@@ -1,0 +1,24 @@
+name = "irishette"
+main = ".output/server/index.mjs"
+compatibility_date = "2025-08-11"
+compatibility_flags = [ "nodejs_compat" ]
+
+[assets]
+directory = ".output/public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "irishette-prod"
+database_id = "04561426-7df1-4896-83a1-de154516023e"
+migrations_dir = "./drizzle"
+
+[[kv_namespaces]]
+binding = "KV_SESSIONS"
+id = "2977770a40e04d1884006d74ab04b28e"
+preview_id = "6459b78d1fa947989de52e593a1da4da"
+
+[observability]
+enabled = true
+
+[vars]
+BETTER_AUTH_URL = "https://www.irishette.com"

@@ -1,0 +1,12 @@
+{
+  "initialized": true,
+  "mode": "file-router",
+  "projectName": "irishette",
+  "typescript": true,
+  "tailwind": true,
+  "git": true,
+  "packageManager": "pnpm",
+  "version": 1,
+  "framework": "react-cra",
+  "chosenAddOns": ["shadcn", "start", "tRPC", "tanstack-query", "eslint"]
+}
