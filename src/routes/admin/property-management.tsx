@@ -510,7 +510,7 @@ function PropertyManagement() {
 									/>
 								</div>
 								<div className="flex items-center gap-2">
-									<label className="text-sm font-medium">Status:</label>
+									<div className="text-sm font-medium">Change Room Status:</div>
 									<DropdownMenu>
 										<DropdownMenuTrigger asChild>
 											<Button variant="outline" className="capitalize">

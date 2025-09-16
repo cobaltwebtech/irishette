@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { ArrowLeft, Check, CreditCard, LoaderCircle, User } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -1250,6 +1251,51 @@ function PaymentStep() {
 function ConfirmationStep() {
 	const booking = useBookingStore();
 	const summary = booking.summary;
+	const [confirmationId, setConfirmationId] = useState<string | null>(null);
+	const [isLoading, setIsLoading] = useState(true);
+
+	// Fetch booking details to get confirmation ID
+	useEffect(() => {
+		const fetchBookingDetails = async () => {
+			if (!booking.bookingId) {
+				setIsLoading(false);
+				return;
+			}
+
+			try {
+				const response = await fetch('/api/trpc/bookings.getBooking', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						bookingId: booking.bookingId,
+					}),
+				});
+
+				if (response.ok) {
+					const result = (await response.json()) as {
+						result?: {
+							data?: {
+								booking?: {
+									confirmationId?: string;
+								};
+							};
+						};
+					};
+					const bookingData = result.result?.data?.booking;
+
+					if (bookingData?.confirmationId) {
+						setConfirmationId(bookingData.confirmationId);
+					}
+				}
+			} catch (error) {
+				console.error('Failed to fetch booking details:', error);
+			} finally {
+				setIsLoading(false);
+			}
+		};
+
+		fetchBookingDetails();
+	}, [booking.bookingId]);
 
 	return (
 		<Card>
@@ -1278,6 +1324,20 @@ function ConfirmationStep() {
 							</h3>
 
 							<div className="grid gap-3">
+								{confirmationId && (
+									<div className="flex justify-between">
+										<span className="text-muted-foreground">
+											Confirmation ID:
+										</span>
+										<Badge
+											variant="outline"
+											className="font-bold font-mono text-sm tracking-wider"
+										>
+											{isLoading ? '...' : confirmationId}
+										</Badge>
+									</div>
+								)}
+
 								<div className="flex justify-between">
 									<span className="text-muted-foreground">Room:</span>
 									<span className="font-medium capitalize">
@@ -1327,15 +1387,6 @@ function ConfirmationStep() {
 										{summary.guestCount !== 1 ? 's' : ''}
 									</span>
 								</div>
-
-								{booking.bookingId && (
-									<div className="flex justify-between">
-										<span className="text-muted-foreground">Booking ID:</span>
-										<span className="font-medium font-mono text-sm">
-											{booking.bookingId}
-										</span>
-									</div>
-								)}
 							</div>
 						</div>
 

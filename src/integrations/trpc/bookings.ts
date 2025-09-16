@@ -3,6 +3,10 @@ import { and, between, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { createDrizzle } from '@/db/drizzle-init';
 import { bookings, room, user } from '@/db/schema-export';
+import {
+	type BookingEmailData,
+	sendBookingConfirmationEmail,
+} from '@/lib/email-service';
 import { PaymentService } from '@/lib/payment-service';
 import {
 	calculateBookingSchema,
@@ -238,11 +242,18 @@ export const bookingsRouter = createTRPCRouter({
 					});
 				}
 
-				const bookingDetails = await paymentService.getBookingWithPayment(
-					input.bookingId,
-				);
-
-				return bookingDetails;
+				// If no userId provided (admin access), include user data
+				if (!input.userId) {
+					const bookingDetails =
+						await paymentService.getBookingWithPaymentAndUser(input.bookingId);
+					return bookingDetails;
+				} else {
+					// Regular user access, no user data included
+					const bookingDetails = await paymentService.getBookingWithPayment(
+						input.bookingId,
+					);
+					return bookingDetails;
+				}
 			} catch (error) {
 				console.error('Failed to get booking:', error);
 				throw new TRPCError({
@@ -282,6 +293,7 @@ export const bookingsRouter = createTRPCRouter({
 						booking: bookings,
 						room: {
 							id: room.id,
+							name: room.name,
 							slug: room.slug,
 							basePrice: room.basePrice,
 						},
@@ -539,4 +551,101 @@ export const bookingsRouter = createTRPCRouter({
 			});
 		}
 	}),
+
+	/**
+	 * Resend booking confirmation email
+	 */
+	resendConfirmationEmail: publicProcedure
+		.input(
+			z.object({
+				bookingId: z.string(),
+				userId: z.string().optional(), // Optional for admin access
+			}),
+		)
+		.mutation(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+			const paymentService = new PaymentService({
+				DB: ctx.db,
+				STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
+				STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || '',
+				BETTER_AUTH_URL: process.env.BETTER_AUTH_URL || '',
+			});
+
+			try {
+				// Verify the booking exists and user has access
+				const whereConditions = [eq(bookings.id, input.bookingId)];
+				if (input.userId) {
+					whereConditions.push(eq(bookings.userId, input.userId));
+				}
+
+				const bookingResult = await db
+					.select()
+					.from(bookings)
+					.where(and(...whereConditions));
+
+				if (!bookingResult[0]) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: 'Booking not found or access denied',
+					});
+				}
+
+				// Get full booking details for email
+				const bookingDetails = await paymentService.getBookingWithPayment(
+					input.bookingId,
+				);
+
+				if (!bookingDetails?.booking || !bookingDetails?.room) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: 'Booking details incomplete',
+					});
+				}
+
+				// Prepare email data
+				const emailData: BookingEmailData = {
+					confirmationId: bookingDetails.booking.confirmationId,
+					guestName: bookingDetails.booking.guestName,
+					guestEmail: bookingDetails.booking.guestEmail,
+					guestPhone: bookingDetails.booking.guestPhone || undefined,
+					roomName: bookingDetails.room.name,
+					checkInDate: bookingDetails.booking.checkInDate,
+					checkOutDate: bookingDetails.booking.checkOutDate,
+					numberOfNights: bookingDetails.booking.numberOfNights,
+					numberOfGuests: bookingDetails.booking.numberOfGuests,
+					specialRequests: bookingDetails.booking.specialRequests || undefined,
+					baseAmount: bookingDetails.booking.baseAmount,
+					taxAmount: bookingDetails.booking.taxAmount || 0,
+					feesAmount: bookingDetails.booking.feesAmount || 0,
+					totalAmount: bookingDetails.booking.totalAmount,
+					baseUrl: process.env.BETTER_AUTH_URL || '',
+				};
+
+				// Send the confirmation email
+				const emailResult = await sendBookingConfirmationEmail(emailData, {
+					RESEND_API_KEY: process.env.RESEND_API_KEY || '',
+				});
+
+				if (!emailResult.success) {
+					throw new TRPCError({
+						code: 'INTERNAL_SERVER_ERROR',
+						message: emailResult.error || 'Failed to send confirmation email',
+					});
+				}
+
+				return {
+					success: true,
+					message: 'Confirmation email sent successfully',
+				};
+			} catch (error) {
+				console.error('Failed to resend confirmation email:', error);
+				if (error instanceof TRPCError) {
+					throw error;
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: 'Failed to resend confirmation email',
+				});
+			}
+		}),
 });

@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-router';
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
 import type { TRPCOptionsProxy } from '@trpc/tanstack-react-query';
+import { Toaster } from '@/components/ui/sonner';
 import type { TRPCRouter } from '@/integrations/trpc/router';
 import Header from '../components/Header';
 import TanStackQueryLayout from '../integrations/tanstack-query/layout.tsx';
@@ -51,6 +52,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 			<body>
 				<Header />
 				{children}
+				<Toaster />
 				<TanStackRouterDevtools />
 				<TanStackQueryLayout />
 				<Scripts />

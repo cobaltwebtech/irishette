@@ -51,6 +51,8 @@ export const bookings = sqliteTable(
 
 		// Stripe integration
 		stripeCustomerId: text('stripe_customer_id'),
+		stripeSessionId: text('stripe_session_id'),
+		stripePaymentIntentId: text('stripe_payment_intent_id'),
 
 		// Timestamps (essential for admin dashboard)
 		createdAt: integer('created_at', { mode: 'timestamp' })

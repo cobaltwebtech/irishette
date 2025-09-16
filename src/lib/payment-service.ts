@@ -1,5 +1,5 @@
 import { and, eq, gte, lte, or } from 'drizzle-orm';
-import { nanoid } from 'nanoid';
+import { customAlphabet, nanoid } from 'nanoid';
 import Stripe from 'stripe';
 import { createDrizzle } from '@/db/drizzle-init';
 import {
@@ -13,6 +13,12 @@ import type {
 	CreateBookingInput,
 	CreateCheckoutSessionInput,
 } from './payment-validation';
+
+// Create a custom nanoid generator for confirmation IDs using only uppercase alphanumeric characters
+const generateConfirmationId = customAlphabet(
+	'ABCDEFGHJKMNPQRSTUVWXYZ0123456789',
+	6,
+);
 
 /**
  * PaymentService - Handles booking creation and Stripe payment processing
@@ -298,7 +304,7 @@ export class PaymentService {
 			id: bookingId,
 			userId,
 			roomId: bookingData.roomId,
-			confirmationId: nanoid(8).toUpperCase(),
+			confirmationId: generateConfirmationId(),
 			checkInDate: bookingData.checkInDate,
 			checkOutDate: bookingData.checkOutDate,
 			numberOfNights: pricing.numberOfNights,
@@ -460,12 +466,21 @@ export class PaymentService {
 	 * Handle successful payment confirmation
 	 * Called by Stripe webhook when checkout.session.completed
 	 */
+	/**
+	 * Enhanced booking confirmation with complete data finalization
+	 */
 	async confirmBookingPayment(sessionId: string): Promise<void> {
+		console.log('Starting booking confirmation for session:', sessionId);
+
 		// Get Stripe session details
-		const session = await this.stripe.checkout.sessions.retrieve(sessionId);
+		const session = await this.stripe.checkout.sessions.retrieve(sessionId, {
+			expand: ['payment_intent', 'customer'],
+		});
 
 		if (session.payment_status !== 'paid') {
-			throw new Error('Payment not completed');
+			throw new Error(
+				`Payment not completed. Status: ${session.payment_status}`,
+			);
 		}
 
 		const bookingId = session.metadata?.booking_id;
@@ -473,28 +488,73 @@ export class PaymentService {
 			throw new Error('Booking ID not found in session metadata');
 		}
 
-		// Update booking status
-		await this.db
-			.update(bookings)
-			.set({
-				status: 'confirmed',
-				paymentStatus: 'paid',
-				confirmedAt: new Date(),
-				updatedAt: new Date(),
-			})
+		console.log('Confirming booking:', bookingId);
+
+		// Get current booking details
+		const bookingResult = await this.db
+			.select()
+			.from(bookings)
 			.where(eq(bookings.id, bookingId));
 
-		// Update payment transaction status
+		if (!bookingResult[0]) {
+			throw new Error(`Booking not found: ${bookingId}`);
+		}
+
+		const booking = bookingResult[0];
+
+		// Extract payment intent ID (it could be a string or an object)
+		const paymentIntentId =
+			typeof session.payment_intent === 'string'
+				? session.payment_intent
+				: session.payment_intent?.id;
+
+		if (!paymentIntentId) {
+			throw new Error('Payment intent ID not found in session');
+		}
+
+		// Update booking status with complete payment information
+		const updateData = {
+			status: 'confirmed' as const,
+			paymentStatus: 'paid' as const,
+			confirmedAt: new Date(),
+			updatedAt: new Date(),
+			// Store additional payment metadata for reference
+			stripeSessionId: sessionId,
+			stripePaymentIntentId: paymentIntentId,
+		};
+
+		await this.db
+			.update(bookings)
+			.set(updateData)
+			.where(eq(bookings.id, bookingId));
+
+		// Update payment transaction status with complete details
 		await this.db
 			.update(paymentTransactions)
 			.set({
 				status: 'succeeded',
+				stripePaymentIntentId: paymentIntentId,
 			})
 			.where(eq(paymentTransactions.bookingId, bookingId));
 
-		// TODO: Send confirmation email
-		// TODO: Block dates in room availability
-		// TODO: Trigger any other post-booking workflows
+		console.log('Booking confirmed successfully:', {
+			bookingId,
+			sessionId,
+			paymentIntentId: paymentIntentId,
+			amount: booking.totalAmount,
+			guestEmail: booking.guestEmail,
+		});
+
+		// Block dates in room availability table
+		await this.blockRoomDates(
+			booking.roomId,
+			booking.checkInDate,
+			booking.checkOutDate,
+		);
+
+		// Note: Confirmation email is sent by the webhook handler after payment confirmation
+
+		console.log('Post-booking workflows completed for:', bookingId);
 	}
 
 	/**
@@ -528,19 +588,23 @@ export class PaymentService {
 	}
 
 	/**
-	 * Get booking with payment details
+	 * Get booking with payment details and room information
 	 */
 	async getBookingWithPayment(bookingId: string) {
 		const bookingResult = await this.db
-			.select()
+			.select({
+				booking: bookings,
+				room: room,
+			})
 			.from(bookings)
+			.innerJoin(room, eq(bookings.roomId, room.id))
 			.where(eq(bookings.id, bookingId));
 
 		if (!bookingResult[0]) {
 			throw new Error('Booking not found');
 		}
 
-		const booking = bookingResult[0];
+		const { booking, room: roomData } = bookingResult[0];
 
 		// Get payment transaction details
 		const paymentResult = await this.db
@@ -550,7 +614,143 @@ export class PaymentService {
 
 		return {
 			booking,
+			room: roomData,
 			paymentDetails: paymentResult[0] || null,
 		};
+	}
+
+	/**
+	 * Get booking with payment details, room information, and user data (for admin)
+	 */
+	async getBookingWithPaymentAndUser(bookingId: string) {
+		const bookingResult = await this.db
+			.select({
+				booking: bookings,
+				room: room,
+				user: {
+					id: user.id,
+					email: user.email,
+					name: user.name,
+				},
+			})
+			.from(bookings)
+			.innerJoin(room, eq(bookings.roomId, room.id))
+			.innerJoin(user, eq(bookings.userId, user.id))
+			.where(eq(bookings.id, bookingId));
+
+		if (!bookingResult[0]) {
+			throw new Error('Booking not found');
+		}
+
+		const { booking, room: roomData, user: userData } = bookingResult[0];
+
+		// Get payment transaction details
+		const paymentResult = await this.db
+			.select()
+			.from(paymentTransactions)
+			.where(eq(paymentTransactions.bookingId, bookingId));
+
+		return {
+			booking,
+			room: roomData,
+			user: userData,
+			paymentDetails: paymentResult[0] || null,
+		};
+	}
+
+	/**
+	 * Get booking details by Stripe session ID
+	 */
+	async getBookingByStripeSessionId(stripeSessionId: string) {
+		const bookingResult = await this.db
+			.select({
+				booking: bookings,
+				room: room,
+			})
+			.from(bookings)
+			.innerJoin(room, eq(bookings.roomId, room.id))
+			.where(eq(bookings.stripeSessionId, stripeSessionId));
+
+		if (!bookingResult[0]) {
+			throw new Error('Booking not found for Stripe session ID');
+		}
+
+		const { booking, room: roomData } = bookingResult[0];
+
+		// Get payment transaction details
+		const paymentResult = await this.db
+			.select()
+			.from(paymentTransactions)
+			.where(eq(paymentTransactions.bookingId, booking.id));
+
+		return {
+			booking,
+			room: roomData,
+			paymentDetails: paymentResult[0] || null,
+		};
+	}
+
+	/**
+	 * Block room dates in availability table after successful booking
+	 */
+	private async blockRoomDates(
+		roomId: string,
+		checkInDate: string,
+		checkOutDate: string,
+	): Promise<void> {
+		try {
+			console.log('Blocking room dates:', {
+				roomId,
+				checkInDate,
+				checkOutDate,
+			});
+
+			// Generate all dates between check-in and check-out
+			const startDate = new Date(checkInDate);
+			const endDate = new Date(checkOutDate);
+			const dates: string[] = [];
+
+			const currentDate = new Date(startDate);
+			while (currentDate < endDate) {
+				dates.push(currentDate.toISOString().split('T')[0]);
+				currentDate.setDate(currentDate.getDate() + 1);
+			}
+
+			// Insert blocked dates into room availability
+			for (const date of dates) {
+				try {
+					await this.db.insert(roomAvailability).values({
+						id: nanoid(),
+						roomId,
+						date,
+						isBlocked: true,
+						source: 'booking_confirmed',
+						externalBookingId: null, // This is an internal booking
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					});
+				} catch {
+					// If date already exists, update it
+					await this.db
+						.update(roomAvailability)
+						.set({
+							isBlocked: true,
+							source: 'booking_confirmed',
+							updatedAt: new Date(),
+						})
+						.where(
+							and(
+								eq(roomAvailability.roomId, roomId),
+								eq(roomAvailability.date, date),
+							),
+						);
+				}
+			}
+
+			console.log('Room dates blocked successfully:', dates.length, 'dates');
+		} catch (error) {
+			console.error('Failed to block room dates:', error);
+			// Don't throw here - booking is already confirmed, this is just cleanup
+		}
 	}
 }

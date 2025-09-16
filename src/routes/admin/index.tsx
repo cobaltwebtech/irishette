@@ -30,11 +30,42 @@ type Room = {
 	updatedAt: Date;
 };
 
+// Types for booking data (matching the tRPC response structure)
+type BookingData = {
+	booking: {
+		id: string;
+		confirmationId: string;
+		status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
+		paymentStatus: 'pending' | 'paid' | 'failed' | 'refunded';
+		guestName: string;
+		guestEmail: string;
+		checkInDate: string;
+		checkOutDate: string;
+		totalAmount: number;
+		numberOfGuests: number;
+		createdAt: string;
+		roomId: string;
+	};
+	room: {
+		id: string;
+		name: string;
+		slug: string;
+		basePrice: number;
+	};
+	user: {
+		id: string;
+		email: string;
+		name?: string;
+	};
+};
+
 function AdminDashboard() {
 	const { data: session, isPending } = useSession();
 	const navigate = useNavigate();
 	const [rooms, setRooms] = useState<Room[]>([]);
 	const [loadingRooms, setLoadingRooms] = useState(true);
+	const [bookings, setBookings] = useState<BookingData[]>([]);
+	const [loadingBookings, setLoadingBookings] = useState(true);
 
 	// Load rooms function
 	const loadRooms = useCallback(async () => {
@@ -62,6 +93,38 @@ function AdminDashboard() {
 		}
 	}, []);
 
+	// Load bookings function
+	const loadBookings = useCallback(async () => {
+		try {
+			setLoadingBookings(true);
+			const response = await fetch('/api/trpc/bookings.adminListBookings', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					limit: 50, // Get more to filter for upcoming
+					offset: 0,
+				}),
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to fetch bookings');
+			}
+
+			const result = (await response.json()) as {
+				result?: {
+					data?: BookingData[];
+				};
+			};
+
+			const bookingsData = result.result?.data || [];
+			setBookings(bookingsData);
+		} catch (error) {
+			console.error('Failed to load bookings:', error);
+		} finally {
+			setLoadingBookings(false);
+		}
+	}, []);
+
 	// Client-side auth check
 	useEffect(() => {
 		if (!isPending && (!session?.user || session.user.role !== 'admin')) {
@@ -69,49 +132,42 @@ function AdminDashboard() {
 		}
 	}, [session, isPending, navigate]);
 
-	// Load rooms on component mount
+	// Load bookings on component mount
 	useEffect(() => {
 		if (session?.user && session.user.role === 'admin') {
 			loadRooms();
+			loadBookings();
 		}
-	}, [session, loadRooms]);
+	}, [session, loadRooms, loadBookings]);
 
 	// Show loading or redirect if not authenticated
 	if (isPending || !session?.user || session.user.role !== 'admin') {
 		return <div className="container mx-auto px-4 py-8">Loading...</div>;
 	}
 
-	// Mock data for now - we'll wire up tRPC later
-	const stats = {
-		total: 25,
-		pending: 3,
-		totalRevenue: 1250.0,
-	};
+	// Filter bookings to get upcoming confirmed ones (check-in date >= today)
+	const today = new Date();
+	today.setHours(0, 0, 0, 0);
 
-	const bookings = [
-		{
-			booking: {
-				id: '1',
-				status: 'confirmed',
-				paymentStatus: 'paid',
-				guestName: 'John Doe',
-				checkInDate: '2025-09-15',
-				checkOutDate: '2025-09-17',
-				roomId: '1',
-			},
-		},
-		{
-			booking: {
-				id: '2',
-				status: 'pending',
-				paymentStatus: 'pending',
-				guestName: 'Jane Smith',
-				checkInDate: '2025-09-20',
-				checkOutDate: '2025-09-22',
-				roomId: '2',
-			},
-		},
-	];
+	const upcomingBookings = bookings
+		.filter((bookingData) => {
+			const checkInDate = new Date(bookingData.booking.checkInDate);
+			checkInDate.setHours(0, 0, 0, 0);
+			return checkInDate >= today && bookingData.booking.status === 'confirmed';
+		})
+		.sort(
+			(a, b) =>
+				new Date(a.booking.checkInDate).getTime() -
+				new Date(b.booking.checkInDate).getTime(),
+		)
+		.slice(0, 3);
+
+	// Mock data for stats - we'll wire up tRPC later
+	const stats = {
+		total: bookings.length,
+		pending: bookings.filter((b) => b.booking.status === 'pending').length,
+		totalRevenue: bookings.reduce((sum, b) => sum + b.booking.totalAmount, 0),
+	};
 
 	const totalBookings = stats.total;
 	const pendingBookings = stats.pending;
@@ -238,11 +294,11 @@ function AdminDashboard() {
 						</div>
 					</CardContent>
 				</Card>{' '}
-				{/* Recent Bookings */}
+				{/* Upcoming Bookings */}
 				<Card>
 					<CardHeader>
 						<div className="flex items-center justify-between">
-							<CardTitle>Recent Bookings</CardTitle>
+							<CardTitle>Upcoming Bookings</CardTitle>
 							<Link to="/admin/bookings">
 								<Button size="sm">View All Bookings</Button>
 							</Link>
@@ -250,46 +306,64 @@ function AdminDashboard() {
 					</CardHeader>
 					<CardContent>
 						<div className="space-y-4">
-							{bookings?.slice(0, 5).map((bookingData) => {
-								const booking = bookingData.booking;
-								const room = rooms.find((r: Room) => r.id === booking.roomId);
-								return (
-									<div
-										key={booking.id}
-										className="flex items-center justify-between p-4 border rounded-lg"
-									>
-										<div>
-											<h3 className="font-medium">{booking.guestName}</h3>
-											<p className="text-sm text-muted-foreground">
-												{room?.name || 'Unknown Room'} • {booking.checkInDate}{' '}
-												to {booking.checkOutDate}
-											</p>
-										</div>
-										<div className="flex items-center gap-2">
-											<Badge
-												variant={
-													booking.status === 'confirmed'
-														? 'default'
-														: booking.status === 'cancelled'
-															? 'destructive'
-															: 'secondary'
-												}
-											>
-												{booking.status}
-											</Badge>
-											<Badge
-												variant={
-													booking.paymentStatus === 'paid'
-														? 'default'
-														: 'secondary'
-												}
-											>
-												{booking.paymentStatus}
-											</Badge>
-										</div>
-									</div>
-								);
-							})}
+							{loadingBookings ? (
+								<div className="text-center py-4 text-muted-foreground">
+									Loading bookings...
+								</div>
+							) : upcomingBookings.length === 0 ? (
+								<div className="text-center py-4 text-muted-foreground">
+									No upcoming bookings
+								</div>
+							) : (
+								upcomingBookings.map((bookingData) => {
+									const booking = bookingData.booking;
+									return (
+										<Link
+											key={booking.id}
+											to="/admin/bookings/$bookingId"
+											params={{ bookingId: booking.id }}
+											className="block"
+										>
+											<div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+												<div>
+													<h3 className="font-medium">{booking.guestName}</h3>
+													<p className="text-sm text-muted-foreground">
+														{bookingData.room.name} • Check-in:{' '}
+														{new Date(booking.checkInDate).toLocaleDateString()}
+													</p>
+													<p className="text-xs text-muted-foreground">
+														{booking.numberOfGuests} guest
+														{booking.numberOfGuests !== 1 ? 's' : ''} • $
+														{booking.totalAmount.toFixed(2)}
+													</p>
+												</div>
+												<div className="flex items-center gap-2">
+													<Badge
+														variant={
+															booking.status === 'confirmed'
+																? 'default'
+																: booking.status === 'cancelled'
+																	? 'destructive'
+																	: 'secondary'
+														}
+													>
+														{booking.status}
+													</Badge>
+													<Badge
+														variant={
+															booking.paymentStatus === 'paid'
+																? 'default'
+																: 'secondary'
+														}
+													>
+														{booking.paymentStatus}
+													</Badge>
+												</div>
+											</div>
+										</Link>
+									);
+								})
+							)}
 						</div>
 					</CardContent>
 				</Card>

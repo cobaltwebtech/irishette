@@ -11,7 +11,7 @@ import {
 	useReactTable,
 } from '@tanstack/react-table';
 import { ArrowLeft, ArrowUpDown, Search } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/table';
 import { useSession } from '@/lib/auth-client';
 
-export const Route = createFileRoute('/admin/bookings')({
+export const Route = createFileRoute('/admin/bookings/')({
 	component: AdminBookings,
 });
 
@@ -34,6 +34,7 @@ export const Route = createFileRoute('/admin/bookings')({
 type BookingData = {
 	booking: {
 		id: string;
+		confirmationId: string;
 		status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
 		paymentStatus: 'pending' | 'paid' | 'failed' | 'refunded';
 		guestName: string;
@@ -41,7 +42,7 @@ type BookingData = {
 		checkInDate: string;
 		checkOutDate: string;
 		totalAmount: number;
-		guestCount: number;
+		numberOfGuests: number;
 		createdAt: string;
 		roomId: string;
 	};
@@ -58,99 +59,89 @@ type BookingData = {
 };
 
 function AdminBookings() {
-	const { data: session } = useSession();
+	const { data: session, isPending } = useSession();
 	const [sorting, setSorting] = useState<SortingState>([]);
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 	const [globalFilter, setGlobalFilter] = useState('');
+	const [bookings, setBookings] = useState<BookingData[]>([]);
+	const [isLoading, setIsLoading] = useState(true);
+	const [error, setError] = useState<string | null>(null);
 
-	// Mock data for now - will be replaced with tRPC call
-	const mockBookings: BookingData[] = [
-		{
-			booking: {
-				id: '1',
-				status: 'confirmed',
-				paymentStatus: 'paid',
-				guestName: 'John Doe',
-				guestEmail: 'john@example.com',
-				checkInDate: '2025-09-15',
-				checkOutDate: '2025-09-17',
-				totalAmount: 250.0,
-				guestCount: 2,
-				createdAt: '2025-09-10T10:00:00Z',
-				roomId: '1',
-			},
-			room: {
-				id: '1',
-				slug: 'rose-room',
-				basePrice: 125,
-			},
-			user: {
-				id: '1',
-				email: 'john@example.com',
-				name: 'John Doe',
-			},
-		},
-		{
-			booking: {
-				id: '2',
-				status: 'pending',
-				paymentStatus: 'pending',
-				guestName: 'Jane Smith',
-				guestEmail: 'jane@example.com',
-				checkInDate: '2025-09-20',
-				checkOutDate: '2025-09-22',
-				totalAmount: 270.0,
-				guestCount: 1,
-				createdAt: '2025-09-11T14:30:00Z',
-				roomId: '2',
-			},
-			room: {
-				id: '2',
-				slug: 'texas-room',
-				basePrice: 135,
-			},
-			user: {
-				id: '2',
-				email: 'jane@example.com',
-				name: 'Jane Smith',
-			},
-		},
-		{
-			booking: {
-				id: '3',
-				status: 'cancelled',
-				paymentStatus: 'refunded',
-				guestName: 'Bob Johnson',
-				guestEmail: 'bob@example.com',
-				checkInDate: '2025-09-25',
-				checkOutDate: '2025-09-27',
-				totalAmount: 250.0,
-				guestCount: 2,
-				createdAt: '2025-09-05T09:15:00Z',
-				roomId: '1',
-			},
-			room: {
-				id: '1',
-				slug: 'rose-room',
-				basePrice: 125,
-			},
-			user: {
-				id: '3',
-				email: 'bob@example.com',
-				name: 'Bob Johnson',
-			},
-		},
-	];
+	// Fetch bookings data
+	useEffect(() => {
+		const fetchBookings = async () => {
+			if (!session?.user || session.user.role !== 'admin') return;
+
+			try {
+				setIsLoading(true);
+				setError(null);
+
+				console.log('Fetching admin bookings...');
+
+				const response = await fetch('/api/trpc/bookings.adminListBookings', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						limit: 100, // Get all bookings for now
+						offset: 0,
+					}),
+				});
+
+				console.log('Response status:', response.status);
+
+				if (!response.ok) {
+					const errorText = await response.text();
+					console.error('Response error:', errorText);
+					throw new Error('Failed to fetch bookings');
+				}
+
+				const result = (await response.json()) as {
+					result?: {
+						data?: BookingData[];
+					};
+				};
+
+				console.log('Received result:', result);
+
+				const bookingsData = result.result?.data;
+
+				if (!bookingsData) {
+					throw new Error('No booking data found in response');
+				}
+
+				setBookings(bookingsData);
+			} catch (error) {
+				console.error('Failed to fetch bookings:', error);
+				setError(
+					error instanceof Error ? error.message : 'Failed to load bookings',
+				);
+			} finally {
+				setIsLoading(false);
+			}
+		};
+
+		if (session?.user?.role === 'admin') {
+			fetchBookings();
+		} else if (!isPending) {
+			setIsLoading(false);
+		}
+	}, [session?.user, isPending]);
 
 	// Create columns using the column helper
 	const columnHelper = createColumnHelper<BookingData>();
 
 	const columns = useMemo(
 		() => [
-			columnHelper.accessor('booking.id', {
-				header: 'Booking ID',
+			columnHelper.accessor('booking.confirmationId', {
+				header: 'Confirmation ID',
 				cell: (info) => (
-					<span className="font-mono text-sm">{info.getValue().slice(-8)}</span>
+					<Link
+						to="/admin/bookings/$bookingId"
+						params={{ bookingId: info.row.original.booking.id }}
+						className="font-mono text-sm font-semibold text-primary hover:text-primary/80 underline"
+					>
+						{info.getValue()}
+					</Link>
 				),
 			}),
 			columnHelper.accessor('booking.guestName', {
@@ -204,7 +195,7 @@ function AdminBookings() {
 					</div>
 				),
 			}),
-			columnHelper.accessor('booking.guestCount', {
+			columnHelper.accessor('booking.numberOfGuests', {
 				header: 'Guests',
 				cell: (info) => info.getValue(),
 			}),
@@ -281,7 +272,7 @@ function AdminBookings() {
 	);
 
 	const table = useReactTable({
-		data: mockBookings,
+		data: bookings,
 		columns,
 		onSortingChange: setSorting,
 		onColumnFiltersChange: setColumnFilters,
@@ -297,8 +288,51 @@ function AdminBookings() {
 		},
 	});
 
+	// Early return for loading state
+	if (isPending || isLoading) {
+		return (
+			<div className="container mx-auto px-4 py-8">
+				<div className="flex items-center justify-center h-64">
+					<div className="text-center">
+						<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+						<p className="text-muted-foreground">Loading bookings...</p>
+					</div>
+				</div>
+			</div>
+		);
+	}
+
+	// Access denied check
 	if (!session?.user || session.user.role !== 'admin') {
-		return <div className="container mx-auto px-4 py-8">Access denied</div>;
+		return (
+			<div className="container mx-auto px-4 py-8">
+				<div className="text-center">
+					<h2 className="text-2xl font-bold mb-4">Access Denied</h2>
+					<p className="text-muted-foreground">
+						You don't have permission to view this page.
+					</p>
+				</div>
+			</div>
+		);
+	}
+
+	// Error state
+	if (error) {
+		return (
+			<div className="container mx-auto px-4 py-8">
+				<div className="text-center">
+					<h2 className="text-2xl font-bold mb-4 text-red-600">Error</h2>
+					<p className="text-muted-foreground mb-4">{error}</p>
+					<button
+						type="button"
+						onClick={() => window.location.reload()}
+						className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+					>
+						Try Again
+					</button>
+				</div>
+			</div>
+		);
 	}
 
 	return (
