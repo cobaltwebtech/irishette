@@ -1,0 +1,465 @@
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import {
+	ArrowLeft,
+	Bath,
+	Calendar as CalendarIcon,
+	Car,
+	Coffee,
+	Tv,
+	Wifi,
+	Wind,
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import type { DateRange } from 'react-day-picker';
+import RoomAvailabilityCalendar from '@/components/RoomAvailabilityCalendar';
+import { Button } from '@/components/ui/button';
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from '@/components/ui/card';
+import { useBookingStore } from '@/stores';
+
+export const Route = createFileRoute('/texas-room')({
+	head: () => ({
+		meta: [
+			{
+				title: 'Texas Room | Irishette.com',
+			},
+		],
+	}),
+	component: TexasRoomPage,
+});
+
+function TexasRoomPage() {
+	const [selectedRange, setSelectedRange] = useState<DateRange | undefined>(
+		undefined,
+	);
+	const [totalPrice, setTotalPrice] = useState<number>(0);
+	const [nights, setNights] = useState<number>(0);
+	const booking = useBookingStore();
+	const navigate = useNavigate();
+
+	// Room information
+	const roomSlug = 'texas-room';
+
+	// Initialize booking store if we're starting a new booking
+	useEffect(() => {
+		// Check if we have a room already set in the store
+		if (!booking.roomSlug || booking.roomSlug !== roomSlug) {
+			// This will reset any existing booking and start fresh for this room
+			booking.actions.initializeBooking('qSDFP06DGD7v8M3rC3DwE', roomSlug); // Actual Texas Room ID from database
+		}
+	}, [booking.roomSlug, booking.actions]);
+
+	const handleRangeSelect = (
+		dateRange: DateRange | undefined,
+		totalPriceValue?: number,
+		nightsValue?: number,
+	) => {
+		setSelectedRange(dateRange);
+		setTotalPrice(totalPriceValue || 0);
+		setNights(nightsValue || 0);
+
+		// Update booking store with selected dates
+		if (dateRange?.from && dateRange?.to) {
+			// Convert dates to ISO strings for storage
+			const checkInDate = dateRange.from.toISOString().split('T')[0];
+			const checkOutDate = dateRange.to.toISOString().split('T')[0];
+
+			booking.actions.setDates(checkInDate, checkOutDate);
+
+			// Set pricing information if available
+			if (totalPriceValue && nightsValue) {
+				// Calculate fees (same logic as PaymentService)
+				const cleaningFee = 50;
+				const serviceFee = Math.round(totalPriceValue * 0.12); // 12% service fee
+				const totalFees = cleaningFee + serviceFee;
+
+				// Calculate tax on subtotal (base + fees)
+				const subtotal = totalPriceValue + totalFees;
+				const taxAmount = Math.round(subtotal * 0.08); // 8% tax on subtotal
+				const totalAmount = subtotal + taxAmount;
+
+				booking.actions.setPricing({
+					basePrice: totalPriceValue / nightsValue, // Calculate base price per night
+					nights: nightsValue,
+					subtotal: totalPriceValue,
+					taxes: taxAmount,
+					fees: totalFees,
+					totalAmount: totalAmount,
+					currency: 'USD',
+				});
+			}
+		} else {
+			// Clear dates if no range selected
+			booking.actions.setDates('', '');
+		}
+	};
+
+	const handleBookNow = () => {
+		// Validate that we have the required information
+		if (!selectedRange?.from || !selectedRange?.to) {
+			// Could show an error toast here
+			return;
+		}
+
+		// Check if booking store validation passes
+		if (!booking.canProceed()) {
+			// Could show validation errors
+			const errors = booking.getValidationErrors();
+			console.warn('Booking validation failed:', errors);
+			return;
+		}
+
+		// Proceed to next step (authentication)
+		booking.actions.setStep('auth');
+
+		// Navigate to booking flow route
+		navigate({ to: '/booking' });
+		console.log('Starting booking process with data:', booking.summary);
+	};
+	return (
+		<div className="min-h-screen bg-background">
+			{/* Back Navigation */}
+			<div className="container mx-auto max-w-6xl px-4 py-4">
+				<Link
+					to="/"
+					className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors"
+				>
+					<ArrowLeft className="w-4 h-4 mr-2" />
+					Back to Home
+				</Link>
+			</div>
+
+			{/* Hero Section */}
+			<section className="relative bg-gradient-to-b from-orange-50 to-background py-16 px-4">
+				<div className="container mx-auto max-w-4xl text-center">
+					<h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
+						Texas Room
+					</h1>
+					<p className="text-xl md:text-2xl text-muted-foreground mb-8 font-medium">
+						Experience true Texas charm in this spacious and inviting retreat.
+					</p>
+				</div>
+			</section>
+
+			{/* Availability Calendar */}
+			<section className="py-16 px-4" data-calendar-section>
+				<div className="container mx-auto max-w-4xl">
+					<div className="text-center mb-12">
+						<h2 className="text-3xl font-bold mb-4 flex items-center justify-center gap-2">
+							<CalendarIcon className="w-8 h-8 text-orange-600" />
+							Check Availability
+						</h2>
+						<p className="text-muted-foreground text-lg">
+							Select your preferred dates to see availability and pricing
+						</p>
+					</div>
+
+					<div className="grid lg:grid-cols-2 gap-8 items-start">
+						{/* Calendar */}
+						<div className="flex justify-center">
+							<RoomAvailabilityCalendar
+								roomSlug="texas-room"
+								selectedDateRange={selectedRange}
+								onDateRangeSelect={handleRangeSelect}
+								className="w-full max-w-2xl"
+								minNights={1}
+								maxNights={30}
+							/>
+						</div>
+
+						{/* Booking Information */}
+						<div className="space-y-6">
+							<Card className="border-orange-200">
+								<CardHeader>
+									<CardTitle className="text-orange-800">
+										Booking Information
+									</CardTitle>
+								</CardHeader>
+								<CardContent className="space-y-4">
+									{selectedRange?.from && selectedRange?.to ? (
+										<div>
+											<p className="text-sm text-muted-foreground mb-2">
+												Selected Dates:
+											</p>
+											<p className="font-semibold text-lg">
+												{selectedRange.from.toLocaleDateString('en-US', {
+													weekday: 'short',
+													month: 'short',
+													day: 'numeric',
+												})}{' '}
+												-{' '}
+												{selectedRange.to.toLocaleDateString('en-US', {
+													weekday: 'short',
+													month: 'short',
+													day: 'numeric',
+												})}
+											</p>
+
+											<div className="mt-4 p-4 bg-orange-50 rounded-lg space-y-2">
+												<div className="flex justify-between">
+													<span className="text-orange-800">Base Rate:</span>
+													<span className="font-semibold">$89.99/night</span>
+												</div>
+												<div className="flex justify-between">
+													<span className="text-orange-800">
+														Number of Nights:
+													</span>
+													<span className="font-semibold">{nights} nights</span>
+												</div>
+												<hr className="border-orange-200" />
+												<div className="flex justify-between font-bold">
+													<span className="text-orange-800">Total:</span>
+													<span>${totalPrice.toFixed(2)}</span>
+												</div>
+												<p className="text-sm text-muted-foreground mt-1">
+													*Rates may vary by season and length of stay
+												</p>
+											</div>
+										</div>
+									) : (
+										<div className="text-center py-8">
+											<CalendarIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+											<p className="text-muted-foreground">
+												Select your check-in and check-out dates to see pricing
+												and availability
+											</p>
+											<p className="text-sm text-muted-foreground mt-2">
+												Minimum stay: 1 nights • Maximum stay: 30 nights
+											</p>
+										</div>
+									)}
+								</CardContent>
+							</Card>
+
+							{selectedRange?.from && selectedRange?.to && (
+								<Card className="border-orange-200 bg-orange-50">
+									<CardContent className="p-6">
+										<h4 className="font-semibold text-orange-800 mb-2">
+											Ready to book these dates?
+										</h4>
+										<p className="text-sm text-muted-foreground mb-4">
+											Continue with your reservation for the Texas Room
+										</p>
+										<Button
+											className="w-full bg-orange-600 hover:bg-orange-700"
+											onClick={handleBookNow}
+										>
+											Book Now - {selectedRange.from.toLocaleDateString()} to{' '}
+											{selectedRange.to.toLocaleDateString()}
+										</Button>
+									</CardContent>
+								</Card>
+							)}
+						</div>
+					</div>
+				</div>
+			</section>
+
+			{/* Room Description */}
+			<section className="py-16 px-4">
+				<div className="container mx-auto max-w-4xl">
+					<Card className="border-orange-200">
+						<CardHeader>
+							<CardTitle className="text-2xl text-orange-800">
+								Your Texas Getaway
+							</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className="prose prose-lg max-w-none">
+								<p className="text-foreground/90 leading-relaxed mb-6">
+									The Texas Room offers a private entrance for a peaceful,
+									independent stay. Inside you'll find a convenient kitchenette
+									with a coffee maker, refrigerator, and microwave—plus plenty
+									of space for your belongings.
+								</p>
+								<p className="text-foreground/90 leading-relaxed">
+									The Texas Room reflects the spirit of the Lone Star State with
+									its warm décor and distinctive touches. Relax in a cozy
+									king-sized bed in a light-filled space, and enjoy modern
+									comforts including a TV with Prime Video and Netflix, a
+									ceiling fan, electric fireplace. The private attached bathroom
+									features an antique clawfoot bathtub—perfect for a long,
+									relaxing soak—(please note: no walk-in shower). A separate
+									work space and all the amenities you need complete this
+									uniquely Texan getaway.
+								</p>
+							</div>
+						</CardContent>
+					</Card>
+				</div>
+			</section>
+
+			{/* Amenities */}
+			<section className="py-16 px-4 bg-muted/20">
+				<div className="container mx-auto max-w-6xl">
+					<h2 className="text-3xl font-bold text-center mb-12">
+						Room Amenities
+					</h2>
+
+					<div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+						<Card className="text-center p-6">
+							<Coffee className="w-8 h-8 text-orange-600 mx-auto mb-4" />
+							<h3 className="font-semibold mb-2">Kitchenette</h3>
+							<p className="text-sm text-muted-foreground">
+								Coffee maker, refrigerator, microwave
+							</p>
+						</Card>
+
+						<Card className="text-center p-6">
+							<Bath className="w-8 h-8 text-orange-600 mx-auto mb-4" />
+							<h3 className="font-semibold mb-2">Clawfoot Tub</h3>
+							<p className="text-sm text-muted-foreground">
+								Antique bathtub (no walk-in shower)
+							</p>
+						</Card>
+
+						<Card className="text-center p-6">
+							<Tv className="w-8 h-8 text-orange-600 mx-auto mb-4" />
+							<h3 className="font-semibold mb-2">Entertainment</h3>
+							<p className="text-sm text-muted-foreground">
+								TV with Prime Video & Netflix
+							</p>
+						</Card>
+
+						<Card className="text-center p-6">
+							<Wind className="w-8 h-8 text-orange-600 mx-auto mb-4" />
+							<h3 className="font-semibold mb-2">Climate Control</h3>
+							<p className="text-sm text-muted-foreground">
+								Ceiling fan & electric fireplace
+							</p>
+						</Card>
+
+						<Card className="text-center p-6">
+							<Wifi className="w-8 h-8 text-orange-600 mx-auto mb-4" />
+							<h3 className="font-semibold mb-2">Work Space</h3>
+							<p className="text-sm text-muted-foreground">
+								Dedicated area with WiFi
+							</p>
+						</Card>
+
+						<Card className="text-center p-6">
+							<Car className="w-8 h-8 text-orange-600 mx-auto mb-4" />
+							<h3 className="font-semibold mb-2">Private Entrance</h3>
+							<p className="text-sm text-muted-foreground">
+								Independent access
+							</p>
+						</Card>
+
+						<Card className="text-center p-6">
+							<div className="w-8 h-8 bg-orange-600 rounded mx-auto mb-4 flex items-center justify-center">
+								<span className="text-white text-sm font-bold">K</span>
+							</div>
+							<h3 className="font-semibold mb-2">King Bed</h3>
+							<p className="text-sm text-muted-foreground">
+								Spacious sleeping for two
+							</p>
+						</Card>
+
+						<Card className="text-center p-6">
+							<div className="w-8 h-8 bg-orange-600 rounded mx-auto mb-4 flex items-center justify-center">
+								<span className="text-white text-sm font-bold">★</span>
+							</div>
+							<h3 className="font-semibold mb-2">Texas Charm</h3>
+							<p className="text-sm text-muted-foreground">
+								Warm décor & distinctive touches
+							</p>
+						</Card>
+					</div>
+				</div>
+			</section>
+
+			{/* Special Features */}
+			<section className="py-16 px-4">
+				<div className="container mx-auto max-w-4xl">
+					<Card className="bg-orange-50 border-orange-200">
+						<CardHeader>
+							<CardTitle className="text-2xl text-orange-800">
+								Texas Room Special Features
+							</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className="grid md:grid-cols-2 gap-6">
+								<div>
+									<h3 className="font-semibold text-lg mb-2 text-orange-700">
+										Antique Clawfoot Tub
+									</h3>
+									<p className="text-muted-foreground">
+										Relax and unwind in our beautiful antique clawfoot
+										bathtub—perfect for a long, luxurious soak after exploring
+										Dublin and the surrounding area.
+									</p>
+								</div>
+								<div>
+									<h3 className="font-semibold text-lg mb-2 text-orange-700">
+										Texas-Themed Décor
+									</h3>
+									<p className="text-muted-foreground">
+										Immerse yourself in true Lone Star State style with warm
+										colors, distinctive touches, and décor that reflects the
+										spirit of Texas.
+									</p>
+								</div>
+							</div>
+							<div className="mt-6 p-4 bg-orange-100 rounded-lg">
+								<p className="text-sm text-orange-800 font-medium">
+									<strong>Please Note:</strong> The Texas Room features a
+									beautiful antique clawfoot tub but does not have a walk-in
+									shower. Perfect for guests who enjoy relaxing baths!
+								</p>
+							</div>
+						</CardContent>
+					</Card>
+				</div>
+			</section>
+
+			{/* Booking CTA */}
+			<section className="py-16 px-4">
+				<div className="container mx-auto max-w-4xl text-center">
+					<Card className="bg-orange-50 border-orange-200">
+						<CardHeader>
+							<CardTitle className="text-2xl text-orange-800">
+								Ready to Experience Texas Charm?
+							</CardTitle>
+							<CardDescription className="text-base">
+								Book your stay in the uniquely Texan Texas Room
+							</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<p className="text-muted-foreground mb-6">
+								Book your stay directly with us for the best rates and
+								personalized service.
+							</p>
+							<div className="flex flex-col sm:flex-row gap-4 justify-center">
+								<Button
+									className="bg-orange-600 hover:bg-orange-700 text-white px-8 py-3 rounded-md font-medium transition-colors"
+									onClick={() => {
+										// Scroll to the availability calendar section
+										const calendarSection = document.querySelector(
+											'[data-calendar-section]',
+										);
+										if (calendarSection) {
+											calendarSection.scrollIntoView({ behavior: 'smooth' });
+										}
+									}}
+								>
+									Check Availability
+								</Button>
+								<Link
+									to="/"
+									className="border border-orange-600 text-orange-600 hover:bg-orange-50 px-8 py-3 rounded-md font-medium transition-colors inline-flex items-center justify-center"
+								>
+									View All Rooms
+								</Link>
+							</div>
+						</CardContent>
+					</Card>
+				</div>
+			</section>
+		</div>
+	);
+}

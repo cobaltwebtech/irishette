@@ -1,239 +1,450 @@
-import { eq, and, inArray } from 'drizzle-orm'
-import { createTRPCRouter, publicProcedure } from './init'
-import { createDrizzle } from '@/db/drizzle-init'
-import { room } from '@/db/schema-export'
+import { and, eq, inArray } from 'drizzle-orm';
+import { nanoid } from 'nanoid';
+import { z } from 'zod';
+import { createDrizzle } from '@/db/drizzle-init';
+import { room } from '@/db/schema-export';
+import { iCalService } from '@/lib/ical-service';
 import {
-  createRoomSchema,
-  updateRoomSchema,
-  getRoomSchema,
-  getRoomsSchema,
-  checkAvailabilitySchema,
-  bulkAvailabilitySchema,
-  syncCalendarSchema,
-} from '@/lib/room-validation'
-import { nanoid } from 'nanoid'
+	bulkAvailabilitySchema,
+	checkAvailabilitySchema,
+	createRoomSchema,
+	getRoomSchema,
+	getRoomsSchema,
+	syncCalendarSchema,
+	updateRoomSchema,
+} from '@/lib/room-validation';
+import { createTRPCRouter, publicProcedure } from './init';
 
 export const roomsRouter = createTRPCRouter({
-  // Get all rooms with pagination and filtering
-  list: publicProcedure
-    .input(getRoomsSchema)
-    .query(async ({ ctx, input }) => {
-      const db = createDrizzle(ctx.db)
-      
-      // Build the complete query in one go
-      const baseQuery = db.select().from(room)
-      const query = input.isActive !== undefined 
-        ? baseQuery.where(eq(room.isActive, input.isActive))
-        : baseQuery
-      
-      const result = await query
-        .limit(input.limit)
-        .offset(input.offset)
-      
-      // Get total count for pagination
-      const countBaseQuery = db.select().from(room)
-      const countQuery = input.isActive !== undefined
-        ? countBaseQuery.where(eq(room.isActive, input.isActive))
-        : countBaseQuery
-      
-      const totalResult = await countQuery
-      const total = totalResult.length
-      
-      return {
-        rooms: result,
-        pagination: {
-          total,
-          limit: input.limit,
-          offset: input.offset,
-          hasMore: input.offset + input.limit < total,
-        },
-      }
-    }),
+	// Simple test procedure without input
+	ping: publicProcedure.query(async () => {
+		return { message: 'pong', timestamp: new Date().toISOString() };
+	}),
 
-  // Get single room by ID
-  get: publicProcedure
-    .input(getRoomSchema)
-    .query(async ({ ctx, input }) => {
-      const db = createDrizzle(ctx.db)
-      
-      const result = await db
-        .select()
-        .from(room)
-        .where(eq(room.id, input.id))
-      
-      if (!result[0]) {
-        throw new Error('Room not found')
-      }
-      
-      return result[0]
-    }),
+	// Get all rooms with pagination and filtering
+	list: publicProcedure.input(getRoomsSchema).query(async ({ ctx, input }) => {
+		const db = createDrizzle(ctx.db);
 
-  // Create new room (admin only - we'll add auth middleware later)
-  create: publicProcedure
-    .input(createRoomSchema)
-    .mutation(async ({ ctx, input }) => {
-      const db = createDrizzle(ctx.db)
-      
-      const roomId = nanoid()
-      const now = new Date()
-      
-      const newRoom = {
-        id: roomId,
-        slug: input.slug,
-        basePrice: input.basePrice,
-        isActive: input.isActive,
-        airbnbIcalUrl: input.airbnbIcalUrl || null,
-        bookingComIcalUrl: input.bookingComIcalUrl || null,
-        lastAirbnbSync: null,
-        lastBookingComSync: null,
-        createdAt: now,
-        updatedAt: now,
-      }
-      
-      await db.insert(room).values(newRoom)
-      
-      return newRoom
-    }),
+		// Build query conditions
+		const conditions = [];
 
-  // Update existing room (admin only)
-  update: publicProcedure
-    .input(updateRoomSchema)
-    .mutation(async ({ ctx, input }) => {
-      const db = createDrizzle(ctx.db)
-      
-      const { id, ...updateData } = input
-      
-      const result = await db
-        .update(room)
-        .set({
-          ...updateData,
-          updatedAt: new Date(),
-        })
-        .where(eq(room.id, id))
-        .returning()
-      
-      if (!result[0]) {
-        throw new Error('Room not found')
-      }
-      
-      return result[0]
-    }),
+		// Filter by status if provided
+		if (input.status) {
+			conditions.push(eq(room.status, input.status));
+		}
 
-  // Delete room (admin only)
-  delete: publicProcedure
-    .input(getRoomSchema)
-    .mutation(async ({ ctx, input }) => {
-      const db = createDrizzle(ctx.db)
-      
-      const result = await db
-        .delete(room)
-        .where(eq(room.id, input.id))
-        .returning()
-      
-      if (!result[0]) {
-        throw new Error('Room not found')
-      }
-      
-      return { success: true, id: input.id }
-    }),
+		// Legacy support: filter by isActive if provided and no status filter
+		if (input.isActive !== undefined && !input.status) {
+			conditions.push(eq(room.isActive, input.isActive));
+		}
 
-  // Check room availability
-  checkAvailability: publicProcedure
-    .input(checkAvailabilitySchema)
-    .query(async ({ input }) => {
-      // TODO: Implement availability checking logic
-      // This will check against bookings and external calendars
-      return {
-        roomId: input.roomId,
-        available: true, // Placeholder
-        conflictingBookings: [],
-        externalConflicts: [],
-      }
-    }),
+		// Build the query
+		const baseQuery = db.select().from(room);
+		const query =
+			conditions.length > 0 ? baseQuery.where(and(...conditions)) : baseQuery;
 
-  // Bulk availability check
-  bulkAvailability: publicProcedure
-    .input(bulkAvailabilitySchema)
-    .query(async ({ ctx, input }) => {
-      const db = createDrizzle(ctx.db)
-      
-      // Build query conditions
-      const conditions = [eq(room.isActive, true)]
-      if (input.roomIds && input.roomIds.length > 0) {
-        conditions.push(inArray(room.id, input.roomIds))
-      }
-      
-      // Execute query with all conditions
-      const roomsToCheck = await db
-        .select()
-        .from(room)
-        .where(and(...conditions))
-      
-      // TODO: Check availability for each room
-      const availability = roomsToCheck.map(roomData => ({
-        roomId: roomData.id,
-        roomSlug: roomData.slug,
-        available: true, // Placeholder
-        conflictingBookings: [],
-        externalConflicts: [],
-      }))
-      
-      return {
-        dateRange: {
-          startDate: input.startDate,
-          endDate: input.endDate,
-        },
-        availability,
-      }
-    }),
+		const result = await query.limit(input.limit).offset(input.offset);
 
-  // Sync external calendar
-  syncCalendar: publicProcedure
-    .input(syncCalendarSchema)
-    .mutation(async ({ ctx, input }) => {
-      const db = createDrizzle(ctx.db)
-      
-      // Get room to sync
-      const result = await db
-        .select()
-        .from(room)
-        .where(eq(room.id, input.roomId))
-      
-      if (!result[0]) {
-        throw new Error('Room not found')
-      }
-      
-      const roomData = result[0]
-      
-      // Get the appropriate calendar URL
-      let calendarUrl: string | null = null
-      if (input.platform === 'airbnb') {
-        calendarUrl = roomData.airbnbIcalUrl
-      } else if (input.platform === 'booking.com') {
-        calendarUrl = roomData.bookingComIcalUrl
-      }
-      
-      if (!calendarUrl) {
-        throw new Error(`No ${input.platform} calendar URL configured for this room`)
-      }
-      
-      // TODO: Implement calendar sync logic
-      // This will fetch iCal data from external sources and parse it
-      
-      // Update last sync timestamp
-      const updateField = input.platform === 'airbnb' ? 'lastAirbnbSync' : 'lastBookingComSync'
-      const now = new Date()
-      
-      await db
-        .update(room)
-        .set({ [updateField]: now, updatedAt: now })
-        .where(eq(room.id, input.roomId))
-      
-      return {
-        success: true,
-        syncedEvents: 0, // Placeholder
-        lastSync: now,
-        platform: input.platform,
-      }
-    }),
-})
+		// Get total count for pagination
+		const countBaseQuery = db.select().from(room);
+		const countQuery =
+			conditions.length > 0
+				? countBaseQuery.where(and(...conditions))
+				: countBaseQuery;
+
+		const totalResult = await countQuery;
+		const total = totalResult.length;
+
+		return {
+			rooms: result,
+			pagination: {
+				total,
+				limit: input.limit,
+				offset: input.offset,
+				hasMore: input.offset + input.limit < total,
+			},
+		};
+	}),
+
+	// Get single room by ID
+	get: publicProcedure.input(getRoomSchema).query(async ({ ctx, input }) => {
+		const db = createDrizzle(ctx.db);
+
+		const result = await db.select().from(room).where(eq(room.id, input.id));
+
+		if (!result[0]) {
+			throw new Error('Room not found');
+		}
+
+		return result[0];
+	}),
+
+	// Create new room (admin only - we'll add auth middleware later)
+	create: publicProcedure
+		.input(createRoomSchema)
+		.mutation(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			const roomId = nanoid();
+			const now = new Date();
+
+			const newRoom = {
+				id: roomId,
+				name: input.name,
+				slug: input.slug,
+				description: input.description || null,
+				basePrice: input.basePrice || 0, // Default price for now
+				status: input.status || 'active',
+				isActive: input.isActive,
+				airbnbIcalUrl: input.airbnbIcalUrl || null,
+				expediaIcalUrl: input.expediaIcalUrl || null,
+				lastAirbnbSync: null,
+				lastExpediaSync: null,
+				createdAt: now,
+				updatedAt: now,
+			};
+
+			await db.insert(room).values(newRoom);
+
+			return newRoom;
+		}),
+
+	// Update existing room (admin only)
+	update: publicProcedure
+		.input(updateRoomSchema)
+		.mutation(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			const { id, ...updateData } = input;
+
+			const result = await db
+				.update(room)
+				.set({
+					...updateData,
+					updatedAt: new Date(),
+				})
+				.where(eq(room.id, id))
+				.returning();
+
+			if (!result[0]) {
+				throw new Error('Room not found');
+			}
+
+			return result[0];
+		}),
+
+	// Archive room (replaces delete - preserves data for historical bookings)
+	archive: publicProcedure
+		.input(getRoomSchema)
+		.mutation(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			const result = await db
+				.update(room)
+				.set({
+					status: 'archived',
+					isActive: false, // Keep legacy field in sync
+					updatedAt: new Date(),
+				})
+				.where(eq(room.id, input.id))
+				.returning();
+
+			if (!result[0]) {
+				throw new Error('Room not found');
+			}
+
+			return { success: true, id: input.id, status: 'archived' };
+		}),
+
+	// Activate room
+	activate: publicProcedure
+		.input(getRoomSchema)
+		.mutation(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			const result = await db
+				.update(room)
+				.set({
+					status: 'active',
+					isActive: true, // Keep legacy field in sync
+					updatedAt: new Date(),
+				})
+				.where(eq(room.id, input.id))
+				.returning();
+
+			if (!result[0]) {
+				throw new Error('Room not found');
+			}
+
+			return { success: true, id: input.id, status: 'active' };
+		}),
+
+	// Deactivate room (temporarily unavailable)
+	deactivate: publicProcedure
+		.input(getRoomSchema)
+		.mutation(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			const result = await db
+				.update(room)
+				.set({
+					status: 'inactive',
+					isActive: false, // Keep legacy field in sync
+					updatedAt: new Date(),
+				})
+				.where(eq(room.id, input.id))
+				.returning();
+
+			if (!result[0]) {
+				throw new Error('Room not found');
+			}
+
+			return { success: true, id: input.id, status: 'inactive' };
+		}),
+
+	// Check room availability
+	checkAvailability: publicProcedure
+		.input(checkAvailabilitySchema)
+		.query(async ({ input }) => {
+			// TODO: Implement availability checking logic
+			// This will check against bookings and external calendars
+			return {
+				roomId: input.roomId,
+				available: true, // Placeholder
+				conflictingBookings: [],
+				externalConflicts: [],
+			};
+		}),
+
+	// Bulk availability check
+	bulkAvailability: publicProcedure
+		.input(bulkAvailabilitySchema)
+		.query(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			// Build query conditions - only check active rooms for availability
+			const conditions = [eq(room.status, 'active')];
+			if (input.roomIds && input.roomIds.length > 0) {
+				conditions.push(inArray(room.id, input.roomIds));
+			}
+
+			// Execute query with all conditions
+			const roomsToCheck = await db
+				.select()
+				.from(room)
+				.where(and(...conditions));
+
+			// TODO: Check availability for each room
+			const availability = roomsToCheck.map((roomData) => ({
+				roomId: roomData.id,
+				roomSlug: roomData.slug,
+				available: true, // Placeholder
+				conflictingBookings: [],
+				externalConflicts: [],
+			}));
+
+			return {
+				dateRange: {
+					startDate: input.startDate,
+					endDate: input.endDate,
+				},
+				availability,
+			};
+		}),
+
+	// Sync external calendar
+	syncCalendar: publicProcedure
+		.input(syncCalendarSchema)
+		.mutation(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			// Get room to sync
+			const result = await db
+				.select()
+				.from(room)
+				.where(eq(room.id, input.roomId));
+
+			if (!result[0]) {
+				throw new Error('Room not found');
+			}
+
+			const roomData = result[0];
+
+			// Get the appropriate calendar URL
+			let calendarUrl: string | null = null;
+			if (input.platform === 'airbnb') {
+				calendarUrl = roomData.airbnbIcalUrl;
+			} else if (input.platform === 'expedia') {
+				calendarUrl = roomData.expediaIcalUrl;
+			}
+
+			if (!calendarUrl) {
+				throw new Error(
+					`No ${input.platform} calendar URL configured for this room`,
+				);
+			}
+
+			// Use iCal service to perform the actual sync
+			const icalServiceInstance = new iCalService(ctx.db);
+			const syncResult = await icalServiceInstance.syncExternalCalendar(
+				input.roomId,
+				input.platform,
+			);
+
+			return {
+				success: syncResult.success,
+				syncedEvents: syncResult.bookingsProcessed,
+				lastSync: new Date(),
+				platform: input.platform,
+				errorMessage: syncResult.errorMessage,
+			};
+		}),
+
+	// Update room iCal URLs
+	updateIcalUrls: publicProcedure
+		.input(
+			z.object({
+				roomId: z.string(),
+				airbnbIcalUrl: z.string().url().optional().nullable(),
+				expediaIcalUrl: z.string().url().optional().nullable(),
+			}),
+		)
+		.mutation(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			// Verify room exists
+			const roomResult = await db
+				.select()
+				.from(room)
+				.where(eq(room.id, input.roomId));
+
+			if (!roomResult[0]) {
+				throw new Error('Room not found');
+			}
+
+			// Update iCal URLs
+			const updateData: Partial<typeof room.$inferInsert> = {
+				updatedAt: new Date(),
+			};
+
+			if (input.airbnbIcalUrl !== undefined) {
+				updateData.airbnbIcalUrl = input.airbnbIcalUrl;
+			}
+
+			if (input.expediaIcalUrl !== undefined) {
+				updateData.expediaIcalUrl = input.expediaIcalUrl;
+			}
+
+			await db.update(room).set(updateData).where(eq(room.id, input.roomId));
+
+			return {
+				success: true,
+				roomId: input.roomId,
+				updatedUrls: {
+					airbnb: input.airbnbIcalUrl,
+					expedia: input.expediaIcalUrl,
+				},
+				updatedAt: new Date(),
+			};
+		}),
+
+	// Get room iCal configuration
+	getIcalConfig: publicProcedure
+		.input(
+			z.object({
+				roomId: z.string(),
+			}),
+		)
+		.query(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			const roomResult = await db
+				.select({
+					id: room.id,
+					slug: room.slug,
+					airbnbIcalUrl: room.airbnbIcalUrl,
+					expediaIcalUrl: room.expediaIcalUrl,
+					lastAirbnbSync: room.lastAirbnbSync,
+					lastExpediaSync: room.lastExpediaSync,
+				})
+				.from(room)
+				.where(eq(room.id, input.roomId));
+
+			if (!roomResult[0]) {
+				throw new Error('Room not found');
+			}
+
+			const roomData = roomResult[0];
+
+			return {
+				roomId: roomData.id,
+				roomSlug: roomData.slug,
+				icalUrls: {
+					airbnb: roomData.airbnbIcalUrl,
+					expedia: roomData.expediaIcalUrl,
+				},
+				lastSync: {
+					airbnb: roomData.lastAirbnbSync,
+					expedia: roomData.lastExpediaSync,
+				},
+				configured: {
+					airbnb: !!roomData.airbnbIcalUrl,
+					expedia: !!roomData.expediaIcalUrl,
+				},
+				// Generate URLs for this room's calendar feed
+				exportUrls: {
+					byId: `/api/rooms/${roomData.id}/calendar.ics`,
+					bySlug: `/api/rooms/slug/${roomData.slug}/calendar.ics`,
+				},
+			};
+		}),
+
+	// Test iCal URL (validate it works)
+	testIcalUrl: publicProcedure
+		.input(
+			z.object({
+				url: z.string().url(),
+			}),
+		)
+		.mutation(async ({ input }) => {
+			try {
+				const response = await fetch(input.url, {
+					headers: {
+						'User-Agent': 'Irishette Calendar Test/1.0',
+					},
+				});
+
+				if (!response.ok) {
+					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+				}
+
+				const content = await response.text();
+
+				// Basic validation
+				if (!content.includes('BEGIN:VCALENDAR')) {
+					throw new Error('Invalid iCal format: Missing VCALENDAR');
+				}
+
+				// Count events
+				const eventCount = (content.match(/BEGIN:VEVENT/g) || []).length;
+				const lines = content.split('\n').length;
+
+				return {
+					success: true,
+					url: input.url,
+					contentLength: content.length,
+					lines,
+					eventCount,
+					preview: content.substring(0, 300) + '...',
+					validatedAt: new Date(),
+				};
+			} catch (error) {
+				return {
+					success: false,
+					url: input.url,
+					error: error instanceof Error ? error.message : 'Unknown error',
+					validatedAt: new Date(),
+				};
+			}
+		}),
+});
