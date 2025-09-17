@@ -1,16 +1,20 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, gte, inArray, lte } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 import { createDrizzle } from '@/db/drizzle-init';
-import { room } from '@/db/schema-export';
+import { room, roomPricingRules } from '@/db/schema-export';
 import { iCalService } from '@/lib/ical-service';
 import {
 	bulkAvailabilitySchema,
 	checkAvailabilitySchema,
+	createPricingRuleSchema,
 	createRoomSchema,
+	deletePricingRuleSchema,
+	getPricingRulesSchema,
 	getRoomSchema,
 	getRoomsSchema,
 	syncCalendarSchema,
+	updatePricingRuleSchema,
 	updateRoomSchema,
 } from '@/lib/room-validation';
 import { createTRPCRouter, publicProcedure } from './init';
@@ -446,5 +450,205 @@ export const roomsRouter = createTRPCRouter({
 					validatedAt: new Date(),
 				};
 			}
+		}),
+
+	// Pricing Rules Management
+	// Get pricing rules for a room
+	getPricingRules: publicProcedure
+		.input(getPricingRulesSchema)
+		.query(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			const conditions = [eq(roomPricingRules.roomId, input.roomId)];
+
+			// Filter by active status if provided
+			if (input.isActive !== undefined) {
+				conditions.push(eq(roomPricingRules.isActive, input.isActive));
+			}
+
+			// Filter by date range if provided
+			if (input.startDate) {
+				conditions.push(
+					lte(roomPricingRules.startDate, input.endDate || input.startDate),
+				);
+			}
+			if (input.endDate) {
+				conditions.push(
+					gte(roomPricingRules.endDate, input.startDate || input.endDate),
+				);
+			}
+
+			const result = await db
+				.select()
+				.from(roomPricingRules)
+				.where(and(...conditions))
+				.orderBy(roomPricingRules.startDate);
+
+			return result;
+		}),
+
+	// Create a new pricing rule
+	createPricingRule: publicProcedure
+		.input(createPricingRuleSchema)
+		.mutation(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			// Validate that dates are not in the past
+			const today = new Date();
+			today.setHours(0, 0, 0, 0); // Reset time to start of day
+			const startDate = new Date(input.startDate);
+			const endDate = new Date(input.endDate);
+
+			if (startDate < today) {
+				throw new Error('Start date cannot be in the past');
+			}
+
+			if (endDate < today) {
+				throw new Error('End date cannot be in the past');
+			}
+
+			// Check for overlapping rules
+			const existingRules = await db
+				.select()
+				.from(roomPricingRules)
+				.where(
+					and(
+						eq(roomPricingRules.roomId, input.roomId),
+						eq(roomPricingRules.isActive, true),
+						// Check for date range overlap
+						gte(roomPricingRules.endDate, input.startDate),
+						lte(roomPricingRules.startDate, input.endDate),
+					),
+				);
+
+			if (existingRules.length > 0) {
+				const overlappingRule = existingRules[0];
+				throw new Error(
+					`Pricing rule overlaps with existing rule "${overlappingRule.name}" (${overlappingRule.startDate} - ${overlappingRule.endDate})`,
+				);
+			}
+
+			const ruleId = nanoid();
+			const now = new Date();
+
+			const newRule = {
+				id: ruleId,
+				roomId: input.roomId,
+				name: input.name,
+				ruleType: input.ruleType,
+				value: input.value,
+				startDate: input.startDate,
+				endDate: input.endDate,
+				isActive: input.isActive ?? true,
+				daysOfWeek: input.daysOfWeek ? JSON.stringify(input.daysOfWeek) : null,
+				createdAt: now,
+				updatedAt: now,
+			};
+
+			await db.insert(roomPricingRules).values(newRule);
+
+			return newRule;
+		}),
+
+	// Update existing pricing rule
+	updatePricingRule: publicProcedure
+		.input(updatePricingRuleSchema)
+		.mutation(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			const { id, ...updateData } = input;
+
+			// If date range is being updated, check for overlaps
+			if (updateData.startDate || updateData.endDate) {
+				// Get the current rule to get roomId and current date range
+				const currentRule = await db
+					.select()
+					.from(roomPricingRules)
+					.where(eq(roomPricingRules.id, id))
+					.limit(1);
+
+				if (!currentRule[0]) {
+					throw new Error('Pricing rule not found');
+				}
+
+				const startDate = updateData.startDate || currentRule[0].startDate;
+				const endDate = updateData.endDate || currentRule[0].endDate;
+
+				// Validate that dates are not in the past
+				const today = new Date();
+				today.setHours(0, 0, 0, 0); // Reset time to start of day
+				const startDateObj = new Date(startDate);
+				const endDateObj = new Date(endDate);
+
+				if (startDateObj < today) {
+					throw new Error('Start date cannot be in the past');
+				}
+
+				if (endDateObj < today) {
+					throw new Error('End date cannot be in the past');
+				}
+
+				// Check for overlapping rules (excluding the current rule being updated)
+				const existingRules = await db
+					.select()
+					.from(roomPricingRules)
+					.where(
+						and(
+							eq(roomPricingRules.roomId, currentRule[0].roomId),
+							eq(roomPricingRules.isActive, true),
+							// Check for date range overlap
+							gte(roomPricingRules.endDate, startDate),
+							lte(roomPricingRules.startDate, endDate),
+						),
+					);
+
+				// Filter out the current rule from the results
+				const overlappingRules = existingRules.filter((rule) => rule.id !== id);
+
+				if (overlappingRules.length > 0) {
+					const overlappingRule = overlappingRules[0];
+					throw new Error(
+						`Pricing rule overlaps with existing rule "${overlappingRule.name}" (${overlappingRule.startDate} - ${overlappingRule.endDate})`,
+					);
+				}
+			}
+
+			const updatedRule = {
+				...updateData,
+				daysOfWeek: updateData.daysOfWeek
+					? JSON.stringify(updateData.daysOfWeek)
+					: undefined,
+				updatedAt: new Date(),
+			};
+
+			const result = await db
+				.update(roomPricingRules)
+				.set(updatedRule)
+				.where(eq(roomPricingRules.id, id))
+				.returning();
+
+			if (!result[0]) {
+				throw new Error('Pricing rule not found');
+			}
+
+			return result[0];
+		}),
+
+	// Delete pricing rule
+	deletePricingRule: publicProcedure
+		.input(deletePricingRuleSchema)
+		.mutation(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			const result = await db
+				.delete(roomPricingRules)
+				.where(eq(roomPricingRules.id, input.id))
+				.returning();
+
+			if (!result[0]) {
+				throw new Error('Pricing rule not found');
+			}
+
+			return { success: true, deletedRule: result[0] };
 		}),
 });

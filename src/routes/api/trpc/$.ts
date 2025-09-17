@@ -36,7 +36,8 @@ async function handleTRPCRequest(request: Request): Promise<Response> {
 			const inputParam = urlObj.searchParams.get('input');
 			if (inputParam) {
 				try {
-					input = JSON.parse(decodeURIComponent(inputParam));
+					const parsed = JSON.parse(decodeURIComponent(inputParam));
+					input = parsed.json || parsed; // Extract json property if it exists
 				} catch (e) {
 					console.error('Failed to parse GET input:', e);
 				}
@@ -46,7 +47,8 @@ async function handleTRPCRequest(request: Request): Promise<Response> {
 			try {
 				const bodyText = await request.text();
 				if (bodyText) {
-					input = JSON.parse(bodyText);
+					const parsed = JSON.parse(bodyText);
+					input = parsed.json || parsed; // Extract json property if it exists
 				}
 			} catch (e) {
 				console.error('Failed to parse POST body:', e);
@@ -111,6 +113,22 @@ async function handleTRPCRequest(request: Request): Promise<Response> {
 				} else if (procedureName === 'syncCalendar') {
 					result = await caller.rooms.syncCalendar(
 						input as Parameters<typeof caller.rooms.syncCalendar>[0],
+					);
+				} else if (procedureName === 'getPricingRules') {
+					result = await caller.rooms.getPricingRules(
+						input as Parameters<typeof caller.rooms.getPricingRules>[0],
+					);
+				} else if (procedureName === 'createPricingRule') {
+					result = await caller.rooms.createPricingRule(
+						input as Parameters<typeof caller.rooms.createPricingRule>[0],
+					);
+				} else if (procedureName === 'updatePricingRule') {
+					result = await caller.rooms.updatePricingRule(
+						input as Parameters<typeof caller.rooms.updatePricingRule>[0],
+					);
+				} else if (procedureName === 'deletePricingRule') {
+					result = await caller.rooms.deletePricingRule(
+						input as Parameters<typeof caller.rooms.deletePricingRule>[0],
 					);
 				} else {
 					throw new Error(`Unknown procedure: ${procedureName}`);

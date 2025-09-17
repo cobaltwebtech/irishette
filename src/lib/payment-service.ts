@@ -1,4 +1,4 @@
-import { and, eq, gte, lte, or } from 'drizzle-orm';
+import { and, desc, eq, gte, isNull, lte, or } from 'drizzle-orm';
 import { customAlphabet, nanoid } from 'nanoid';
 import Stripe from 'stripe';
 import { createDrizzle } from '@/db/drizzle-init';
@@ -7,6 +7,7 @@ import {
 	paymentTransactions,
 	room,
 	roomAvailability,
+	roomPricingRules,
 	user,
 } from '@/db/schema-export';
 import type {
@@ -65,6 +66,21 @@ export class PaymentService {
 		taxAmount: number;
 		totalAmount: number;
 		numberOfNights: number;
+		appliedRules: Array<{
+			id: string;
+			name: string;
+			ruleType: string;
+			value: number;
+			appliedAmount: number;
+		}>;
+		taxBreakdown: {
+			stateTaxRate: number;
+			cityTaxRate: number;
+			stateTaxAmount: number;
+			cityTaxAmount: number;
+			totalTaxAmount: number;
+			taxableAmount: number;
+		};
 	}> {
 		// Get room pricing
 		const roomResult = await this.db
@@ -89,35 +105,149 @@ export class PaymentService {
 			throw new Error('Invalid date range');
 		}
 
-		// Base calculation
-		const baseAmount = roomData.basePrice * numberOfNights;
+		// Get applicable pricing rules for this date range
+		const applicableRules = await this.db
+			.select()
+			.from(roomPricingRules)
+			.where(
+				and(
+					eq(roomPricingRules.roomId, roomId),
+					eq(roomPricingRules.isActive, true),
+					// Rule must overlap with booking dates
+					lte(roomPricingRules.startDate, checkOutDate),
+					gte(roomPricingRules.endDate, checkInDate),
+					// Check min/max nights constraints
+					or(
+						isNull(roomPricingRules.minNights),
+						lte(roomPricingRules.minNights, numberOfNights),
+					),
+					or(
+						isNull(roomPricingRules.maxNights),
+						gte(roomPricingRules.maxNights, numberOfNights),
+					),
+				),
+			)
+			.orderBy(desc(roomPricingRules.priority));
 
-		// Standard fees (these could be configurable)
-		const cleaningFee = 50; // Fixed cleaning fee
-		const serviceFeeRate = 0.12; // 12% service fee
-		const serviceFee = baseAmount * serviceFeeRate; // Keep precision
-		const feesAmount = cleaningFee + serviceFee;
+		// Filter rules by days of week if specified
+		const filteredRules = applicableRules.filter((rule) => {
+			if (!rule.daysOfWeek) return true;
+
+			try {
+				const daysOfWeek = JSON.parse(rule.daysOfWeek) as string[];
+				const dayNames = [
+					'sunday',
+					'monday',
+					'tuesday',
+					'wednesday',
+					'thursday',
+					'friday',
+					'saturday',
+				];
+
+				// Check if any day in the booking range matches the rule's days
+				for (
+					let d = new Date(checkIn);
+					d < checkOut;
+					d.setDate(d.getDate() + 1)
+				) {
+					const dayName = dayNames[d.getDay()];
+					if (daysOfWeek.includes(dayName)) {
+						return true;
+					}
+				}
+				return false;
+			} catch {
+				return true; // If parsing fails, include the rule
+			}
+		});
+
+		// Apply pricing rules to calculate final price per night
+		let finalPricePerNight = roomData.basePrice;
+		const appliedRules: Array<{
+			id: string;
+			name: string;
+			ruleType: string;
+			value: number;
+			appliedAmount: number;
+		}> = [];
+
+		// Apply rules in priority order (highest first)
+		// Only apply the highest priority rule of each type
+		const appliedRuleTypes = new Set<string>();
+
+		for (const rule of filteredRules) {
+			// Skip if we've already applied a rule of this type with higher priority
+			if (appliedRuleTypes.has(rule.ruleType)) continue;
+
+			let appliedAmount = 0;
+
+			switch (rule.ruleType) {
+				case 'surcharge_rate':
+					appliedAmount = roomData.basePrice * rule.value;
+					finalPricePerNight += appliedAmount;
+					break;
+				case 'fixed_amount':
+					appliedAmount = rule.value;
+					finalPricePerNight += appliedAmount;
+					break;
+				case 'absolute_price':
+					appliedAmount = rule.value - roomData.basePrice;
+					finalPricePerNight = rule.value;
+					break;
+			}
+
+			appliedRules.push({
+				id: rule.id,
+				name: rule.name,
+				ruleType: rule.ruleType,
+				value: rule.value,
+				appliedAmount,
+			});
+
+			appliedRuleTypes.add(rule.ruleType);
+		}
+
+		// Base calculation with dynamic pricing
+		const baseAmount = finalPricePerNight * numberOfNights;
+
+		// Use the room's service fee rate
+		const serviceFeeRate = roomData.serviceFeeRate;
 
 		// Guest count could affect pricing in the future
 		// For now, we store it but don't use it in calculations
 		const guestMultiplier = guestCount > 4 ? 1.1 : 1.0; // Small fee for large groups
 
-		// Apply guest multiplier to base amount and fees
+		// Apply guest multiplier to base amount
 		const adjustedBaseAmount = baseAmount * guestMultiplier;
-		const adjustedFeesAmount = feesAmount * guestMultiplier;
 
-		// Calculate tax on the subtotal (base + fees after guest adjustment)
-		const subtotal = adjustedBaseAmount + adjustedFeesAmount;
-		const taxRate = 0.08; // 8% tax rate
-		const taxAmount = subtotal * taxRate;
-		const totalAmount = subtotal + taxAmount;
+		// Calculate Hotel Occupancy Tax on room price only (excluding service fees)
+		const stateTaxAmount = adjustedBaseAmount * roomData.stateTaxRate; // Texas state tax (6%)
+		const cityTaxAmount = adjustedBaseAmount * roomData.cityTaxRate; // Dublin city tax (7%)
+		const totalTaxAmount = stateTaxAmount + cityTaxAmount;
+
+		// Calculate service fee on the adjusted base amount (no tax on service fees)
+		const serviceFee = adjustedBaseAmount * serviceFeeRate;
+
+		// Total amount includes room price + service fees + hotel occupancy tax
+		const totalAmount = adjustedBaseAmount + serviceFee + totalTaxAmount;
 
 		return {
 			baseAmount: Math.round(adjustedBaseAmount * 100) / 100, // Round to nearest cent
-			feesAmount: Math.round(adjustedFeesAmount * 100) / 100, // Round to nearest cent
-			taxAmount: Math.round(taxAmount * 100) / 100, // Round to nearest cent
+			feesAmount: Math.round(serviceFee * 100) / 100, // Round to nearest cent
+			taxAmount: Math.round(totalTaxAmount * 100) / 100, // Hotel occupancy tax
 			totalAmount: Math.round(totalAmount * 100) / 100, // Round to nearest cent
 			numberOfNights,
+			appliedRules,
+			// Add detailed tax breakdown for reporting
+			taxBreakdown: {
+				stateTaxRate: roomData.stateTaxRate,
+				cityTaxRate: roomData.cityTaxRate,
+				stateTaxAmount: Math.round(stateTaxAmount * 100) / 100,
+				cityTaxAmount: Math.round(cityTaxAmount * 100) / 100,
+				totalTaxAmount: Math.round(totalTaxAmount * 100) / 100,
+				taxableAmount: Math.round(adjustedBaseAmount * 100) / 100, // Only room price is taxable
+			},
 		};
 	}
 
@@ -358,7 +488,7 @@ export class PaymentService {
 
 		const customer = userResult[0];
 
-		// Get room details for line item
+		// Get room details for line item and tax calculation
 		const roomResult = await this.db
 			.select()
 			.from(room)
@@ -369,6 +499,10 @@ export class PaymentService {
 		}
 
 		const roomData = roomResult[0];
+
+		// Calculate tax breakdown for display
+		const stateTaxAmount = booking.baseAmount * roomData.stateTaxRate;
+		const cityTaxAmount = booking.baseAmount * roomData.cityTaxRate;
 
 		// Create line items for Stripe
 		const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
@@ -405,18 +539,49 @@ export class PaymentService {
 			});
 		}
 
-		// Add tax as a separate line item using manual tax rate
+		// Add detailed tax line items using calculated amounts
 		if (booking.taxAmount && booking.taxAmount > 0) {
-			lineItems.push({
-				price_data: {
-					currency: 'usd',
-					product_data: {
-						name: 'Taxes',
+			// Add Texas State Hotel Occupancy Tax (6%)
+			if (stateTaxAmount > 0) {
+				lineItems.push({
+					price_data: {
+						currency: 'usd',
+						product_data: {
+							name: 'Texas Hotel Occupancy Tax',
+							description: `State tax (${roomData.stateTaxRate * 100}%) on room price of $${booking.baseAmount.toFixed(2)}`,
+							metadata: {
+								tax_type: 'state_hotel_occupancy_tax',
+								tax_rate: roomData.stateTaxRate.toString(),
+								taxable_amount: booking.baseAmount.toString(),
+								jurisdiction: 'Texas',
+							},
+						},
+						unit_amount: Math.round(stateTaxAmount * 100), // Ensure integer cents
 					},
-					unit_amount: Math.round(booking.taxAmount * 100), // Ensure integer cents
-				},
-				quantity: 1,
-			});
+					quantity: 1,
+				});
+			}
+
+			// Add Dublin City Hotel Occupancy Tax (7%)
+			if (cityTaxAmount > 0) {
+				lineItems.push({
+					price_data: {
+						currency: 'usd',
+						product_data: {
+							name: 'Dublin Hotel Occupancy Tax',
+							description: `City tax (${roomData.cityTaxRate * 100}%) on room price of $${booking.baseAmount.toFixed(2)}`,
+							metadata: {
+								tax_type: 'city_hotel_occupancy_tax',
+								tax_rate: roomData.cityTaxRate.toString(),
+								taxable_amount: booking.baseAmount.toString(),
+								jurisdiction: 'Dublin, TX',
+							},
+						},
+						unit_amount: Math.round(cityTaxAmount * 100), // Ensure integer cents
+					},
+					quantity: 1,
+				});
+			}
 		}
 
 		// Create Stripe checkout session

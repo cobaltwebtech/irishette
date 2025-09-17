@@ -109,7 +109,12 @@ function AdminBookings() {
 					throw new Error('No booking data found in response');
 				}
 
-				setBookings(bookingsData);
+				// Filter out pending bookings since they are temporary and payment is not completed
+				const filteredBookings = bookingsData.filter(
+					(booking) => booking.booking.status !== 'pending',
+				);
+
+				setBookings(filteredBookings);
 			} catch (error) {
 				console.error('Failed to fetch bookings:', error);
 				setError(

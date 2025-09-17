@@ -19,8 +19,9 @@ import { Route as BookingRouteImport } from './routes/booking'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AccountIndexRouteImport } from './routes/account/index'
-import { Route as AdminPropertyManagementRouteImport } from './routes/admin/property-management'
+import { Route as AdminPropertyManagementIndexRouteImport } from './routes/admin/property-management/index'
 import { Route as AdminBookingsIndexRouteImport } from './routes/admin/bookings/index'
+import { Route as AdminPropertyManagementRoomIdRouteImport } from './routes/admin/property-management/$roomId'
 import { Route as AdminBookingsBookingIdRouteImport } from './routes/admin/bookings/$bookingId'
 import { Route as AccountBookingBookingIdRouteImport } from './routes/account/booking/$bookingId'
 import { ServerRoute as ApiTrpcSplatServerRouteImport } from './routes/api/trpc/$'
@@ -70,16 +71,23 @@ const AccountIndexRoute = AccountIndexRouteImport.update({
   path: '/account/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminPropertyManagementRoute = AdminPropertyManagementRouteImport.update({
-  id: '/admin/property-management',
-  path: '/admin/property-management',
-  getParentRoute: () => rootRouteImport,
-} as any)
+const AdminPropertyManagementIndexRoute =
+  AdminPropertyManagementIndexRouteImport.update({
+    id: '/admin/property-management/',
+    path: '/admin/property-management/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AdminBookingsIndexRoute = AdminBookingsIndexRouteImport.update({
   id: '/admin/bookings/',
   path: '/admin/bookings/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminPropertyManagementRoomIdRoute =
+  AdminPropertyManagementRoomIdRouteImport.update({
+    id: '/admin/property-management/$roomId',
+    path: '/admin/property-management/$roomId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AdminBookingsBookingIdRoute = AdminBookingsBookingIdRouteImport.update({
   id: '/admin/bookings/$bookingId',
   path: '/admin/bookings/$bookingId',
@@ -119,12 +127,13 @@ export interface FileRoutesByFullPath {
   '/logout': typeof LogoutRoute
   '/rose-room': typeof RoseRoomRoute
   '/texas-room': typeof TexasRoomRoute
-  '/admin/property-management': typeof AdminPropertyManagementRoute
   '/account': typeof AccountIndexRoute
   '/admin': typeof AdminIndexRoute
   '/account/booking/$bookingId': typeof AccountBookingBookingIdRoute
   '/admin/bookings/$bookingId': typeof AdminBookingsBookingIdRoute
+  '/admin/property-management/$roomId': typeof AdminPropertyManagementRoomIdRoute
   '/admin/bookings': typeof AdminBookingsIndexRoute
+  '/admin/property-management': typeof AdminPropertyManagementIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -133,12 +142,13 @@ export interface FileRoutesByTo {
   '/logout': typeof LogoutRoute
   '/rose-room': typeof RoseRoomRoute
   '/texas-room': typeof TexasRoomRoute
-  '/admin/property-management': typeof AdminPropertyManagementRoute
   '/account': typeof AccountIndexRoute
   '/admin': typeof AdminIndexRoute
   '/account/booking/$bookingId': typeof AccountBookingBookingIdRoute
   '/admin/bookings/$bookingId': typeof AdminBookingsBookingIdRoute
+  '/admin/property-management/$roomId': typeof AdminPropertyManagementRoomIdRoute
   '/admin/bookings': typeof AdminBookingsIndexRoute
+  '/admin/property-management': typeof AdminPropertyManagementIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -148,12 +158,13 @@ export interface FileRoutesById {
   '/logout': typeof LogoutRoute
   '/rose-room': typeof RoseRoomRoute
   '/texas-room': typeof TexasRoomRoute
-  '/admin/property-management': typeof AdminPropertyManagementRoute
   '/account/': typeof AccountIndexRoute
   '/admin/': typeof AdminIndexRoute
   '/account/booking/$bookingId': typeof AccountBookingBookingIdRoute
   '/admin/bookings/$bookingId': typeof AdminBookingsBookingIdRoute
+  '/admin/property-management/$roomId': typeof AdminPropertyManagementRoomIdRoute
   '/admin/bookings/': typeof AdminBookingsIndexRoute
+  '/admin/property-management/': typeof AdminPropertyManagementIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -164,12 +175,13 @@ export interface FileRouteTypes {
     | '/logout'
     | '/rose-room'
     | '/texas-room'
-    | '/admin/property-management'
     | '/account'
     | '/admin'
     | '/account/booking/$bookingId'
     | '/admin/bookings/$bookingId'
+    | '/admin/property-management/$roomId'
     | '/admin/bookings'
+    | '/admin/property-management'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -178,12 +190,13 @@ export interface FileRouteTypes {
     | '/logout'
     | '/rose-room'
     | '/texas-room'
-    | '/admin/property-management'
     | '/account'
     | '/admin'
     | '/account/booking/$bookingId'
     | '/admin/bookings/$bookingId'
+    | '/admin/property-management/$roomId'
     | '/admin/bookings'
+    | '/admin/property-management'
   id:
     | '__root__'
     | '/'
@@ -192,12 +205,13 @@ export interface FileRouteTypes {
     | '/logout'
     | '/rose-room'
     | '/texas-room'
-    | '/admin/property-management'
     | '/account/'
     | '/admin/'
     | '/account/booking/$bookingId'
     | '/admin/bookings/$bookingId'
+    | '/admin/property-management/$roomId'
     | '/admin/bookings/'
+    | '/admin/property-management/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -207,12 +221,13 @@ export interface RootRouteChildren {
   LogoutRoute: typeof LogoutRoute
   RoseRoomRoute: typeof RoseRoomRoute
   TexasRoomRoute: typeof TexasRoomRoute
-  AdminPropertyManagementRoute: typeof AdminPropertyManagementRoute
   AccountIndexRoute: typeof AccountIndexRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AccountBookingBookingIdRoute: typeof AccountBookingBookingIdRoute
   AdminBookingsBookingIdRoute: typeof AdminBookingsBookingIdRoute
+  AdminPropertyManagementRoomIdRoute: typeof AdminPropertyManagementRoomIdRoute
   AdminBookingsIndexRoute: typeof AdminBookingsIndexRoute
+  AdminPropertyManagementIndexRoute: typeof AdminPropertyManagementIndexRoute
 }
 export interface FileServerRoutesByFullPath {
   '/api/auth/$': typeof ApiAuthSplatServerRoute
@@ -319,11 +334,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/property-management': {
-      id: '/admin/property-management'
+    '/admin/property-management/': {
+      id: '/admin/property-management/'
       path: '/admin/property-management'
       fullPath: '/admin/property-management'
-      preLoaderRoute: typeof AdminPropertyManagementRouteImport
+      preLoaderRoute: typeof AdminPropertyManagementIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/bookings/': {
@@ -331,6 +346,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/bookings'
       fullPath: '/admin/bookings'
       preLoaderRoute: typeof AdminBookingsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/property-management/$roomId': {
+      id: '/admin/property-management/$roomId'
+      path: '/admin/property-management/$roomId'
+      fullPath: '/admin/property-management/$roomId'
+      preLoaderRoute: typeof AdminPropertyManagementRoomIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/bookings/$bookingId': {
@@ -389,12 +411,13 @@ const rootRouteChildren: RootRouteChildren = {
   LogoutRoute: LogoutRoute,
   RoseRoomRoute: RoseRoomRoute,
   TexasRoomRoute: TexasRoomRoute,
-  AdminPropertyManagementRoute: AdminPropertyManagementRoute,
   AccountIndexRoute: AccountIndexRoute,
   AdminIndexRoute: AdminIndexRoute,
   AccountBookingBookingIdRoute: AccountBookingBookingIdRoute,
   AdminBookingsBookingIdRoute: AdminBookingsBookingIdRoute,
+  AdminPropertyManagementRoomIdRoute: AdminPropertyManagementRoomIdRoute,
   AdminBookingsIndexRoute: AdminBookingsIndexRoute,
+  AdminPropertyManagementIndexRoute: AdminPropertyManagementIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
