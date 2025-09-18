@@ -115,16 +115,105 @@ export const roomAvailabilitySchema = z.object({
 });
 
 // Room blocking schema
-export const blockRoomSchema = z.object({
-	roomId: z.string(),
+export const blockRoomSchema = z
+	.object({
+		roomId: z.string(),
+		startDate: z
+			.string()
+			.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+		endDate: z
+			.string()
+			.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+		reason: z.string().min(1, 'Reason is required'),
+		notes: z.string().optional(),
+	})
+	.refine(
+		(data) => {
+			// Ensure start date is before or equal to end date
+			return new Date(data.startDate) <= new Date(data.endDate);
+		},
+		{
+			message: 'End date must be after or equal to start date',
+			path: ['endDate'],
+		},
+	);
+
+// Room blocked period validation schemas for CRUD operations
+export const roomBlockedPeriodSchema = z
+	.object({
+		id: z.string().optional(),
+		roomId: z.string(),
+		startDate: z
+			.string()
+			.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+		endDate: z
+			.string()
+			.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+		reason: z.string().min(1, 'Reason is required'),
+		notes: z.string().optional(),
+		createdAt: z.date().optional(),
+	})
+	.refine(
+		(data) => {
+			// Ensure start date is before or equal to end date
+			return new Date(data.startDate) <= new Date(data.endDate);
+		},
+		{
+			message: 'End date must be after or equal to start date',
+			path: ['endDate'],
+		},
+	);
+
+// Create blocked period input (without ID and timestamps)
+export const createBlockedPeriodSchema = roomBlockedPeriodSchema.omit({
+	id: true,
+	createdAt: true,
+});
+
+// Update blocked period input (partial with required ID)
+export const updateBlockedPeriodSchema = roomBlockedPeriodSchema
+	.partial()
+	.extend({
+		id: z.string(),
+	})
+	.omit({
+		createdAt: true,
+	})
+	.refine(
+		(data) => {
+			// Ensure start date is before or equal to end date if both are provided
+			if (data.startDate && data.endDate) {
+				return new Date(data.startDate) <= new Date(data.endDate);
+			}
+			return true;
+		},
+		{
+			message: 'End date must be after or equal to start date',
+			path: ['endDate'],
+		},
+	);
+
+// Query schemas for blocked periods
+export const getBlockedPeriodsSchema = z.object({
+	roomId: z.string().optional(),
 	startDate: z
 		.string()
-		.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+		.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
+		.optional(),
 	endDate: z
 		.string()
-		.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-	reason: z.string().min(1, 'Reason is required'),
-	notes: z.string().optional(),
+		.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
+		.optional(),
+	limit: z.number().min(1).max(100).default(50),
+	offset: z.number().min(0).default(0),
+});
+
+export const getBlockedPeriodSchema = z.object({
+	id: z.string(),
+});
+
+export const deleteBlockedPeriodSchema = z.object({
+	id: z.string(),
 });
 
 // Pricing rules schemas
@@ -214,6 +303,10 @@ export type BulkAvailability = z.infer<typeof bulkAvailabilitySchema>;
 export type SyncCalendar = z.infer<typeof syncCalendarSchema>;
 export type RoomAvailability = z.infer<typeof roomAvailabilitySchema>;
 export type BlockRoom = z.infer<typeof blockRoomSchema>;
+export type RoomBlockedPeriod = z.infer<typeof roomBlockedPeriodSchema>;
+export type CreateBlockedPeriod = z.infer<typeof createBlockedPeriodSchema>;
+export type UpdateBlockedPeriod = z.infer<typeof updateBlockedPeriodSchema>;
+export type GetBlockedPeriods = z.infer<typeof getBlockedPeriodsSchema>;
 export type RoomPricingRule = z.infer<typeof roomPricingRuleSchema>;
 export type CreatePricingRule = z.infer<typeof createPricingRuleSchema>;
 export type UpdatePricingRule = z.infer<typeof updatePricingRuleSchema>;

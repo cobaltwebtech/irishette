@@ -12,8 +12,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
-import { BookingDebugPanel } from '@/components/BookingDebugPanel';
 import RoomAvailabilityCalendar from '@/components/RoomAvailabilityCalendar';
+import { RoomGallery } from '@/components/RoomGallery';
 import { Button } from '@/components/ui/button';
 import {
 	Card,
@@ -46,6 +46,54 @@ function RoseRoomPage() {
 
 	// Room information
 	const roomSlug = 'rose-room';
+
+	// Rose Room images from Cloudinary
+	const roseRoomImages = [
+		{
+			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/rose-room/29931e5a-4c05-46e8-bab3-6340860d5e43.jpg',
+			alt: 'Rose Room - Image 1',
+		},
+		{
+			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/rose-room/694c24dc-acaf-42e0-a564-87cf6591c2d3.jpg',
+			alt: 'Rose Room - Image 2',
+		},
+		{
+			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/rose-room/70869469-cf8d-4106-a097-5a094101c444.jpg',
+			alt: 'Rose Room - Image 3',
+		},
+		{
+			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/rose-room/73f7d15b-59b7-40bf-9aa8-96d40e3e71dd.jpg',
+			alt: 'Rose Room - Image 4',
+		},
+		{
+			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/rose-room/7dad57f4-0301-4ff0-b44f-ef88c88e01f5.jpg',
+			alt: 'Rose Room - Image 5',
+		},
+		{
+			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/rose-room/7ec19df2-0b06-4d10-8777-3558acb41689.jpg',
+			alt: 'Rose Room - Image 6',
+		},
+		{
+			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/rose-room/aca4abb9-0658-4ebf-ab13-b261430da6ea.jpg',
+			alt: 'Rose Room - Image 7',
+		},
+		{
+			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/rose-room/cb8e21a3-3a0c-4844-9eb8-37afbe8de80c.jpg',
+			alt: 'Rose Room - Image 8',
+		},
+		{
+			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/rose-room/d71e61ca-4388-44d9-b301-61bf493f5473.jpg',
+			alt: 'Rose Room - Image 9',
+		},
+		{
+			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/rose-room/e0954657-f5fa-4fa3-bd69-3f9ec2570401.jpg',
+			alt: 'Rose Room - Image 10',
+		},
+		{
+			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/rose-room/e5edfd3a-864f-4250-ac62-955e5ae86b5d.jpg',
+			alt: 'Rose Room - Image 11',
+		},
+	];
 
 	// Initialize booking store if we're starting a new booking
 	useEffect(() => {
@@ -119,7 +167,6 @@ function RoseRoomPage() {
 
 	return (
 		<div className="min-h-screen bg-background">
-			<BookingDebugPanel />
 			{/* Back Navigation */}
 			<div className="container mx-auto max-w-6xl px-4 py-4">
 				<Link
@@ -140,6 +187,23 @@ function RoseRoomPage() {
 					<p className="text-xl md:text-2xl text-muted-foreground mb-8 font-medium">
 						Leave your worries behind in this spacious and tranquil retreat.
 					</p>
+				</div>
+			</section>
+
+			{/* Photo Gallery */}
+			<section className="py-16 px-4">
+				<div className="container mx-auto max-w-4xl">
+					<h2 className="text-3xl font-bold text-center mb-12">
+						Rose Room Gallery
+					</h2>
+					<RoomGallery
+						images={roseRoomImages}
+						roomName="Rose Room"
+						className="max-w-4xl mx-auto"
+						mainImageHeight={500}
+						thumbImageHeight={100}
+						thumbsPerView={5}
+					/>
 				</div>
 			</section>
 

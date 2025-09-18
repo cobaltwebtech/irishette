@@ -1,5 +1,6 @@
 import React from 'react';
 import { Resend } from 'resend';
+import { AdminBookingNotificationEmail } from '@/components/email/AdminBookingNotificationEmail';
 import { BookingConfirmationEmail } from '@/components/email/BookingConfirmationEmail';
 
 interface EmailEnv {
@@ -20,6 +21,21 @@ export interface BookingEmailData {
 	baseAmount: number;
 	taxAmount: number;
 	feesAmount: number;
+	totalAmount: number;
+	baseUrl: string;
+}
+
+export interface AdminNotificationEmailData {
+	confirmationId: string;
+	guestName: string;
+	guestEmail: string;
+	guestPhone?: string;
+	roomName: string;
+	checkInDate: string;
+	checkOutDate: string;
+	numberOfNights: number;
+	numberOfGuests: number;
+	specialRequests?: string;
 	totalAmount: number;
 	baseUrl: string;
 }
@@ -103,4 +119,71 @@ export function validateEmailService(env: EmailEnv): {
 	}
 
 	return { isConfigured: true };
+}
+
+/**
+ * Send admin notification email for new bookings
+ */
+export async function sendAdminBookingNotification(
+	emailData: AdminNotificationEmailData,
+	adminEmails: string[],
+	env: EmailEnv,
+): Promise<{ success: boolean; error?: string }> {
+	try {
+		if (!env.RESEND_API_KEY) {
+			console.error('RESEND_API_KEY environment variable is not set');
+			return { success: false, error: 'Email service not configured' };
+		}
+
+		if (adminEmails.length === 0) {
+			console.warn('No admin emails provided for notification');
+			return { success: true }; // Not an error, just no admins to notify
+		}
+
+		// Initialize Resend
+		const resend = new Resend(env.RESEND_API_KEY);
+
+		// Send email to all admin users
+		const { data, error } = await resend.emails.send({
+			from: 'Irishette <admin@contact.cobaltweb.tech>',
+			to: adminEmails,
+			subject: `New Booking Alert: ${emailData.confirmationId} - ${emailData.guestName}`,
+			react: React.createElement(AdminBookingNotificationEmail, {
+				confirmationId: emailData.confirmationId,
+				guestName: emailData.guestName,
+				guestEmail: emailData.guestEmail,
+				guestPhone: emailData.guestPhone,
+				roomName: emailData.roomName,
+				checkInDate: emailData.checkInDate,
+				checkOutDate: emailData.checkOutDate,
+				numberOfNights: emailData.numberOfNights,
+				numberOfGuests: emailData.numberOfGuests,
+				specialRequests: emailData.specialRequests,
+				totalAmount: emailData.totalAmount,
+				adminDashboardUrl: `${emailData.baseUrl}/admin`,
+			}),
+		});
+
+		if (error) {
+			console.error('Failed to send admin notification email:', error);
+			return {
+				success: false,
+				error: `Admin email delivery failed: ${error.message}`,
+			};
+		}
+
+		console.log('Admin notification email sent successfully:', {
+			emailId: data?.id,
+			recipients: adminEmails,
+			confirmationId: emailData.confirmationId,
+		});
+
+		return { success: true };
+	} catch (error) {
+		console.error('Error sending admin notification email:', error);
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : 'Unknown error',
+		};
+	}
 }

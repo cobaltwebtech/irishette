@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { CalendarDays, DollarSign, Eye, Users } from 'lucide-react';
+import { CalendarDays, House, Pencil } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -162,17 +162,6 @@ function AdminDashboard() {
 		)
 		.slice(0, 3);
 
-	// Mock data for stats - we'll wire up tRPC later
-	const stats = {
-		total: bookings.length,
-		pending: bookings.filter((b) => b.booking.status === 'pending').length,
-		totalRevenue: bookings.reduce((sum, b) => sum + b.booking.totalAmount, 0),
-	};
-
-	const totalBookings = stats.total;
-	const pendingBookings = stats.pending;
-	const totalRevenue = stats.totalRevenue;
-
 	return (
 		<div className="container mx-auto px-4 py-8">
 			<div className="mb-8">
@@ -187,41 +176,30 @@ function AdminDashboard() {
 				<Card>
 					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 						<CardTitle className="text-sm font-medium">
-							Total Bookings
+							Upcoming Bookings
 						</CardTitle>
 						<CalendarDays className="h-4 w-4 text-muted-foreground" />
 					</CardHeader>
 					<CardContent>
-						<div className="text-2xl font-bold">{totalBookings}</div>
+						<Link to="/admin/bookings">
+							<div className="text-2xl font-bold">
+								{upcomingBookings.length}
+							</div>
+						</Link>
 					</CardContent>
 				</Card>
 
+				{/* Placeholder for second column - you can add another metric here */}
 				<Card>
 					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-						<CardTitle className="text-sm font-medium">
-							Pending Bookings
-						</CardTitle>
-						<Users className="h-4 w-4 text-muted-foreground" />
+						<CardTitle className="text-sm font-medium">Total Rooms</CardTitle>
+						<House className="h-4 w-4 text-muted-foreground" />
 					</CardHeader>
 					<CardContent>
-						<div className="text-2xl font-bold">{pendingBookings}</div>
+						<div className="text-2xl font-bold">{rooms.length}</div>
 					</CardContent>
 				</Card>
 
-				<Card>
-					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-						<CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-						<DollarSign className="h-4 w-4 text-muted-foreground" />
-					</CardHeader>
-					<CardContent>
-						<div className="text-2xl font-bold">${totalRevenue.toFixed(2)}</div>
-					</CardContent>
-				</Card>
-			</div>
-
-			{/* Rooms and Recent Bookings */}
-			{/* Rooms and Recent Bookings */}
-			<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 				{/* Quick Actions */}
 				<Card>
 					<CardHeader>
@@ -242,59 +220,11 @@ function AdminDashboard() {
 						</div>
 					</CardContent>
 				</Card>
-				{/* Rooms Overview */}
-				<Card>
-					<CardHeader>
-						<div className="flex items-center justify-between">
-							<CardTitle>Rooms</CardTitle>
-							<Link to="/admin/property-management">
-								<Button size="sm">View All Rooms</Button>
-							</Link>
-						</div>
-					</CardHeader>
-					<CardContent>
-						<div className="space-y-4">
-							{loadingRooms ? (
-								<div className="text-center py-4 text-muted-foreground">
-									Loading rooms...
-								</div>
-							) : rooms.length === 0 ? (
-								<div className="text-center py-4 text-muted-foreground">
-									No rooms found
-								</div>
-							) : (
-								rooms.slice(0, 3).map((room: Room) => (
-									<div
-										key={room.id}
-										className="flex items-center justify-between p-4 border rounded-lg"
-									>
-										<div>
-											<h3 className="font-medium">{room.name}</h3>
-											<p className="text-sm text-muted-foreground">
-												Base Price: ${room.basePrice}/night
-											</p>
-										</div>
-										<div className="flex items-center gap-2">
-											<Badge
-												variant={
-													room.status === 'active' ? 'default' : 'secondary'
-												}
-											>
-												{room.status}
-											</Badge>
-											<Link to="/admin/property-management">
-												<Button size="sm" variant="outline">
-													<Eye className="h-4 w-4" />
-												</Button>
-											</Link>
-										</div>
-									</div>
-								))
-							)}
-						</div>
-					</CardContent>
-				</Card>{' '}
-				{/* Upcoming Bookings */}
+			</div>
+
+			{/* Rooms and Recent Bookings */}
+			<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+				{/* Upcoming Bookings Details */}
 				<Card>
 					<CardHeader>
 						<div className="flex items-center justify-between">
@@ -363,6 +293,62 @@ function AdminDashboard() {
 										</Link>
 									);
 								})
+							)}
+						</div>
+					</CardContent>
+				</Card>
+
+				{/* Rooms Overview */}
+				<Card>
+					<CardHeader>
+						<div className="flex items-center justify-between">
+							<CardTitle>Rooms</CardTitle>
+							<Link to="/admin/property-management">
+								<Button size="sm">View All Rooms</Button>
+							</Link>
+						</div>
+					</CardHeader>
+					<CardContent>
+						<div className="space-y-4">
+							{loadingRooms ? (
+								<div className="text-center py-4 text-muted-foreground">
+									Loading rooms...
+								</div>
+							) : rooms.length === 0 ? (
+								<div className="text-center py-4 text-muted-foreground">
+									No rooms found
+								</div>
+							) : (
+								rooms.slice(0, 3).map((room: Room) => (
+									<div
+										key={room.id}
+										className="flex items-center justify-between p-4 border rounded-lg"
+									>
+										<div>
+											<h3 className="font-medium">{room.name}</h3>
+											<p className="text-sm text-muted-foreground">
+												Base Price: ${room.basePrice}/night
+											</p>
+										</div>
+										<div className="flex items-center gap-2">
+											<Badge
+												variant={
+													room.status === 'active' ? 'default' : 'secondary'
+												}
+											>
+												{room.status}
+											</Badge>
+											<Link
+												to="/admin/property-management/$roomId"
+												params={{ roomId: room.id }}
+											>
+												<Button size="sm" variant="outline">
+													<Pencil className="h-4 w-4" />
+												</Button>
+											</Link>
+										</div>
+									</div>
+								))
 							)}
 						</div>
 					</CardContent>

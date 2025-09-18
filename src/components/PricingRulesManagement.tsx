@@ -164,8 +164,9 @@ export function PricingRulesManagement({
 	};
 
 	const formatDateRange = (startDate: string, endDate: string) => {
-		const start = new Date(startDate).toLocaleDateString();
-		const end = new Date(endDate).toLocaleDateString();
+		// Parse dates without timezone issues by treating them as local dates
+		const start = new Date(`${startDate}T00:00:00`).toLocaleDateString();
+		const end = new Date(`${endDate}T00:00:00`).toLocaleDateString();
 		return `${start} - ${end}`;
 	};
 
@@ -183,7 +184,7 @@ export function PricingRulesManagement({
 
 	// Filter pricing rules to show only current and future rules
 	const filteredRules = pricingRules.filter((rule) => {
-		const endDate = new Date(rule.endDate);
+		const endDate = new Date(`${rule.endDate}T00:00:00`);
 		const today = new Date();
 		today.setHours(0, 0, 0, 0); // Reset time to start of day
 		return endDate >= today;
@@ -242,8 +243,8 @@ export function PricingRulesManagement({
 							{filteredRules
 								.sort(
 									(a, b) =>
-										new Date(a.startDate).getTime() -
-										new Date(b.startDate).getTime(),
+										new Date(`${a.startDate}T00:00:00`).getTime() -
+										new Date(`${b.startDate}T00:00:00`).getTime(),
 								)
 								.map((rule) => (
 									<TableRow key={rule.id}>
@@ -450,7 +451,10 @@ function PricingRuleForm({
 			return;
 		}
 
-		if (new Date(formData.startDate) >= new Date(formData.endDate)) {
+		if (
+			new Date(`${formData.startDate}T00:00:00`) >=
+			new Date(`${formData.endDate}T00:00:00`)
+		) {
 			toast.error('End date must be after start date');
 			return;
 		}
@@ -458,8 +462,8 @@ function PricingRuleForm({
 		// Prevent creating rules with past dates
 		const today = new Date();
 		today.setHours(0, 0, 0, 0); // Reset time to start of day
-		const startDate = new Date(formData.startDate);
-		const endDate = new Date(formData.endDate);
+		const startDate = new Date(`${formData.startDate}T00:00:00`);
+		const endDate = new Date(`${formData.endDate}T00:00:00`);
 
 		if (startDate < today) {
 			toast.error('Start date cannot be in the past');

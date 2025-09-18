@@ -134,6 +134,30 @@ async function handleTRPCRequest(request: Request): Promise<Response> {
 					result = await caller.rooms.calculatePricing(
 						input as Parameters<typeof caller.rooms.calculatePricing>[0],
 					);
+				} else if (procedureName === 'getBlockedPeriods') {
+					result = await caller.rooms.getBlockedPeriods(
+						input as Parameters<typeof caller.rooms.getBlockedPeriods>[0],
+					);
+				} else if (procedureName === 'getBlockedPeriod') {
+					result = await caller.rooms.getBlockedPeriod(
+						input as Parameters<typeof caller.rooms.getBlockedPeriod>[0],
+					);
+				} else if (procedureName === 'createBlockedPeriod') {
+					result = await caller.rooms.createBlockedPeriod(
+						input as Parameters<typeof caller.rooms.createBlockedPeriod>[0],
+					);
+				} else if (procedureName === 'updateBlockedPeriod') {
+					result = await caller.rooms.updateBlockedPeriod(
+						input as Parameters<typeof caller.rooms.updateBlockedPeriod>[0],
+					);
+				} else if (procedureName === 'deleteBlockedPeriod') {
+					result = await caller.rooms.deleteBlockedPeriod(
+						input as Parameters<typeof caller.rooms.deleteBlockedPeriod>[0],
+					);
+				} else if (procedureName === 'generateIcal') {
+					result = await caller.rooms.generateIcal(
+						input as Parameters<typeof caller.rooms.generateIcal>[0],
+					);
 				} else {
 					throw new Error(`Unknown procedure: ${procedureName}`);
 				}

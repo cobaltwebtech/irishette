@@ -6,6 +6,7 @@ import {
 	icalSyncLog,
 	room,
 	roomAvailability,
+	roomBlockedPeriods,
 } from '@/db/schema-export';
 import { iCalService } from '@/lib/ical-service';
 import { createTRPCRouter, publicProcedure } from './init';
@@ -327,6 +328,67 @@ export const availabilityRouter = createTRPCRouter({
 					),
 				);
 
+			// Get blocked periods for the date range
+			const blockedPeriodsResult = await db
+				.select()
+				.from(roomBlockedPeriods)
+				.where(
+					and(
+						eq(roomBlockedPeriods.roomId, input.roomId),
+						lte(roomBlockedPeriods.startDate, input.endDate),
+						gte(roomBlockedPeriods.endDate, input.startDate),
+					),
+				);
+
+			// Create a map to track blocked dates from blocked periods
+			const blockedDatesFromPeriods = new Set<string>();
+			for (const blockedPeriod of blockedPeriodsResult) {
+				const blockStart = new Date(blockedPeriod.startDate);
+				const blockEnd = new Date(blockedPeriod.endDate);
+
+				for (
+					let d = new Date(blockStart);
+					d <= blockEnd;
+					d.setDate(d.getDate() + 1)
+				) {
+					const dateKey = d.toISOString().split('T')[0];
+					if (dateKey >= input.startDate && dateKey <= input.endDate) {
+						blockedDatesFromPeriods.add(dateKey);
+					}
+				}
+			}
+
+			// Process availability records and override with blocked periods
+			const calendarData = availabilityResult.map((record) => {
+				const isBlockedByPeriod = blockedDatesFromPeriods.has(record.date);
+				return {
+					date: record.date,
+					available: isBlockedByPeriod ? false : record.isAvailable,
+					blocked: isBlockedByPeriod ? true : record.isBlocked,
+					source: isBlockedByPeriod ? 'blocked' : record.source,
+					priceOverride: record.priceOverride,
+					externalBookingId: record.externalBookingId,
+				};
+			});
+
+			// Add entries for dates that are only in blocked periods but not in availability records
+			const existingDates = new Set(availabilityResult.map((r) => r.date));
+			for (const blockedDate of blockedDatesFromPeriods) {
+				if (!existingDates.has(blockedDate)) {
+					calendarData.push({
+						date: blockedDate,
+						available: false,
+						blocked: true,
+						source: 'blocked',
+						priceOverride: null,
+						externalBookingId: null,
+					});
+				}
+			}
+
+			// Sort by date
+			calendarData.sort((a, b) => a.date.localeCompare(b.date));
+
 			return {
 				roomId: input.roomId,
 				roomSlug: roomResult[0].slug,
@@ -334,14 +396,7 @@ export const availabilityRouter = createTRPCRouter({
 					startDate: input.startDate,
 					endDate: input.endDate,
 				},
-				calendar: availabilityResult.map((record) => ({
-					date: record.date,
-					available: record.isAvailable,
-					blocked: record.isBlocked,
-					source: record.source,
-					priceOverride: record.priceOverride,
-					externalBookingId: record.externalBookingId,
-				})),
+				calendar: calendarData,
 				lastSync: {
 					airbnb: roomResult[0].lastAirbnbSync,
 					expedia: roomResult[0].lastExpediaSync,
@@ -462,6 +517,18 @@ export const availabilityRouter = createTRPCRouter({
 					),
 				);
 
+			// Get blocked periods for the date range
+			const blockedPeriodsResult = await db
+				.select()
+				.from(roomBlockedPeriods)
+				.where(
+					and(
+						eq(roomBlockedPeriods.roomId, roomData.id),
+						lte(roomBlockedPeriods.startDate, endDate),
+						gte(roomBlockedPeriods.endDate, startDate),
+					),
+				);
+
 			// Create a map of dates with their availability status
 			const dateMap = new Map<
 				string,
@@ -513,6 +580,29 @@ export const availabilityRouter = createTRPCRouter({
 								checkInDate: booking.checkInDate,
 								checkOutDate: booking.checkOutDate,
 							},
+						});
+					}
+				}
+			}
+
+			// Process blocked periods - mark dates as unavailable
+			for (const blockedPeriod of blockedPeriodsResult) {
+				const blockStart = new Date(blockedPeriod.startDate);
+				const blockEnd = new Date(blockedPeriod.endDate);
+
+				// Mark all dates in blocked period range as unavailable
+				for (
+					let d = new Date(blockStart);
+					d <= blockEnd;
+					d.setDate(d.getDate() + 1)
+				) {
+					const dateKey = d.toISOString().split('T')[0];
+					if (dateKey >= startDate && dateKey <= endDate) {
+						dateMap.set(dateKey, {
+							available: false,
+							blocked: true,
+							price: roomData.basePrice,
+							source: 'blocked',
 						});
 					}
 				}

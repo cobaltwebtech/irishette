@@ -3,7 +3,7 @@ import {
 	ArrowLeft,
 	Calendar,
 	CreditCard,
-	Eye,
+	ExternalLink,
 	Mail,
 	Settings,
 	User,
@@ -713,6 +713,20 @@ function AdminBookingDetailPage() {
 
 								{/* Admin Action Buttons */}
 								<div className="border-t pt-4 space-y-2">
+									{booking.booking.stripePaymentIntentId && (
+										<Button variant="outline" className="w-full" asChild>
+											<a
+												href={`https://dashboard.stripe.com/payments/${booking.booking.stripePaymentIntentId}`}
+												target="_blank"
+												rel="noopener noreferrer"
+												className="inline-flex items-center"
+											>
+												<ExternalLink className="w-4 h-4 mr-2" />
+												View Payment at Stripe
+											</a>
+										</Button>
+									)}
+
 									<Button
 										onClick={handleResendEmail}
 										disabled={isResendingEmail}
@@ -724,19 +738,11 @@ function AdminBookingDetailPage() {
 											? 'Sending...'
 											: 'Resend Confirmation Email'}
 									</Button>
-									<Button variant="outline" className="w-full">
-										<Eye className="w-4 h-4 mr-2" />
-										View Customer Profile
-									</Button>
+
 									<Button variant="outline" className="w-full">
 										<Settings className="w-4 h-4 mr-2" />
-										Edit Booking
+										Cancel Booking (NEED TO IMPLEMENT)
 									</Button>
-									<Link to="/admin/bookings" className="block">
-										<Button variant="outline" className="w-full">
-											Back to All Bookings
-										</Button>
-									</Link>
 								</div>
 							</CardContent>
 						</Card>

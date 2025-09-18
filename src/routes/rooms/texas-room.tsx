@@ -12,6 +12,7 @@ import {
 import { useEffect, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import RoomAvailabilityCalendar from '@/components/RoomAvailabilityCalendar';
+import { RoomGallery } from '@/components/RoomGallery';
 import { Button } from '@/components/ui/button';
 import {
 	Card,
@@ -44,6 +45,46 @@ function TexasRoomPage() {
 
 	// Room information
 	const roomSlug = 'texas-room';
+
+	// Texas Room images from Cloudinary
+	const texasRoomImages = [
+		{
+			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/texas-room/2438d940-5419-4f77-985c-081d766b2a77.jpg',
+			alt: 'Texas Room - Image 1',
+		},
+		{
+			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/texas-room/67b358eb-1af2-4dae-9114-b74636c32119.jpg',
+			alt: 'Texas Room - Image 2',
+		},
+		{
+			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/texas-room/9abc8cd6-f843-4e67-9142-eb473adff4f5.jpg',
+			alt: 'Texas Room - Image 3',
+		},
+		{
+			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/texas-room/9cbf035c-cdb9-49b2-8b27-b9f48b8f1cac.jpg',
+			alt: 'Texas Room - Image 4',
+		},
+		{
+			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/texas-room/b2191747-41d4-4960-91fc-eaeefabddc3a.jpg',
+			alt: 'Texas Room - Image 5',
+		},
+		{
+			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/texas-room/b495460e-218d-4e2b-8b5b-3e87df2a4b43.jpg',
+			alt: 'Texas Room - Image 6',
+		},
+		{
+			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/texas-room/b665f34a-dd96-41ad-ad07-672cebefd93e.jpg',
+			alt: 'Texas Room - Image 7',
+		},
+		{
+			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/texas-room/dfb868ed-b654-4cd7-83c9-7f1a63b1c35a.jpg',
+			alt: 'Texas Room - Image 8',
+		},
+		{
+			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/texas-room/ef65e11c-d2d0-4d28-bc7f-ae0ea1e5c68c.jpg',
+			alt: 'Texas Room - Image 9',
+		},
+	];
 
 	// Initialize booking store if we're starting a new booking
 	useEffect(() => {
@@ -136,6 +177,23 @@ function TexasRoomPage() {
 					<p className="text-xl md:text-2xl text-muted-foreground mb-8 font-medium">
 						Experience true Texas charm in this spacious and inviting retreat.
 					</p>
+				</div>
+			</section>
+
+			{/* Photo Gallery */}
+			<section className="py-16 px-4">
+				<div className="container mx-auto max-w-4xl">
+					<h2 className="text-3xl font-bold text-center mb-12">
+						Texas Room Gallery
+					</h2>
+					<RoomGallery
+						images={texasRoomImages}
+						roomName="Texas Room"
+						className="max-w-4xl mx-auto"
+						mainImageHeight={500}
+						thumbImageHeight={100}
+						thumbsPerView={5}
+					/>
 				</div>
 			</section>
 

@@ -1,7 +1,10 @@
 import { createServerFileRoute } from '@tanstack/react-start/server';
 import Stripe from 'stripe';
+import { getAdminUsers } from '@/lib/admin-query';
 import {
+	type AdminNotificationEmailData,
 	type BookingEmailData,
+	sendAdminBookingNotification,
 	sendBookingConfirmationEmail,
 } from '@/lib/email-service';
 import { PaymentService } from '@/lib/payment-service';
@@ -22,6 +25,7 @@ export const ServerRoute = createServerFileRoute('/api/stripe/$').methods({
 		return new Response('Not Found', { status: 404 });
 	},
 });
+
 async function handleStripeWebhook(request: Request): Promise<Response> {
 	console.log('Stripe webhook received');
 
@@ -184,6 +188,59 @@ async function handleCheckoutCompleted(
 						'Failed to send booking confirmation email:',
 						emailResult.error,
 					);
+				}
+
+				// Send admin notification email
+				console.log('Starting admin notification email process...');
+				try {
+					// Get admin users
+					const adminEmails = await getAdminUsers(bindings.DB);
+
+					if (adminEmails.length > 0) {
+						const adminEmailData: AdminNotificationEmailData = {
+							confirmationId: bookingDetails.booking.confirmationId,
+							guestName: bookingDetails.booking.guestName,
+							guestEmail: bookingDetails.booking.guestEmail,
+							guestPhone: bookingDetails.booking.guestPhone || undefined,
+							roomName: bookingDetails.room.name,
+							checkInDate: bookingDetails.booking.checkInDate,
+							checkOutDate: bookingDetails.booking.checkOutDate,
+							numberOfNights: bookingDetails.booking.numberOfNights,
+							numberOfGuests: bookingDetails.booking.numberOfGuests,
+							specialRequests:
+								bookingDetails.booking.specialRequests || undefined,
+							totalAmount: bookingDetails.booking.totalAmount,
+							baseUrl: bindings.BETTER_AUTH_URL,
+						};
+
+						const adminEmailResult = await sendAdminBookingNotification(
+							adminEmailData,
+							adminEmails,
+							{
+								RESEND_API_KEY: bindings.RESEND_API_KEY,
+							},
+						);
+
+						if (adminEmailResult.success) {
+							console.log(
+								'Admin notification email sent successfully to:',
+								adminEmails,
+							);
+						} else {
+							console.error(
+								'Failed to send admin notification email:',
+								adminEmailResult.error,
+							);
+						}
+					} else {
+						console.log('No admin users found - skipping admin notification');
+					}
+				} catch (adminEmailError) {
+					console.error(
+						'Error in admin email sending process:',
+						adminEmailError,
+					);
+					// Don't throw here - admin email failure shouldn't fail the webhook
 				}
 			} else {
 				console.error('Could not retrieve booking details for email sending');

@@ -4,6 +4,7 @@ import {
 	ArrowLeft,
 	Calendar,
 	CheckCircle,
+	Copy,
 	Edit,
 	ExternalLink,
 	RefreshCw,
@@ -16,6 +17,7 @@ import {
 import { useCallback, useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
 import { PricingRulesManagement } from '@/components/PricingRulesManagement';
+import { RoomBlockingManagement } from '@/components/RoomBlockingManagement';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,8 +31,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useSession } from '@/lib/auth-client';
 import type {
+	CreateBlockedPeriod,
 	CreatePricingRule,
+	RoomBlockedPeriod,
 	RoomPricingRule,
+	UpdateBlockedPeriod,
 	UpdatePricingRule,
 } from '@/lib/room-validation';
 
@@ -132,6 +137,27 @@ function EditRoom() {
 
 	// Pricing rules state
 	const [pricingRules, setPricingRules] = useState<RoomPricingRule[]>([]);
+
+	// Blocked periods state
+	const [blockedPeriods, setBlockedPeriods] = useState<RoomBlockedPeriod[]>([]);
+	const [blockedPeriodsLoading, setBlockedPeriodsLoading] = useState(false);
+
+	// Copy to clipboard helper function
+	const copyToClipboard = async (text: string, description: string) => {
+		try {
+			await navigator.clipboard.writeText(text);
+			toast.success('Copied to clipboard!', {
+				description: `${description} has been copied to your clipboard.`,
+				duration: 2000,
+			});
+		} catch (error) {
+			console.error('Failed to copy:', error);
+			toast.error('Failed to copy to clipboard', {
+				description: 'Please manually copy the URL.',
+				duration: 3000,
+			});
+		}
+	};
 
 	// Load room data
 	const loadRoom = useCallback(async () => {
@@ -376,6 +402,138 @@ function EditRoom() {
 			loadPricingRules();
 		}
 	}, [room, loadPricingRules]);
+
+	// Load blocked periods for this room
+	const loadBlockedPeriods = useCallback(async () => {
+		if (!roomId) return;
+
+		try {
+			setBlockedPeriodsLoading(true);
+			const inputParam = encodeURIComponent(JSON.stringify({ roomId }));
+			const response = await fetch(
+				`/api/trpc/rooms.getBlockedPeriods?input=${inputParam}`,
+				{
+					method: 'GET',
+				},
+			);
+
+			if (!response.ok) {
+				throw new Error('Failed to load blocked periods');
+			}
+
+			const data = (await response.json()) as {
+				result: { data: RoomBlockedPeriod[] };
+			};
+
+			setBlockedPeriods(data.result.data);
+		} catch (error) {
+			console.error('Failed to load blocked periods:', error);
+			toast.error('Failed to load blocked periods', {
+				description:
+					error instanceof Error
+						? error.message
+						: 'An unexpected error occurred.',
+			});
+		} finally {
+			setBlockedPeriodsLoading(false);
+		}
+	}, [roomId]);
+
+	// Blocked periods management functions
+	const handleCreateBlockedPeriod = async (period: CreateBlockedPeriod) => {
+		const response = await fetch('/api/trpc/rooms.createBlockedPeriod', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify(period),
+		});
+
+		const result = (await response.json()) as {
+			error?: {
+				json?: { message: string };
+				message?: string;
+			};
+		};
+
+		// Check for tRPC error format
+		if (result.error) {
+			const errorMessage =
+				result.error.json?.message ||
+				result.error.message ||
+				'Failed to create blocked period';
+			throw new Error(errorMessage);
+		}
+
+		if (!response.ok) {
+			throw new Error('Failed to create blocked period');
+		}
+
+		// Reload blocked periods
+		await loadBlockedPeriods();
+	};
+
+	const handleUpdateBlockedPeriod = async (period: UpdateBlockedPeriod) => {
+		const response = await fetch('/api/trpc/rooms.updateBlockedPeriod', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify(period),
+		});
+
+		const result = (await response.json()) as {
+			error?: {
+				json?: { message: string };
+				message?: string;
+			};
+		};
+
+		// Check for tRPC error format
+		if (result.error) {
+			const errorMessage =
+				result.error.json?.message ||
+				result.error.message ||
+				'Failed to update blocked period';
+			throw new Error(errorMessage);
+		}
+
+		if (!response.ok) {
+			throw new Error('Failed to update blocked period');
+		}
+
+		// Reload blocked periods
+		await loadBlockedPeriods();
+	};
+
+	const handleDeleteBlockedPeriod = async (periodId: string) => {
+		try {
+			const response = await fetch('/api/trpc/rooms.deleteBlockedPeriod', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({ id: periodId }),
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to delete blocked period');
+			}
+
+			// Reload blocked periods
+			await loadBlockedPeriods();
+		} catch (error) {
+			console.error('Failed to delete blocked period:', error);
+			throw error;
+		}
+	};
+
+	// Load blocked periods when room is loaded
+	useEffect(() => {
+		if (room) {
+			loadBlockedPeriods();
+		}
+	}, [room, loadBlockedPeriods]);
 
 	// Calendar management functions
 	const handleEditCalendar = (provider: CalendarProvider) => {
@@ -859,6 +1017,18 @@ function EditRoom() {
 				/>
 			</div>
 
+			{/* Room Blocking Management */}
+			<div className="mt-6">
+				<RoomBlockingManagement
+					roomId={room.id}
+					blockedPeriods={blockedPeriods}
+					onCreateBlockedPeriod={handleCreateBlockedPeriod}
+					onUpdateBlockedPeriod={handleUpdateBlockedPeriod}
+					onDeleteBlockedPeriod={handleDeleteBlockedPeriod}
+					isLoading={blockedPeriodsLoading}
+				/>
+			</div>
+
 			{/* iCal URL Edit Modal */}
 			{editingCalendar && (
 				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -1093,21 +1263,45 @@ function EditRoom() {
 
 					{/* Export URLs */}
 					<div className="border rounded-lg p-4">
-						<h5 className="font-medium mb-2">Export Calendar</h5>
-						<div className="space-y-2">
-							<div className="flex items-center gap-2">
-								<ExternalLink className="h-3 w-3 text-gray-400" />
-								<span className="text-sm text-gray-600">By ID:</span>
-								<code className="text-sm bg-gray-100 px-2 py-1 rounded">
-									/api/rooms/{room.id}/calendar.ics
-								</code>
+						<h5 className="font-medium mb-3">
+							Export Calendar for External Services
+						</h5>
+						<p className="text-sm text-gray-600 mb-4">
+							Use these URLs to sync this room's availability with external
+							booking platforms like Airbnb and Expedia.
+						</p>
+						<div className="space-y-3">
+							<div className="flex items-center justify-between gap-2 p-3 bg-gray-50 rounded-lg">
+								<div className="flex items-center gap-2 min-w-0">
+									<ExternalLink className="h-3 w-3 text-gray-400 flex-shrink-0" />
+									<span className="text-sm text-gray-600 flex-shrink-0">
+										iCal URL:
+									</span>
+									<code className="text-sm bg-white px-2 py-1 rounded border font-mono truncate">
+										{typeof window !== 'undefined'
+											? `${window.location.origin}/api/ical/${room.id}.ics`
+											: `/api/ical/${room.id}.ics`}
+									</code>
+								</div>
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => {
+										const url =
+											typeof window !== 'undefined'
+												? `${window.location.origin}/api/ical/${room.id}.ics`
+												: `https://irishette.com/api/ical/${room.id}.ics`;
+										copyToClipboard(url, 'iCal URL');
+									}}
+									className="flex items-center gap-1 flex-shrink-0"
+								>
+									<Copy className="h-3 w-3" />
+									Copy
+								</Button>
 							</div>
-							<div className="flex items-center gap-2">
-								<ExternalLink className="h-3 w-3 text-gray-400" />
-								<span className="text-sm text-gray-600">By Slug:</span>
-								<code className="text-sm bg-gray-100 px-2 py-1 rounded">
-									/api/rooms/slug/{room.slug}/calendar.ics
-								</code>
+							<div className="text-xs text-gray-500 pl-5">
+								This URL provides real-time availability data including
+								confirmed bookings and blocked periods.
 							</div>
 						</div>
 					</div>

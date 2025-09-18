@@ -27,6 +27,7 @@ import { Route as AccountBookingBookingIdRouteImport } from './routes/account/bo
 import { ServerRoute as ApiTrpcSplatServerRouteImport } from './routes/api/trpc/$'
 import { ServerRoute as ApiStripeSplatServerRouteImport } from './routes/api/stripe/$'
 import { ServerRoute as ApiSendConfirmationEmailSplatServerRouteImport } from './routes/api/send-confirmation-email/$'
+import { ServerRoute as ApiIcalSplatServerRouteImport } from './routes/api/ical/$'
 import { ServerRoute as ApiAuthSplatServerRouteImport } from './routes/api/auth/$'
 
 const rootServerRouteImport = createServerRootRoute()
@@ -114,6 +115,11 @@ const ApiSendConfirmationEmailSplatServerRoute =
     path: '/api/send-confirmation-email/$',
     getParentRoute: () => rootServerRouteImport,
   } as any)
+const ApiIcalSplatServerRoute = ApiIcalSplatServerRouteImport.update({
+  id: '/api/ical/$',
+  path: '/api/ical/$',
+  getParentRoute: () => rootServerRouteImport,
+} as any)
 const ApiAuthSplatServerRoute = ApiAuthSplatServerRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -231,12 +237,14 @@ export interface RootRouteChildren {
 }
 export interface FileServerRoutesByFullPath {
   '/api/auth/$': typeof ApiAuthSplatServerRoute
+  '/api/ical/$': typeof ApiIcalSplatServerRoute
   '/api/send-confirmation-email/$': typeof ApiSendConfirmationEmailSplatServerRoute
   '/api/stripe/$': typeof ApiStripeSplatServerRoute
   '/api/trpc/$': typeof ApiTrpcSplatServerRoute
 }
 export interface FileServerRoutesByTo {
   '/api/auth/$': typeof ApiAuthSplatServerRoute
+  '/api/ical/$': typeof ApiIcalSplatServerRoute
   '/api/send-confirmation-email/$': typeof ApiSendConfirmationEmailSplatServerRoute
   '/api/stripe/$': typeof ApiStripeSplatServerRoute
   '/api/trpc/$': typeof ApiTrpcSplatServerRoute
@@ -244,6 +252,7 @@ export interface FileServerRoutesByTo {
 export interface FileServerRoutesById {
   __root__: typeof rootServerRouteImport
   '/api/auth/$': typeof ApiAuthSplatServerRoute
+  '/api/ical/$': typeof ApiIcalSplatServerRoute
   '/api/send-confirmation-email/$': typeof ApiSendConfirmationEmailSplatServerRoute
   '/api/stripe/$': typeof ApiStripeSplatServerRoute
   '/api/trpc/$': typeof ApiTrpcSplatServerRoute
@@ -252,18 +261,21 @@ export interface FileServerRouteTypes {
   fileServerRoutesByFullPath: FileServerRoutesByFullPath
   fullPaths:
     | '/api/auth/$'
+    | '/api/ical/$'
     | '/api/send-confirmation-email/$'
     | '/api/stripe/$'
     | '/api/trpc/$'
   fileServerRoutesByTo: FileServerRoutesByTo
   to:
     | '/api/auth/$'
+    | '/api/ical/$'
     | '/api/send-confirmation-email/$'
     | '/api/stripe/$'
     | '/api/trpc/$'
   id:
     | '__root__'
     | '/api/auth/$'
+    | '/api/ical/$'
     | '/api/send-confirmation-email/$'
     | '/api/stripe/$'
     | '/api/trpc/$'
@@ -271,6 +283,7 @@ export interface FileServerRouteTypes {
 }
 export interface RootServerRouteChildren {
   ApiAuthSplatServerRoute: typeof ApiAuthSplatServerRoute
+  ApiIcalSplatServerRoute: typeof ApiIcalSplatServerRoute
   ApiSendConfirmationEmailSplatServerRoute: typeof ApiSendConfirmationEmailSplatServerRoute
   ApiStripeSplatServerRoute: typeof ApiStripeSplatServerRoute
   ApiTrpcSplatServerRoute: typeof ApiTrpcSplatServerRoute
@@ -394,6 +407,13 @@ declare module '@tanstack/react-start/server' {
       preLoaderRoute: typeof ApiSendConfirmationEmailSplatServerRouteImport
       parentRoute: typeof rootServerRouteImport
     }
+    '/api/ical/$': {
+      id: '/api/ical/$'
+      path: '/api/ical/$'
+      fullPath: '/api/ical/$'
+      preLoaderRoute: typeof ApiIcalSplatServerRouteImport
+      parentRoute: typeof rootServerRouteImport
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -424,6 +444,7 @@ export const routeTree = rootRouteImport
   ._addFileTypes<FileRouteTypes>()
 const rootServerRouteChildren: RootServerRouteChildren = {
   ApiAuthSplatServerRoute: ApiAuthSplatServerRoute,
+  ApiIcalSplatServerRoute: ApiIcalSplatServerRoute,
   ApiSendConfirmationEmailSplatServerRoute:
     ApiSendConfirmationEmailSplatServerRoute,
   ApiStripeSplatServerRoute: ApiStripeSplatServerRoute,

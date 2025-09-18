@@ -2,18 +2,23 @@ import { and, eq, gte, inArray, lte } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 import { createDrizzle } from '@/db/drizzle-init';
-import { room, roomPricingRules } from '@/db/schema-export';
+import { room, roomBlockedPeriods, roomPricingRules } from '@/db/schema-export';
 import { iCalService } from '@/lib/ical-service';
 import {
 	bulkAvailabilitySchema,
 	checkAvailabilitySchema,
+	createBlockedPeriodSchema,
 	createPricingRuleSchema,
 	createRoomSchema,
+	deleteBlockedPeriodSchema,
 	deletePricingRuleSchema,
+	getBlockedPeriodSchema,
+	getBlockedPeriodsSchema,
 	getPricingRulesSchema,
 	getRoomSchema,
 	getRoomsSchema,
 	syncCalendarSchema,
+	updateBlockedPeriodSchema,
 	updatePricingRuleSchema,
 	updateRoomSchema,
 } from '@/lib/room-validation';
@@ -772,6 +777,231 @@ export const roomsRouter = createTRPCRouter({
 				numberOfNights,
 				appliedRules,
 				roomBasePrice: roomData.basePrice,
+			};
+		}),
+
+	// Room blocking procedures
+	getBlockedPeriods: publicProcedure
+		.input(getBlockedPeriodsSchema)
+		.query(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			// Build query conditions
+			const conditions = [];
+
+			// Filter by room if provided
+			if (input.roomId) {
+				conditions.push(eq(roomBlockedPeriods.roomId, input.roomId));
+			}
+
+			// Filter by date range if provided
+			if (input.startDate) {
+				conditions.push(lte(roomBlockedPeriods.startDate, input.startDate));
+			}
+
+			if (input.endDate) {
+				conditions.push(gte(roomBlockedPeriods.endDate, input.endDate));
+			}
+
+			// Build the query
+			const baseQuery = db.select().from(roomBlockedPeriods);
+			const query =
+				conditions.length > 0 ? baseQuery.where(and(...conditions)) : baseQuery;
+
+			const result = await query
+				.limit(input.limit)
+				.offset(input.offset)
+				.orderBy(roomBlockedPeriods.startDate);
+
+			return result;
+		}),
+
+	getBlockedPeriod: publicProcedure
+		.input(getBlockedPeriodSchema)
+		.query(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			const result = await db
+				.select()
+				.from(roomBlockedPeriods)
+				.where(eq(roomBlockedPeriods.id, input.id))
+				.limit(1);
+
+			if (result.length === 0) {
+				throw new Error('Blocked period not found');
+			}
+
+			return result[0];
+		}),
+
+	createBlockedPeriod: publicProcedure
+		.input(createBlockedPeriodSchema)
+		.mutation(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			// Check if room exists
+			const roomExists = await db
+				.select({ id: room.id })
+				.from(room)
+				.where(eq(room.id, input.roomId))
+				.limit(1);
+
+			if (roomExists.length === 0) {
+				throw new Error('Room not found');
+			}
+
+			// Check for overlapping blocked periods
+			const overlapping = await db
+				.select()
+				.from(roomBlockedPeriods)
+				.where(
+					and(
+						eq(roomBlockedPeriods.roomId, input.roomId),
+						lte(roomBlockedPeriods.startDate, input.endDate),
+						gte(roomBlockedPeriods.endDate, input.startDate),
+					),
+				);
+
+			if (overlapping.length > 0) {
+				throw new Error(
+					'This date range overlaps with an existing blocked period',
+				);
+			}
+
+			const id = nanoid();
+			const newPeriod = {
+				id,
+				roomId: input.roomId,
+				startDate: input.startDate,
+				endDate: input.endDate,
+				reason: input.reason,
+				notes: input.notes || null,
+				createdAt: new Date(),
+			};
+
+			await db.insert(roomBlockedPeriods).values(newPeriod);
+
+			return newPeriod;
+		}),
+
+	updateBlockedPeriod: publicProcedure
+		.input(updateBlockedPeriodSchema)
+		.mutation(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			// Check if blocked period exists
+			const existing = await db
+				.select()
+				.from(roomBlockedPeriods)
+				.where(eq(roomBlockedPeriods.id, input.id))
+				.limit(1);
+
+			if (existing.length === 0) {
+				throw new Error('Blocked period not found');
+			}
+
+			const existingPeriod = existing[0];
+
+			// If dates are being updated, check for overlaps with other periods
+			if (input.startDate || input.endDate) {
+				const startDate = input.startDate || existingPeriod.startDate;
+				const endDate = input.endDate || existingPeriod.endDate;
+
+				const overlapping = await db
+					.select()
+					.from(roomBlockedPeriods)
+					.where(
+						and(
+							eq(roomBlockedPeriods.roomId, existingPeriod.roomId),
+							lte(roomBlockedPeriods.startDate, endDate),
+							gte(roomBlockedPeriods.endDate, startDate),
+							// Exclude the current period from overlap check
+							eq(roomBlockedPeriods.id, input.id),
+						),
+					);
+
+				if (overlapping.length > 1) {
+					// More than 1 means there are overlaps besides itself
+					throw new Error(
+						'This date range overlaps with an existing blocked period',
+					);
+				}
+			}
+
+			// Build update object with only provided fields
+			const updateData: Partial<typeof existingPeriod> = {};
+			if (input.startDate) updateData.startDate = input.startDate;
+			if (input.endDate) updateData.endDate = input.endDate;
+			if (input.reason) updateData.reason = input.reason;
+			if (input.notes !== undefined) updateData.notes = input.notes || null;
+
+			await db
+				.update(roomBlockedPeriods)
+				.set(updateData)
+				.where(eq(roomBlockedPeriods.id, input.id));
+
+			// Return updated period
+			const updated = await db
+				.select()
+				.from(roomBlockedPeriods)
+				.where(eq(roomBlockedPeriods.id, input.id))
+				.limit(1);
+
+			return updated[0];
+		}),
+
+	deleteBlockedPeriod: publicProcedure
+		.input(deleteBlockedPeriodSchema)
+		.mutation(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			// Check if blocked period exists
+			const existing = await db
+				.select()
+				.from(roomBlockedPeriods)
+				.where(eq(roomBlockedPeriods.id, input.id))
+				.limit(1);
+
+			if (existing.length === 0) {
+				throw new Error('Blocked period not found');
+			}
+
+			await db
+				.delete(roomBlockedPeriods)
+				.where(eq(roomBlockedPeriods.id, input.id));
+
+			return { success: true, id: input.id };
+		}),
+
+	// Generate iCal feed for a room
+	generateIcal: publicProcedure
+		.input(
+			z.object({
+				roomId: z.string(),
+			}),
+		)
+		.query(async ({ ctx, input }) => {
+			const icalService = new iCalService(ctx.db);
+
+			// Check if room exists
+			const db = createDrizzle(ctx.db);
+			const roomExists = await db
+				.select()
+				.from(room)
+				.where(eq(room.id, input.roomId))
+				.limit(1);
+
+			if (roomExists.length === 0) {
+				throw new Error('Room not found');
+			}
+
+			const icalContent = await icalService.generateICalForRoom(input.roomId);
+
+			return {
+				roomId: input.roomId,
+				icalContent,
+				contentType: 'text/calendar',
+				filename: `room-${input.roomId}.ics`,
 			};
 		}),
 });

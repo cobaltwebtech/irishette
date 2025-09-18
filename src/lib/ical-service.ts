@@ -1,7 +1,13 @@
 import { and, eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { createDrizzle } from '@/db/drizzle-init';
-import { icalSyncLog, room, roomAvailability } from '@/db/schema-export';
+import {
+	bookings,
+	icalSyncLog,
+	room,
+	roomAvailability,
+	roomBlockedPeriods,
+} from '@/db/schema-export';
 
 interface CalendarEvent {
 	uid: string;
@@ -210,25 +216,46 @@ export class iCalService {
 	}
 
 	/**
-	 * Generate iCal content for our bookings
+	 * Generate iCal content for our bookings and blocked periods
 	 */
 	async generateICalForRoom(roomId: string): Promise<string> {
+		// First, check if the room exists
+		const roomExists = await this.db
+			.select()
+			.from(room)
+			.where(eq(room.id, roomId))
+			.limit(1);
+
+		if (roomExists.length === 0) {
+			throw new Error(`Room with ID ${roomId} not found`);
+		}
+
 		// Get all confirmed bookings for this room
-		const bookingResults = await this.db
+		const confirmedBookings = await this.db
 			.select({
-				id: roomAvailability.id,
-				date: roomAvailability.date,
-				externalBookingId: roomAvailability.externalBookingId,
-				source: roomAvailability.source,
+				id: bookings.id,
+				confirmationId: bookings.confirmationId,
+				checkInDate: bookings.checkInDate,
+				checkOutDate: bookings.checkOutDate,
+				guestName: bookings.guestName,
+				status: bookings.status,
 			})
-			.from(roomAvailability)
+			.from(bookings)
 			.where(
-				and(
-					eq(roomAvailability.roomId, roomId),
-					eq(roomAvailability.isBlocked, true),
-					eq(roomAvailability.source, 'direct'),
-				),
+				and(eq(bookings.roomId, roomId), eq(bookings.status, 'confirmed')),
 			);
+
+		// Get all blocked periods for this room
+		const blockedPeriods = await this.db
+			.select({
+				id: roomBlockedPeriods.id,
+				startDate: roomBlockedPeriods.startDate,
+				endDate: roomBlockedPeriods.endDate,
+				reason: roomBlockedPeriods.reason,
+				notes: roomBlockedPeriods.notes,
+			})
+			.from(roomBlockedPeriods)
+			.where(eq(roomBlockedPeriods.roomId, roomId));
 
 		const icalLines = [
 			'BEGIN:VCALENDAR',
@@ -238,62 +265,47 @@ export class iCalService {
 			'METHOD:PUBLISH',
 		];
 
-		// Group consecutive dates into booking periods
-		const bookingPeriods: { start: string; end: string; id: string }[] = [];
-		let currentPeriod: { start: string; end: string; id: string } | null = null;
+		const now =
+			new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
 
-		const sortedBookings = bookingResults.sort((a, b) =>
-			a.date.localeCompare(b.date),
-		);
-
-		for (const booking of sortedBookings) {
-			if (!currentPeriod) {
-				currentPeriod = {
-					start: booking.date,
-					end: booking.date,
-					id: booking.id,
-				};
-			} else {
-				const currentDate = new Date(booking.date);
-				const lastDate = new Date(currentPeriod.end);
-				lastDate.setDate(lastDate.getDate() + 1);
-
-				if (currentDate.getTime() === lastDate.getTime()) {
-					// Consecutive date, extend period
-					currentPeriod.end = booking.date;
-				} else {
-					// Gap found, save current period and start new one
-					bookingPeriods.push({ ...currentPeriod });
-					currentPeriod = {
-						start: booking.date,
-						end: booking.date,
-						id: booking.id,
-					};
-				}
-			}
-		}
-
-		if (currentPeriod) {
-			bookingPeriods.push(currentPeriod);
-		}
-
-		// Add events for each booking period
-		for (const period of bookingPeriods) {
-			const startDate = period.start.replace(/-/g, '');
-			const endDateObj = new Date(period.end);
-			endDateObj.setDate(endDateObj.getDate() + 1); // iCal end date is exclusive
-			const endDate = endDateObj.toISOString().split('T')[0].replace(/-/g, '');
-			const now =
-				new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+		// Add events for confirmed bookings
+		for (const booking of confirmedBookings) {
+			const startDate = booking.checkInDate.replace(/-/g, '');
+			const endDate = booking.checkOutDate.replace(/-/g, '');
 
 			icalLines.push(
 				'BEGIN:VEVENT',
-				`UID:${period.id}@irishette.com`,
+				`UID:booking-${booking.id}@irishette.com`,
 				`DTSTART;VALUE=DATE:${startDate}`,
 				`DTEND;VALUE=DATE:${endDate}`,
 				`DTSTAMP:${now}`,
-				'SUMMARY:Booked',
-				'DESCRIPTION:This property is not available',
+				`SUMMARY:Booked - ${booking.guestName}`,
+				`DESCRIPTION:Booking confirmed (${booking.confirmationId})`,
+				'STATUS:CONFIRMED',
+				'TRANSP:OPAQUE',
+				'END:VEVENT',
+			);
+		}
+
+		// Add events for blocked periods
+		for (const period of blockedPeriods) {
+			const startDate = period.startDate.replace(/-/g, '');
+			const endDateObj = new Date(period.endDate);
+			endDateObj.setDate(endDateObj.getDate() + 1); // iCal end date is exclusive
+			const endDate = endDateObj.toISOString().split('T')[0].replace(/-/g, '');
+
+			const description = period.notes
+				? `${period.reason} - ${period.notes}`
+				: period.reason;
+
+			icalLines.push(
+				'BEGIN:VEVENT',
+				`UID:blocked-${period.id}@irishette.com`,
+				`DTSTART;VALUE=DATE:${startDate}`,
+				`DTEND;VALUE=DATE:${endDate}`,
+				`DTSTAMP:${now}`,
+				`SUMMARY:Blocked - ${period.reason}`,
+				`DESCRIPTION:${description}`,
 				'STATUS:CONFIRMED',
 				'TRANSP:OPAQUE',
 				'END:VEVENT',
@@ -302,5 +314,26 @@ export class iCalService {
 
 		icalLines.push('END:VCALENDAR');
 		return icalLines.join('\r\n');
+	}
+
+	/**
+	 * Get the iCal URL for a specific room
+	 */
+	static getICalUrl(roomId: string, baseUrl?: string): string {
+		const domain = baseUrl || 'https://irishette.com';
+		return `${domain}/api/ical/${roomId}.ics`;
+	}
+
+	/**
+	 * Validate that a room exists and is active
+	 */
+	async validateRoom(roomId: string): Promise<boolean> {
+		const roomResult = await this.db
+			.select()
+			.from(room)
+			.where(and(eq(room.id, roomId), eq(room.isActive, true)))
+			.limit(1);
+
+		return roomResult.length > 0;
 	}
 }

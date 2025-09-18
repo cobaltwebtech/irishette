@@ -270,6 +270,13 @@ export default function RoomAvailabilityCalendar({
 		)
 		.map((day) => createLocalDate(day.date));
 
+	// Blocked period dates (manually blocked by admin)
+	const blockedPeriodDates = availability.calendar
+		.filter(
+			(day) => (!day.available || day.blocked) && day.source === 'blocked',
+		)
+		.map((day) => createLocalDate(day.date));
+
 	if (availability.loading) {
 		return (
 			<div className={`${className} p-8 text-center`}>
@@ -347,12 +354,15 @@ export default function RoomAvailabilityCalendar({
 					booked: bookedDates,
 					available: availableDates,
 					checkoutOnly: checkoutOnlyDates,
+					blockedPeriod: blockedPeriodDates,
 				}}
 				modifiersClassNames={{
 					booked: 'bg-destructive/20 text-destructive line-through opacity-75',
 					available: 'bg-rose-50 hover:bg-rose-100 border-rose-200',
 					checkoutOnly:
 						'bg-yellow-50 text-yellow-800 border-yellow-300 hover:bg-yellow-100',
+					blockedPeriod:
+						'bg-gray-200 text-gray-600 cursor-not-allowed opacity-75',
 					selected: 'bg-rose-600 text-white hover:bg-rose-700',
 				}}
 				numberOfMonths={2}
@@ -392,6 +402,10 @@ export default function RoomAvailabilityCalendar({
 					<div className="flex items-center gap-2">
 						<div className="w-4 h-4 bg-destructive/20 border rounded"></div>
 						<span>Booked</span>
+					</div>
+					<div className="flex items-center gap-2">
+						<div className="w-4 h-4 bg-gray-200 border border-gray-300 rounded"></div>
+						<span>Blocked</span>
 					</div>
 					<div className="flex items-center gap-2">
 						<div className="w-4 h-4 bg-rose-600 rounded"></div>
