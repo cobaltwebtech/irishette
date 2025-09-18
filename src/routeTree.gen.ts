@@ -11,14 +11,14 @@
 import { createServerRootRoute } from '@tanstack/react-start/server'
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as TexasRoomRouteImport } from './routes/texas-room'
-import { Route as RoseRoomRouteImport } from './routes/rose-room'
 import { Route as LogoutRouteImport } from './routes/logout'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as BookingRouteImport } from './routes/booking'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AccountIndexRouteImport } from './routes/account/index'
+import { Route as RoomsTexasRoomRouteImport } from './routes/rooms/texas-room'
+import { Route as RoomsRoseRoomRouteImport } from './routes/rooms/rose-room'
 import { Route as AdminPropertyManagementIndexRouteImport } from './routes/admin/property-management/index'
 import { Route as AdminBookingsIndexRouteImport } from './routes/admin/bookings/index'
 import { Route as AdminPropertyManagementRoomIdRouteImport } from './routes/admin/property-management/$roomId'
@@ -31,16 +31,6 @@ import { ServerRoute as ApiAuthSplatServerRouteImport } from './routes/api/auth/
 
 const rootServerRouteImport = createServerRootRoute()
 
-const TexasRoomRoute = TexasRoomRouteImport.update({
-  id: '/texas-room',
-  path: '/texas-room',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RoseRoomRoute = RoseRoomRouteImport.update({
-  id: '/rose-room',
-  path: '/rose-room',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const LogoutRoute = LogoutRouteImport.update({
   id: '/logout',
   path: '/logout',
@@ -69,6 +59,16 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
 const AccountIndexRoute = AccountIndexRouteImport.update({
   id: '/account/',
   path: '/account/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RoomsTexasRoomRoute = RoomsTexasRoomRouteImport.update({
+  id: '/rooms/texas-room',
+  path: '/rooms/texas-room',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RoomsRoseRoomRoute = RoomsRoseRoomRouteImport.update({
+  id: '/rooms/rose-room',
+  path: '/rooms/rose-room',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminPropertyManagementIndexRoute =
@@ -125,8 +125,8 @@ export interface FileRoutesByFullPath {
   '/booking': typeof BookingRoute
   '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
-  '/rose-room': typeof RoseRoomRoute
-  '/texas-room': typeof TexasRoomRoute
+  '/rooms/rose-room': typeof RoomsRoseRoomRoute
+  '/rooms/texas-room': typeof RoomsTexasRoomRoute
   '/account': typeof AccountIndexRoute
   '/admin': typeof AdminIndexRoute
   '/account/booking/$bookingId': typeof AccountBookingBookingIdRoute
@@ -140,8 +140,8 @@ export interface FileRoutesByTo {
   '/booking': typeof BookingRoute
   '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
-  '/rose-room': typeof RoseRoomRoute
-  '/texas-room': typeof TexasRoomRoute
+  '/rooms/rose-room': typeof RoomsRoseRoomRoute
+  '/rooms/texas-room': typeof RoomsTexasRoomRoute
   '/account': typeof AccountIndexRoute
   '/admin': typeof AdminIndexRoute
   '/account/booking/$bookingId': typeof AccountBookingBookingIdRoute
@@ -156,8 +156,8 @@ export interface FileRoutesById {
   '/booking': typeof BookingRoute
   '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
-  '/rose-room': typeof RoseRoomRoute
-  '/texas-room': typeof TexasRoomRoute
+  '/rooms/rose-room': typeof RoomsRoseRoomRoute
+  '/rooms/texas-room': typeof RoomsTexasRoomRoute
   '/account/': typeof AccountIndexRoute
   '/admin/': typeof AdminIndexRoute
   '/account/booking/$bookingId': typeof AccountBookingBookingIdRoute
@@ -173,8 +173,8 @@ export interface FileRouteTypes {
     | '/booking'
     | '/login'
     | '/logout'
-    | '/rose-room'
-    | '/texas-room'
+    | '/rooms/rose-room'
+    | '/rooms/texas-room'
     | '/account'
     | '/admin'
     | '/account/booking/$bookingId'
@@ -188,8 +188,8 @@ export interface FileRouteTypes {
     | '/booking'
     | '/login'
     | '/logout'
-    | '/rose-room'
-    | '/texas-room'
+    | '/rooms/rose-room'
+    | '/rooms/texas-room'
     | '/account'
     | '/admin'
     | '/account/booking/$bookingId'
@@ -203,8 +203,8 @@ export interface FileRouteTypes {
     | '/booking'
     | '/login'
     | '/logout'
-    | '/rose-room'
-    | '/texas-room'
+    | '/rooms/rose-room'
+    | '/rooms/texas-room'
     | '/account/'
     | '/admin/'
     | '/account/booking/$bookingId'
@@ -219,8 +219,8 @@ export interface RootRouteChildren {
   BookingRoute: typeof BookingRoute
   LoginRoute: typeof LoginRoute
   LogoutRoute: typeof LogoutRoute
-  RoseRoomRoute: typeof RoseRoomRoute
-  TexasRoomRoute: typeof TexasRoomRoute
+  RoomsRoseRoomRoute: typeof RoomsRoseRoomRoute
+  RoomsTexasRoomRoute: typeof RoomsTexasRoomRoute
   AccountIndexRoute: typeof AccountIndexRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AccountBookingBookingIdRoute: typeof AccountBookingBookingIdRoute
@@ -278,20 +278,6 @@ export interface RootServerRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/texas-room': {
-      id: '/texas-room'
-      path: '/texas-room'
-      fullPath: '/texas-room'
-      preLoaderRoute: typeof TexasRoomRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/rose-room': {
-      id: '/rose-room'
-      path: '/rose-room'
-      fullPath: '/rose-room'
-      preLoaderRoute: typeof RoseRoomRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/logout': {
       id: '/logout'
       path: '/logout'
@@ -332,6 +318,20 @@ declare module '@tanstack/react-router' {
       path: '/account'
       fullPath: '/account'
       preLoaderRoute: typeof AccountIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/rooms/texas-room': {
+      id: '/rooms/texas-room'
+      path: '/rooms/texas-room'
+      fullPath: '/rooms/texas-room'
+      preLoaderRoute: typeof RoomsTexasRoomRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/rooms/rose-room': {
+      id: '/rooms/rose-room'
+      path: '/rooms/rose-room'
+      fullPath: '/rooms/rose-room'
+      preLoaderRoute: typeof RoomsRoseRoomRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/property-management/': {
@@ -409,8 +409,8 @@ const rootRouteChildren: RootRouteChildren = {
   BookingRoute: BookingRoute,
   LoginRoute: LoginRoute,
   LogoutRoute: LogoutRoute,
-  RoseRoomRoute: RoseRoomRoute,
-  TexasRoomRoute: TexasRoomRoute,
+  RoomsRoseRoomRoute: RoomsRoseRoomRoute,
+  RoomsTexasRoomRoute: RoomsTexasRoomRoute,
   AccountIndexRoute: AccountIndexRoute,
   AdminIndexRoute: AdminIndexRoute,
   AccountBookingBookingIdRoute: AccountBookingBookingIdRoute,

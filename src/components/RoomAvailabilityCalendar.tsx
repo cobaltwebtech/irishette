@@ -72,10 +72,10 @@ export default function RoomAvailabilityCalendar({
 
 			// Calculate date range for the API call (3 months from today)
 			const today = new Date();
-			const startDate = today.toISOString().split('T')[0];
+			const startDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 			const endDate = new Date();
 			endDate.setMonth(today.getMonth() + 3);
-			const endDateStr = endDate.toISOString().split('T')[0];
+			const endDateStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
 
 			// Call the availability API
 			const response = await fetch(
@@ -126,8 +126,10 @@ export default function RoomAvailabilityCalendar({
 
 	// Calculate total price and nights for the selected range
 	const calculateStayDetails = useCallback(
-		(range: DateRange | undefined) => {
-			if (!range?.from || !range?.to) return { totalPrice: 0, nights: 0 };
+		async (range: DateRange | undefined) => {
+			if (!range?.from || !range?.to || !availability.room) {
+				return { totalPrice: 0, nights: 0 };
+			}
 
 			const start = new Date(range.from);
 			const end = new Date(range.to);
@@ -135,24 +137,78 @@ export default function RoomAvailabilityCalendar({
 				(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24),
 			);
 
-			let totalPrice = 0;
-			const current = new Date(start);
+			try {
+				// Create date strings without timezone conversion
+				const checkInDate = `${range.from.getFullYear()}-${String(range.from.getMonth() + 1).padStart(2, '0')}-${String(range.from.getDate()).padStart(2, '0')}`;
+				const checkOutDate = `${range.to.getFullYear()}-${String(range.to.getMonth() + 1).padStart(2, '0')}-${String(range.to.getDate()).padStart(2, '0')}`;
 
-			while (current < end) {
-				const dateStr = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
-				const dayData = availability.calendar.find(
-					(day) => day.date === dateStr,
+				// Use the new tRPC endpoint to calculate pricing with dynamic rules
+				const response = await fetch(
+					`/api/trpc/rooms.calculatePricing?input=${encodeURIComponent(
+						JSON.stringify({
+							roomId: availability.room.id,
+							checkInDate,
+							checkOutDate,
+							guestCount: 2, // Default guest count
+						}),
+					)}`,
 				);
-				totalPrice += dayData?.price || availability.room?.basePrice || 0;
-				current.setDate(current.getDate() + 1);
-			}
 
-			return { totalPrice, nights };
+				if (!response.ok) {
+					throw new Error('Failed to calculate pricing');
+				}
+
+				const data = (await response.json()) as {
+					result: {
+						data: {
+							baseAmount: number;
+							numberOfNights: number;
+							appliedRules: Array<{
+								id: string;
+								name: string;
+								ruleType: string;
+								value: number;
+								appliedAmount: number;
+							}>;
+							roomBasePrice: number;
+						};
+					};
+				};
+
+				const pricing = data.result.data;
+
+				// For the room selection page, we return the baseAmount which includes
+				// the base price plus any applied pricing rules
+				return {
+					totalPrice: pricing.baseAmount,
+					nights: pricing.numberOfNights,
+				};
+			} catch (error) {
+				console.warn(
+					'Failed to calculate dynamic pricing, falling back to base price:',
+					error,
+				);
+
+				// Fallback to basic calculation if API fails
+				let totalPrice = 0;
+				const current = new Date(start);
+
+				while (current < end) {
+					const dateStr = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
+					const dayData = availability.calendar.find(
+						(day) => day.date === dateStr,
+					);
+					totalPrice += dayData?.price || availability.room?.basePrice || 0;
+					current.setDate(current.getDate() + 1);
+				}
+
+				return { totalPrice, nights };
+			}
 		},
-		[availability.calendar, availability.room?.basePrice],
+		[availability.calendar, availability.room],
 	);
 
-	const handleDateRangeSelect = (range: DateRange | undefined) => {
+	const handleDateRangeSelect = async (range: DateRange | undefined) => {
 		// Validate the range doesn't include any blocked dates
 		if (range?.from && range?.to) {
 			const start = new Date(range.from);
@@ -183,7 +239,7 @@ export default function RoomAvailabilityCalendar({
 		}
 
 		setDateRange(range);
-		const { totalPrice, nights } = calculateStayDetails(range);
+		const { totalPrice, nights } = await calculateStayDetails(range);
 		onDateRangeSelect?.(range, totalPrice, nights);
 	};
 

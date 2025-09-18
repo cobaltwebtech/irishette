@@ -17,6 +17,22 @@ export interface PricingBreakdown {
 	fees: number;
 	totalAmount: number;
 	currency: string;
+	// Enhanced pricing information from PaymentService
+	appliedRules?: Array<{
+		id: string;
+		name: string;
+		ruleType: string;
+		value: number;
+		appliedAmount: number;
+	}>;
+	taxBreakdown?: {
+		stateTaxRate: number;
+		cityTaxRate: number;
+		stateTaxAmount: number;
+		cityTaxAmount: number;
+		totalTaxAmount: number;
+		taxableAmount: number;
+	};
 }
 
 export interface GuestInfo {
@@ -24,15 +40,6 @@ export interface GuestInfo {
 	email: string;
 	phone: string;
 	specialRequests?: string;
-}
-
-export interface BillingAddress {
-	line1: string;
-	line2?: string;
-	city: string;
-	state: string;
-	postalCode: string;
-	country: string;
 }
 
 export interface BookingState {
@@ -48,9 +55,6 @@ export interface BookingState {
 
 	// Guest information
 	guestInfo: GuestInfo | null;
-
-	// Billing information
-	billingAddress: BillingAddress | null;
 
 	// Flow control
 	currentStep: BookingStep;
@@ -78,7 +82,6 @@ const initialState: BookingState = {
 	guestCount: 1,
 	pricing: null,
 	guestInfo: null,
-	billingAddress: null,
 	currentStep: 'dates',
 	bookingId: null,
 	error: null,
@@ -184,15 +187,6 @@ export const bookingActions = {
 		}));
 	},
 
-	// Set billing address
-	setBillingAddress: (billingAddress: BillingAddress) => {
-		bookingStore.setState((state) => ({
-			...state,
-			billingAddress,
-			updatedAt: new Date().toISOString(),
-		}));
-	},
-
 	// Navigate to a specific step
 	setStep: (step: BookingStep) => {
 		bookingStore.setState((state) => ({
@@ -281,15 +275,7 @@ export const bookingActions = {
 
 	// Check if can proceed to confirmation (after payment)
 	canProceedToConfirmation: () => {
-		const state = bookingStore.state;
-		return !!(
-			bookingActions.canProceedToPayment() &&
-			state.billingAddress?.line1 &&
-			state.billingAddress?.city &&
-			state.billingAddress?.state &&
-			state.billingAddress?.postalCode &&
-			state.billingAddress?.country
-		);
+		return !!bookingActions.canProceedToPayment();
 	},
 
 	// Get current booking summary

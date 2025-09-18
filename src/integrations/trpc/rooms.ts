@@ -651,4 +651,127 @@ export const roomsRouter = createTRPCRouter({
 
 			return { success: true, deletedRule: result[0] };
 		}),
+
+	// Calculate room pricing with dynamic rules (for frontend calendar)
+	calculatePricing: publicProcedure
+		.input(
+			z.object({
+				roomId: z.string(),
+				checkInDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+				checkOutDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+				guestCount: z.number().min(1).default(2),
+			}),
+		)
+		.query(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			// Get room data
+			const roomResult = await db
+				.select()
+				.from(room)
+				.where(eq(room.id, input.roomId));
+
+			if (!roomResult[0]) {
+				throw new Error('Room not found');
+			}
+
+			const roomData = roomResult[0];
+
+			// Calculate number of nights
+			const checkIn = new Date(input.checkInDate);
+			const checkOut = new Date(input.checkOutDate);
+			const numberOfNights = Math.ceil(
+				(checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24),
+			);
+
+			if (numberOfNights <= 0) {
+				throw new Error('Invalid date range');
+			}
+
+			// Start with base pricing
+			let baseAmount = roomData.basePrice * numberOfNights;
+
+			// Get applicable pricing rules - get all rules that might overlap
+			const pricingRules = await db
+				.select()
+				.from(roomPricingRules)
+				.where(
+					and(
+						eq(roomPricingRules.roomId, input.roomId),
+						eq(roomPricingRules.isActive, true),
+					),
+				);
+
+			const appliedRules: Array<{
+				id: string;
+				name: string;
+				ruleType: string;
+				value: number;
+				appliedAmount: number;
+			}> = [];
+
+			// Calculate which nights are affected by each rule
+			const stayNights: string[] = [];
+			const currentDate = new Date(input.checkInDate);
+			const checkOutDate = new Date(input.checkOutDate);
+
+			// Generate array of stay nights (checkIn to checkOut, exclusive of checkOut)
+			while (currentDate < checkOutDate) {
+				stayNights.push(currentDate.toISOString().split('T')[0]);
+				currentDate.setDate(currentDate.getDate() + 1);
+			}
+
+			// Apply pricing rules only for nights that fall within rule periods
+			for (const rule of pricingRules) {
+				// Find which stay nights fall within this rule's date range
+				// Rule end date is EXCLUSIVE (just like checkout dates)
+				const affectedNights = stayNights.filter((night) => {
+					return night >= rule.startDate && night < rule.endDate;
+				});
+
+				if (affectedNights.length === 0) {
+					// No nights affected by this rule
+					continue;
+				}
+
+				let appliedAmount = 0;
+
+				if (rule.ruleType === 'surcharge_rate') {
+					// Percentage surcharge on base price for affected nights only
+					const affectedBaseAmount = roomData.basePrice * affectedNights.length;
+					appliedAmount = affectedBaseAmount * rule.value;
+					baseAmount += appliedAmount;
+				} else if (rule.ruleType === 'fixed_amount') {
+					// Fixed amount per affected night
+					appliedAmount = rule.value * affectedNights.length;
+					baseAmount += appliedAmount;
+				} else if (rule.ruleType === 'absolute_price') {
+					// Override with absolute price for affected nights only
+					const originalAffectedAmount =
+						roomData.basePrice * affectedNights.length;
+					const newAffectedAmount = rule.value * affectedNights.length;
+					appliedAmount = newAffectedAmount - originalAffectedAmount;
+					baseAmount = baseAmount - originalAffectedAmount + newAffectedAmount;
+				}
+
+				if (appliedAmount !== 0) {
+					appliedRules.push({
+						id: rule.id,
+						name: rule.name,
+						ruleType: rule.ruleType,
+						value: rule.value,
+						appliedAmount,
+					});
+				}
+			}
+
+			// For the calendar component, we only return the room rate (no fees/taxes)
+			// Fees and taxes will be calculated later in the booking flow
+			return {
+				baseAmount: baseAmount, // This includes base price + pricing rules
+				numberOfNights,
+				appliedRules,
+				roomBasePrice: roomData.basePrice,
+			};
+		}),
 });

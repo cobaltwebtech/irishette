@@ -29,14 +29,14 @@ export default function Header() {
 							Home
 						</Link>
 						<Link
-							to="/rose-room"
+							to="/rooms/rose-room"
 							className="text-foreground hover:text-primary transition-colors [&.active]:text-primary [&.active]:font-semibold"
 							activeProps={{ className: 'text-primary font-semibold' }}
 						>
 							Rose Room
 						</Link>
 						<Link
-							to="/texas-room"
+							to="/rooms/texas-room"
 							className="text-foreground hover:text-primary transition-colors [&.active]:text-primary [&.active]:font-semibold"
 							activeProps={{ className: 'text-primary font-semibold' }}
 						>

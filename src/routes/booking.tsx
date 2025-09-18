@@ -1,16 +1,18 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { ArrowLeft, Check, CreditCard, LoaderCircle, User } from 'lucide-react';
+import { ArrowLeft, Check, LoaderCircle, User } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { signIn, updateUser, useSession } from '@/lib/auth-client';
-import {
-	type BillingAddress,
-	type BookingStep,
-	useBookingStore,
-} from '@/stores';
+import { type BookingStep, useBookingStore } from '@/stores';
+
+// Helper function to create a date from YYYY-MM-DD string without timezone conversion
+function parseISODateString(dateString: string): Date {
+	const [year, month, day] = dateString.split('-').map(Number);
+	return new Date(year, month - 1, day); // month is 0-indexed
+}
 
 export const Route = createFileRoute('/booking')({
 	head: () => ({
@@ -42,9 +44,7 @@ function BookingFlow() {
 
 		if (
 			stepParam &&
-			['dates', 'auth', 'details', 'payment', 'confirmation'].includes(
-				stepParam,
-			)
+			['dates', 'auth', 'details', 'confirmation'].includes(stepParam)
 		) {
 			booking.actions.setStep(stepParam as BookingStep);
 		}
@@ -95,13 +95,44 @@ function BookingFlow() {
 							taxAmount: number;
 							totalAmount: number;
 							numberOfNights: number;
+							appliedRules?: Array<{
+								id: string;
+								name: string;
+								ruleType: string;
+								value: number;
+								appliedAmount: number;
+							}>;
+							taxBreakdown?: {
+								stateTaxRate: number;
+								cityTaxRate: number;
+								stateTaxAmount: number;
+								cityTaxAmount: number;
+								totalTaxAmount: number;
+								taxableAmount: number;
+							};
 						};
 					};
+					// Legacy format support
 					baseAmount?: number;
 					feesAmount?: number;
 					taxAmount?: number;
 					totalAmount?: number;
 					numberOfNights?: number;
+					appliedRules?: Array<{
+						id: string;
+						name: string;
+						ruleType: string;
+						value: number;
+						appliedAmount: number;
+					}>;
+					taxBreakdown?: {
+						stateTaxRate: number;
+						cityTaxRate: number;
+						stateTaxAmount: number;
+						cityTaxAmount: number;
+						totalTaxAmount: number;
+						taxableAmount: number;
+					};
 				};
 				console.log('Raw response data:', responseData);
 
@@ -136,6 +167,9 @@ function BookingFlow() {
 					fees: pricingData.feesAmount,
 					totalAmount: pricingData.totalAmount,
 					currency: 'USD',
+					// Include enhanced pricing information
+					appliedRules: pricingData.appliedRules || [],
+					taxBreakdown: pricingData.taxBreakdown,
 				});
 			} catch (error) {
 				console.error('Error calculating precise pricing:', error);
@@ -197,7 +231,9 @@ function BookingFlow() {
 					<div className="flex items-center justify-between">
 						<Link
 							to={
-								booking.roomSlug === 'rose-room' ? '/rose-room' : '/texas-room'
+								booking.roomSlug === 'rose-room'
+									? '/rooms/rose-room'
+									: '/rooms/texas-room'
 							}
 							className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors"
 						>
@@ -227,7 +263,6 @@ function BookingFlow() {
 								label: 'Details',
 								completed: booking.isValid.details,
 							},
-							{ step: 'payment', label: 'Payment', completed: false },
 							{
 								step: 'confirmation',
 								label: 'Confirmed',
@@ -257,7 +292,7 @@ function BookingFlow() {
 								>
 									{item.label}
 								</span>
-								{index < 4 && (
+								{index < 3 && (
 									<div
 										className={`w-8 h-0.5 ml-4 ${
 											item.completed ? 'bg-primary' : 'bg-muted'
@@ -278,7 +313,6 @@ function BookingFlow() {
 						{booking.isStep('dates') && <DatesStep />}
 						{booking.isStep('auth') && <AuthenticationStep />}
 						{booking.isStep('details') && <BookingDetailsStep />}
-						{booking.isStep('payment') && <PaymentStep />}
 						{booking.isStep('confirmation') && <ConfirmationStep />}
 					</div>
 
@@ -306,7 +340,11 @@ function DatesStep() {
 					Please go back to select your dates and room.
 				</p>
 				<Link
-					to={booking.roomSlug === 'rose-room' ? '/rose-room' : '/texas-room'}
+					to={
+						booking.roomSlug === 'rose-room'
+							? '/rooms/rose-room'
+							: '/rooms/texas-room'
+					}
 				>
 					<Button>Back to Room Selection</Button>
 				</Link>
@@ -445,6 +483,7 @@ function BookingDetailsStep() {
 	const [numberOfGuests, setNumberOfGuests] = useState(booking.guestCount || 1);
 	const [specialRequests, setSpecialRequests] = useState('');
 	const [errors, setErrors] = useState<Record<string, string>>({});
+	const [isSubmitting, setIsSubmitting] = useState(false);
 
 	// Pre-populate form with session data or existing booking data
 	useEffect(() => {
@@ -563,6 +602,21 @@ function BookingDetailsStep() {
 						taxAmount: number;
 						totalAmount: number;
 						numberOfNights: number;
+						appliedRules?: Array<{
+							id: string;
+							name: string;
+							ruleType: string;
+							value: number;
+							appliedAmount: number;
+						}>;
+						taxBreakdown?: {
+							stateTaxRate: number;
+							cityTaxRate: number;
+							stateTaxAmount: number;
+							cityTaxAmount: number;
+							totalTaxAmount: number;
+							taxableAmount: number;
+						};
 					};
 				};
 				baseAmount?: number;
@@ -570,6 +624,21 @@ function BookingDetailsStep() {
 				taxAmount?: number;
 				totalAmount?: number;
 				numberOfNights?: number;
+				appliedRules?: Array<{
+					id: string;
+					name: string;
+					ruleType: string;
+					value: number;
+					appliedAmount: number;
+				}>;
+				taxBreakdown?: {
+					stateTaxRate: number;
+					cityTaxRate: number;
+					stateTaxAmount: number;
+					cityTaxAmount: number;
+					totalTaxAmount: number;
+					taxableAmount: number;
+				};
 			};
 
 			console.log('Raw response data (handleContinue):', responseData);
@@ -605,6 +674,9 @@ function BookingDetailsStep() {
 				fees: pricingData.feesAmount,
 				totalAmount: pricingData.totalAmount,
 				currency: 'USD',
+				// Include enhanced pricing information
+				appliedRules: pricingData.appliedRules || [],
+				taxBreakdown: pricingData.taxBreakdown,
 			});
 
 			console.log('Updated pricing with detailed breakdown:', pricingData);
@@ -626,12 +698,144 @@ function BookingDetailsStep() {
 					fees: 0,
 					totalAmount: 0,
 					currency: 'USD',
+					appliedRules: [],
+					taxBreakdown: undefined,
 				});
 			}
 		}
 
 		// Proceed to payment step
-		booking.actions.setStep('payment');
+		await initiatePayment();
+	};
+
+	// Function to handle payment initiation
+	const initiatePayment = async () => {
+		if (!session?.user) {
+			booking.actions.setError('Please sign in to continue with payment');
+			return;
+		}
+
+		if (!booking.guestInfo || !booking.pricing) {
+			booking.actions.setError('Missing booking information');
+			return;
+		}
+
+		if (!booking.roomId || !booking.checkInDate || !booking.checkOutDate) {
+			booking.actions.setError('Missing booking dates or room information');
+			return;
+		}
+
+		setIsSubmitting(true);
+		booking.actions.clearError();
+
+		try {
+			// Prepare booking data for creation
+			const bookingData = {
+				roomId: booking.roomId,
+				checkInDate: booking.checkInDate,
+				checkOutDate: booking.checkOutDate,
+				guestCount: booking.guestCount,
+				guestName: booking.guestInfo.name,
+				guestEmail: booking.guestInfo.email,
+				guestPhone: booking.guestInfo.phone,
+				specialRequests: booking.guestInfo.specialRequests || '',
+				basePrice: booking.pricing.basePrice,
+				serviceFee: booking.pricing.fees || 0,
+				taxAmount: booking.pricing.taxes || 0,
+				totalAmount: booking.pricing.totalAmount,
+				userId: session.user.id,
+			};
+
+			// Step 1: Create booking via TRPC
+			console.log('Creating booking...', bookingData);
+			const createBookingResponse = await fetch(
+				'/api/trpc/bookings.createBooking',
+				{
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify(bookingData),
+				},
+			);
+
+			if (!createBookingResponse.ok) {
+				const errorData = await createBookingResponse.text();
+				throw new Error(`Failed to create booking: ${errorData}`);
+			}
+
+			const createBookingResult = (await createBookingResponse.json()) as {
+				result?: {
+					data?: {
+						bookingId?: string;
+						success?: boolean;
+					};
+				};
+			};
+			console.log('Booking created:', createBookingResult);
+
+			if (!createBookingResult.result?.data?.bookingId) {
+				throw new Error('No booking ID returned from server');
+			}
+
+			const bookingId = createBookingResult.result.data.bookingId;
+			booking.actions.setBookingId(bookingId);
+
+			// Step 2: Create Stripe checkout session
+			console.log('Creating checkout session...');
+			const checkoutData = {
+				bookingId: bookingId,
+				userId: session.user.id,
+				successUrl: `${window.location.origin}/booking?step=confirmation`,
+				cancelUrl: `${window.location.origin}/booking?step=details`,
+			};
+
+			const checkoutResponse = await fetch(
+				'/api/trpc/bookings.createCheckoutSession',
+				{
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify(checkoutData),
+				},
+			);
+
+			if (!checkoutResponse.ok) {
+				const errorData = await checkoutResponse.text();
+				throw new Error(`Failed to create checkout session: ${errorData}`);
+			}
+
+			const checkoutResult = (await checkoutResponse.json()) as {
+				result?: {
+					data?: {
+						sessionId?: string;
+						checkoutUrl?: string;
+					};
+				};
+			};
+			console.log('Checkout session created:', checkoutResult);
+
+			// Step 3: Redirect to Stripe checkout
+			if (checkoutResult.result?.data?.checkoutUrl) {
+				console.log(
+					'Redirecting to Stripe checkout:',
+					checkoutResult.result.data.checkoutUrl,
+				);
+				window.location.href = checkoutResult.result.data.checkoutUrl;
+			} else {
+				throw new Error('No checkout URL returned from server');
+			}
+		} catch (error) {
+			console.error('Payment processing error:', error);
+			booking.actions.setError(
+				error instanceof Error
+					? error.message
+					: 'An error occurred while processing your payment',
+			);
+		} finally {
+			setIsSubmitting(false);
+		}
 	};
 
 	return (
@@ -774,17 +978,36 @@ function BookingDetailsStep() {
 					</div>
 				</div>
 
+				{/* Error Display */}
+				{booking.error && (
+					<div className="bg-destructive/10 border border-destructive/20 rounded-md p-3">
+						<p className="text-sm text-destructive">{booking.error}</p>
+					</div>
+				)}
+
 				{/* Continue Button */}
 				<div className="flex gap-3">
 					<Button
 						variant="outline"
 						onClick={() => booking.actions.setStep('auth')}
 						className="flex-1"
+						disabled={isSubmitting}
 					>
 						Back
 					</Button>
-					<Button onClick={handleContinue} className="flex-1">
-						Continue to Payment
+					<Button
+						onClick={handleContinue}
+						className="flex-1"
+						disabled={isSubmitting}
+					>
+						{isSubmitting ? (
+							<>
+								<LoaderCircle className="w-4 h-4 mr-2 animate-spin" />
+								Processing...
+							</>
+						) : (
+							'Continue to Payment'
+						)}
 					</Button>
 				</div>
 			</CardContent>
@@ -792,462 +1015,7 @@ function BookingDetailsStep() {
 	);
 }
 
-// Step 4: Payment
-function PaymentStep() {
-	const { data: session } = useSession();
-	const booking = useBookingStore();
-
-	// Form state for billing address
-	const [billingAddress, setBillingAddress] = useState<BillingAddress>({
-		line1: '',
-		line2: '',
-		city: '',
-		state: '',
-		postalCode: '',
-		country: 'US', // Default to US
-	});
-
-	// Form validation errors
-	const [errors, setErrors] = useState<Record<string, string>>({});
-	const [isSubmitting, setIsSubmitting] = useState(false);
-
-	// Form IDs for accessibility
-	const line1Id = useId();
-	const line2Id = useId();
-	const cityId = useId();
-	const stateId = useId();
-	const postalCodeId = useId();
-	const countryId = useId();
-
-	// Load existing billing address if available
-	useEffect(() => {
-		if (booking.billingAddress) {
-			setBillingAddress(booking.billingAddress);
-		}
-	}, [booking.billingAddress]);
-
-	// Validate form fields
-	const validateForm = (): boolean => {
-		const newErrors: Record<string, string> = {};
-
-		if (!billingAddress.line1.trim()) {
-			newErrors.line1 = 'Address line 1 is required';
-		}
-
-		if (!billingAddress.city.trim()) {
-			newErrors.city = 'City is required';
-		}
-
-		if (!billingAddress.state.trim()) {
-			newErrors.state = 'State/Province is required';
-		}
-
-		if (!billingAddress.postalCode.trim()) {
-			newErrors.postalCode = 'Postal code is required';
-		}
-
-		if (!billingAddress.country.trim()) {
-			newErrors.country = 'Country is required';
-		}
-
-		setErrors(newErrors);
-		return Object.keys(newErrors).length === 0;
-	};
-
-	// Check if form is valid for submission
-	const isFormValid = () => {
-		return !!(
-			billingAddress.line1.trim() &&
-			billingAddress.city.trim() &&
-			billingAddress.state.trim() &&
-			billingAddress.postalCode.trim() &&
-			billingAddress.country.trim()
-		);
-	};
-
-	// Handle form submission
-	const handleSubmit = async (e: React.FormEvent) => {
-		e.preventDefault();
-
-		if (!validateForm()) {
-			return;
-		}
-
-		if (!session?.user) {
-			booking.actions.setError('Please sign in to continue with payment');
-			return;
-		}
-
-		if (!booking.guestInfo || !booking.pricing) {
-			booking.actions.setError('Missing booking information');
-			return;
-		}
-
-		if (!booking.roomId || !booking.checkInDate || !booking.checkOutDate) {
-			booking.actions.setError('Missing booking dates or room information');
-			return;
-		}
-
-		setIsSubmitting(true);
-		booking.actions.clearError();
-
-		try {
-			// Save billing address to store
-			booking.actions.setBillingAddress(billingAddress);
-
-			// Prepare booking data for creation
-			const bookingData = {
-				roomId: booking.roomId,
-				checkInDate: booking.checkInDate,
-				checkOutDate: booking.checkOutDate,
-				guestCount: booking.guestCount,
-				guestName: booking.guestInfo.name,
-				guestEmail: booking.guestInfo.email,
-				guestPhone: booking.guestInfo.phone,
-				billingAddress: billingAddress,
-				specialRequests: booking.guestInfo.specialRequests || '',
-				basePrice: booking.pricing.basePrice,
-				cleaningFee: booking.pricing.fees || 0,
-				serviceFee: 0, // Could be included in fees
-				taxAmount: booking.pricing.taxes || 0,
-				totalAmount: booking.pricing.totalAmount,
-				userId: session.user.id,
-			};
-
-			// Step 1: Create booking via TRPC
-			console.log('Creating booking...', bookingData);
-			const createBookingResponse = await fetch(
-				'/api/trpc/bookings.createBooking',
-				{
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify(bookingData),
-				},
-			);
-
-			if (!createBookingResponse.ok) {
-				const errorData = await createBookingResponse.text();
-				throw new Error(`Failed to create booking: ${errorData}`);
-			}
-
-			const createBookingResult = (await createBookingResponse.json()) as {
-				result?: {
-					data?: {
-						bookingId?: string;
-						success?: boolean;
-					};
-				};
-			};
-			console.log('Booking created:', createBookingResult);
-
-			if (!createBookingResult.result?.data?.bookingId) {
-				throw new Error('No booking ID returned from server');
-			}
-
-			const bookingId = createBookingResult.result.data.bookingId;
-			booking.actions.setBookingId(bookingId);
-
-			// Step 2: Create Stripe checkout session
-			console.log('Creating checkout session...');
-			const checkoutData = {
-				bookingId: bookingId,
-				userId: session.user.id,
-				successUrl: `${window.location.origin}/booking?step=confirmation`,
-				cancelUrl: `${window.location.origin}/booking?step=payment`,
-			};
-
-			const checkoutResponse = await fetch(
-				'/api/trpc/bookings.createCheckoutSession',
-				{
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify(checkoutData),
-				},
-			);
-
-			if (!checkoutResponse.ok) {
-				const errorData = await checkoutResponse.text();
-				throw new Error(`Failed to create checkout session: ${errorData}`);
-			}
-
-			const checkoutResult = (await checkoutResponse.json()) as {
-				result?: {
-					data?: {
-						sessionId?: string;
-						checkoutUrl?: string;
-					};
-				};
-			};
-			console.log('Checkout session created:', checkoutResult);
-
-			// Step 3: Redirect to Stripe checkout
-			if (checkoutResult.result?.data?.checkoutUrl) {
-				console.log(
-					'Redirecting to Stripe checkout:',
-					checkoutResult.result.data.checkoutUrl,
-				);
-				window.location.href = checkoutResult.result.data.checkoutUrl;
-			} else {
-				throw new Error('No checkout URL returned from server');
-			}
-		} catch (error) {
-			console.error('Payment processing error:', error);
-			booking.actions.setError(
-				error instanceof Error
-					? error.message
-					: 'An error occurred while processing your payment',
-			);
-		} finally {
-			setIsSubmitting(false);
-		}
-	};
-
-	return (
-		<Card>
-			<CardHeader>
-				<CardTitle className="flex items-center gap-2">
-					<CreditCard className="w-5 h-5" />
-					Payment & Billing
-				</CardTitle>
-			</CardHeader>
-			<CardContent>
-				<form onSubmit={handleSubmit} className="space-y-4">
-					{/* Billing Address Section */}
-					<div>
-						<h3 className="text-lg font-medium mb-4">Billing Address</h3>
-
-						{/* Address Line 1 */}
-						<div className="space-y-2">
-							<label htmlFor={line1Id} className="text-sm font-medium">
-								Address Line 1 *
-							</label>
-							<Input
-								id={line1Id}
-								type="text"
-								value={billingAddress.line1}
-								onChange={(e) =>
-									setBillingAddress({
-										...billingAddress,
-										line1: e.target.value,
-									})
-								}
-								placeholder="Street address"
-								aria-invalid={!!errors.line1}
-								aria-describedby={errors.line1 ? `${line1Id}-error` : undefined}
-								disabled={isSubmitting}
-							/>
-							{errors.line1 && (
-								<p id={`${line1Id}-error`} className="text-sm text-destructive">
-									{errors.line1}
-								</p>
-							)}
-						</div>
-
-						{/* Address Line 2 */}
-						<div className="space-y-2">
-							<label htmlFor={line2Id} className="text-sm font-medium">
-								Address Line 2
-							</label>
-							<Input
-								id={line2Id}
-								type="text"
-								value={billingAddress.line2}
-								onChange={(e) =>
-									setBillingAddress({
-										...billingAddress,
-										line2: e.target.value,
-									})
-								}
-								placeholder="Apartment, suite, etc. (optional)"
-								disabled={isSubmitting}
-							/>
-						</div>
-
-						{/* City and State */}
-						<div className="grid grid-cols-2 gap-4">
-							<div className="space-y-2">
-								<label htmlFor={cityId} className="text-sm font-medium">
-									City *
-								</label>
-								<Input
-									id={cityId}
-									type="text"
-									value={billingAddress.city}
-									onChange={(e) =>
-										setBillingAddress({
-											...billingAddress,
-											city: e.target.value,
-										})
-									}
-									placeholder="City"
-									aria-invalid={!!errors.city}
-									aria-describedby={errors.city ? `${cityId}-error` : undefined}
-									disabled={isSubmitting}
-								/>
-								{errors.city && (
-									<p
-										id={`${cityId}-error`}
-										className="text-sm text-destructive"
-									>
-										{errors.city}
-									</p>
-								)}
-							</div>
-
-							<div className="space-y-2">
-								<label htmlFor={stateId} className="text-sm font-medium">
-									State/Province *
-								</label>
-								<Input
-									id={stateId}
-									type="text"
-									value={billingAddress.state}
-									onChange={(e) =>
-										setBillingAddress({
-											...billingAddress,
-											state: e.target.value,
-										})
-									}
-									placeholder="State or Province"
-									aria-invalid={!!errors.state}
-									aria-describedby={
-										errors.state ? `${stateId}-error` : undefined
-									}
-									disabled={isSubmitting}
-								/>
-								{errors.state && (
-									<p
-										id={`${stateId}-error`}
-										className="text-sm text-destructive"
-									>
-										{errors.state}
-									</p>
-								)}
-							</div>
-						</div>
-
-						{/* Postal Code and Country */}
-						<div className="grid grid-cols-2 gap-4">
-							<div className="space-y-2">
-								<label htmlFor={postalCodeId} className="text-sm font-medium">
-									Postal Code *
-								</label>
-								<Input
-									id={postalCodeId}
-									type="text"
-									value={billingAddress.postalCode}
-									onChange={(e) =>
-										setBillingAddress({
-											...billingAddress,
-											postalCode: e.target.value,
-										})
-									}
-									placeholder="ZIP/Postal Code"
-									aria-invalid={!!errors.postalCode}
-									aria-describedby={
-										errors.postalCode ? `${postalCodeId}-error` : undefined
-									}
-									disabled={isSubmitting}
-								/>
-								{errors.postalCode && (
-									<p
-										id={`${postalCodeId}-error`}
-										className="text-sm text-destructive"
-									>
-										{errors.postalCode}
-									</p>
-								)}
-							</div>
-
-							<div className="space-y-2">
-								<label htmlFor={countryId} className="text-sm font-medium">
-									Country *
-								</label>
-								<select
-									id={countryId}
-									value={billingAddress.country}
-									onChange={(e) =>
-										setBillingAddress({
-											...billingAddress,
-											country: e.target.value,
-										})
-									}
-									className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-									aria-invalid={!!errors.country}
-									aria-describedby={
-										errors.country ? `${countryId}-error` : undefined
-									}
-									disabled={isSubmitting}
-								>
-									<option value="US">United States</option>
-									<option value="CA">Canada</option>
-									<option value="MX">Mexico</option>
-									<option value="GB">United Kingdom</option>
-									<option value="FR">France</option>
-									<option value="DE">Germany</option>
-									<option value="AU">Australia</option>
-									{/* Add more countries as needed */}
-								</select>
-								{errors.country && (
-									<p
-										id={`${countryId}-error`}
-										className="text-sm text-destructive"
-									>
-										{errors.country}
-									</p>
-								)}
-							</div>
-						</div>
-					</div>
-
-					{/* Payment Info */}
-					<div className="border-t pt-4">
-						<h3 className="text-lg font-medium mb-2">Payment Information</h3>
-						<p className="text-sm text-muted-foreground mb-4">
-							You'll be redirected to Stripe for secure payment processing.
-						</p>
-
-						{/* Error Display */}
-						{booking.error && (
-							<div className="bg-destructive/10 border border-destructive/20 rounded-md p-3 mb-4">
-								<p className="text-sm text-destructive">{booking.error}</p>
-							</div>
-						)}
-
-						{/* Submit Button */}
-						<Button
-							type="submit"
-							className="w-full"
-							disabled={isSubmitting || !isFormValid()}
-						>
-							{isSubmitting ? (
-								<>
-									<LoaderCircle className="w-4 h-4 mr-2 animate-spin" />
-									Processing...
-								</>
-							) : (
-								<>
-									Continue to Payment
-									{booking.pricing?.totalAmount && (
-										<span className="ml-2">
-											${booking.pricing.totalAmount.toFixed(2)}
-										</span>
-									)}
-								</>
-							)}
-						</Button>
-					</div>
-				</form>
-			</CardContent>
-		</Card>
-	);
-}
-
-// Step 5: Confirmation
+// Step 4: Confirmation
 function ConfirmationStep() {
 	const booking = useBookingStore();
 	const summary = booking.summary;
@@ -1348,19 +1116,7 @@ function ConfirmationStep() {
 								<div className="flex justify-between">
 									<span className="text-muted-foreground">Check-in:</span>
 									<span className="font-medium">
-										{new Date(summary.checkInDate).toLocaleDateString('en-US', {
-											weekday: 'long',
-											year: 'numeric',
-											month: 'long',
-											day: 'numeric',
-										})}
-									</span>
-								</div>
-
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">Check-out:</span>
-									<span className="font-medium">
-										{new Date(summary.checkOutDate).toLocaleDateString(
+										{parseISODateString(summary.checkInDate).toLocaleDateString(
 											'en-US',
 											{
 												weekday: 'long',
@@ -1369,6 +1125,20 @@ function ConfirmationStep() {
 												day: 'numeric',
 											},
 										)}
+									</span>
+								</div>
+
+								<div className="flex justify-between">
+									<span className="text-muted-foreground">Check-out:</span>
+									<span className="font-medium">
+										{parseISODateString(
+											summary.checkOutDate,
+										).toLocaleDateString('en-US', {
+											weekday: 'long',
+											year: 'numeric',
+											month: 'long',
+											day: 'numeric',
+										})}
 									</span>
 								</div>
 
@@ -1523,10 +1293,12 @@ function BookingSummary() {
 				<div>
 					<h4 className="font-semibold">Dates</h4>
 					<p className="text-sm text-muted-foreground">
-						Check-in: {new Date(summary.checkInDate).toLocaleDateString()}
+						Check-in:{' '}
+						{parseISODateString(summary.checkInDate).toLocaleDateString()}
 					</p>
 					<p className="text-sm text-muted-foreground">
-						Check-out: {new Date(summary.checkOutDate).toLocaleDateString()}
+						Check-out:{' '}
+						{parseISODateString(summary.checkOutDate).toLocaleDateString()}
 					</p>
 					<p className="text-sm text-muted-foreground">
 						{summary.totalNights} night{summary.totalNights !== 1 ? 's' : ''}
@@ -1553,18 +1325,58 @@ function BookingSummary() {
 								</span>
 								<span>${summary.pricing.subtotal?.toFixed(2) || '0.00'}</span>
 							</div>
+
 							{summary.pricing.fees && summary.pricing.fees > 0 && (
 								<div className="flex justify-between text-muted-foreground">
-									<span>Service & cleaning fees</span>
+									<span>Service Fee</span>
 									<span>${summary.pricing.fees.toFixed(2)}</span>
 								</div>
 							)}
+
+							{/* Enhanced tax display */}
 							{summary.pricing.taxes && summary.pricing.taxes > 0 && (
-								<div className="flex justify-between text-muted-foreground">
-									<span>Taxes (8%)</span>
-									<span>${summary.pricing.taxes.toFixed(2)}</span>
+								<div className="space-y-1">
+									<div className="flex justify-between text-muted-foreground">
+										<span>Hotel Occupancy Tax</span>
+										<span>${summary.pricing.taxes.toFixed(2)}</span>
+									</div>
+									{summary.pricing.taxBreakdown && (
+										<div className="ml-2 space-y-1 text-xs text-muted-foreground">
+											<div className="flex justify-between">
+												<span>
+													• State of Texas (
+													{(
+														summary.pricing.taxBreakdown.stateTaxRate * 100
+													).toFixed(0)}
+													%)
+												</span>
+												<span>
+													$
+													{summary.pricing.taxBreakdown.stateTaxAmount.toFixed(
+														2,
+													)}
+												</span>
+											</div>
+											<div className="flex justify-between">
+												<span>
+													• City of Dublin (
+													{(
+														summary.pricing.taxBreakdown.cityTaxRate * 100
+													).toFixed(0)}
+													%)
+												</span>
+												<span>
+													$
+													{summary.pricing.taxBreakdown.cityTaxAmount.toFixed(
+														2,
+													)}
+												</span>
+											</div>
+										</div>
+									)}
 								</div>
 							)}
+
 							<div className="flex justify-between font-semibold border-t pt-2 mt-2 text-base">
 								<span>Total</span>
 								<span>

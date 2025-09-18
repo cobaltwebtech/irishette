@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, lte, or } from 'drizzle-orm';
+import { and, eq, gte, lte, or } from 'drizzle-orm';
 import { customAlphabet, nanoid } from 'nanoid';
 import Stripe from 'stripe';
 import { createDrizzle } from '@/db/drizzle-init';
@@ -116,18 +116,9 @@ export class PaymentService {
 					// Rule must overlap with booking dates
 					lte(roomPricingRules.startDate, checkOutDate),
 					gte(roomPricingRules.endDate, checkInDate),
-					// Check min/max nights constraints
-					or(
-						isNull(roomPricingRules.minNights),
-						lte(roomPricingRules.minNights, numberOfNights),
-					),
-					or(
-						isNull(roomPricingRules.maxNights),
-						gte(roomPricingRules.maxNights, numberOfNights),
-					),
 				),
 			)
-			.orderBy(desc(roomPricingRules.priority));
+			.orderBy(roomPricingRules.startDate); // Order by start date since priority doesn't exist
 
 		// Filter rules by days of week if specified
 		const filteredRules = applicableRules.filter((rule) => {
@@ -172,28 +163,33 @@ export class PaymentService {
 			appliedAmount: number;
 		}> = [];
 
-		// Apply rules in priority order (highest first)
-		// Only apply the highest priority rule of each type
-		const appliedRuleTypes = new Set<string>();
+		// Apply all matching rules
+		// Note: Without priority system, we apply rules in the order they appear
+		// For absolute_price rules, the last one wins
+		let hasAbsolutePrice = false;
 
 		for (const rule of filteredRules) {
-			// Skip if we've already applied a rule of this type with higher priority
-			if (appliedRuleTypes.has(rule.ruleType)) continue;
-
 			let appliedAmount = 0;
 
 			switch (rule.ruleType) {
 				case 'surcharge_rate':
-					appliedAmount = roomData.basePrice * rule.value;
-					finalPricePerNight += appliedAmount;
+					if (!hasAbsolutePrice) {
+						appliedAmount = roomData.basePrice * rule.value;
+						finalPricePerNight += appliedAmount;
+					}
 					break;
 				case 'fixed_amount':
-					appliedAmount = rule.value;
-					finalPricePerNight += appliedAmount;
+					if (!hasAbsolutePrice) {
+						appliedAmount = rule.value;
+						finalPricePerNight += appliedAmount;
+					}
 					break;
 				case 'absolute_price':
 					appliedAmount = rule.value - roomData.basePrice;
 					finalPricePerNight = rule.value;
+					hasAbsolutePrice = true;
+					// Reset previous adjustments since absolute price overrides everything
+					appliedRules.length = 0;
 					break;
 			}
 
@@ -204,8 +200,6 @@ export class PaymentService {
 				value: rule.value,
 				appliedAmount,
 			});
-
-			appliedRuleTypes.add(rule.ruleType);
 		}
 
 		// Base calculation with dynamic pricing
@@ -592,10 +586,8 @@ export class PaymentService {
 			mode: 'payment',
 			success_url: input.successUrl,
 			cancel_url: input.cancelUrl,
-			// Remove automatic tax and use manual tax rate via line items
-			customer_update: {
-				address: 'auto',
-			},
+			// Require complete billing address collection
+			billing_address_collection: 'required',
 			metadata: {
 				booking_id: bookingId,
 				user_id: booking.userId,

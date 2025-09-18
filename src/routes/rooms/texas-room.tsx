@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/card';
 import { useBookingStore } from '@/stores';
 
-export const Route = createFileRoute('/texas-room')({
+export const Route = createFileRoute('/rooms/texas-room')({
 	head: () => ({
 		meta: [
 			{
@@ -65,31 +65,24 @@ function TexasRoomPage() {
 
 		// Update booking store with selected dates
 		if (dateRange?.from && dateRange?.to) {
-			// Convert dates to ISO strings for storage
-			const checkInDate = dateRange.from.toISOString().split('T')[0];
-			const checkOutDate = dateRange.to.toISOString().split('T')[0];
+			// Convert dates to ISO strings for storage without timezone shift
+			const checkInDate = `${dateRange.from.getFullYear()}-${String(dateRange.from.getMonth() + 1).padStart(2, '0')}-${String(dateRange.from.getDate()).padStart(2, '0')}`;
+			const checkOutDate = `${dateRange.to.getFullYear()}-${String(dateRange.to.getMonth() + 1).padStart(2, '0')}-${String(dateRange.to.getDate()).padStart(2, '0')}`;
 
 			booking.actions.setDates(checkInDate, checkOutDate);
 
-			// Set pricing information if available
+			// Store only the base pricing information for display
+			// Fees and taxes will be calculated in the booking flow
 			if (totalPriceValue && nightsValue) {
-				// Calculate fees (same logic as PaymentService)
-				const cleaningFee = 50;
-				const serviceFee = Math.round(totalPriceValue * 0.12); // 12% service fee
-				const totalFees = cleaningFee + serviceFee;
-
-				// Calculate tax on subtotal (base + fees)
-				const subtotal = totalPriceValue + totalFees;
-				const taxAmount = Math.round(subtotal * 0.08); // 8% tax on subtotal
-				const totalAmount = subtotal + taxAmount;
+				const basePrice = totalPriceValue / nightsValue;
 
 				booking.actions.setPricing({
-					basePrice: totalPriceValue / nightsValue, // Calculate base price per night
+					basePrice: basePrice,
 					nights: nightsValue,
-					subtotal: totalPriceValue,
-					taxes: taxAmount,
-					fees: totalFees,
-					totalAmount: totalAmount,
+					subtotal: totalPriceValue, // This is just the base room cost
+					taxes: 0, // No taxes shown on room selection
+					fees: 0, // No fees shown on room selection
+					totalAmount: totalPriceValue, // Base room cost only
 					currency: 'USD',
 				});
 			}
@@ -203,7 +196,9 @@ function TexasRoomPage() {
 											<div className="mt-4 p-4 bg-orange-50 rounded-lg space-y-2">
 												<div className="flex justify-between">
 													<span className="text-orange-800">Base Rate:</span>
-													<span className="font-semibold">$89.99/night</span>
+													<span className="font-semibold">
+														${(totalPrice / nights).toFixed(2)}/night
+													</span>
 												</div>
 												<div className="flex justify-between">
 													<span className="text-orange-800">
@@ -213,11 +208,14 @@ function TexasRoomPage() {
 												</div>
 												<hr className="border-orange-200" />
 												<div className="flex justify-between font-bold">
-													<span className="text-orange-800">Total:</span>
+													<span className="text-orange-800">
+														Room Rate Total:
+													</span>
 													<span>${totalPrice.toFixed(2)}</span>
 												</div>
 												<p className="text-sm text-muted-foreground mt-1">
-													*Rates may vary by season and length of stay
+													*Room rate only - service fees and taxes added at
+													checkout
 												</p>
 											</div>
 										</div>

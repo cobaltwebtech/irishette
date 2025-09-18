@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/card';
 import { useBookingStore } from '@/stores';
 
-export const Route = createFileRoute('/rose-room')({
+export const Route = createFileRoute('/rooms/rose-room')({
 	head: () => ({
 		meta: [
 			{
@@ -67,31 +67,24 @@ function RoseRoomPage() {
 
 		// Update booking store with selected dates
 		if (dateRange?.from && dateRange?.to) {
-			// Convert dates to ISO strings for storage
-			const checkInDate = dateRange.from.toISOString().split('T')[0];
-			const checkOutDate = dateRange.to.toISOString().split('T')[0];
+			// Convert dates to ISO strings for storage without timezone shift
+			const checkInDate = `${dateRange.from.getFullYear()}-${String(dateRange.from.getMonth() + 1).padStart(2, '0')}-${String(dateRange.from.getDate()).padStart(2, '0')}`;
+			const checkOutDate = `${dateRange.to.getFullYear()}-${String(dateRange.to.getMonth() + 1).padStart(2, '0')}-${String(dateRange.to.getDate()).padStart(2, '0')}`;
 
 			booking.actions.setDates(checkInDate, checkOutDate);
 
-			// Set pricing information if available
+			// Store only the base pricing information for display
+			// Fees and taxes will be calculated in the booking flow
 			if (totalPriceValue && nightsValue) {
-				// Calculate fees (same logic as PaymentService)
-				const cleaningFee = 50;
-				const serviceFee = Math.round(totalPriceValue * 0.12); // 12% service fee
-				const totalFees = cleaningFee + serviceFee;
-
-				// Calculate tax on subtotal (base + fees)
-				const subtotal = totalPriceValue + totalFees;
-				const taxAmount = Math.round(subtotal * 0.08); // 8% tax on subtotal
-				const totalAmount = subtotal + taxAmount;
+				const basePrice = totalPriceValue / nightsValue;
 
 				booking.actions.setPricing({
-					basePrice: totalPriceValue / nightsValue, // Calculate base price per night
+					basePrice: basePrice,
 					nights: nightsValue,
-					subtotal: totalPriceValue,
-					taxes: taxAmount,
-					fees: totalFees,
-					totalAmount: totalAmount,
+					subtotal: totalPriceValue, // This is just the base room cost
+					taxes: 0, // No taxes shown on room selection
+					fees: 0, // No fees shown on room selection
+					totalAmount: totalPriceValue, // Base room cost only
 					currency: 'USD',
 				});
 			}
@@ -213,19 +206,20 @@ function RoseRoomPage() {
 											<div className="mt-4 p-4 bg-rose-50 rounded-lg space-y-2">
 												<div className="flex justify-between items-center">
 													<span className="text-rose-800 font-semibold">
-														{nights} night{nights !== 1 ? 's' : ''}
+														Room Rate for {nights} night
+														{nights !== 1 ? 's' : ''}
 													</span>
 													<span className="text-rose-800 font-semibold">
 														${totalPrice.toFixed(2)}
 													</span>
 												</div>
 												<p className="text-sm text-muted-foreground">
-													Average: $
+													Base rate: $
 													{nights > 0 ? (totalPrice / nights).toFixed(2) : '0'}
 													/night
 												</p>
 												<p className="text-xs text-muted-foreground">
-													*Rates include all fees and taxes
+													*Room rate only - fees and taxes added at checkout
 												</p>
 											</div>
 										</div>
@@ -254,7 +248,8 @@ function RoseRoomPage() {
 											className="w-full bg-rose-600 hover:bg-rose-700"
 											onClick={handleBookNow}
 										>
-											Book Now - ${totalPrice.toFixed(2)} for {nights} night
+											Book Now - ${totalPrice.toFixed(2)} room rate for {nights}{' '}
+											night
 											{nights !== 1 ? 's' : ''}
 										</Button>
 									</CardContent>

@@ -130,6 +130,10 @@ async function handleTRPCRequest(request: Request): Promise<Response> {
 					result = await caller.rooms.deletePricingRule(
 						input as Parameters<typeof caller.rooms.deletePricingRule>[0],
 					);
+				} else if (procedureName === 'calculatePricing') {
+					result = await caller.rooms.calculatePricing(
+						input as Parameters<typeof caller.rooms.calculatePricing>[0],
+					);
 				} else {
 					throw new Error(`Unknown procedure: ${procedureName}`);
 				}

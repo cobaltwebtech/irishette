@@ -260,7 +260,7 @@ export const BookingConfirmationEmail: React.FC<
 								<Row className="mb-2">
 									<Column className="w-2/3">
 										<Text className="text-base text-stone-700">
-											Cleaning & Service Fees
+											Service Fee
 										</Text>
 									</Column>
 									<Column className="w-1/3 text-right">

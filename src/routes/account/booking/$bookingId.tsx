@@ -571,7 +571,7 @@ function BookingDetailPage() {
 									{booking.booking.feesAmount &&
 										booking.booking.feesAmount > 0 && (
 											<div className="flex justify-between items-center">
-												<span className="text-sm">Cleaning fee</span>
+												<span className="text-sm">Service Fee</span>
 												<span className="font-medium">
 													${booking.booking.feesAmount.toFixed(2)}
 												</span>

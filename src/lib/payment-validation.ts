@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-// Base booking schema matching the database schema
+// Base booking schema matching the actual data structure sent from frontend
 export const createBookingSchema = z.object({
 	roomId: z.string(),
 	checkInDate: z
@@ -16,24 +16,13 @@ export const createBookingSchema = z.object({
 	guestEmail: z.string().email(),
 	guestPhone: z.string().min(10).max(20),
 
-	// Billing address
-	billingAddress: z.object({
-		line1: z.string().min(1).max(200),
-		line2: z.string().max(200).optional(),
-		city: z.string().min(1).max(100),
-		state: z.string().min(1).max(100),
-		postalCode: z.string().min(1).max(20),
-		country: z.string().length(2), // ISO country code
-	}),
-
 	// Special requests and notes
 	specialRequests: z.string().max(1000).optional(),
 
-	// Pricing breakdown
+	// Pricing breakdown (sent from frontend, validated against server calculation)
 	basePrice: z.number().positive(),
-	cleaningFee: z.number().min(0).optional(),
-	serviceFee: z.number().min(0).optional(),
-	taxAmount: z.number().min(0).optional(),
+	serviceFee: z.number().min(0).default(0),
+	taxAmount: z.number().min(0).default(0),
 	totalAmount: z.number().positive(),
 });
 
