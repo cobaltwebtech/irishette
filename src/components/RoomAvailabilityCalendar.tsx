@@ -250,13 +250,7 @@ export default function RoomAvailabilityCalendar({
 		return new Date(year, month - 1, day); // month is 0-indexed in JavaScript Date
 	};
 
-	// Dates that are completely unavailable due to actual bookings
-	const bookedDates = availability.calendar
-		.filter(
-			(day) => (!day.available || day.blocked) && day.source === 'booking',
-		)
-		.map((day) => createLocalDate(day.date));
-
+	// Available dates
 	const availableDates = availability.calendar
 		.filter((day) => day.available && !day.blocked)
 		.map((day) => createLocalDate(day.date));
@@ -270,17 +264,20 @@ export default function RoomAvailabilityCalendar({
 		)
 		.map((day) => createLocalDate(day.date));
 
-	// Blocked period dates (manually blocked by admin)
-	const blockedPeriodDates = availability.calendar
+	// All unavailable dates (combines bookings and blocked periods)
+	const unavailableDates = availability.calendar
 		.filter(
-			(day) => (!day.available || day.blocked) && day.source === 'blocked',
+			(day) =>
+				(!day.available || day.blocked) &&
+				day.source !== 'airbnb' &&
+				day.source !== 'expedia',
 		)
 		.map((day) => createLocalDate(day.date));
 
 	if (availability.loading) {
 		return (
 			<div className={`${className} p-8 text-center`}>
-				<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-600 mx-auto mb-4"></div>
+				<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
 				<p className="text-muted-foreground">Loading availability...</p>
 			</div>
 		);
@@ -294,7 +291,7 @@ export default function RoomAvailabilityCalendar({
 				<button
 					type="button"
 					onClick={fetchAvailability}
-					className="mt-4 text-rose-600 hover:text-rose-700 underline"
+					className="text-primary hover:text-primary/80 underline"
 				>
 					Try again
 				</button>
@@ -351,19 +348,17 @@ export default function RoomAvailabilityCalendar({
 				defaultMonth={dateRange?.from || new Date()}
 				disabled={(date) => getDisabledDates(date, dateRange)}
 				modifiers={{
-					booked: bookedDates,
+					unavailable: unavailableDates,
 					available: availableDates,
 					checkoutOnly: checkoutOnlyDates,
-					blockedPeriod: blockedPeriodDates,
 				}}
 				modifiersClassNames={{
-					booked: 'bg-destructive/20 text-destructive line-through opacity-75',
-					available: 'bg-rose-50 hover:bg-rose-100 border-rose-200',
+					unavailable:
+						'bg-destructive/20 text-destructive line-through opacity-75',
+					available: 'bg-secondary hover:bg-secondary/80 border-primary/20',
 					checkoutOnly:
-						'bg-yellow-50 text-yellow-800 border-yellow-300 hover:bg-yellow-100',
-					blockedPeriod:
-						'bg-gray-200 text-gray-600 cursor-not-allowed opacity-75',
-					selected: 'bg-rose-600 text-white hover:bg-rose-700',
+						'bg-accent/20 text-accent border-accent/30 hover:bg-accent/30',
+					selected: 'bg-primary text-primary-foreground hover:bg-primary/90',
 				}}
 				numberOfMonths={2}
 				min={minNights}
@@ -392,23 +387,19 @@ export default function RoomAvailabilityCalendar({
 			<div className="space-y-3">
 				<div className="flex flex-wrap gap-4 text-sm">
 					<div className="flex items-center gap-2">
-						<div className="w-4 h-4 bg-rose-50 border border-rose-200 rounded"></div>
+						<div className="w-4 h-4 bg-secondary border border-primary/20 rounded"></div>
 						<span>Available</span>
 					</div>
 					<div className="flex items-center gap-2">
-						<div className="w-4 h-4 bg-yellow-50 border border-yellow-300 rounded"></div>
+						<div className="w-4 h-4 bg-destructive/20 border rounded"></div>
+						<span>Unavailable</span>
+					</div>
+					<div className="flex items-center gap-2">
+						<div className="w-4 h-4 bg-accent/20 border border-accent/30 rounded"></div>
 						<span>Checkout Only</span>
 					</div>
 					<div className="flex items-center gap-2">
-						<div className="w-4 h-4 bg-destructive/20 border rounded"></div>
-						<span>Booked</span>
-					</div>
-					<div className="flex items-center gap-2">
-						<div className="w-4 h-4 bg-gray-200 border border-gray-300 rounded"></div>
-						<span>Blocked</span>
-					</div>
-					<div className="flex items-center gap-2">
-						<div className="w-4 h-4 bg-rose-600 rounded"></div>
+						<div className="w-4 h-4 bg-primary rounded"></div>
 						<span>Selected</span>
 					</div>
 				</div>

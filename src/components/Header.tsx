@@ -1,7 +1,8 @@
 import { Link, useRouter } from '@tanstack/react-router';
 import { LogOut, User } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { client, useSession } from '@/lib/auth-client';
+import { cn } from '@/utils/twMerge';
 
 export default function Header() {
 	const { data: session, isPending } = useSession();
@@ -76,11 +77,8 @@ export default function Header() {
 								</div>
 							) : (
 								// Unauthenticated user
-								<Link
-									to="/login"
-									className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-								>
-									Sign In
+								<Link to="/login" className={cn(buttonVariants())}>
+									View Bookings
 								</Link>
 							))}
 

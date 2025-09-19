@@ -169,7 +169,7 @@ function TexasRoomPage() {
 			</div>
 
 			{/* Hero Section */}
-			<section className="relative bg-gradient-to-b from-orange-50 to-background py-16 px-4">
+			<section className="relative bg-gradient-to-b from-accent/20 to-background py-16 px-4">
 				<div className="container mx-auto max-w-4xl text-center">
 					<h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
 						Texas Room
@@ -202,7 +202,7 @@ function TexasRoomPage() {
 				<div className="container mx-auto max-w-4xl">
 					<div className="text-center mb-12">
 						<h2 className="text-3xl font-bold mb-4 flex items-center justify-center gap-2">
-							<CalendarIcon className="w-8 h-8 text-orange-600" />
+							<CalendarIcon className="w-8 h-8 text-accent" />
 							Check Availability
 						</h2>
 						<p className="text-muted-foreground text-lg">
@@ -225,9 +225,9 @@ function TexasRoomPage() {
 
 						{/* Booking Information */}
 						<div className="space-y-6">
-							<Card className="border-orange-200">
+							<Card className="border-accent/20">
 								<CardHeader>
-									<CardTitle className="text-orange-800">
+									<CardTitle className="text-accent-foreground">
 										Booking Information
 									</CardTitle>
 								</CardHeader>
@@ -293,16 +293,16 @@ function TexasRoomPage() {
 							</Card>
 
 							{selectedRange?.from && selectedRange?.to && (
-								<Card className="border-orange-200 bg-orange-50">
+								<Card className="border-accent/20 bg-accent/10">
 									<CardContent className="p-6">
-										<h4 className="font-semibold text-orange-800 mb-2">
+										<h4 className="font-semibold text-accent-foreground mb-2">
 											Ready to book these dates?
 										</h4>
 										<p className="text-sm text-muted-foreground mb-4">
 											Continue with your reservation for the Texas Room
 										</p>
 										<Button
-											className="w-full bg-orange-600 hover:bg-orange-700"
+											className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
 											onClick={handleBookNow}
 										>
 											Book Now - {selectedRange.from.toLocaleDateString()} to{' '}
@@ -319,9 +319,9 @@ function TexasRoomPage() {
 			{/* Room Description */}
 			<section className="py-16 px-4">
 				<div className="container mx-auto max-w-4xl">
-					<Card className="border-orange-200">
+					<Card className="border-accent/20">
 						<CardHeader>
-							<CardTitle className="text-2xl text-orange-800">
+							<CardTitle className="text-2xl text-accent-foreground">
 								Your Texas Getaway
 							</CardTitle>
 						</CardHeader>
@@ -359,7 +359,7 @@ function TexasRoomPage() {
 
 					<div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
 						<Card className="text-center p-6">
-							<Coffee className="w-8 h-8 text-orange-600 mx-auto mb-4" />
+							<Coffee className="w-8 h-8 text-accent mx-auto mb-4" />
 							<h3 className="font-semibold mb-2">Kitchenette</h3>
 							<p className="text-sm text-muted-foreground">
 								Coffee maker, refrigerator, microwave
@@ -367,7 +367,7 @@ function TexasRoomPage() {
 						</Card>
 
 						<Card className="text-center p-6">
-							<Bath className="w-8 h-8 text-orange-600 mx-auto mb-4" />
+							<Bath className="w-8 h-8 text-accent mx-auto mb-4" />
 							<h3 className="font-semibold mb-2">Clawfoot Tub</h3>
 							<p className="text-sm text-muted-foreground">
 								Antique bathtub (no walk-in shower)
@@ -375,7 +375,7 @@ function TexasRoomPage() {
 						</Card>
 
 						<Card className="text-center p-6">
-							<Tv className="w-8 h-8 text-orange-600 mx-auto mb-4" />
+							<Tv className="w-8 h-8 text-accent mx-auto mb-4" />
 							<h3 className="font-semibold mb-2">Entertainment</h3>
 							<p className="text-sm text-muted-foreground">
 								TV with Prime Video & Netflix
@@ -383,7 +383,7 @@ function TexasRoomPage() {
 						</Card>
 
 						<Card className="text-center p-6">
-							<Wind className="w-8 h-8 text-orange-600 mx-auto mb-4" />
+							<Wind className="w-8 h-8 text-accent mx-auto mb-4" />
 							<h3 className="font-semibold mb-2">Climate Control</h3>
 							<p className="text-sm text-muted-foreground">
 								Ceiling fan & electric fireplace
@@ -391,7 +391,7 @@ function TexasRoomPage() {
 						</Card>
 
 						<Card className="text-center p-6">
-							<Wifi className="w-8 h-8 text-orange-600 mx-auto mb-4" />
+							<Wifi className="w-8 h-8 text-accent mx-auto mb-4" />
 							<h3 className="font-semibold mb-2">Work Space</h3>
 							<p className="text-sm text-muted-foreground">
 								Dedicated area with WiFi
@@ -399,7 +399,7 @@ function TexasRoomPage() {
 						</Card>
 
 						<Card className="text-center p-6">
-							<Car className="w-8 h-8 text-orange-600 mx-auto mb-4" />
+							<Car className="w-8 h-8 text-accent mx-auto mb-4" />
 							<h3 className="font-semibold mb-2">Private Entrance</h3>
 							<p className="text-sm text-muted-foreground">
 								Independent access
@@ -407,8 +407,10 @@ function TexasRoomPage() {
 						</Card>
 
 						<Card className="text-center p-6">
-							<div className="w-8 h-8 bg-orange-600 rounded mx-auto mb-4 flex items-center justify-center">
-								<span className="text-white text-sm font-bold">K</span>
+							<div className="w-8 h-8 bg-accent rounded mx-auto mb-4 flex items-center justify-center">
+								<span className="text-accent-foreground text-sm font-bold">
+									K
+								</span>
 							</div>
 							<h3 className="font-semibold mb-2">King Bed</h3>
 							<p className="text-sm text-muted-foreground">
@@ -417,8 +419,10 @@ function TexasRoomPage() {
 						</Card>
 
 						<Card className="text-center p-6">
-							<div className="w-8 h-8 bg-orange-600 rounded mx-auto mb-4 flex items-center justify-center">
-								<span className="text-white text-sm font-bold">★</span>
+							<div className="w-8 h-8 bg-accent rounded mx-auto mb-4 flex items-center justify-center">
+								<span className="text-accent-foreground text-sm font-bold">
+									★
+								</span>
 							</div>
 							<h3 className="font-semibold mb-2">Texas Charm</h3>
 							<p className="text-sm text-muted-foreground">
@@ -432,16 +436,16 @@ function TexasRoomPage() {
 			{/* Special Features */}
 			<section className="py-16 px-4">
 				<div className="container mx-auto max-w-4xl">
-					<Card className="bg-orange-50 border-orange-200">
+					<Card className="bg-accent/10 border-accent/20">
 						<CardHeader>
-							<CardTitle className="text-2xl text-orange-800">
+							<CardTitle className="text-2xl text-accent-foreground">
 								Texas Room Special Features
 							</CardTitle>
 						</CardHeader>
 						<CardContent>
 							<div className="grid md:grid-cols-2 gap-6">
 								<div>
-									<h3 className="font-semibold text-lg mb-2 text-orange-700">
+									<h3 className="font-semibold text-lg mb-2 text-accent">
 										Antique Clawfoot Tub
 									</h3>
 									<p className="text-muted-foreground">
@@ -451,7 +455,7 @@ function TexasRoomPage() {
 									</p>
 								</div>
 								<div>
-									<h3 className="font-semibold text-lg mb-2 text-orange-700">
+									<h3 className="font-semibold text-lg mb-2 text-accent">
 										Texas-Themed Décor
 									</h3>
 									<p className="text-muted-foreground">
@@ -461,8 +465,8 @@ function TexasRoomPage() {
 									</p>
 								</div>
 							</div>
-							<div className="mt-6 p-4 bg-orange-100 rounded-lg">
-								<p className="text-sm text-orange-800 font-medium">
+							<div className="mt-6 p-4 bg-accent/20 rounded-lg">
+								<p className="text-sm text-accent-foreground font-medium">
 									<strong>Please Note:</strong> The Texas Room features a
 									beautiful antique clawfoot tub but does not have a walk-in
 									shower. Perfect for guests who enjoy relaxing baths!
@@ -476,9 +480,9 @@ function TexasRoomPage() {
 			{/* Booking CTA */}
 			<section className="py-16 px-4">
 				<div className="container mx-auto max-w-4xl text-center">
-					<Card className="bg-orange-50 border-orange-200">
+					<Card className="bg-accent/10 border-accent/20">
 						<CardHeader>
-							<CardTitle className="text-2xl text-orange-800">
+							<CardTitle className="text-2xl text-accent-foreground">
 								Ready to Experience Texas Charm?
 							</CardTitle>
 							<CardDescription className="text-base">
@@ -492,7 +496,7 @@ function TexasRoomPage() {
 							</p>
 							<div className="flex flex-col sm:flex-row gap-4 justify-center">
 								<Button
-									className="bg-orange-600 hover:bg-orange-700 text-white px-8 py-3 rounded-md font-medium transition-colors"
+									className="bg-accent hover:bg-accent/90 text-accent-foreground px-8 py-3 rounded-md font-medium transition-colors"
 									onClick={() => {
 										// Scroll to the availability calendar section
 										const calendarSection = document.querySelector(
@@ -507,7 +511,7 @@ function TexasRoomPage() {
 								</Button>
 								<Link
 									to="/"
-									className="border border-orange-600 text-orange-600 hover:bg-orange-50 px-8 py-3 rounded-md font-medium transition-colors inline-flex items-center justify-center"
+									className="border border-accent text-accent hover:bg-accent/10 px-8 py-3 rounded-md font-medium transition-colors inline-flex items-center justify-center"
 								>
 									View All Rooms
 								</Link>

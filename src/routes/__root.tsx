@@ -34,6 +34,20 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 		],
 		links: [
 			{
+				rel: 'preload',
+				href: '/fonts/SchibstedGrotesk-Regular.woff2',
+				as: 'font',
+				type: 'font/woff2',
+				crossOrigin: 'anonymous',
+			},
+			{
+				rel: 'preload',
+				href: '/fonts/SchibstedGrotesk-Italic.woff2',
+				as: 'font',
+				type: 'font/woff2',
+				crossOrigin: 'anonymous',
+			},
+			{
 				rel: 'stylesheet',
 				href: appCss,
 			},

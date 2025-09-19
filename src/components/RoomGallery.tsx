@@ -1,11 +1,15 @@
 import { Image } from '@unpic/react';
 import { useState } from 'react';
 import type { Swiper as SwiperType } from 'swiper';
-import { Swiper, SwiperSlide } from 'swiper/react';
-import './room-gallery.css';
-
 // Import required modules
 import { FreeMode, Navigation, Thumbs } from 'swiper/modules';
+import { Swiper, SwiperSlide } from 'swiper/react';
+
+// Import Swiper styles
+// import 'swiper/css';
+// import 'swiper/css/navigation';
+// import 'swiper/css/thumbs';
+// import 'swiper/css/free-mode';
 
 export interface RoomImage {
 	src: string;

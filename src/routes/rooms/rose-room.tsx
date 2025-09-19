@@ -179,7 +179,7 @@ function RoseRoomPage() {
 			</div>
 
 			{/* Hero Section */}
-			<section className="relative bg-gradient-to-b from-rose-50 to-background py-16 px-4">
+			<section className="relative bg-gradient-to-b from-secondary to-background py-16 px-4">
 				<div className="container mx-auto max-w-4xl text-center">
 					<h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
 						Rose Room
@@ -190,29 +190,12 @@ function RoseRoomPage() {
 				</div>
 			</section>
 
-			{/* Photo Gallery */}
-			<section className="py-16 px-4">
-				<div className="container mx-auto max-w-4xl">
-					<h2 className="text-3xl font-bold text-center mb-12">
-						Rose Room Gallery
-					</h2>
-					<RoomGallery
-						images={roseRoomImages}
-						roomName="Rose Room"
-						className="max-w-4xl mx-auto"
-						mainImageHeight={500}
-						thumbImageHeight={100}
-						thumbsPerView={5}
-					/>
-				</div>
-			</section>
-
 			{/* Availability Calendar */}
 			<section className="py-16 px-4" data-calendar-section>
 				<div className="container mx-auto max-w-4xl">
 					<div className="text-center mb-12">
 						<h2 className="text-3xl font-bold mb-4 flex items-center justify-center gap-2">
-							<CalendarIcon className="w-8 h-8 text-rose-600" />
+							<CalendarIcon className="w-8 h-8 text-primary" />
 							Check Availability
 						</h2>
 						<p className="text-muted-foreground text-lg">
@@ -235,9 +218,9 @@ function RoseRoomPage() {
 
 						{/* Booking Information */}
 						<div className="space-y-6">
-							<Card className="border-rose-200">
+							<Card className="border-primary/20">
 								<CardHeader>
-									<CardTitle className="text-rose-800">
+									<CardTitle className="text-primary">
 										Booking Information
 									</CardTitle>
 								</CardHeader>
@@ -299,9 +282,9 @@ function RoseRoomPage() {
 							</Card>
 
 							{selectedDateRange?.from && selectedDateRange?.to && (
-								<Card className="border-rose-200 bg-rose-50">
+								<Card className="border-primary/20 bg-secondary">
 									<CardContent className="p-6">
-										<h4 className="font-semibold text-rose-800 mb-2">
+										<h4 className="font-semibold text-primary mb-2">
 											Ready to book your stay?
 										</h4>
 										<p className="text-sm text-muted-foreground mb-4">
@@ -309,7 +292,7 @@ function RoseRoomPage() {
 											{nights !== 1 ? 's' : ''} at the Rose Room
 										</p>
 										<Button
-											className="w-full bg-rose-600 hover:bg-rose-700"
+											className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
 											onClick={handleBookNow}
 										>
 											Book Now - ${totalPrice.toFixed(2)} room rate for {nights}{' '}
@@ -324,12 +307,29 @@ function RoseRoomPage() {
 				</div>
 			</section>
 
+			{/* Photo Gallery */}
+			<section className="py-16 px-4">
+				<div className="container mx-auto max-w-4xl">
+					<h2 className="text-3xl font-bold text-center mb-12">
+						Rose Room Gallery
+					</h2>
+					<RoomGallery
+						images={roseRoomImages}
+						roomName="Rose Room"
+						className="max-w-4xl mx-auto"
+						mainImageHeight={500}
+						thumbImageHeight={100}
+						thumbsPerView={5}
+					/>
+				</div>
+			</section>
+
 			{/* Room Description */}
 			<section className="py-16 px-4">
 				<div className="container mx-auto max-w-4xl">
-					<Card className="border-rose-200">
+					<Card className="border-primary/20">
 						<CardHeader>
-							<CardTitle className="text-2xl text-rose-800">
+							<CardTitle className="text-2xl text-primary">
 								Your Private Retreat
 							</CardTitle>
 						</CardHeader>
@@ -366,7 +366,7 @@ function RoseRoomPage() {
 
 					<div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
 						<Card className="text-center p-6">
-							<Coffee className="w-8 h-8 text-rose-600 mx-auto mb-4" />
+							<Coffee className="w-8 h-8 text-primary mx-auto mb-4" />
 							<h3 className="font-semibold mb-2">Kitchenette</h3>
 							<p className="text-sm text-muted-foreground">
 								Coffee maker, refrigerator, microwave
@@ -374,7 +374,7 @@ function RoseRoomPage() {
 						</Card>
 
 						<Card className="text-center p-6">
-							<Bath className="w-8 h-8 text-rose-600 mx-auto mb-4" />
+							<Bath className="w-8 h-8 text-primary mx-auto mb-4" />
 							<h3 className="font-semibold mb-2">Walk-in Shower</h3>
 							<p className="text-sm text-muted-foreground">
 								Private en-suite bathroom
@@ -382,7 +382,7 @@ function RoseRoomPage() {
 						</Card>
 
 						<Card className="text-center p-6">
-							<Tv className="w-8 h-8 text-rose-600 mx-auto mb-4" />
+							<Tv className="w-8 h-8 text-primary mx-auto mb-4" />
 							<h3 className="font-semibold mb-2">Entertainment</h3>
 							<p className="text-sm text-muted-foreground">
 								TV with Prime Video & Netflix
@@ -390,7 +390,7 @@ function RoseRoomPage() {
 						</Card>
 
 						<Card className="text-center p-6">
-							<Wind className="w-8 h-8 text-rose-600 mx-auto mb-4" />
+							<Wind className="w-8 h-8 text-primary mx-auto mb-4" />
 							<h3 className="font-semibold mb-2">Climate Control</h3>
 							<p className="text-sm text-muted-foreground">
 								Ceiling fan & electric fireplace
@@ -398,7 +398,7 @@ function RoseRoomPage() {
 						</Card>
 
 						<Card className="text-center p-6">
-							<Wifi className="w-8 h-8 text-rose-600 mx-auto mb-4" />
+							<Wifi className="w-8 h-8 text-primary mx-auto mb-4" />
 							<h3 className="font-semibold mb-2">Work Space</h3>
 							<p className="text-sm text-muted-foreground">
 								Dedicated area with WiFi
@@ -406,7 +406,7 @@ function RoseRoomPage() {
 						</Card>
 
 						<Card className="text-center p-6">
-							<Car className="w-8 h-8 text-rose-600 mx-auto mb-4" />
+							<Car className="w-8 h-8 text-primary mx-auto mb-4" />
 							<h3 className="font-semibold mb-2">Private Entrance</h3>
 							<p className="text-sm text-muted-foreground">
 								Independent access via deck
@@ -414,8 +414,10 @@ function RoseRoomPage() {
 						</Card>
 
 						<Card className="text-center p-6">
-							<div className="w-8 h-8 bg-rose-600 rounded mx-auto mb-4 flex items-center justify-center">
-								<span className="text-white text-sm font-bold">Q</span>
+							<div className="w-8 h-8 bg-primary rounded mx-auto mb-4 flex items-center justify-center">
+								<span className="text-primary-foreground text-sm font-bold">
+									Q
+								</span>
 							</div>
 							<h3 className="font-semibold mb-2">Queen Bed</h3>
 							<p className="text-sm text-muted-foreground">
@@ -424,7 +426,7 @@ function RoseRoomPage() {
 						</Card>
 
 						<Card className="text-center p-6">
-							<Zap className="w-8 h-8 text-rose-600 mx-auto mb-4" />
+							<Zap className="w-8 h-8 text-primary mx-auto mb-4" />
 							<h3 className="font-semibold mb-2">Modern Comforts</h3>
 							<p className="text-sm text-muted-foreground">
 								All essential amenities included
@@ -437,9 +439,9 @@ function RoseRoomPage() {
 			{/* Booking CTA */}
 			<section className="py-16 px-4">
 				<div className="container mx-auto max-w-4xl text-center">
-					<Card className="bg-rose-50 border-rose-200">
+					<Card className="bg-secondary border-primary/20">
 						<CardHeader>
-							<CardTitle className="text-2xl text-rose-800">
+							<CardTitle className="text-2xl text-primary">
 								Ready to Book?
 							</CardTitle>
 							<CardDescription className="text-base">
@@ -453,7 +455,7 @@ function RoseRoomPage() {
 							</p>
 							<div className="flex flex-col sm:flex-row gap-4 justify-center">
 								<Button
-									className="bg-rose-600 hover:bg-rose-700 text-white px-8 py-3 rounded-md font-medium transition-colors"
+									className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-3 rounded-md font-medium transition-colors"
 									onClick={() => {
 										// Scroll to the availability calendar section
 										const calendarSection = document.querySelector(
@@ -468,7 +470,7 @@ function RoseRoomPage() {
 								</Button>
 								<Link
 									to="/"
-									className="border border-rose-600 text-rose-600 hover:bg-rose-50 px-8 py-3 rounded-md font-medium transition-colors inline-flex items-center justify-center"
+									className="border border-primary text-primary hover:bg-secondary px-8 py-3 rounded-md font-medium transition-colors inline-flex items-center justify-center"
 								>
 									View All Rooms
 								</Link>
