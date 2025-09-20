@@ -6,9 +6,12 @@ import {
 } from '@tanstack/react-router';
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
 import type { TRPCOptionsProxy } from '@trpc/tanstack-react-query';
+import { ReactLenis } from 'lenis/react';
 import { Toaster } from '@/components/ui/sonner';
 import type { TRPCRouter } from '@/integrations/trpc/router';
+import Footer from '../components/Footer';
 import Header from '../components/Header';
+import NotFoundPage from '../components/NotFoundPage';
 import TanStackQueryLayout from '../integrations/tanstack-query/layout.tsx';
 import appCss from '../styles.css?url';
 
@@ -54,6 +57,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 		],
 	}),
 
+	notFoundComponent: NotFoundPage,
 	shellComponent: RootDocument,
 });
 
@@ -64,11 +68,14 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 				<HeadContent />
 			</head>
 			<body>
-				<Header />
-				{children}
-				<Toaster />
-				<TanStackRouterDevtools />
-				<TanStackQueryLayout />
+				<ReactLenis root>
+					<Header />
+					{children}
+					<Footer />
+					<Toaster />
+					<TanStackRouterDevtools />
+					<TanStackQueryLayout />
+				</ReactLenis>
 				<Scripts />
 			</body>
 		</html>

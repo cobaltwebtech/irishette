@@ -3,42 +3,11 @@
 @import "swiper/css/navigation";
 @import "swiper/css/thumbs";
 @import "swiper/css/free-mode";
+@import "swiper/css/effect-fade";
 
 @plugin "tailwindcss-animate";
 
-/* Custom Fonts */
-@font-face {
-	font-family: "Schibsted Grotesk";
-	src: url("/fonts/SchibstedGrotesk-Regular.woff2") format("woff2");
-	font-weight: 100 900;
-	font-style: normal;
-	font-display: swap;
-}
-
-@font-face {
-	font-family: "Schibsted Grotesk";
-	src: url("/fonts/SchibstedGrotesk-Italic.woff2") format("woff2");
-	font-weight: 100 900;
-	font-style: italic;
-	font-display: swap;
-}
-
 @custom-variant dark (&:is(.dark *));
-
-body {
-	@apply m-0;
-	font-family:
-		"Schibsted Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
-		"Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
-		sans-serif;
-	-webkit-font-smoothing: antialiased;
-	-moz-osx-font-smoothing: grayscale;
-}
-
-code {
-	font-family:
-		source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
-}
 
 :root {
 	--background: oklch(0.98 0.01 90);
@@ -112,6 +81,9 @@ code {
 }
 
 @theme inline {
+	--default-font-family:
+		"Schibsted Grotesk", ui-sans-serif, system-ui, -apple-system,
+		BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);
 	--color-card: var(--card);

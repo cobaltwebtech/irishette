@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import {
-	ArrowLeft,
 	Bath,
+	Bed,
 	Calendar as CalendarIcon,
 	Car,
 	Coffee,
@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
+import BookingInformation from '@/components/BookingInformation';
 import RoomAvailabilityCalendar from '@/components/RoomAvailabilityCalendar';
 import { RoomGallery } from '@/components/RoomGallery';
 import { Button } from '@/components/ui/button';
@@ -43,6 +44,11 @@ function RoseRoomPage() {
 	const [nights, setNights] = useState<number>(0);
 	const booking = useBookingStore();
 	const navigate = useNavigate();
+
+	// Scroll to top when component mounts
+	useEffect(() => {
+		window.scrollTo({ top: 0, behavior: 'smooth' });
+	}, []);
 
 	// Room information
 	const roomSlug = 'rose-room';
@@ -167,43 +173,77 @@ function RoseRoomPage() {
 
 	return (
 		<div className="min-h-screen bg-background">
-			{/* Back Navigation */}
-			<div className="container mx-auto max-w-6xl px-4 py-4">
-				<Link
-					to="/"
-					className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors"
-				>
-					<ArrowLeft className="w-4 h-4 mr-2" />
-					Back to Home
-				</Link>
-			</div>
-
 			{/* Hero Section */}
-			<section className="relative bg-gradient-to-b from-secondary to-background py-16 px-4">
-				<div className="container mx-auto max-w-4xl text-center">
-					<h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
+			<section className="relative h-[50vh] min-h-[500px] flex items-center justify-center overflow-hidden">
+				{/* Background Image */}
+				<div
+					className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+					style={{
+						backgroundImage: `url('https://res.cloudinary.com/cobalt/image/upload/c_fill,w_1920,h_1080,q_auto,f_auto/irishette/rose-room/7ec19df2-0b06-4d10-8777-3558acb41689.jpg')`,
+					}}
+				/>
+
+				{/* Overlay for better text readability */}
+				<div className="absolute inset-0 bg-black/60" />
+
+				{/* Content */}
+				<div className="relative z-10 container mx-auto max-w-4xl text-center px-4">
+					<h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-6 bg-gradient-to-r from-rose-800 via-pink-400 to-rose-800 bg-clip-text text-transparent">
 						Rose Room
 					</h1>
-					<p className="text-xl md:text-2xl text-muted-foreground mb-8 font-medium">
+					<p className="text-xl md:text-2xl lg:text-3xl text-popover mb-8 font-medium drop-shadow-md max-w-3xl mx-auto">
 						Leave your worries behind in this spacious and tranquil retreat.
 					</p>
+					<div className="flex flex-col sm:flex-row gap-4 justify-center">
+						<Button
+							variant="accent"
+							size="lg"
+							onClick={() => {
+								const calendarSection = document.querySelector(
+									'[data-calendar-section]',
+								);
+								if (calendarSection) {
+									calendarSection.scrollIntoView({ behavior: 'smooth' });
+								}
+							}}
+						>
+							Book Rose Room
+						</Button>
+						<Button
+							variant="outline"
+							size="lg"
+							onClick={() => {
+								const gallerySection = document.querySelector(
+									'[data-gallery-section]',
+								);
+								if (gallerySection) {
+									gallerySection.scrollIntoView({ behavior: 'smooth' });
+								}
+							}}
+						>
+							View Room Photos
+						</Button>
+					</div>
 				</div>
 			</section>
 
 			{/* Availability Calendar */}
-			<section className="py-16 px-4" data-calendar-section>
-				<div className="container mx-auto max-w-4xl">
+			<section
+				className="py-16 px-4 bg-gradient-to-b from-secondary to-background"
+				data-calendar-section
+			>
+				<div className="container mx-auto max-w-screen-lg">
 					<div className="text-center mb-12">
 						<h2 className="text-3xl font-bold mb-4 flex items-center justify-center gap-2">
-							<CalendarIcon className="w-8 h-8 text-primary" />
-							Check Availability
+							<CalendarIcon className="w-8 h-8 text-accent" />
+							Select Dates to Book Now
 						</h2>
 						<p className="text-muted-foreground text-lg">
 							Select your preferred dates to see availability and pricing
 						</p>
 					</div>
 
-					<div className="grid lg:grid-cols-2 gap-8 items-start">
+					<div className="grid lg:grid-cols-2 gap-8 justify-center">
 						{/* Calendar */}
 						<div className="flex justify-center">
 							<RoomAvailabilityCalendar
@@ -217,98 +257,28 @@ function RoseRoomPage() {
 						</div>
 
 						{/* Booking Information */}
-						<div className="space-y-6">
-							<Card className="border-primary/20">
-								<CardHeader>
-									<CardTitle className="text-primary">
-										Booking Information
-									</CardTitle>
-								</CardHeader>
-								<CardContent className="space-y-4">
-									{selectedDateRange?.from && selectedDateRange?.to ? (
-										<div>
-											<p className="text-sm text-muted-foreground mb-2">
-												Selected Dates:
-											</p>
-											<div className="space-y-2">
-												<p className="font-semibold">
-													Check-in:{' '}
-													{selectedDateRange.from.toLocaleDateString('en-US', {
-														weekday: 'long',
-														year: 'numeric',
-														month: 'long',
-														day: 'numeric',
-													})}
-												</p>
-												<p className="font-semibold">
-													Check-out:{' '}
-													{selectedDateRange.to.toLocaleDateString('en-US', {
-														weekday: 'long',
-														year: 'numeric',
-														month: 'long',
-														day: 'numeric',
-													})}
-												</p>
-											</div>
-											<div className="mt-4 p-4 bg-rose-50 rounded-lg space-y-2">
-												<div className="flex justify-between items-center">
-													<span className="text-rose-800 font-semibold">
-														Room Rate for {nights} night
-														{nights !== 1 ? 's' : ''}
-													</span>
-													<span className="text-rose-800 font-semibold">
-														${totalPrice.toFixed(2)}
-													</span>
-												</div>
-												<p className="text-sm text-muted-foreground">
-													Base rate: $
-													{nights > 0 ? (totalPrice / nights).toFixed(2) : '0'}
-													/night
-												</p>
-												<p className="text-xs text-muted-foreground">
-													*Room rate only - fees and taxes added at checkout
-												</p>
-											</div>
-										</div>
-									) : (
-										<div className="text-center py-8">
-											<CalendarIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-											<p className="text-muted-foreground">
-												Select a date to see pricing and availability
-											</p>
-										</div>
-									)}
-								</CardContent>
-							</Card>
-
-							{selectedDateRange?.from && selectedDateRange?.to && (
-								<Card className="border-primary/20 bg-secondary">
-									<CardContent className="p-6">
-										<h4 className="font-semibold text-primary mb-2">
-											Ready to book your stay?
-										</h4>
-										<p className="text-sm text-muted-foreground mb-4">
-											Continue with your reservation for {nights} night
-											{nights !== 1 ? 's' : ''} at the Rose Room
-										</p>
-										<Button
-											className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-											onClick={handleBookNow}
-										>
-											Book Now - ${totalPrice.toFixed(2)} room rate for {nights}{' '}
-											night
-											{nights !== 1 ? 's' : ''}
-										</Button>
-									</CardContent>
-								</Card>
-							)}
-						</div>
+						<BookingInformation
+							selectedDateRange={selectedDateRange}
+							totalPrice={totalPrice}
+							nights={nights}
+							onBookNow={handleBookNow}
+							roomName="Rose Room"
+						/>
+					</div>
+					<div className="flex flex-col items-center mt-8 gap-4">
+						<p>
+							Can't find the dates you need? Check out the Texas Room
+							availability.
+						</p>
+						<Button asChild variant="secondary">
+							<Link to="/rooms/texas-room">View Texas Room</Link>
+						</Button>
 					</div>
 				</div>
 			</section>
 
 			{/* Photo Gallery */}
-			<section className="py-16 px-4">
+			<section className="py-16 px-4" data-gallery-section>
 				<div className="container mx-auto max-w-4xl">
 					<h2 className="text-3xl font-bold text-center mb-12">
 						Rose Room Gallery
@@ -414,11 +384,7 @@ function RoseRoomPage() {
 						</Card>
 
 						<Card className="text-center p-6">
-							<div className="w-8 h-8 bg-primary rounded mx-auto mb-4 flex items-center justify-center">
-								<span className="text-primary-foreground text-sm font-bold">
-									Q
-								</span>
-							</div>
+							<Bed className="w-8 h-8 text-primary mx-auto mb-4" />
 							<h3 className="font-semibold mb-2">Queen Bed</h3>
 							<p className="text-sm text-muted-foreground">
 								Comfortable sleeping for two
@@ -439,11 +405,9 @@ function RoseRoomPage() {
 			{/* Booking CTA */}
 			<section className="py-16 px-4">
 				<div className="container mx-auto max-w-4xl text-center">
-					<Card className="bg-secondary border-primary/20">
+					<Card className="bg-accent/10 border-accent/20">
 						<CardHeader>
-							<CardTitle className="text-2xl text-primary">
-								Ready to Book?
-							</CardTitle>
+							<CardTitle className="text-2xl">Ready to Book?</CardTitle>
 							<CardDescription className="text-base">
 								Experience the tranquil charm of the Rose Room
 							</CardDescription>
@@ -455,7 +419,8 @@ function RoseRoomPage() {
 							</p>
 							<div className="flex flex-col sm:flex-row gap-4 justify-center">
 								<Button
-									className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-3 rounded-md font-medium transition-colors"
+									variant="accent"
+									size="lg"
 									onClick={() => {
 										// Scroll to the availability calendar section
 										const calendarSection = document.querySelector(
@@ -468,12 +433,9 @@ function RoseRoomPage() {
 								>
 									Check Availability
 								</Button>
-								<Link
-									to="/"
-									className="border border-primary text-primary hover:bg-secondary px-8 py-3 rounded-md font-medium transition-colors inline-flex items-center justify-center"
-								>
-									View All Rooms
-								</Link>
+								<Button asChild variant="outline" size="lg">
+									<Link to="/">View All Rooms</Link>
+								</Button>
 							</div>
 						</CardContent>
 					</Card>

@@ -1,16 +1,19 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { Image } from '@unpic/react';
 import {
-	ArrowLeft,
 	Bath,
+	Bed,
 	Calendar as CalendarIcon,
 	Car,
 	Coffee,
+	Star,
 	Tv,
 	Wifi,
 	Wind,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
+import BookingInformation from '@/components/BookingInformation';
 import RoomAvailabilityCalendar from '@/components/RoomAvailabilityCalendar';
 import { RoomGallery } from '@/components/RoomGallery';
 import { Button } from '@/components/ui/button';
@@ -43,13 +46,18 @@ function TexasRoomPage() {
 	const booking = useBookingStore();
 	const navigate = useNavigate();
 
+	// Scroll to top when component mounts
+	useEffect(() => {
+		window.scrollTo({ top: 0, behavior: 'smooth' });
+	}, []);
+
 	// Room information
 	const roomSlug = 'texas-room';
 
 	// Texas Room images from Cloudinary
 	const texasRoomImages = [
 		{
-			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/texas-room/2438d940-5419-4f77-985c-081d766b2a77.jpg',
+			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/texas-room/9abc8cd6-f843-4e67-9142-eb473adff4f5.jpg',
 			alt: 'Texas Room - Image 1',
 		},
 		{
@@ -57,7 +65,7 @@ function TexasRoomPage() {
 			alt: 'Texas Room - Image 2',
 		},
 		{
-			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/texas-room/9abc8cd6-f843-4e67-9142-eb473adff4f5.jpg',
+			src: 'https://res.cloudinary.com/cobalt/image/upload/irishette/texas-room/2438d940-5419-4f77-985c-081d766b2a77.jpg',
 			alt: 'Texas Room - Image 3',
 		},
 		{
@@ -157,31 +165,112 @@ function TexasRoomPage() {
 	};
 	return (
 		<div className="min-h-screen bg-background">
-			{/* Back Navigation */}
-			<div className="container mx-auto max-w-6xl px-4 py-4">
-				<Link
-					to="/"
-					className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors"
-				>
-					<ArrowLeft className="w-4 h-4 mr-2" />
-					Back to Home
-				</Link>
-			</div>
-
 			{/* Hero Section */}
-			<section className="relative bg-gradient-to-b from-accent/20 to-background py-16 px-4">
-				<div className="container mx-auto max-w-4xl text-center">
-					<h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
+			<section className="relative h-[50vh] min-h-[500px] flex items-center justify-center overflow-hidden">
+				{/* Background Image */}
+				<div
+					className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+					style={{
+						backgroundImage: `url('https://res.cloudinary.com/cobalt/image/upload/c_fill,w_1920,h_1080,q_auto,f_auto/irishette/texas-room/9cbf035c-cdb9-49b2-8b27-b9f48b8f1cac.jpg')`,
+					}}
+				/>
+
+				{/* Overlay for better text readability */}
+				<div className="absolute inset-0 bg-black/60" />
+
+				{/* Content */}
+				<div className="relative z-10 container mx-auto max-w-4xl text-center px-4">
+					<h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-6 bg-gradient-to-r from-blue-700 via-white to-red-900 bg-clip-text text-transparent">
 						Texas Room
 					</h1>
-					<p className="text-xl md:text-2xl text-muted-foreground mb-8 font-medium">
+					<p className="text-xl md:text-2xl lg:text-3xl text-popover mb-8 font-medium drop-shadow-md max-w-3xl mx-auto">
 						Experience true Texas charm in this spacious and inviting retreat.
 					</p>
+					<div className="flex flex-col sm:flex-row gap-4 justify-center">
+						<Button
+							variant="accent"
+							size="lg"
+							onClick={() => {
+								const calendarSection = document.querySelector(
+									'[data-calendar-section]',
+								);
+								if (calendarSection) {
+									calendarSection.scrollIntoView({ behavior: 'smooth' });
+								}
+							}}
+						>
+							Book Texas Room
+						</Button>
+						<Button
+							variant="outline"
+							size="lg"
+							onClick={() => {
+								const gallerySection = document.querySelector(
+									'[data-gallery-section]',
+								);
+								if (gallerySection) {
+									gallerySection.scrollIntoView({ behavior: 'smooth' });
+								}
+							}}
+						>
+							View Room Photos
+						</Button>
+					</div>
+				</div>
+			</section>
+
+			{/* Availability Calendar */}
+			<section
+				className="py-16 px-4 bg-gradient-to-b from-secondary to-background"
+				data-calendar-section
+			>
+				<div className="container mx-auto max-w-screen-lg">
+					<div className="text-center mb-12">
+						<h2 className="text-3xl font-bold mb-4 flex items-center justify-center gap-2">
+							<CalendarIcon className="w-8 h-8 text-accent" />
+							Select Dates to Book Now
+						</h2>
+						<p className="text-muted-foreground text-lg">
+							Select your preferred dates to see availability and pricing
+						</p>
+					</div>
+
+					<div className="grid lg:grid-cols-2 gap-8 justify-center">
+						{/* Calendar */}
+						<div className="flex justify-center">
+							<RoomAvailabilityCalendar
+								roomSlug="texas-room"
+								selectedDateRange={selectedRange}
+								onDateRangeSelect={handleRangeSelect}
+								className="w-full max-w-2xl"
+								minNights={1}
+								maxNights={30}
+							/>
+						</div>
+
+						{/* Booking Information */}
+						<BookingInformation
+							selectedDateRange={selectedRange}
+							totalPrice={totalPrice}
+							nights={nights}
+							onBookNow={handleBookNow}
+							roomName="Texas Room"
+							className="w-full max-w-2xl"
+						/>
+					</div>
+				</div>
+				<div className="flex flex-col items-center mt-8 gap-4">
+					<p>
+						Can't find the dates you need? Check out the Rose Room availability.
+					</p>
+					<Button asChild variant="secondary">
+						<Link to="/rooms/rose-room">View Rose Room</Link>
+					</Button>
 				</div>
 			</section>
 
 			{/* Photo Gallery */}
-			<section className="py-16 px-4">
+			<section className="py-16 px-4" data-gallery-section>
 				<div className="container mx-auto max-w-4xl">
 					<h2 className="text-3xl font-bold text-center mb-12">
 						Texas Room Gallery
@@ -197,133 +286,12 @@ function TexasRoomPage() {
 				</div>
 			</section>
 
-			{/* Availability Calendar */}
-			<section className="py-16 px-4" data-calendar-section>
-				<div className="container mx-auto max-w-4xl">
-					<div className="text-center mb-12">
-						<h2 className="text-3xl font-bold mb-4 flex items-center justify-center gap-2">
-							<CalendarIcon className="w-8 h-8 text-accent" />
-							Check Availability
-						</h2>
-						<p className="text-muted-foreground text-lg">
-							Select your preferred dates to see availability and pricing
-						</p>
-					</div>
-
-					<div className="grid lg:grid-cols-2 gap-8 items-start">
-						{/* Calendar */}
-						<div className="flex justify-center">
-							<RoomAvailabilityCalendar
-								roomSlug="texas-room"
-								selectedDateRange={selectedRange}
-								onDateRangeSelect={handleRangeSelect}
-								className="w-full max-w-2xl"
-								minNights={1}
-								maxNights={30}
-							/>
-						</div>
-
-						{/* Booking Information */}
-						<div className="space-y-6">
-							<Card className="border-accent/20">
-								<CardHeader>
-									<CardTitle className="text-accent-foreground">
-										Booking Information
-									</CardTitle>
-								</CardHeader>
-								<CardContent className="space-y-4">
-									{selectedRange?.from && selectedRange?.to ? (
-										<div>
-											<p className="text-sm text-muted-foreground mb-2">
-												Selected Dates:
-											</p>
-											<p className="font-semibold text-lg">
-												{selectedRange.from.toLocaleDateString('en-US', {
-													weekday: 'short',
-													month: 'short',
-													day: 'numeric',
-												})}{' '}
-												-{' '}
-												{selectedRange.to.toLocaleDateString('en-US', {
-													weekday: 'short',
-													month: 'short',
-													day: 'numeric',
-												})}
-											</p>
-
-											<div className="mt-4 p-4 bg-orange-50 rounded-lg space-y-2">
-												<div className="flex justify-between">
-													<span className="text-orange-800">Base Rate:</span>
-													<span className="font-semibold">
-														${(totalPrice / nights).toFixed(2)}/night
-													</span>
-												</div>
-												<div className="flex justify-between">
-													<span className="text-orange-800">
-														Number of Nights:
-													</span>
-													<span className="font-semibold">{nights} nights</span>
-												</div>
-												<hr className="border-orange-200" />
-												<div className="flex justify-between font-bold">
-													<span className="text-orange-800">
-														Room Rate Total:
-													</span>
-													<span>${totalPrice.toFixed(2)}</span>
-												</div>
-												<p className="text-sm text-muted-foreground mt-1">
-													*Room rate only - service fees and taxes added at
-													checkout
-												</p>
-											</div>
-										</div>
-									) : (
-										<div className="text-center py-8">
-											<CalendarIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-											<p className="text-muted-foreground">
-												Select your check-in and check-out dates to see pricing
-												and availability
-											</p>
-											<p className="text-sm text-muted-foreground mt-2">
-												Minimum stay: 1 nights • Maximum stay: 30 nights
-											</p>
-										</div>
-									)}
-								</CardContent>
-							</Card>
-
-							{selectedRange?.from && selectedRange?.to && (
-								<Card className="border-accent/20 bg-accent/10">
-									<CardContent className="p-6">
-										<h4 className="font-semibold text-accent-foreground mb-2">
-											Ready to book these dates?
-										</h4>
-										<p className="text-sm text-muted-foreground mb-4">
-											Continue with your reservation for the Texas Room
-										</p>
-										<Button
-											className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
-											onClick={handleBookNow}
-										>
-											Book Now - {selectedRange.from.toLocaleDateString()} to{' '}
-											{selectedRange.to.toLocaleDateString()}
-										</Button>
-									</CardContent>
-								</Card>
-							)}
-						</div>
-					</div>
-				</div>
-			</section>
-
 			{/* Room Description */}
 			<section className="py-16 px-4">
 				<div className="container mx-auto max-w-4xl">
 					<Card className="border-accent/20">
 						<CardHeader>
-							<CardTitle className="text-2xl text-accent-foreground">
-								Your Texas Getaway
-							</CardTitle>
+							<CardTitle className="text-2xl">Your Texas Getaway</CardTitle>
 						</CardHeader>
 						<CardContent>
 							<div className="prose prose-lg max-w-none">
@@ -407,11 +375,7 @@ function TexasRoomPage() {
 						</Card>
 
 						<Card className="text-center p-6">
-							<div className="w-8 h-8 bg-accent rounded mx-auto mb-4 flex items-center justify-center">
-								<span className="text-accent-foreground text-sm font-bold">
-									K
-								</span>
-							</div>
+							<Bed className="w-8 h-8 text-accent mx-auto mb-4" />
 							<h3 className="font-semibold mb-2">King Bed</h3>
 							<p className="text-sm text-muted-foreground">
 								Spacious sleeping for two
@@ -419,11 +383,7 @@ function TexasRoomPage() {
 						</Card>
 
 						<Card className="text-center p-6">
-							<div className="w-8 h-8 bg-accent rounded mx-auto mb-4 flex items-center justify-center">
-								<span className="text-accent-foreground text-sm font-bold">
-									★
-								</span>
-							</div>
+							<Star className="w-8 h-8 text-accent mx-auto mb-4" />
 							<h3 className="font-semibold mb-2">Texas Charm</h3>
 							<p className="text-sm text-muted-foreground">
 								Warm décor & distinctive touches
@@ -438,27 +398,41 @@ function TexasRoomPage() {
 				<div className="container mx-auto max-w-4xl">
 					<Card className="bg-accent/10 border-accent/20">
 						<CardHeader>
-							<CardTitle className="text-2xl text-accent-foreground">
-								Texas Room Special Features
+							<CardTitle className="text-2xl">
+								Texas Room Special Features (need to update these images)
 							</CardTitle>
 						</CardHeader>
 						<CardContent>
 							<div className="grid md:grid-cols-2 gap-6">
-								<div>
-									<h3 className="font-semibold text-lg mb-2 text-accent">
+								<div className="space-y-2">
+									<Image
+										src="https://res.cloudinary.com/cobalt/image/upload/irishette/texas-room/b495460e-218d-4e2b-8b5b-3e87df2a4b43.avif"
+										alt="Texas Room Clawfoot Tub"
+										width={300}
+										height={400}
+										className="mx-auto rounded-lg"
+									/>
+									<h3 className="text-center font-semibold text-lg mb-2 text-accent">
 										Antique Clawfoot Tub
 									</h3>
-									<p className="text-muted-foreground">
+									<p className="text-center text-muted-foreground">
 										Relax and unwind in our beautiful antique clawfoot
 										bathtub—perfect for a long, luxurious soak after exploring
 										Dublin and the surrounding area.
 									</p>
 								</div>
-								<div>
-									<h3 className="font-semibold text-lg mb-2 text-accent">
+								<div className="space-y-2">
+									<Image
+										src="https://res.cloudinary.com/cobalt/image/upload/irishette/texas-room/b2191747-41d4-4960-91fc-eaeefabddc3a.avif"
+										alt="Texas Room Clawfoot Tub"
+										width={300}
+										height={400}
+										className="mx-auto rounded-lg"
+									/>
+									<h3 className="text-center font-semibold text-lg mb-2 text-accent">
 										Texas-Themed Décor
 									</h3>
-									<p className="text-muted-foreground">
+									<p className="text-center text-muted-foreground">
 										Immerse yourself in true Lone Star State style with warm
 										colors, distinctive touches, and décor that reflects the
 										spirit of Texas.
@@ -466,7 +440,7 @@ function TexasRoomPage() {
 								</div>
 							</div>
 							<div className="mt-6 p-4 bg-accent/20 rounded-lg">
-								<p className="text-sm text-accent-foreground font-medium">
+								<p className="text-sm font-medium">
 									<strong>Please Note:</strong> The Texas Room features a
 									beautiful antique clawfoot tub but does not have a walk-in
 									shower. Perfect for guests who enjoy relaxing baths!
@@ -482,7 +456,7 @@ function TexasRoomPage() {
 				<div className="container mx-auto max-w-4xl text-center">
 					<Card className="bg-accent/10 border-accent/20">
 						<CardHeader>
-							<CardTitle className="text-2xl text-accent-foreground">
+							<CardTitle className="text-2xl">
 								Ready to Experience Texas Charm?
 							</CardTitle>
 							<CardDescription className="text-base">
@@ -496,7 +470,8 @@ function TexasRoomPage() {
 							</p>
 							<div className="flex flex-col sm:flex-row gap-4 justify-center">
 								<Button
-									className="bg-accent hover:bg-accent/90 text-accent-foreground px-8 py-3 rounded-md font-medium transition-colors"
+									variant="accent"
+									size="lg"
 									onClick={() => {
 										// Scroll to the availability calendar section
 										const calendarSection = document.querySelector(
@@ -509,12 +484,9 @@ function TexasRoomPage() {
 								>
 									Check Availability
 								</Button>
-								<Link
-									to="/"
-									className="border border-accent text-accent hover:bg-accent/10 px-8 py-3 rounded-md font-medium transition-colors inline-flex items-center justify-center"
-								>
-									View All Rooms
-								</Link>
+								<Button asChild variant="outline" size="lg">
+									<Link to="/">View All Rooms</Link>
+								</Button>
 							</div>
 						</CardContent>
 					</Card>

@@ -1,8 +1,13 @@
 import { Link, useRouter } from '@tanstack/react-router';
-import { LogOut, User } from 'lucide-react';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { LogOut, Luggage, User } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { client, useSession } from '@/lib/auth-client';
-import { cn } from '@/utils/twMerge';
+
+const navigationLinks = [
+	{ to: '/rooms/rose-room', label: 'Rose Room' },
+	{ to: '/rooms/texas-room', label: 'Texas Room' },
+	{ to: '/contact', label: 'Contact Us' },
+];
 
 export default function Header() {
 	const { data: session, isPending } = useSession();
@@ -16,33 +21,25 @@ export default function Header() {
 					<Link
 						to="/"
 						className="text-xl font-bold text-primary hover:text-primary/80 transition-colors"
+						onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
 					>
 						Irishette
+						<span className="sr-only">Home</span>
+						<span className="text-xs"> Logo goes here</span>
 					</Link>
 
 					{/* Navigation */}
 					<nav className="hidden md:flex items-center space-x-8">
-						<Link
-							to="/"
-							className="text-foreground hover:text-primary transition-colors [&.active]:text-primary [&.active]:font-semibold"
-							activeProps={{ className: 'text-primary font-semibold' }}
-						>
-							Home
-						</Link>
-						<Link
-							to="/rooms/rose-room"
-							className="text-foreground hover:text-primary transition-colors [&.active]:text-primary [&.active]:font-semibold"
-							activeProps={{ className: 'text-primary font-semibold' }}
-						>
-							Rose Room
-						</Link>
-						<Link
-							to="/rooms/texas-room"
-							className="text-foreground hover:text-primary transition-colors [&.active]:text-primary [&.active]:font-semibold"
-							activeProps={{ className: 'text-primary font-semibold' }}
-						>
-							Texas Room
-						</Link>
+						{navigationLinks.map((link) => (
+							<Link
+								key={link.to}
+								to={link.to}
+								className="text-foreground hover:text-primary transition-colors [&.active]:text-primary [&.active]:font-semibold"
+								activeProps={{ className: 'text-primary font-semibold' }}
+							>
+								{link.label}
+							</Link>
+						))}
 					</nav>
 
 					{/* Auth Section */}
@@ -77,9 +74,12 @@ export default function Header() {
 								</div>
 							) : (
 								// Unauthenticated user
-								<Link to="/login" className={cn(buttonVariants())}>
-									View Bookings
-								</Link>
+								<Button asChild>
+									<Link to="/login">
+										<Luggage className="size-5" />
+										View Bookings
+									</Link>
+								</Button>
 							))}
 
 						{/* Mobile Menu Button */}

@@ -3,7 +3,7 @@
 import { X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
-
+import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 
 interface Room {
@@ -369,23 +369,23 @@ export default function RoomAvailabilityCalendar({
 			{/* Clear Selection Button */}
 			{dateRange?.from && (
 				<div className="flex justify-center">
-					<button
+					<Button
 						type="button"
 						onClick={() => {
 							setDateRange(undefined);
 							onDateRangeSelect?.(undefined, 0, 0);
 						}}
-						className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground border border-border hover:border-foreground/20 px-3 py-1.5 rounded-md transition-colors"
+						variant="outline"
 					>
 						<X className="w-3 h-3" />
 						Clear Selection
-					</button>
+					</Button>
 				</div>
 			)}
 
 			{/* Legend and Info */}
 			<div className="space-y-3">
-				<div className="flex flex-wrap gap-4 text-sm">
+				<div className="flex flex-wrap justify-center gap-4 text-sm">
 					<div className="flex items-center gap-2">
 						<div className="w-4 h-4 bg-secondary border border-primary/20 rounded"></div>
 						<span>Available</span>
