@@ -37,7 +37,7 @@ export const bookingsRouter = createTRPCRouter({
 			const paymentService = new PaymentService({
 				DB: ctx.db,
 				STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
-				STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || '',
+				STRIPE_TRPC_WEBHOOK_SECRET: process.env.STRIPE_TRPC_WEBHOOK_SECRET || '',
 				BETTER_AUTH_URL: process.env.BETTER_AUTH_URL || '',
 			});
 
@@ -75,7 +75,7 @@ export const bookingsRouter = createTRPCRouter({
 			const paymentService = new PaymentService({
 				DB: ctx.db,
 				STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
-				STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || '',
+				STRIPE_TRPC_WEBHOOK_SECRET: process.env.STRIPE_TRPC_WEBHOOK_SECRET || '',
 				BETTER_AUTH_URL: process.env.BETTER_AUTH_URL || '',
 			});
 
@@ -113,7 +113,7 @@ export const bookingsRouter = createTRPCRouter({
 			const paymentService = new PaymentService({
 				DB: ctx.db,
 				STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
-				STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || '',
+				STRIPE_TRPC_WEBHOOK_SECRET: process.env.STRIPE_TRPC_WEBHOOK_SECRET || '',
 				BETTER_AUTH_URL: process.env.BETTER_AUTH_URL || '',
 			});
 
@@ -151,7 +151,7 @@ export const bookingsRouter = createTRPCRouter({
 			const paymentService = new PaymentService({
 				DB: ctx.db,
 				STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
-				STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || '',
+				STRIPE_TRPC_WEBHOOK_SECRET: process.env.STRIPE_TRPC_WEBHOOK_SECRET || '',
 				BETTER_AUTH_URL: process.env.BETTER_AUTH_URL || '',
 			});
 
@@ -218,7 +218,7 @@ export const bookingsRouter = createTRPCRouter({
 			const paymentService = new PaymentService({
 				DB: ctx.db,
 				STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
-				STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || '',
+				STRIPE_TRPC_WEBHOOK_SECRET: process.env.STRIPE_TRPC_WEBHOOK_SECRET || '',
 				BETTER_AUTH_URL: process.env.BETTER_AUTH_URL || '',
 			});
 
@@ -567,7 +567,7 @@ export const bookingsRouter = createTRPCRouter({
 			const paymentService = new PaymentService({
 				DB: ctx.db,
 				STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
-				STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || '',
+				STRIPE_TRPC_WEBHOOK_SECRET: process.env.STRIPE_TRPC_WEBHOOK_SECRET || '',
 				BETTER_AUTH_URL: process.env.BETTER_AUTH_URL || '',
 			});
 

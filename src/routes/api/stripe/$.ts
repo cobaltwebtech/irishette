@@ -53,7 +53,7 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
 			event = stripe.webhooks.constructEvent(
 				body,
 				signature,
-				bindings.STRIPE_WEBHOOK_SECRET,
+				bindings.STRIPE_TRPC_WEBHOOK_SECRET,
 			);
 		} catch (err) {
 			console.error('Webhook signature verification failed:', err);
@@ -74,7 +74,7 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
 		const paymentService = new PaymentService({
 			DB: bindings.DB,
 			STRIPE_SECRET_KEY: bindings.STRIPE_SECRET_KEY,
-			STRIPE_WEBHOOK_SECRET: bindings.STRIPE_WEBHOOK_SECRET,
+			STRIPE_TRPC_WEBHOOK_SECRET: bindings.STRIPE_TRPC_WEBHOOK_SECRET,
 			BETTER_AUTH_URL: bindings.BETTER_AUTH_URL,
 		});
 

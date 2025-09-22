@@ -68,7 +68,7 @@ export const auth = () => {
 			}),
 			stripe({
 				stripeClient,
-				stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET,
+				stripeWebhookSecret: env.STRIPE_BETTER_AUTH_WEBHOOK_SECRET,
 				createCustomerOnSignUp: true,
 			}),
 			reactStartCookies(), // Handle cookies for TanStack Start
