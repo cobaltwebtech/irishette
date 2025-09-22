@@ -22,8 +22,10 @@ enabled = true
 
 [triggers]
 crons = [
-  "0 * * * *",    # Every hour - sync external calendars
-  "0 2 * * 0"     # Weekly on Sunday at 2 AM - cleanup old logs
+  # Every hour - sync external calendars
+  "0 * * * *",
+  # Weekly on Sunday at 2 AM - cleanup old logs
+  "0 2 * * 7"
 ]
 
 [vars]
