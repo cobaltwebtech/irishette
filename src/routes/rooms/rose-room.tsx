@@ -2,9 +2,11 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import {
 	Bath,
 	Bed,
+	CalendarCheck,
 	Calendar as CalendarIcon,
 	Car,
 	Coffee,
+	Image as ImageIcon,
 	Tv,
 	Wifi,
 	Wind,
@@ -174,7 +176,7 @@ function RoseRoomPage() {
 	return (
 		<div className="min-h-screen bg-background">
 			{/* Hero Section */}
-			<section className="relative h-[50vh] min-h-[500px] flex items-center justify-center overflow-hidden">
+			<section className="relative h-[50vh] min-h-[500px] flex items-center justify-center overflow-hidden shadow-lg shadow-foreground/50">
 				{/* Background Image */}
 				<div
 					className="absolute inset-0 bg-cover bg-center bg-no-repeat"
@@ -191,7 +193,7 @@ function RoseRoomPage() {
 					<h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-6 bg-gradient-to-r from-rose-800 via-pink-400 to-rose-800 bg-clip-text text-transparent">
 						Rose Room
 					</h1>
-					<p className="text-xl md:text-2xl lg:text-3xl text-popover mb-8 font-medium drop-shadow-md max-w-3xl mx-auto">
+					<p className="text-xl md:text-2xl italic text-popover mb-8 font-medium drop-shadow-md max-w-3xl mx-auto">
 						Leave your worries behind in this spacious and tranquil retreat.
 					</p>
 					<div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -207,11 +209,13 @@ function RoseRoomPage() {
 								}
 							}}
 						>
+							<CalendarCheck className="size-6" />
 							Book Rose Room
 						</Button>
 						<Button
 							variant="outline"
 							size="lg"
+							className="text-background"
 							onClick={() => {
 								const gallerySection = document.querySelector(
 									'[data-gallery-section]',
@@ -221,6 +225,7 @@ function RoseRoomPage() {
 								}
 							}}
 						>
+							<ImageIcon className="size-6" />
 							View Room Photos
 						</Button>
 					</div>
@@ -328,7 +333,7 @@ function RoseRoomPage() {
 			</section>
 
 			{/* Amenities */}
-			<section className="py-16 px-4 bg-muted/20">
+			<section className="py-16 px-4 bg-muted/80">
 				<div className="container mx-auto max-w-6xl">
 					<h2 className="text-3xl font-bold text-center mb-12">
 						Room Amenities

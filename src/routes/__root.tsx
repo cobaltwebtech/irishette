@@ -42,6 +42,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 				as: 'font',
 				type: 'font/woff2',
 				crossOrigin: 'anonymous',
+				name: 'Schibsted Grotesk',
 			},
 			{
 				rel: 'preload',
@@ -49,6 +50,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 				as: 'font',
 				type: 'font/woff2',
 				crossOrigin: 'anonymous',
+				name: 'Schibsted Grotesk',
 			},
 			{
 				rel: 'stylesheet',

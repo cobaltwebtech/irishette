@@ -13,6 +13,7 @@ import { createServerRootRoute } from '@tanstack/react-start/server'
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LogoutRouteImport } from './routes/logout'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ContactRouteImport } from './routes/contact'
 import { Route as BookingRouteImport } from './routes/booking'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
@@ -40,6 +41,11 @@ const LogoutRoute = LogoutRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContactRoute = ContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BookingRoute = BookingRouteImport.update({
@@ -129,6 +135,7 @@ const ApiAuthSplatServerRoute = ApiAuthSplatServerRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/booking': typeof BookingRoute
+  '/contact': typeof ContactRoute
   '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
   '/rooms/rose-room': typeof RoomsRoseRoomRoute
@@ -144,6 +151,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/booking': typeof BookingRoute
+  '/contact': typeof ContactRoute
   '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
   '/rooms/rose-room': typeof RoomsRoseRoomRoute
@@ -160,6 +168,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/booking': typeof BookingRoute
+  '/contact': typeof ContactRoute
   '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
   '/rooms/rose-room': typeof RoomsRoseRoomRoute
@@ -177,6 +186,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/booking'
+    | '/contact'
     | '/login'
     | '/logout'
     | '/rooms/rose-room'
@@ -192,6 +202,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/booking'
+    | '/contact'
     | '/login'
     | '/logout'
     | '/rooms/rose-room'
@@ -207,6 +218,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/booking'
+    | '/contact'
     | '/login'
     | '/logout'
     | '/rooms/rose-room'
@@ -223,6 +235,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BookingRoute: typeof BookingRoute
+  ContactRoute: typeof ContactRoute
   LoginRoute: typeof LoginRoute
   LogoutRoute: typeof LogoutRoute
   RoomsRoseRoomRoute: typeof RoomsRoseRoomRoute
@@ -303,6 +316,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contact': {
+      id: '/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof ContactRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/booking': {
@@ -427,6 +447,7 @@ declare module '@tanstack/react-start/server' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BookingRoute: BookingRoute,
+  ContactRoute: ContactRoute,
   LoginRoute: LoginRoute,
   LogoutRoute: LogoutRoute,
   RoomsRoseRoomRoute: RoomsRoseRoomRoute,

@@ -14,13 +14,13 @@ export default function Header() {
 	const router = useRouter();
 
 	return (
-		<header className="bg-background border-b border-border sticky top-0 z-50">
-			<div className="container mx-auto px-4">
+		<header className="bg-gradient-to-b from-secondary-foreground to-primary sticky top-0 z-50">
+			<div className="container mx-auto px-4 py-2">
 				<div className="flex items-center justify-between h-16">
 					{/* Logo/Brand */}
 					<Link
 						to="/"
-						className="text-xl font-bold text-primary hover:text-primary/80 transition-colors"
+						className="text-2xl font-extrabold text-background hover:text-primary/80 transition-colors"
 						onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
 					>
 						Irishette
@@ -34,8 +34,7 @@ export default function Header() {
 							<Link
 								key={link.to}
 								to={link.to}
-								className="text-foreground hover:text-primary transition-colors [&.active]:text-primary [&.active]:font-semibold"
-								activeProps={{ className: 'text-primary font-semibold' }}
+								className="text-background hover:text-accent/80 transition-colors font-semibold [&.active]:text-accent"
 							>
 								{link.label}
 							</Link>
@@ -74,7 +73,7 @@ export default function Header() {
 								</div>
 							) : (
 								// Unauthenticated user
-								<Button asChild>
+								<Button variant="accent" asChild>
 									<Link to="/login">
 										<Luggage className="size-5" />
 										View Bookings

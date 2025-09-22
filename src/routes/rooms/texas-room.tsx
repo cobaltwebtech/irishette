@@ -3,9 +3,11 @@ import { Image } from '@unpic/react';
 import {
 	Bath,
 	Bed,
+	CalendarCheck,
 	Calendar as CalendarIcon,
 	Car,
 	Coffee,
+	Image as ImageIcon,
 	Star,
 	Tv,
 	Wifi,
@@ -166,7 +168,7 @@ function TexasRoomPage() {
 	return (
 		<div className="min-h-screen bg-background">
 			{/* Hero Section */}
-			<section className="relative h-[50vh] min-h-[500px] flex items-center justify-center overflow-hidden">
+			<section className="relative h-[50vh] min-h-[500px] flex items-center justify-center overflow-hidden shadow-lg shadow-foreground/50">
 				{/* Background Image */}
 				<div
 					className="absolute inset-0 bg-cover bg-center bg-no-repeat"
@@ -183,7 +185,7 @@ function TexasRoomPage() {
 					<h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-6 bg-gradient-to-r from-blue-700 via-white to-red-900 bg-clip-text text-transparent">
 						Texas Room
 					</h1>
-					<p className="text-xl md:text-2xl lg:text-3xl text-popover mb-8 font-medium drop-shadow-md max-w-3xl mx-auto">
+					<p className="text-xl md:text-2xl italic text-popover mb-8 font-medium drop-shadow-md max-w-3xl mx-auto">
 						Experience true Texas charm in this spacious and inviting retreat.
 					</p>
 					<div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -199,11 +201,13 @@ function TexasRoomPage() {
 								}
 							}}
 						>
+							<CalendarCheck className="size-6" />
 							Book Texas Room
 						</Button>
 						<Button
 							variant="outline"
 							size="lg"
+							className="text-background"
 							onClick={() => {
 								const gallerySection = document.querySelector(
 									'[data-gallery-section]',
@@ -213,6 +217,7 @@ function TexasRoomPage() {
 								}
 							}}
 						>
+							<ImageIcon className="size-6" />
 							View Room Photos
 						</Button>
 					</div>
@@ -291,7 +296,21 @@ function TexasRoomPage() {
 				<div className="container mx-auto max-w-4xl">
 					<Card className="border-accent/20">
 						<CardHeader>
-							<CardTitle className="text-2xl">Your Texas Getaway</CardTitle>
+							<CardTitle className="text-2xl flex items-center gap-3">
+								<svg
+									width="512"
+									height="512"
+									viewBox="0 0 512 512"
+									className="size-10 text-rose-600"
+								>
+									<title>Texas Icon</title>
+									<path
+										fill="currentColor"
+										d="M156.3 41.88V222.6l-130.57 3c35.98 40.7 60.88 78.7 123.07 126c36.4-48.2 78.8-54.7 144.7 100.5l66.8 18c.7-49.4-15.2-97.8 126-155.3l-11.3-93l-3-60.7l-211.9-39.8V41.88z"
+									/>
+								</svg>
+								<span>Your Texas Getaway</span>
+							</CardTitle>
 						</CardHeader>
 						<CardContent>
 							<div className="prose prose-lg max-w-none">
@@ -319,7 +338,7 @@ function TexasRoomPage() {
 			</section>
 
 			{/* Amenities */}
-			<section className="py-16 px-4 bg-muted/20">
+			<section className="py-16 px-4 bg-muted/80">
 				<div className="container mx-auto max-w-6xl">
 					<h2 className="text-3xl font-bold text-center mb-12">
 						Room Amenities
