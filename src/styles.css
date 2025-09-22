@@ -4,8 +4,7 @@
 @import "swiper/css/thumbs";
 @import "swiper/css/free-mode";
 @import "swiper/css/effect-fade";
-
-@plugin "tailwindcss-animate";
+@import "tw-animate-css";
 
 @font-face {
 	font-family: Schibsted Grotesk;
