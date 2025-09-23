@@ -1,9 +1,11 @@
+import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { CalendarDays, House, Pencil } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { trpc } from '@/integrations/tanstack-query/root-provider';
 import { useSession } from '@/lib/auth-client';
 
 export const Route = createFileRoute('/admin/')({
@@ -30,100 +32,70 @@ type Room = {
 	updatedAt: Date;
 };
 
-// Types for booking data (matching the tRPC response structure)
-type BookingData = {
-	booking: {
-		id: string;
-		confirmationId: string;
-		status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
-		paymentStatus: 'pending' | 'paid' | 'failed' | 'refunded';
-		guestName: string;
-		guestEmail: string;
-		checkInDate: string;
-		checkOutDate: string;
-		totalAmount: number;
-		numberOfGuests: number;
-		createdAt: string;
-		roomId: string;
-	};
-	room: {
-		id: string;
-		name: string;
-		slug: string;
-		basePrice: number;
-	};
-	user: {
-		id: string;
-		email: string;
-		name?: string;
-	};
-};
-
 function AdminDashboard() {
 	const { data: session, isPending } = useSession();
 	const navigate = useNavigate();
-	const [rooms, setRooms] = useState<Room[]>([]);
-	const [loadingRooms, setLoadingRooms] = useState(true);
-	const [bookings, setBookings] = useState<BookingData[]>([]);
-	const [loadingBookings, setLoadingBookings] = useState(true);
 
-	// Load rooms function
-	const loadRooms = useCallback(async () => {
-		try {
-			setLoadingRooms(true);
-			const inputParam = encodeURIComponent(
-				JSON.stringify({ limit: 10, status: 'active' }),
-			);
-			const response = await fetch(`/api/trpc/rooms.list?input=${inputParam}`, {
-				method: 'GET',
-			});
+	// Replace manual loadRooms with useQuery - using direct trpc import
+	const {
+		data: roomsData,
+		isLoading: loadingRooms,
+		error: roomsError,
+		isError: roomsIsError,
+	} = useQuery(
+		trpc.rooms.list.queryOptions(
+			{
+				limit: 10,
+				status: 'active',
+			},
+			{
+				enabled: !isPending && !!session?.user && session.user.role === 'admin',
+				retry: false, // Avoid retries during SSR issues
+				staleTime: 5 * 60 * 1000, // 5 minutes
+			},
+		),
+	);
 
-			if (!response.ok) {
-				throw new Error('Failed to fetch rooms');
-			}
+	console.log('Admin Dashboard - rooms useQuery state:', {
+		roomsData,
+		loadingRooms,
+		roomsError,
+		roomsIsError,
+		hasSession: !!session?.user,
+		isAdmin: session?.user?.role === 'admin',
+	});
 
-			const data = (await response.json()) as {
-				result: { data: { rooms: Room[] } };
-			};
-			setRooms(data.result.data.rooms || []);
-		} catch (error) {
-			console.error('Failed to load rooms:', error);
-		} finally {
-			setLoadingRooms(false);
-		}
-	}, []);
+	const rooms = roomsData?.rooms || [];
 
-	// Load bookings function
-	const loadBookings = useCallback(async () => {
-		try {
-			setLoadingBookings(true);
-			const response = await fetch('/api/trpc/bookings.adminListBookings', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					limit: 50, // Get more to filter for upcoming
-					offset: 0,
-				}),
-			});
+	// Replace manual loadBookings with useQuery
+	// Replace manual loadBookings with useQuery - using direct trpc import
+	const {
+		data: bookings = [],
+		isLoading: loadingBookings,
+		error: bookingsError,
+		isError: bookingsIsError,
+	} = useQuery(
+		trpc.bookings.adminListBookings.queryOptions(
+			{
+				limit: 50,
+				offset: 0,
+			},
+			{
+				enabled: !isPending && !!session?.user && session.user.role === 'admin',
+				retry: false, // Avoid retries during SSR issues
+				staleTime: 5 * 60 * 1000, // 5 minutes
+			},
+		),
+	);
 
-			if (!response.ok) {
-				throw new Error('Failed to fetch bookings');
-			}
-
-			const result = (await response.json()) as {
-				result?: {
-					data?: BookingData[];
-				};
-			};
-
-			const bookingsData = result.result?.data || [];
-			setBookings(bookingsData);
-		} catch (error) {
-			console.error('Failed to load bookings:', error);
-		} finally {
-			setLoadingBookings(false);
-		}
-	}, []);
+	console.log('Admin Dashboard - bookings useQuery state:', {
+		bookings,
+		loadingBookings,
+		bookingsError,
+		bookingsIsError,
+		hasSession: !!session?.user,
+		isAdmin: session?.user?.role === 'admin',
+	});
 
 	// Client-side auth check
 	useEffect(() => {
@@ -131,14 +103,6 @@ function AdminDashboard() {
 			navigate({ to: '/' });
 		}
 	}, [session, isPending, navigate]);
-
-	// Load bookings on component mount
-	useEffect(() => {
-		if (session?.user && session.user.role === 'admin') {
-			loadRooms();
-			loadBookings();
-		}
-	}, [session, loadRooms, loadBookings]);
 
 	// Show loading or redirect if not authenticated
 	if (isPending || !session?.user || session.user.role !== 'admin') {
@@ -148,6 +112,12 @@ function AdminDashboard() {
 	// Filter bookings to get upcoming confirmed ones (check-in date >= today)
 	const today = new Date();
 	today.setHours(0, 0, 0, 0);
+
+	// Create a map of room IDs to room names for lookup
+	const roomMap = rooms.reduce((acc: Record<string, string>, room: Room) => {
+		acc[room.id] = room.name;
+		return acc;
+	}, {});
 
 	const upcomingBookings = bookings
 		.filter((bookingData) => {
@@ -258,8 +228,12 @@ function AdminDashboard() {
 												<div>
 													<h3 className="font-medium">{booking.guestName}</h3>
 													<p className="text-sm text-muted-foreground">
-														{bookingData.room.name} • Check-in:{' '}
-														{new Date(booking.checkInDate).toLocaleDateString()}
+														{roomMap[bookingData.booking.roomId] ||
+															'Unknown Room'}{' '}
+														• Check-in:{' '}
+														{new Date(
+															booking.checkInDate + 'T00:00:00',
+														).toLocaleDateString()}
 													</p>
 													<p className="text-xs text-muted-foreground">
 														{booking.numberOfGuests} guest

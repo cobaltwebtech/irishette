@@ -5,6 +5,15 @@ import { createAuthClient } from 'better-auth/react';
 export const client = createAuthClient({
 	baseURL: import.meta.env.BETTER_AUTH_URL,
 	plugins: [magicLinkClient(), adminClient(), stripeClient()],
+	fetchOptions: {
+		onRequest(context) {
+			// Ensure cookies are included in SSR requests
+			return {
+				...context,
+				credentials: 'include',
+			};
+		},
+	},
 });
 
 export const {

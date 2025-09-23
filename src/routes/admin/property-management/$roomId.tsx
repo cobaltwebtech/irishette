@@ -1,3 +1,4 @@
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import {
 	AlertCircle,
@@ -14,7 +15,7 @@ import {
 	X,
 	XCircle,
 } from 'lucide-react';
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
 import { PricingRulesManagement } from '@/components/PricingRulesManagement';
 import { RoomBlockingManagement } from '@/components/RoomBlockingManagement';
@@ -29,6 +30,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { trpcClient } from '@/integrations/tanstack-query/root-provider';
 import { useSession } from '@/lib/auth-client';
 import type {
 	CreateBlockedPeriod,
@@ -66,25 +68,6 @@ type TestResult = {
 	};
 };
 
-type Room = {
-	id: string;
-	name: string;
-	slug: string;
-	description: string | null;
-	basePrice: number;
-	serviceFeeRate: number;
-	stateTaxRate: number;
-	cityTaxRate: number;
-	status: RoomStatus;
-	isActive: boolean | null; // Keep for backward compatibility
-	airbnbIcalUrl: string | null;
-	expediaIcalUrl: string | null;
-	lastAirbnbSync: Date | null;
-	lastExpediaSync: Date | null;
-	createdAt: Date;
-	updatedAt: Date;
-};
-
 // Form types
 type RoomFormData = {
 	name: string;
@@ -103,6 +86,7 @@ function EditRoom() {
 	const params = Route.useParams() as { roomId: string };
 	const roomId = params.roomId;
 	const navigate = useNavigate();
+	const routeContext = Route.useRouteContext();
 	const roomNameId = useId();
 	const roomSlugId = useId();
 	const roomDescriptionId = useId();
@@ -112,9 +96,15 @@ function EditRoom() {
 	const cityTaxRateId = useId();
 	const icalUrlId = useId();
 
-	const [room, setRoom] = useState<Room | null>(null);
-	const [loading, setLoading] = useState(true);
-	const [saving, setSaving] = useState(false);
+	// Use tRPC query to fetch room data
+	const roomQuery = useQuery({
+		...routeContext.trpc.rooms.get.queryOptions({ id: roomId }),
+		enabled: !!roomId,
+	});
+
+	const room = roomQuery.data;
+	const loading = roomQuery.isLoading;
+
 	const [formData, setFormData] = useState<RoomFormData>({
 		name: '',
 		slug: '',
@@ -134,13 +124,50 @@ function EditRoom() {
 	const [newIcalUrl, setNewIcalUrl] = useState('');
 	const [testingUrl, setTestingUrl] = useState<string | null>(null);
 	const [testResult, setTestResult] = useState<TestResult | null>(null);
+	const [saving, setSaving] = useState(false);
 
 	// Pricing rules state
 	const [pricingRules, setPricingRules] = useState<RoomPricingRule[]>([]);
 
+	// Use tRPC query to fetch pricing rules
+	const pricingRulesQuery = useQuery({
+		...routeContext.trpc.rooms.getPricingRules.queryOptions({ roomId }),
+		enabled: !!roomId && !!room,
+	});
+
+	// Update pricing rules state when query data changes
+	useEffect(() => {
+		if (pricingRulesQuery.data) {
+			const transformedRules = pricingRulesQuery.data.map((rule) => ({
+				...rule,
+				isActive: rule.isActive ?? true,
+				daysOfWeek: rule.daysOfWeek ?? undefined,
+			}));
+			setPricingRules(transformedRules);
+		}
+	}, [pricingRulesQuery.data]);
+
 	// Blocked periods state
 	const [blockedPeriods, setBlockedPeriods] = useState<RoomBlockedPeriod[]>([]);
-	const [blockedPeriodsLoading, setBlockedPeriodsLoading] = useState(false);
+
+	// Use tRPC query to fetch blocked periods
+	const blockedPeriodsQuery = useQuery({
+		...routeContext.trpc.rooms.getBlockedPeriods.queryOptions({ roomId }),
+		enabled: !!roomId && !!room,
+	});
+
+	const blockedPeriodsLoading = blockedPeriodsQuery.isLoading;
+
+	// Update blocked periods state when query data changes
+	useEffect(() => {
+		if (blockedPeriodsQuery.data) {
+			const transformedPeriods = blockedPeriodsQuery.data.map((period) => ({
+				...period,
+				notes: period.notes ?? undefined,
+			}));
+			setBlockedPeriods(transformedPeriods);
+		}
+	}, [blockedPeriodsQuery.data]);
 
 	// Copy to clipboard helper function
 	const copyToClipboard = async (text: string, description: string) => {
@@ -159,97 +186,64 @@ function EditRoom() {
 		}
 	};
 
-	// Load room data
-	const loadRoom = useCallback(async () => {
-		try {
-			setLoading(true);
-			const inputParam = encodeURIComponent(JSON.stringify({ id: roomId }));
-			const response = await fetch(`/api/trpc/rooms.get?input=${inputParam}`, {
-				method: 'GET',
-			});
-
-			if (!response.ok) {
-				const errorText = await response.text();
-				console.error('API Error:', errorText);
-				throw new Error('Failed to fetch room');
-			}
-
-			const data = (await response.json()) as {
-				result: { data: Room };
-			};
-
-			const roomData = data.result.data;
-			setRoom(roomData);
-			setFormData({
-				name: roomData.name,
-				slug: roomData.slug,
-				description: roomData.description || '',
-				basePrice: roomData.basePrice,
-				serviceFeeRate: roomData.serviceFeeRate ?? 0.12, // Only use default if not in DB
-				stateTaxRate: roomData.stateTaxRate ?? 0.06, // Only use default if not in DB
-				cityTaxRate: roomData.cityTaxRate ?? 0.07, // Only use default if not in DB
-				status: roomData.status || 'active',
-				isActive: roomData.isActive ?? true,
-			});
-		} catch (error) {
-			console.error('Failed to load room:', error);
-			// If room not found, redirect back to property management
-			navigate({ to: '/admin/property-management' });
-		} finally {
-			setLoading(false);
-		}
-	}, [roomId, navigate]);
-
-	// Load room on component mount
+	// Populate form data when room is loaded
 	useEffect(() => {
-		loadRoom();
-	}, [loadRoom]);
-
-	// Save room changes
-	const handleSaveRoom = async () => {
-		if (!room) return;
-
-		try {
-			setSaving(true);
-			const response = await fetch('/api/trpc/rooms.update', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					id: room.id,
-					...formData,
-				}),
+		if (room) {
+			setFormData({
+				name: room.name,
+				slug: room.slug,
+				description: room.description || '',
+				basePrice: room.basePrice,
+				serviceFeeRate: room.serviceFeeRate ?? 0.12, // Only use default if not in DB
+				stateTaxRate: room.stateTaxRate ?? 0.06, // Only use default if not in DB
+				cityTaxRate: room.cityTaxRate ?? 0.07, // Only use default if not in DB
+				status: room.status || 'active',
+				isActive: room.isActive ?? true,
 			});
+		}
+	}, [room]);
 
-			if (!response.ok) {
-				const errorText = await response.text();
-				console.error('Update room error:', errorText);
-				throw new Error('Failed to update room');
-			}
+	// Handle room query error by redirecting
+	useEffect(() => {
+		if (roomQuery.error) {
+			console.error('Failed to load room:', roomQuery.error);
+			navigate({ to: '/admin/property-management' });
+		}
+	}, [roomQuery.error, navigate]);
 
-			// Reload room data to get updated values
-			await loadRoom();
-
-			// Show success toast
+	// Convert room update to mutation
+	const updateRoomMutation = useMutation({
+		mutationFn: async (roomData: RoomFormData) => {
+			setSaving(true);
+			return await trpcClient.rooms.update.mutate({
+				id: room?.id || '',
+				...roomData,
+			});
+		},
+		onSuccess: () => {
+			roomQuery.refetch(); // Reload room data to get updated values
 			toast.success('Room updated successfully!', {
 				description: `${formData.name} has been updated with the latest settings.`,
 				duration: 4000,
 			});
-		} catch (error) {
-			console.error('Failed to save room:', error);
-
-			// Show error toast
-			toast.error('Failed to save room', {
+		},
+		onError: (error) => {
+			console.error('Update room error:', error);
+			toast.error('Error updating room', {
 				description:
-					error instanceof Error
-						? error.message
-						: 'An unexpected error occurred while saving the room.',
-				duration: 5000,
+					'Please try again or contact support if the problem persists.',
+				duration: 4000,
 			});
-		} finally {
+		},
+		onSettled: () => {
 			setSaving(false);
-		}
+		},
+	});
+
+	// Save room changes
+	const handleSaveRoom = async () => {
+		if (!room) return;
+		updateRoomMutation.mutate(formData);
 	};
 
 	// Auto-generate slug from name
@@ -270,121 +264,40 @@ function EditRoom() {
 		}));
 	};
 
-	// Load pricing rules for this room
-	const loadPricingRules = useCallback(async () => {
-		try {
-			const inputParam = encodeURIComponent(JSON.stringify({ roomId }));
-			const response = await fetch(
-				`/api/trpc/rooms.getPricingRules?input=${inputParam}`,
-				{
-					method: 'GET',
-				},
-			);
+	// Pricing rule mutations
+	const createPricingRuleMutation = useMutation({
+		mutationFn: (rule: CreatePricingRule) =>
+			trpcClient.rooms.createPricingRule.mutate(rule),
+		onSuccess: () => {
+			pricingRulesQuery.refetch();
+		},
+		onError: (error) => {
+			console.error('Failed to create pricing rule:', error);
+		},
+	});
 
-			if (!response.ok) {
-				console.error('Failed to fetch pricing rules');
-				return;
-			}
+	const updatePricingRuleMutation = useMutation({
+		mutationFn: (rule: UpdatePricingRule) =>
+			trpcClient.rooms.updatePricingRule.mutate(rule),
+		onSuccess: () => {
+			pricingRulesQuery.refetch();
+		},
+		onError: (error) => {
+			console.error('Failed to update pricing rule:', error);
+		},
+	});
 
-			const data = (await response.json()) as {
-				result: { data: RoomPricingRule[] };
-			};
-
-			setPricingRules(data.result.data);
-		} catch (error) {
-			console.error('Failed to load pricing rules:', error);
-		}
-	}, [roomId]);
-
-	// Pricing rules management functions
-	const handleCreatePricingRule = async (rule: CreatePricingRule) => {
-		const response = await fetch('/api/trpc/rooms.createPricingRule', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({ json: rule }),
-		});
-
-		const result = (await response.json()) as {
-			error?: {
-				json?: { message: string };
-				message?: string;
-			};
-		};
-
-		// Check for tRPC error format
-		if (result.error) {
-			const errorMessage =
-				result.error.json?.message ||
-				result.error.message ||
-				'Failed to create pricing rule';
-			throw new Error(errorMessage);
-		}
-
-		if (!response.ok) {
-			throw new Error('Failed to create pricing rule');
-		}
-
-		// Reload pricing rules
-		await loadPricingRules();
-	};
-
-	const handleUpdatePricingRule = async (rule: UpdatePricingRule) => {
-		const response = await fetch('/api/trpc/rooms.updatePricingRule', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({ json: rule }),
-		});
-
-		const result = (await response.json()) as {
-			error?: {
-				json?: { message: string };
-				message?: string;
-			};
-		};
-
-		// Check for tRPC error format
-		if (result.error) {
-			const errorMessage =
-				result.error.json?.message ||
-				result.error.message ||
-				'Failed to update pricing rule';
-			throw new Error(errorMessage);
-		}
-
-		if (!response.ok) {
-			throw new Error('Failed to update pricing rule');
-		}
-
-		// Reload pricing rules
-		await loadPricingRules();
-	};
-
-	const handleDeletePricingRule = async (ruleId: string) => {
-		try {
-			const response = await fetch('/api/trpc/rooms.deletePricingRule', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({ id: ruleId }),
-			});
-
-			if (!response.ok) {
-				throw new Error('Failed to delete pricing rule');
-			}
-
-			// Reload pricing rules
-			await loadPricingRules();
-
+	const deletePricingRuleMutation = useMutation({
+		mutationFn: (ruleId: string) =>
+			trpcClient.rooms.deletePricingRule.mutate({ id: ruleId }),
+		onSuccess: () => {
+			pricingRulesQuery.refetch();
 			toast.success('Pricing rule deleted successfully!', {
 				description: 'The pricing rule has been removed.',
 				duration: 4000,
 			});
-		} catch (error) {
+		},
+		onError: (error) => {
 			console.error('Failed to delete pricing rule:', error);
 			toast.error('Failed to delete pricing rule', {
 				description:
@@ -393,147 +306,69 @@ function EditRoom() {
 						: 'An unexpected error occurred.',
 				duration: 5000,
 			});
-		}
+		},
+	});
+
+	// Pricing rules management functions
+	const handleCreatePricingRule = async (rule: CreatePricingRule) => {
+		createPricingRuleMutation.mutate(rule);
+	};
+
+	const handleUpdatePricingRule = async (rule: UpdatePricingRule) => {
+		updatePricingRuleMutation.mutate(rule);
+	};
+
+	const handleDeletePricingRule = async (ruleId: string) => {
+		deletePricingRuleMutation.mutate(ruleId);
 	};
 
 	// Load pricing rules when room is loaded
-	useEffect(() => {
-		if (room) {
-			loadPricingRules();
-		}
-	}, [room, loadPricingRules]);
+	// Blocked periods mutations
+	const createBlockedPeriodMutation = useMutation({
+		mutationFn: (period: CreateBlockedPeriod) =>
+			trpcClient.rooms.createBlockedPeriod.mutate(period),
+		onSuccess: () => {
+			blockedPeriodsQuery.refetch();
+		},
+		onError: (error) => {
+			console.error('Failed to create blocked period:', error);
+		},
+	});
 
-	// Load blocked periods for this room
-	const loadBlockedPeriods = useCallback(async () => {
-		if (!roomId) return;
+	const updateBlockedPeriodMutation = useMutation({
+		mutationFn: (period: UpdateBlockedPeriod) =>
+			trpcClient.rooms.updateBlockedPeriod.mutate(period),
+		onSuccess: () => {
+			blockedPeriodsQuery.refetch();
+		},
+		onError: (error) => {
+			console.error('Failed to update blocked period:', error);
+		},
+	});
 
-		try {
-			setBlockedPeriodsLoading(true);
-			const inputParam = encodeURIComponent(JSON.stringify({ roomId }));
-			const response = await fetch(
-				`/api/trpc/rooms.getBlockedPeriods?input=${inputParam}`,
-				{
-					method: 'GET',
-				},
-			);
-
-			if (!response.ok) {
-				throw new Error('Failed to load blocked periods');
-			}
-
-			const data = (await response.json()) as {
-				result: { data: RoomBlockedPeriod[] };
-			};
-
-			setBlockedPeriods(data.result.data);
-		} catch (error) {
-			console.error('Failed to load blocked periods:', error);
-			toast.error('Failed to load blocked periods', {
-				description:
-					error instanceof Error
-						? error.message
-						: 'An unexpected error occurred.',
-			});
-		} finally {
-			setBlockedPeriodsLoading(false);
-		}
-	}, [roomId]);
+	const deleteBlockedPeriodMutation = useMutation({
+		mutationFn: (periodId: string) =>
+			trpcClient.rooms.deleteBlockedPeriod.mutate({ id: periodId }),
+		onSuccess: () => {
+			blockedPeriodsQuery.refetch();
+		},
+		onError: (error) => {
+			console.error('Failed to delete blocked period:', error);
+		},
+	});
 
 	// Blocked periods management functions
 	const handleCreateBlockedPeriod = async (period: CreateBlockedPeriod) => {
-		const response = await fetch('/api/trpc/rooms.createBlockedPeriod', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify(period),
-		});
-
-		const result = (await response.json()) as {
-			error?: {
-				json?: { message: string };
-				message?: string;
-			};
-		};
-
-		// Check for tRPC error format
-		if (result.error) {
-			const errorMessage =
-				result.error.json?.message ||
-				result.error.message ||
-				'Failed to create blocked period';
-			throw new Error(errorMessage);
-		}
-
-		if (!response.ok) {
-			throw new Error('Failed to create blocked period');
-		}
-
-		// Reload blocked periods
-		await loadBlockedPeriods();
+		createBlockedPeriodMutation.mutate(period);
 	};
 
 	const handleUpdateBlockedPeriod = async (period: UpdateBlockedPeriod) => {
-		const response = await fetch('/api/trpc/rooms.updateBlockedPeriod', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify(period),
-		});
-
-		const result = (await response.json()) as {
-			error?: {
-				json?: { message: string };
-				message?: string;
-			};
-		};
-
-		// Check for tRPC error format
-		if (result.error) {
-			const errorMessage =
-				result.error.json?.message ||
-				result.error.message ||
-				'Failed to update blocked period';
-			throw new Error(errorMessage);
-		}
-
-		if (!response.ok) {
-			throw new Error('Failed to update blocked period');
-		}
-
-		// Reload blocked periods
-		await loadBlockedPeriods();
+		updateBlockedPeriodMutation.mutate(period);
 	};
 
 	const handleDeleteBlockedPeriod = async (periodId: string) => {
-		try {
-			const response = await fetch('/api/trpc/rooms.deleteBlockedPeriod', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({ id: periodId }),
-			});
-
-			if (!response.ok) {
-				throw new Error('Failed to delete blocked period');
-			}
-
-			// Reload blocked periods
-			await loadBlockedPeriods();
-		} catch (error) {
-			console.error('Failed to delete blocked period:', error);
-			throw error;
-		}
+		deleteBlockedPeriodMutation.mutate(periodId);
 	};
-
-	// Load blocked periods when room is loaded
-	useEffect(() => {
-		if (room) {
-			loadBlockedPeriods();
-		}
-	}, [room, loadBlockedPeriods]);
 
 	// Calendar management functions
 	const handleEditCalendar = (provider: CalendarProvider) => {
@@ -551,7 +386,7 @@ function EditRoom() {
 		if (!editingCalendar || !room) return;
 
 		try {
-			const input = JSON.stringify({
+			await trpcClient.rooms.updateIcalUrls.mutate({
 				roomId: room.id,
 				airbnbIcalUrl:
 					editingCalendar.provider === 'airbnb' ? newIcalUrl : undefined,
@@ -559,21 +394,7 @@ function EditRoom() {
 					editingCalendar.provider === 'expedia' ? newIcalUrl : undefined,
 			});
 
-			const response = await fetch(`/api/trpc/rooms.updateIcalUrls`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: input,
-			});
-
-			if (!response.ok) {
-				const errorText = await response.text();
-				console.error('Update iCal URL error:', errorText);
-				throw new Error('Failed to update iCal URL');
-			}
-
-			await loadRoom();
+			await roomQuery.refetch();
 			setEditingCalendar(null);
 			setNewIcalUrl('');
 		} catch (error) {
@@ -581,62 +402,41 @@ function EditRoom() {
 		}
 	};
 
+	// Test iCal URL mutation
+	const testIcalUrlMutation = useMutation({
+		mutationFn: (url: string) => trpcClient.rooms.testIcalUrl.mutate({ url }),
+		onSuccess: (data) => {
+			setTestResult(data || { success: true, error: undefined });
+		},
+		onError: (error) => {
+			setTestResult({
+				success: false,
+				error: error instanceof Error ? error.message : 'Unknown error',
+			});
+		},
+		onSettled: () => {
+			setTestingUrl(null);
+		},
+	});
+
 	const handleTestIcalUrl = async (url: string) => {
 		if (!url) return;
 
 		setTestingUrl(url);
 		setTestResult(null);
-
-		try {
-			const response = await fetch('/api/trpc/rooms.testIcalUrl', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({ url }),
-			});
-
-			if (!response.ok) {
-				const errorText = await response.text();
-				console.error('Test iCal URL error:', errorText);
-				throw new Error('Failed to test iCal URL');
-			}
-
-			const data = (await response.json()) as Record<string, unknown>;
-			const resultData = (data.result as Record<string, unknown>)
-				?.data as TestResult;
-			setTestResult(resultData || (data as TestResult));
-		} catch (error) {
-			setTestResult({
-				success: false,
-				error: error instanceof Error ? error.message : 'Unknown error',
-			});
-		} finally {
-			setTestingUrl(null);
-		}
+		testIcalUrlMutation.mutate(url);
 	};
 
 	const handleSyncCalendar = async (provider: CalendarProvider) => {
 		if (!room) return;
 
 		try {
-			const input = JSON.stringify({ roomId: room.id, platform: provider });
-
-			const response = await fetch(`/api/trpc/rooms.syncCalendar`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: input,
+			await trpcClient.rooms.syncCalendar.mutate({
+				roomId: room.id,
+				platform: provider,
 			});
 
-			if (!response.ok) {
-				const errorText = await response.text();
-				console.error('Sync calendar error:', errorText);
-				throw new Error('Failed to sync calendar');
-			}
-
-			await loadRoom();
+			await roomQuery.refetch();
 		} catch (error) {
 			console.error('Failed to sync calendar:', error);
 		}
@@ -646,27 +446,13 @@ function EditRoom() {
 		if (!room) return;
 
 		try {
-			const input = JSON.stringify({
+			await trpcClient.rooms.updateIcalUrls.mutate({
 				roomId: room.id,
 				airbnbIcalUrl: provider === 'airbnb' ? null : undefined,
 				expediaIcalUrl: provider === 'expedia' ? null : undefined,
 			});
 
-			const response = await fetch(`/api/trpc/rooms.updateIcalUrls`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: input,
-			});
-
-			if (!response.ok) {
-				const errorText = await response.text();
-				console.error('Remove iCal URL error:', errorText);
-				throw new Error('Failed to remove iCal URL');
-			}
-
-			await loadRoom();
+			await roomQuery.refetch();
 		} catch (error) {
 			console.error('Failed to remove iCal URL:', error);
 		}

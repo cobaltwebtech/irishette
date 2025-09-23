@@ -35,6 +35,10 @@ export const auth = () => {
 		session: {
 			expiresIn: 60 * 60 * 24 * 7, // Session expires in 7 days
 			updateAge: 60 * 60 * 24, // Every 24 hours the session expiration is updated
+			cookieCache: {
+				enabled: true,
+				maxAge: 60 * 5, // Cache session data for 5 minutes
+			},
 		},
 		rateLimit: {
 			enabled: true,

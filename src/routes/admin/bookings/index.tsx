@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import {
 	type ColumnFiltersState,
@@ -11,7 +12,7 @@ import {
 	useReactTable,
 } from '@tanstack/react-table';
 import { ArrowLeft, ArrowUpDown, Search } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,15 +36,15 @@ type BookingData = {
 	booking: {
 		id: string;
 		confirmationId: string;
-		status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
-		paymentStatus: 'pending' | 'paid' | 'failed' | 'refunded';
+		status: string;
+		paymentStatus: string;
 		guestName: string;
 		guestEmail: string;
 		checkInDate: string;
 		checkOutDate: string;
 		totalAmount: number;
 		numberOfGuests: number;
-		createdAt: string;
+		createdAt: Date;
 		roomId: string;
 	};
 	room: {
@@ -63,74 +64,29 @@ function AdminBookings() {
 	const [sorting, setSorting] = useState<SortingState>([]);
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 	const [globalFilter, setGlobalFilter] = useState('');
-	const [bookings, setBookings] = useState<BookingData[]>([]);
-	const [isLoading, setIsLoading] = useState(true);
-	const [error, setError] = useState<string | null>(null);
+	const routeContext = Route.useRouteContext();
 
-	// Fetch bookings data
-	useEffect(() => {
-		const fetchBookings = async () => {
-			if (!session?.user || session.user.role !== 'admin') return;
+	// Use tRPC query to fetch admin bookings
+	const {
+		data: bookingsData = [],
+		isLoading,
+		error,
+	} = useQuery({
+		...routeContext.trpc.bookings.adminListBookings.queryOptions({
+			limit: 100,
+			offset: 0,
+		}),
+		enabled: !isPending && !!session?.user && session.user.role === 'admin',
+		retry: false, // Avoid retries during SSR issues
+		staleTime: 5 * 60 * 1000, // 5 minutes
+	});
 
-			try {
-				setIsLoading(true);
-				setError(null);
-
-				console.log('Fetching admin bookings...');
-
-				const response = await fetch('/api/trpc/bookings.adminListBookings', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						limit: 100, // Get all bookings for now
-						offset: 0,
-					}),
-				});
-
-				console.log('Response status:', response.status);
-
-				if (!response.ok) {
-					const errorText = await response.text();
-					console.error('Response error:', errorText);
-					throw new Error('Failed to fetch bookings');
-				}
-
-				const result = (await response.json()) as {
-					result?: {
-						data?: BookingData[];
-					};
-				};
-
-				console.log('Received result:', result);
-
-				const bookingsData = result.result?.data;
-
-				if (!bookingsData) {
-					throw new Error('No booking data found in response');
-				}
-
-				// Filter out pending bookings since they are temporary and payment is not completed
-				const filteredBookings = bookingsData.filter(
-					(booking) => booking.booking.status !== 'pending',
-				);
-
-				setBookings(filteredBookings);
-			} catch (error) {
-				console.error('Failed to fetch bookings:', error);
-				setError(
-					error instanceof Error ? error.message : 'Failed to load bookings',
-				);
-			} finally {
-				setIsLoading(false);
-			}
-		};
-
-		if (session?.user?.role === 'admin') {
-			fetchBookings();
-		} else if (!isPending) {
-			setIsLoading(false);
-		}
-	}, [session?.user, isPending]);
+	// Filter to only show confirmed bookings (exclude pending/incomplete bookings)
+	const bookings = useMemo(() => {
+		return bookingsData.filter(
+			(booking) => booking.booking.status === 'confirmed',
+		);
+	}, [bookingsData]);
 
 	// Create columns using the column helper
 	const columnHelper = createColumnHelper<BookingData>();
@@ -190,11 +146,13 @@ function AdminBookings() {
 				),
 				cell: (info) => (
 					<div>
-						<div>{new Date(info.getValue()).toLocaleDateString()}</div>
+						<div>
+							{new Date(info.getValue() + 'T00:00:00').toLocaleDateString()}
+						</div>
 						<div className="text-sm text-muted-foreground">
 							to{' '}
 							{new Date(
-								info.row.original.booking.checkOutDate,
+								info.row.original.booking.checkOutDate + 'T00:00:00',
 							).toLocaleDateString()}
 						</div>
 					</div>
@@ -268,7 +226,7 @@ function AdminBookings() {
 				),
 				cell: (info) => (
 					<span className="text-sm">
-						{new Date(info.getValue()).toLocaleDateString()}
+						{new Date(info.getValue() + 'T00:00:00').toLocaleDateString()}
 					</span>
 				),
 			}),
@@ -327,7 +285,9 @@ function AdminBookings() {
 			<div className="container mx-auto px-4 py-8">
 				<div className="text-center">
 					<h2 className="text-2xl font-bold mb-4 text-red-600">Error</h2>
-					<p className="text-muted-foreground mb-4">{error}</p>
+					<p className="text-muted-foreground mb-4">
+						{error instanceof Error ? error.message : 'Failed to load bookings'}
+					</p>
 					<button
 						type="button"
 						onClick={() => window.location.reload()}

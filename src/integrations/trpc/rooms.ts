@@ -444,7 +444,7 @@ export const roomsRouter = createTRPCRouter({
 					contentLength: content.length,
 					lines,
 					eventCount,
-					preview: content.substring(0, 300) + '...',
+					preview: `${content.substring(0, 300)}...`,
 					validatedAt: new Date(),
 				};
 			} catch (error) {

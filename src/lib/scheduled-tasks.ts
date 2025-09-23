@@ -158,15 +158,15 @@ export async function scheduledCalendarSync(env: ScheduledEnv) {
 		console.log(`  ❌ Errors: ${summary.totalErrors}`);
 
 		// Store summary in KV for monitoring dashboard (optional)
-		try {
-			const key = `sync_summary:${Date.now()}`;
-			await env.KV_SESSIONS.put(key, JSON.stringify(summary), {
-				expirationTtl: 86400 * 7, // Keep for 7 days
-			});
-			console.log(`📝 Sync summary stored in KV: ${key}`);
-		} catch (kvError) {
-			console.error('Failed to store sync summary in KV:', kvError);
-		}
+		// try {
+		// 	const key = `sync_summary:${Date.now()}`;
+		// 	await env.KV_SESSIONS.put(key, JSON.stringify(summary), {
+		// 		expirationTtl: 86400 * 7, // Keep for 7 days
+		// 	});
+		// 	console.log(`📝 Sync summary stored in KV: ${key}`);
+		// } catch (kvError) {
+		// 	console.error('Failed to store sync summary in KV:', kvError);
+		// }
 
 		return summary;
 	} catch (error) {

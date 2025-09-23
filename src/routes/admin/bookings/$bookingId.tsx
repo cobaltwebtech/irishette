@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import {
 	ArrowLeft,
@@ -13,51 +14,8 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { trpcClient } from '@/integrations/tanstack-query/root-provider';
 import { useSession } from '@/lib/auth-client';
-
-// Interface for detailed booking data (matching the user interface but with admin fields)
-interface AdminBookingDetailData {
-	booking: {
-		id: string;
-		confirmationId: string;
-		userId: string;
-		roomId: string;
-		checkInDate: string;
-		checkOutDate: string;
-		numberOfNights: number;
-		numberOfGuests: number;
-		baseAmount: number;
-		taxAmount: number | null;
-		feesAmount: number | null;
-		discountAmount: number | null;
-		totalAmount: number;
-		status: string;
-		paymentStatus: string;
-		guestName: string;
-		guestEmail: string;
-		guestPhone: string | null;
-		specialRequests: string | null;
-		internalNotes: string | null;
-		stripeCustomerId: string | null;
-		stripeSessionId: string | null;
-		stripePaymentIntentId: string | null;
-		createdAt: Date;
-		updatedAt: Date;
-		confirmedAt: Date | null;
-		cancelledAt: Date | null;
-	};
-	room: {
-		id: string;
-		name: string;
-		slug: string;
-		basePrice: number;
-	};
-	user: {
-		id: string;
-		email: string;
-		name?: string;
-	};
-}
 
 export const Route = createFileRoute('/admin/bookings/$bookingId')({
 	head: () => ({
@@ -75,9 +33,7 @@ function AdminBookingDetailPage() {
 	const bookingId = params.bookingId;
 	const { data: session, isPending } = useSession();
 	const router = useRouter();
-	const [booking, setBooking] = useState<AdminBookingDetailData | null>(null);
-	const [isLoading, setIsLoading] = useState(true);
-	const [error, setError] = useState<string | null>(null);
+	const routeContext = Route.useRouteContext();
 	const [isResendingEmail, setIsResendingEmail] = useState(false);
 
 	// Redirect if not admin
@@ -87,70 +43,24 @@ function AdminBookingDetailPage() {
 		}
 	}, [session, isPending, router]);
 
-	// Fetch booking details (admin version - no user restriction)
-	useEffect(() => {
-		const fetchBookingDetails = async () => {
-			if (!session?.user?.id || session.user.role !== 'admin' || !bookingId)
-				return;
-
-			try {
-				setIsLoading(true);
-				setError(null);
-
-				console.log('Fetching admin booking details for:', {
-					bookingId,
-					adminUserId: session.user.id,
-				});
-
-				// Admin version doesn't restrict by userId
-				const response = await fetch('/api/trpc/bookings.getBooking', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						bookingId: bookingId,
-						// Don't pass userId so admin can view any booking
-					}),
-				});
-
-				console.log('Response status:', response.status);
-
-				if (!response.ok) {
-					const errorText = await response.text();
-					console.error('Response error:', errorText);
-					throw new Error('Failed to fetch booking details');
-				}
-
-				const result = (await response.json()) as {
-					result?: {
-						data?: AdminBookingDetailData;
-					};
-				};
-
-				console.log('Received result:', result);
-
-				const bookingData = result.result?.data;
-
-				if (!bookingData) {
-					throw new Error('Booking not found');
-				}
-
-				setBooking(bookingData);
-			} catch (error) {
-				console.error('Failed to fetch booking details:', error);
-				setError(
-					error instanceof Error
-						? error.message
-						: 'Failed to load booking details',
-				);
-			} finally {
-				setIsLoading(false);
-			}
-		};
-
-		if (session?.user?.role === 'admin') {
-			fetchBookingDetails();
-		}
-	}, [session?.user?.id, session?.user?.role, bookingId]);
+	// Use tRPC query to fetch booking details (admin version)
+	const {
+		data: booking,
+		isLoading,
+		error,
+	} = useQuery({
+		...routeContext.trpc.bookings.getBooking.queryOptions({
+			bookingId: bookingId,
+			// Don't pass userId for admin access - this ensures we get user data
+		}),
+		enabled:
+			!isPending &&
+			!!session?.user?.id &&
+			session.user.role === 'admin' &&
+			!!bookingId,
+		retry: false, // Avoid retries during SSR issues
+		staleTime: 5 * 60 * 1000, // 5 minutes
+	});
 
 	// Handle resending confirmation email (admin can resend for any booking)
 	const handleResendEmail = async () => {
@@ -164,59 +74,16 @@ function AdminBookingDetailPage() {
 				booking.booking.id,
 			);
 
-			// Prepare the email data from existing booking information
-			const emailData = {
-				confirmationId: booking.booking.confirmationId,
-				guestName: booking.booking.guestName,
-				guestEmail: booking.booking.guestEmail,
-				guestPhone: booking.booking.guestPhone || undefined,
-				roomName: booking.room.name,
-				checkInDate: booking.booking.checkInDate,
-				checkOutDate: booking.booking.checkOutDate,
-				numberOfNights: booking.booking.numberOfNights,
-				numberOfGuests: booking.booking.numberOfGuests,
-				specialRequests: booking.booking.specialRequests || undefined,
-				baseAmount: booking.booking.baseAmount,
-				taxAmount: booking.booking.taxAmount || 0,
-				feesAmount: booking.booking.feesAmount || 0,
-				totalAmount: booking.booking.totalAmount,
-				baseUrl: window.location.origin,
-			};
-
-			// Call our API endpoint directly
-			const response = await fetch('/api/send-confirmation-email/', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify(emailData),
+			// Use tRPC endpoint to resend confirmation email
+			const result = await trpcClient.bookings.resendConfirmationEmail.mutate({
+				bookingId: booking.booking.id,
+				// Don't pass userId for admin access
 			});
 
-			if (!response.ok) {
-				let errorMessage = 'Failed to send email';
-				try {
-					const errorData = (await response.json()) as { error?: string };
-					errorMessage = errorData.error || errorMessage;
-				} catch {
-					// If JSON parsing fails, use default message
-				}
-				throw new Error(errorMessage);
-			}
-
-			const result = (await response.json()) as {
-				success: boolean;
-				message?: string;
-				error?: string;
-			};
-
-			if (result.success) {
-				toast.success('Email sent successfully!', {
-					description:
-						result.message || 'Confirmation email has been sent to the guest.',
-				});
-			} else {
-				throw new Error(result.error || 'Failed to send confirmation email');
-			}
+			toast.success('Email sent successfully!', {
+				description:
+					result.message || 'Confirmation email has been sent to the guest.',
+			});
 		} catch (error) {
 			console.error('Failed to resend confirmation email:', error);
 			toast.error('Failed to send email', {
@@ -277,7 +144,11 @@ function AdminBookingDetailPage() {
 							<CardTitle>Error</CardTitle>
 						</CardHeader>
 						<CardContent>
-							<p className="text-red-600 mb-4">{error}</p>
+							<p className="text-red-600 mb-4">
+								{error instanceof Error
+									? error.message
+									: 'Failed to load booking details'}
+							</p>
 							<div className="flex gap-2">
 								<Button
 									variant="outline"
@@ -430,7 +301,11 @@ function AdminBookingDetailPage() {
 										<p className="text-sm font-medium text-muted-foreground">
 											Account Email
 										</p>
-										<p className="font-semibold">{booking.user.email}</p>
+										<p className="font-semibold">
+											{(
+												booking as typeof booking & { user?: { email: string } }
+											).user?.email || 'N/A'}
+										</p>
 									</div>
 									{booking.booking.guestPhone && (
 										<div>
@@ -491,15 +366,14 @@ function AdminBookingDetailPage() {
 											Check-in
 										</p>
 										<p className="font-semibold">
-											{new Date(booking.booking.checkInDate).toLocaleDateString(
-												'en-US',
-												{
-													weekday: 'long',
-													year: 'numeric',
-													month: 'long',
-													day: 'numeric',
-												},
-											)}
+											{new Date(
+												booking.booking.checkInDate + 'T00:00:00',
+											).toLocaleDateString('en-US', {
+												weekday: 'long',
+												year: 'numeric',
+												month: 'long',
+												day: 'numeric',
+											})}
 										</p>
 										<p className="text-sm text-muted-foreground">
 											After 3:00 PM
@@ -511,7 +385,7 @@ function AdminBookingDetailPage() {
 										</p>
 										<p className="font-semibold">
 											{new Date(
-												booking.booking.checkOutDate,
+												booking.booking.checkOutDate + 'T00:00:00',
 											).toLocaleDateString('en-US', {
 												weekday: 'long',
 												year: 'numeric',

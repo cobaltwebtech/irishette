@@ -29,4 +29,4 @@ crons = [
 ]
 
 [vars]
-BETTER_AUTH_URL = "https://www.irishette.com"
+BETTER_AUTH_URL = "https://irishette.cobaltdev.workers.dev"

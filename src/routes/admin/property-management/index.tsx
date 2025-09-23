@@ -1,3 +1,4 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import {
 	type ColumnFiltersState,
@@ -11,7 +12,7 @@ import {
 	useReactTable,
 } from '@tanstack/react-table';
 import { ArrowLeft, ArrowUpDown, Edit, Home, Plus, Search } from 'lucide-react';
-import { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,6 +31,7 @@ import {
 	TableHeader,
 	TableRow,
 } from '@/components/ui/table';
+import { trpc, trpcClient } from '@/integrations/tanstack-query/root-provider';
 import { useSession } from '@/lib/auth-client';
 
 export const Route = createFileRoute('/admin/property-management/')({
@@ -75,13 +77,11 @@ type RoomFormData = {
 type EditMode = 'none' | 'add';
 
 function PropertyManagement() {
-	const { data: session } = useSession();
+	const { data: session, isPending } = useSession();
 	const roomNameId = useId();
 	const roomSlugId = useId();
 	const roomDescriptionId = useId();
 	const basePriceId = useId();
-	const [rooms, setRooms] = useState<Room[]>([]);
-	const [loading, setLoading] = useState(true);
 	const [editMode, setEditMode] = useState<EditMode>('none');
 	const [sorting, setSorting] = useState<SortingState>([]);
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -94,37 +94,56 @@ function PropertyManagement() {
 		status: 'active',
 		isActive: true,
 	});
+	const queryClient = useQueryClient();
 
-	// Load rooms function
-	const loadRooms = useCallback(async () => {
-		try {
-			setLoading(true);
-			const inputParam = encodeURIComponent(JSON.stringify({ limit: 100 }));
-			const response = await fetch(`/api/trpc/rooms.list?input=${inputParam}`, {
-				method: 'GET',
-			});
+	// Use tRPC query to fetch rooms - using direct trpc import
+	const {
+		data: roomsData,
+		isLoading: loading,
+		error,
+		isError,
+		status,
+		isSuccess,
+	} = useQuery(
+		trpc.rooms.list.queryOptions(
+			{
+				limit: 100,
+			},
+			{
+				enabled: !isPending && !!session?.user && session.user.role === 'admin',
+				retry: false, // Avoid retries during SSR issues
+				staleTime: 5 * 60 * 1000, // 5 minutes
+			},
+		),
+	);
 
-			if (!response.ok) {
-				const errorText = await response.text();
-				console.error('API Error:', errorText);
-				throw new Error('Failed to fetch rooms');
-			}
+	console.log('Property Management - useQuery state:', {
+		roomsData,
+		loading,
+		error,
+		isError,
+		isSuccess,
+		status,
+		hasSession: !!session?.user,
+		sessionData: session,
+	});
 
-			const data = (await response.json()) as {
-				result: { data: { rooms: Room[] } };
-			};
-			setRooms(data.result.data.rooms || []);
-		} catch (error) {
-			console.error('Failed to load rooms:', error);
-		} finally {
-			setLoading(false);
-		}
-	}, []);
+	const rooms = roomsData?.rooms || [];
 
-	// Load rooms on component mount
-	useEffect(() => {
-		loadRooms();
-	}, [loadRooms]);
+	// Convert room creation to mutation
+	const createRoomMutation = useMutation({
+		mutationFn: async (formData: RoomFormData) => {
+			const result = await trpcClient.rooms.create.mutate(formData);
+			return result;
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ['trpc', 'rooms', 'list'] });
+			setEditMode('none');
+		},
+		onError: (error: Error) => {
+			console.error('Failed to add room:', error);
+		},
+	});
 
 	// Room CRUD operations
 	const handleAddRoom = () => {
@@ -140,27 +159,7 @@ function PropertyManagement() {
 	};
 
 	const handleSaveRoom = async () => {
-		try {
-			// Create new room
-			const response = await fetch('/api/trpc/rooms.create', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify(formData),
-			});
-
-			if (!response.ok) {
-				const errorText = await response.text();
-				console.error('Create room error:', errorText);
-				throw new Error('Failed to add room');
-			}
-
-			await loadRooms();
-			setEditMode('none');
-		} catch (error) {
-			console.error('Failed to add room:', error);
-		}
+		createRoomMutation.mutate(formData);
 	};
 
 	const handleCancelEdit = () => {

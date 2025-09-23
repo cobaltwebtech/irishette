@@ -7,8 +7,34 @@ export const ServerRoute = createServerFileRoute('/api/ical/$').methods({
 		try {
 			// Extract roomId from URL pathname
 			const url = new URL(request.url);
-			const pathParts = url.pathname.split('/');
-			let roomId = pathParts[pathParts.length - 1]; // Get the last part of the path
+
+			// Type guard for pathname
+			if (!url.pathname || typeof url.pathname !== 'string') {
+				console.error(
+					'Invalid pathname:',
+					url.pathname,
+					'from URL:',
+					request.url,
+				);
+				return new Response('Invalid URL pathname', {
+					status: 400,
+					headers: { 'Content-Type': 'text/plain' },
+				});
+			}
+
+			// Defensive: ensure pathname is a string before splitting
+			const pathname =
+				typeof url.pathname === 'string'
+					? url.pathname
+					: String(url.pathname ?? '');
+			console.debug?.(
+				'DEBUG /api/ical pathname type:',
+				typeof url.pathname,
+				'value:',
+				pathname,
+			);
+			const pathParts = pathname.split('/');
+			let roomId = String(pathParts[pathParts.length - 1] ?? '').trim(); // Get the last part of the path
 
 			// Remove .ics extension if present
 			if (roomId.endsWith('.ics')) {

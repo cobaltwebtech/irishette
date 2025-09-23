@@ -1,10 +1,12 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import { X } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
+import { trpc, trpcClient } from '@/integrations/tanstack-query/root-provider';
 
 interface Room {
 	id: string;
@@ -19,20 +21,13 @@ interface CalendarDay {
 	available: boolean;
 	blocked: boolean;
 	price: number;
-	source?: string;
+	source?: string | null;
 	booking?: {
 		id: string;
 		confirmationId: string;
 		checkInDate: string;
 		checkOutDate: string;
-	};
-}
-
-interface AvailabilityData {
-	room?: Room;
-	calendar: CalendarDay[];
-	loading: boolean;
-	error?: string;
+	} | null;
 }
 
 interface RoomAvailabilityCalendarProps {
@@ -56,159 +51,90 @@ export default function RoomAvailabilityCalendar({
 	minNights = 1,
 	maxNights = 30,
 }: RoomAvailabilityCalendarProps) {
-	const [availability, setAvailability] = useState<AvailabilityData>({
-		calendar: [],
-		loading: true,
-	});
-
 	const [dateRange, setDateRange] = useState<DateRange | undefined>(
 		selectedDateRange,
 	);
 
-	// Fetch room availability data
-	const fetchAvailability = useCallback(async () => {
-		try {
-			setAvailability((prev) => ({ ...prev, loading: true, error: undefined }));
+	// Calculate date range for the API call (3 months from today)
+	const dateParams = useMemo(() => {
+		const today = new Date();
+		const startDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+		const endDate = new Date();
+		endDate.setMonth(today.getMonth() + 3);
+		const endDateStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
 
-			// Calculate date range for the API call (3 months from today)
-			const today = new Date();
-			const startDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-			const endDate = new Date();
-			endDate.setMonth(today.getMonth() + 3);
-			const endDateStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
-
-			// Call the availability API
-			const response = await fetch(
-				`/api/trpc/availability.getBySlug?input=${encodeURIComponent(
-					JSON.stringify({
-						roomSlug,
-						startDate,
-						endDate: endDateStr,
-					}),
-				)}`,
-			);
-
-			if (!response.ok) {
-				throw new Error('Failed to fetch availability data');
-			}
-
-			const data = (await response.json()) as {
-				result: {
-					data: {
-						room: Room;
-						calendar: CalendarDay[];
-					};
-				};
-			};
-
-			const { room, calendar } = data.result.data;
-
-			setAvailability({
-				room,
-				calendar,
-				loading: false,
-			});
-		} catch (error) {
-			setAvailability((prev) => ({
-				...prev,
-				loading: false,
-				error:
-					error instanceof Error
-						? error.message
-						: 'Failed to load availability',
-			}));
-		}
+		return {
+			roomSlug,
+			startDate,
+			endDate: endDateStr,
+		};
 	}, [roomSlug]);
 
-	useEffect(() => {
-		fetchAvailability();
-	}, [fetchAvailability]);
-
-	// Calculate total price and nights for the selected range
-	const calculateStayDetails = useCallback(
-		async (range: DateRange | undefined) => {
-			if (!range?.from || !range?.to || !availability.room) {
-				return { totalPrice: 0, nights: 0 };
-			}
-
-			const start = new Date(range.from);
-			const end = new Date(range.to);
-			const nights = Math.ceil(
-				(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24),
-			);
-
-			try {
-				// Create date strings without timezone conversion
-				const checkInDate = `${range.from.getFullYear()}-${String(range.from.getMonth() + 1).padStart(2, '0')}-${String(range.from.getDate()).padStart(2, '0')}`;
-				const checkOutDate = `${range.to.getFullYear()}-${String(range.to.getMonth() + 1).padStart(2, '0')}-${String(range.to.getDate()).padStart(2, '0')}`;
-
-				// Use the new tRPC endpoint to calculate pricing with dynamic rules
-				const response = await fetch(
-					`/api/trpc/rooms.calculatePricing?input=${encodeURIComponent(
-						JSON.stringify({
-							roomId: availability.room.id,
-							checkInDate,
-							checkOutDate,
-							guestCount: 2, // Default guest count
-						}),
-					)}`,
-				);
-
-				if (!response.ok) {
-					throw new Error('Failed to calculate pricing');
-				}
-
-				const data = (await response.json()) as {
-					result: {
-						data: {
-							baseAmount: number;
-							numberOfNights: number;
-							appliedRules: Array<{
-								id: string;
-								name: string;
-								ruleType: string;
-								value: number;
-								appliedAmount: number;
-							}>;
-							roomBasePrice: number;
-						};
-					};
-				};
-
-				const pricing = data.result.data;
-
-				// For the room selection page, we return the baseAmount which includes
-				// the base price plus any applied pricing rules
-				return {
-					totalPrice: pricing.baseAmount,
-					nights: pricing.numberOfNights,
-				};
-			} catch (error) {
-				console.warn(
-					'Failed to calculate dynamic pricing, falling back to base price:',
-					error,
-				);
-
-				// Fallback to basic calculation if API fails
-				let totalPrice = 0;
-				const current = new Date(start);
-
-				while (current < end) {
-					const dateStr = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
-					const dayData = availability.calendar.find(
-						(day) => day.date === dateStr,
-					);
-					totalPrice += dayData?.price || availability.room?.basePrice || 0;
-					current.setDate(current.getDate() + 1);
-				}
-
-				return { totalPrice, nights };
-			}
-		},
-		[availability.calendar, availability.room],
+	// Fetch availability data using tRPC
+	const availabilityQuery = useQuery(
+		trpc.availability.getBySlug.queryOptions(dateParams),
 	);
 
+	// Calculate total price and nights for the selected range
+	const calculateStayDetails = async (
+		range: DateRange | undefined,
+		room: Room | undefined,
+		calendar: CalendarDay[],
+	) => {
+		if (!range?.from || !range?.to || !room) {
+			return { totalPrice: 0, nights: 0 };
+		}
+
+		const start = new Date(range.from);
+		const end = new Date(range.to);
+		const nights = Math.ceil(
+			(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24),
+		);
+
+		try {
+			// Create date strings without timezone conversion
+			const checkInDate = `${range.from.getFullYear()}-${String(range.from.getMonth() + 1).padStart(2, '0')}-${String(range.from.getDate()).padStart(2, '0')}`;
+			const checkOutDate = `${range.to.getFullYear()}-${String(range.to.getMonth() + 1).padStart(2, '0')}-${String(range.to.getDate()).padStart(2, '0')}`;
+
+			// Use tRPC to calculate pricing with dynamic rules
+			const pricing = await trpcClient.rooms.calculatePricing.query({
+				roomId: room.id,
+				checkInDate,
+				checkOutDate,
+				guestCount: 2, // Default guest count
+			});
+
+			// For the room selection page, we return the baseAmount which includes
+			// the base price plus any applied pricing rules
+			return {
+				totalPrice: pricing.baseAmount,
+				nights: pricing.numberOfNights,
+			};
+		} catch (error) {
+			console.warn(
+				'Failed to calculate dynamic pricing, falling back to base price:',
+				error,
+			);
+
+			// Fallback to basic calculation if API fails
+			let totalPrice = 0;
+			const current = new Date(start);
+
+			while (current < end) {
+				const dateStr = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
+				const dayData = calendar.find((day) => day.date === dateStr);
+				totalPrice += dayData?.price || room?.basePrice || 0;
+				current.setDate(current.getDate() + 1);
+			}
+
+			return { totalPrice, nights };
+		}
+	};
+
 	const handleDateRangeSelect = async (range: DateRange | undefined) => {
+		const availability = availabilityQuery.data;
+		if (!availability) return;
+
 		// Validate the range doesn't include any blocked dates
 		if (range?.from && range?.to) {
 			const start = new Date(range.from);
@@ -239,42 +165,61 @@ export default function RoomAvailabilityCalendar({
 		}
 
 		setDateRange(range);
-		const { totalPrice, nights } = await calculateStayDetails(range);
+		const { totalPrice, nights } = await calculateStayDetails(
+			range,
+			availability.room,
+			availability.calendar,
+		);
 		onDateRangeSelect?.(range, totalPrice, nights);
 	};
 
-	// Convert calendar data to Date objects for the calendar component
-	// Use local timezone to avoid date shifting issues
-	const createLocalDate = (dateString: string) => {
-		const [year, month, day] = dateString.split('-').map(Number);
-		return new Date(year, month - 1, day); // month is 0-indexed in JavaScript Date
-	};
+	// Calculate derived data from query results
+	const { availableDates, checkoutOnlyDates, unavailableDates } =
+		useMemo(() => {
+			if (!availabilityQuery.data?.calendar) {
+				return {
+					availableDates: [],
+					checkoutOnlyDates: [],
+					unavailableDates: [],
+				};
+			}
 
-	// Available dates
-	const availableDates = availability.calendar
-		.filter((day) => day.available && !day.blocked)
-		.map((day) => createLocalDate(day.date));
+			const calendar = availabilityQuery.data.calendar;
 
-	// External blocked dates that can be used for checkout only (from Airbnb, Expedia, etc.)
-	const checkoutOnlyDates = availability.calendar
-		.filter(
-			(day) =>
-				(!day.available || day.blocked) &&
-				(day.source === 'airbnb' || day.source === 'expedia'),
-		)
-		.map((day) => createLocalDate(day.date));
+			// Helper function to create local dates
+			const createDate = (dateString: string) => {
+				const [year, month, day] = dateString.split('-').map(Number);
+				return new Date(year, month - 1, day); // month is 0-indexed in JavaScript Date
+			};
 
-	// All unavailable dates (combines bookings and blocked periods)
-	const unavailableDates = availability.calendar
-		.filter(
-			(day) =>
-				(!day.available || day.blocked) &&
-				day.source !== 'airbnb' &&
-				day.source !== 'expedia',
-		)
-		.map((day) => createLocalDate(day.date));
+			return {
+				// Available dates
+				availableDates: calendar
+					.filter((day: CalendarDay) => day.available && !day.blocked)
+					.map((day: CalendarDay) => createDate(day.date)),
 
-	if (availability.loading) {
+				// External blocked dates that can be used for checkout only (from Airbnb, Expedia, etc.)
+				checkoutOnlyDates: calendar
+					.filter(
+						(day: CalendarDay) =>
+							(!day.available || day.blocked) &&
+							(day.source === 'airbnb' || day.source === 'expedia'),
+					)
+					.map((day: CalendarDay) => createDate(day.date)),
+
+				// All unavailable dates (combines bookings and blocked periods)
+				unavailableDates: calendar
+					.filter(
+						(day: CalendarDay) =>
+							(!day.available || day.blocked) &&
+							day.source !== 'airbnb' &&
+							day.source !== 'expedia',
+					)
+					.map((day: CalendarDay) => createDate(day.date)),
+			};
+		}, [availabilityQuery.data?.calendar]);
+
+	if (availabilityQuery.isPending) {
 		return (
 			<div className={`${className} p-8 text-center`}>
 				<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
@@ -283,23 +228,23 @@ export default function RoomAvailabilityCalendar({
 		);
 	}
 
-	if (availability.error) {
+	if (availabilityQuery.isError) {
 		return (
 			<div className={`${className} p-8 text-center`}>
 				<p className="text-destructive mb-4">Error loading calendar</p>
-				<p className="text-sm text-muted-foreground">{availability.error}</p>
+				<p className="text-sm text-muted-foreground">
+					{availabilityQuery.error?.message || 'Failed to load availability'}
+				</p>
 				<button
 					type="button"
-					onClick={fetchAvailability}
+					onClick={() => availabilityQuery.refetch()}
 					className="text-primary hover:text-primary/80 underline"
 				>
 					Try again
 				</button>
 			</div>
 		);
-	}
-
-	// Custom disabled function that allows checkout on blocked dates
+	} // Custom disabled function that allows checkout on blocked dates
 	const getDisabledDates = (date: Date, selectedRange?: DateRange) => {
 		// Always disable past dates
 		const today = new Date();
@@ -309,7 +254,9 @@ export default function RoomAvailabilityCalendar({
 		}
 
 		const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-		const dayData = availability.calendar.find((day) => day.date === dateStr);
+		const dayData = availabilityQuery.data?.calendar.find(
+			(day: CalendarDay) => day.date === dateStr,
+		);
 
 		// If no data for this date, assume available
 		if (!dayData) return false;

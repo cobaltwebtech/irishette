@@ -1,55 +1,57 @@
 import { QueryClient } from '@tanstack/react-query';
-import { createTRPCClient, httpBatchStreamLink } from '@trpc/client';
+import { createTRPCClient, httpBatchLink } from '@trpc/client';
 import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import superjson from 'superjson';
-import { TRPCProvider } from '@/integrations/trpc/react';
 import type { TRPCRouter } from '@/integrations/trpc/router';
 
 function getUrl() {
 	const base = (() => {
 		if (typeof window !== 'undefined') return '';
-		return `http://localhost:${process.env.PORT ?? 3000}`;
+		// In Cloudflare Workers, don't hardcode localhost port
+		// TanStack Start will handle the base URL correctly
+		return '';
 	})();
 	return `${base}/api/trpc`;
 }
 
 export const trpcClient = createTRPCClient<TRPCRouter>({
 	links: [
-		httpBatchStreamLink({
-			transformer: superjson,
+		httpBatchLink({
 			url: getUrl(),
+			transformer: superjson,
 		}),
 	],
 });
 
-export function getContext() {
-	const queryClient = new QueryClient({
-		defaultOptions: {
-			dehydrate: { serializeData: superjson.serialize },
-			hydrate: { deserializeData: superjson.deserialize },
+// Create singleton queryClient and trpc for direct import pattern
+export const queryClient = new QueryClient({
+	defaultOptions: {
+		queries: {
+			retry: 1,
+			refetchOnWindowFocus: false,
 		},
-	});
+	},
+});
 
-	const serverHelpers = createTRPCOptionsProxy({
-		client: trpcClient,
-		queryClient: queryClient,
-	});
+export const trpc = createTRPCOptionsProxy<TRPCRouter>({
+	client: trpcClient,
+	queryClient,
+});
+
+export function getContext() {
+	// Return the same singleton instances to ensure consistency
 	return {
 		queryClient,
-		trpc: serverHelpers,
+		trpc,
 	};
 }
 
 export function Provider({
 	children,
-	queryClient,
+	queryClient: _queryClient,
 }: {
 	children: React.ReactNode;
 	queryClient: QueryClient;
 }) {
-	return (
-		<TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
-			{children}
-		</TRPCProvider>
-	);
+	return <>{children}</>;
 }

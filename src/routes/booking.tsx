@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { trpcClient } from '@/integrations/tanstack-query/root-provider';
 import { signIn, updateUser, useSession } from '@/lib/auth-client';
 import { type BookingStep, useBookingStore } from '@/stores';
 
@@ -66,78 +67,12 @@ function BookingFlow() {
 
 			try {
 				console.log('Calculating precise pricing for booking summary...');
-				const response = await fetch('/api/trpc/bookings.calculateBooking', {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify({
-						roomId: booking.roomId,
-						checkInDate: booking.checkInDate,
-						checkOutDate: booking.checkOutDate,
-						guestCount: booking.guestCount || 1,
-					}),
+				const pricingData = await trpcClient.bookings.calculateBooking.mutate({
+					roomId: booking.roomId,
+					checkInDate: booking.checkInDate,
+					checkOutDate: booking.checkOutDate,
+					guestCount: booking.guestCount || 1,
 				});
-
-				if (!response.ok) {
-					console.error(
-						'Failed to calculate precise pricing:',
-						response.status,
-					);
-					return;
-				}
-
-				const responseData = (await response.json()) as {
-					result?: {
-						data?: {
-							baseAmount: number;
-							feesAmount: number;
-							taxAmount: number;
-							totalAmount: number;
-							numberOfNights: number;
-							appliedRules?: Array<{
-								id: string;
-								name: string;
-								ruleType: string;
-								value: number;
-								appliedAmount: number;
-							}>;
-							taxBreakdown?: {
-								stateTaxRate: number;
-								cityTaxRate: number;
-								stateTaxAmount: number;
-								cityTaxAmount: number;
-								totalTaxAmount: number;
-								taxableAmount: number;
-							};
-						};
-					};
-					// Legacy format support
-					baseAmount?: number;
-					feesAmount?: number;
-					taxAmount?: number;
-					totalAmount?: number;
-					numberOfNights?: number;
-					appliedRules?: Array<{
-						id: string;
-						name: string;
-						ruleType: string;
-						value: number;
-						appliedAmount: number;
-					}>;
-					taxBreakdown?: {
-						stateTaxRate: number;
-						cityTaxRate: number;
-						stateTaxAmount: number;
-						cityTaxAmount: number;
-						totalTaxAmount: number;
-						taxableAmount: number;
-					};
-				};
-				console.log('Raw response data:', responseData);
-
-				// Handle TRPC response format which might be nested under result.data
-				const pricingData = responseData.result?.data || responseData;
 
 				console.log('Extracted pricing data:', pricingData);
 
@@ -562,6 +497,10 @@ function BookingDetailsStep() {
 
 		// Calculate real pricing with fees and taxes before proceeding to payment
 		try {
+			if (!booking.roomId || !booking.checkInDate || !booking.checkOutDate) {
+				throw new Error('Missing required booking information');
+			}
+
 			console.log('Calculating precise pricing with fees and taxes...');
 			console.log('Request data:', {
 				roomId: booking.roomId,
@@ -571,81 +510,16 @@ function BookingDetailsStep() {
 			});
 
 			// Always calculate precise pricing using PaymentService, don't use estimated pricing
-			const response = await fetch('/api/trpc/bookings.calculateBooking', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					roomId: booking.roomId,
-					checkInDate: booking.checkInDate,
-					checkOutDate: booking.checkOutDate,
-					guestCount: numberOfGuests,
-				}),
+			const pricingData = await trpcClient.bookings.calculateBooking.mutate({
+				roomId: booking.roomId,
+				checkInDate: booking.checkInDate,
+				checkOutDate: booking.checkOutDate,
+				guestCount: numberOfGuests,
 			});
 
-			console.log('Response status:', response.status);
-
-			if (!response.ok) {
-				const errorText = await response.text();
-				console.error('API Error:', errorText);
-				throw new Error(
-					`Failed to calculate pricing: ${response.status} ${errorText}`,
-				);
-			}
-
-			const responseData = (await response.json()) as {
-				result?: {
-					data?: {
-						baseAmount: number;
-						feesAmount: number;
-						taxAmount: number;
-						totalAmount: number;
-						numberOfNights: number;
-						appliedRules?: Array<{
-							id: string;
-							name: string;
-							ruleType: string;
-							value: number;
-							appliedAmount: number;
-						}>;
-						taxBreakdown?: {
-							stateTaxRate: number;
-							cityTaxRate: number;
-							stateTaxAmount: number;
-							cityTaxAmount: number;
-							totalTaxAmount: number;
-							taxableAmount: number;
-						};
-					};
-				};
-				baseAmount?: number;
-				feesAmount?: number;
-				taxAmount?: number;
-				totalAmount?: number;
-				numberOfNights?: number;
-				appliedRules?: Array<{
-					id: string;
-					name: string;
-					ruleType: string;
-					value: number;
-					appliedAmount: number;
-				}>;
-				taxBreakdown?: {
-					stateTaxRate: number;
-					cityTaxRate: number;
-					stateTaxAmount: number;
-					cityTaxAmount: number;
-					totalTaxAmount: number;
-					taxableAmount: number;
-				};
-			};
-
-			console.log('Raw response data (handleContinue):', responseData);
+			console.log('Raw response data (handleContinue):', pricingData);
 
 			// Handle TRPC response format which might be nested under result.data
-			const pricingData = responseData.result?.data || responseData;
-
 			console.log('Extracted pricing data (handleContinue):', pricingData);
 
 			// Validate that we have the expected data structure
@@ -746,39 +620,17 @@ function BookingDetailsStep() {
 				userId: session.user.id,
 			};
 
-			// Step 1: Create booking via TRPC
+			// Step 1: Create booking via tRPC
 			console.log('Creating booking...', bookingData);
-			const createBookingResponse = await fetch(
-				'/api/trpc/bookings.createBooking',
-				{
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify(bookingData),
-				},
-			);
-
-			if (!createBookingResponse.ok) {
-				const errorData = await createBookingResponse.text();
-				throw new Error(`Failed to create booking: ${errorData}`);
-			}
-
-			const createBookingResult = (await createBookingResponse.json()) as {
-				result?: {
-					data?: {
-						bookingId?: string;
-						success?: boolean;
-					};
-				};
-			};
+			const createBookingResult =
+				await trpcClient.bookings.createBooking.mutate(bookingData);
 			console.log('Booking created:', createBookingResult);
 
-			if (!createBookingResult.result?.data?.bookingId) {
+			if (!createBookingResult?.bookingId) {
 				throw new Error('No booking ID returned from server');
 			}
 
-			const bookingId = createBookingResult.result.data.bookingId;
+			const bookingId = createBookingResult.bookingId;
 			booking.actions.setBookingId(bookingId);
 
 			// Step 2: Create Stripe checkout session
@@ -790,39 +642,17 @@ function BookingDetailsStep() {
 				cancelUrl: `${window.location.origin}/booking?step=details`,
 			};
 
-			const checkoutResponse = await fetch(
-				'/api/trpc/bookings.createCheckoutSession',
-				{
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify(checkoutData),
-				},
-			);
-
-			if (!checkoutResponse.ok) {
-				const errorData = await checkoutResponse.text();
-				throw new Error(`Failed to create checkout session: ${errorData}`);
-			}
-
-			const checkoutResult = (await checkoutResponse.json()) as {
-				result?: {
-					data?: {
-						sessionId?: string;
-						checkoutUrl?: string;
-					};
-				};
-			};
+			const checkoutResult =
+				await trpcClient.bookings.createCheckoutSession.mutate(checkoutData);
 			console.log('Checkout session created:', checkoutResult);
 
 			// Step 3: Redirect to Stripe checkout
-			if (checkoutResult.result?.data?.checkoutUrl) {
+			if (checkoutResult?.checkoutUrl) {
 				console.log(
 					'Redirecting to Stripe checkout:',
-					checkoutResult.result.data.checkoutUrl,
+					checkoutResult.checkoutUrl,
 				);
-				window.location.href = checkoutResult.result.data.checkoutUrl;
+				window.location.href = checkoutResult.checkoutUrl;
 			} else {
 				throw new Error('No checkout URL returned from server');
 			}
@@ -1031,29 +861,12 @@ function ConfirmationStep() {
 			}
 
 			try {
-				const response = await fetch('/api/trpc/bookings.getBooking', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						bookingId: booking.bookingId,
-					}),
+				const result = await trpcClient.bookings.getBooking.query({
+					bookingId: booking.bookingId,
 				});
 
-				if (response.ok) {
-					const result = (await response.json()) as {
-						result?: {
-							data?: {
-								booking?: {
-									confirmationId?: string;
-								};
-							};
-						};
-					};
-					const bookingData = result.result?.data?.booking;
-
-					if (bookingData?.confirmationId) {
-						setConfirmationId(bookingData.confirmationId);
-					}
+				if (result?.booking?.confirmationId) {
+					setConfirmationId(result.booking.confirmationId);
 				}
 			} catch (error) {
 				console.error('Failed to fetch booking details:', error);
