@@ -10,8 +10,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "irishette-prod",
-      "database_id": "04561426-7df1-4896-83a1-de154516023e",
+      "database_name": "irishette-dev",
+      "database_id": "7a52bbfc-592e-4792-990e-6a5e51ca8cbd",
       "migrations_dir": "./drizzle"
     }
   ],
