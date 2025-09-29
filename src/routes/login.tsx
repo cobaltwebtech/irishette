@@ -10,7 +10,7 @@ import {
 	CardTitle,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { client, useSession } from '@/lib/auth-client';
+import { authClient, useSession } from '@/lib/auth-client';
 
 export const Route = createFileRoute('/login')({
 	head: () => ({
@@ -46,7 +46,7 @@ function LoginPage() {
 		setError('');
 
 		try {
-			await client.signIn.magicLink({
+			await authClient.signIn.magicLink({
 				email,
 				callbackURL: '/account',
 			});

@@ -2,8 +2,8 @@ import { stripeClient } from '@better-auth/stripe/client';
 import { adminClient, magicLinkClient } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';
 
-export const client = createAuthClient({
-	baseURL: import.meta.env.BETTER_AUTH_URL,
+export const authClient = createAuthClient({
+	baseURL: import.meta.env.VITE_BETTER_AUTH_URL,
 	plugins: [magicLinkClient(), adminClient(), stripeClient()],
 	fetchOptions: {
 		onRequest(context) {
@@ -15,6 +15,11 @@ export const client = createAuthClient({
 		},
 	},
 });
+console.log('Auth Client Base URL:', import.meta.env.VITE_BETTER_AUTH_URL);
+console.log(
+	'All VITE env vars:',
+	Object.keys(import.meta.env).filter((k) => k.startsWith('VITE_')),
+);
 
 export const {
 	signIn,
@@ -29,4 +34,4 @@ export const {
 	forgetPassword,
 	sendVerificationEmail,
 	changeEmail,
-} = client;
+} = authClient;

@@ -1,29 +1,42 @@
-import { createServerFileRoute } from '@tanstack/react-start/server';
+import { env } from 'cloudflare:workers';
+import { createFileRoute } from '@tanstack/react-router';
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import type { TRPCContext } from '@/integrations/trpc/init';
 import { trpcRouter } from '@/integrations/trpc/router';
-import { getBindings } from '@/utils/bindings';
 
 // Server route for tRPC API
-export const ServerRoute = createServerFileRoute('/api/trpc/$').methods({
-	GET: ({ request }) => {
-		return handleTRPCRequest(request);
-	},
-	POST: ({ request }) => {
-		return handleTRPCRequest(request);
+export const Route = createFileRoute('/api/trpc/$')({
+	server: {
+		handlers: {
+			GET: ({ request }) => {
+				return handleTRPCRequest(request);
+			},
+			POST: ({ request }) => {
+				return handleTRPCRequest(request);
+			},
+		},
 	},
 });
 
 async function handleTRPCRequest(request: Request): Promise<Response> {
-	console.log('Using fetchRequestHandler - NEW VERSION');
+	console.log('Using fetchRequestHandler - UPDATED VERSION');
 
-	// Get the Cloudflare bindings
-	const bindings = getBindings();
+	console.log('Bindings initialized:', {
+		hasDB: !!env.DB && typeof env.DB === 'object',
+		hasKV: !!env.KV_SESSIONS && typeof env.KV_SESSIONS === 'object',
+		authUrl: env.BETTER_AUTH_URL,
+	});
 
 	// Create tRPC context
 	const context: TRPCContext = {
-		db: bindings.DB,
-		kv: bindings.KV_SESSIONS,
+		db: env.DB,
+		kv: env.KV_SESSIONS,
+		env: {
+			STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY,
+			STRIPE_TRPC_WEBHOOK_SECRET: env.STRIPE_TRPC_WEBHOOK_SECRET,
+			BETTER_AUTH_URL: env.BETTER_AUTH_URL,
+			RESEND_API_KEY: env.RESEND_API_KEY,
+		},
 	};
 
 	return fetchRequestHandler({

@@ -31,7 +31,7 @@ import {
 	TableHeader,
 	TableRow,
 } from '@/components/ui/table';
-import { client, useSession } from '@/lib/auth-client';
+import { useSession } from '@/lib/auth-client';
 
 // Interface for booking data returned from tRPC
 interface BookingData {
@@ -232,15 +232,6 @@ function AccountPage() {
 		},
 	});
 
-	const handleSignOut = async () => {
-		try {
-			await client.signOut();
-			router.navigate({ to: '/' });
-		} catch (error) {
-			console.error('Sign out error:', error);
-		}
-	};
-
 	if (isPending) {
 		return (
 			<div className="min-h-screen bg-background flex items-center justify-center">
@@ -271,10 +262,6 @@ function AccountPage() {
 									Loading your bookings...
 								</p>
 							</div>
-							<Button variant="outline" onClick={handleSignOut}>
-								<LogOut className="w-4 h-4 mr-2" />
-								Sign Out
-							</Button>
 						</div>
 					</div>
 				</div>
@@ -305,10 +292,6 @@ function AccountPage() {
 									Error loading your bookings
 								</p>
 							</div>
-							<Button variant="outline" onClick={handleSignOut}>
-								<LogOut className="w-4 h-4 mr-2" />
-								Sign Out
-							</Button>
 						</div>
 					</div>
 				</div>
@@ -338,10 +321,6 @@ function AccountPage() {
 								Manage your bookings and account settings
 							</p>
 						</div>
-						<Button variant="outline" onClick={handleSignOut}>
-							<LogOut className="w-4 h-4 mr-2" />
-							Sign Out
-						</Button>
 					</div>
 				</div>
 			</div>

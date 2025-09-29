@@ -1,4 +1,4 @@
-import { QueryClient } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
 import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import superjson from 'superjson';
@@ -23,12 +23,16 @@ export const trpcClient = createTRPCClient<TRPCRouter>({
 	],
 });
 
-// Create singleton queryClient and trpc for direct import pattern
+// Create singleton queryClient for the router
 export const queryClient = new QueryClient({
 	defaultOptions: {
 		queries: {
 			retry: 1,
 			refetchOnWindowFocus: false,
+			staleTime: 1000 * 60 * 5, // 5 minutes
+		},
+		mutations: {
+			retry: 1,
 		},
 	},
 });
@@ -39,7 +43,6 @@ export const trpc = createTRPCOptionsProxy<TRPCRouter>({
 });
 
 export function getContext() {
-	// Return the same singleton instances to ensure consistency
 	return {
 		queryClient,
 		trpc,
@@ -48,10 +51,12 @@ export function getContext() {
 
 export function Provider({
 	children,
-	queryClient: _queryClient,
+	queryClient,
 }: {
 	children: React.ReactNode;
 	queryClient: QueryClient;
 }) {
-	return <>{children}</>;
+	return (
+		<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+	);
 }

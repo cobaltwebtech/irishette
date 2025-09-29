@@ -1,7 +1,7 @@
 import { Link, useRouter } from '@tanstack/react-router';
 import { LogOut, Luggage, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { client, useSession } from '@/lib/auth-client';
+import { signOut, useSession } from '@/lib/auth-client';
 
 const navigationLinks = [
 	{ to: '/rooms/rose-room', label: 'Rose Room' },
@@ -25,7 +25,7 @@ export default function Header() {
 					>
 						Irishette
 						<span className="sr-only">Home</span>
-						<span className="text-xs"> Logo goes here</span>
+						<span className="text-xs block"> Logo goes here</span>
 					</Link>
 
 					{/* Navigation */}
@@ -43,43 +43,46 @@ export default function Header() {
 
 					{/* Auth Section */}
 					<div className="flex items-center space-x-4">
-						{!isPending &&
-							(session ? (
-								// Authenticated user menu
-								<div className="flex items-center space-x-4">
+						{isPending ? (
+							// Loading state
+							<div className="text-background">Loading...</div>
+						) : session ? (
+							// Authenticated user menu
+							<div className="flex items-center space-x-4">
+								<Button variant="accent" asChild>
 									<Link
 										to="/account"
-										className="flex items-center space-x-2 text-foreground hover:text-primary transition-colors"
+										className="flex items-center space-x-2 text-background hover:text-background/80 transition-colors"
 									>
-										<User className="w-4 h-4" />
-										<span className="hidden sm:inline">
-											{session.user.name || session.user.email.split('@')[0]}
-										</span>
-									</Link>
-									<Button
-										onClick={async () => {
-											try {
-												await client.signOut();
-												router.navigate({ to: '/' });
-											} catch (error) {
-												console.error('Sign out error:', error);
-											}
-										}}
-										className="flex items-center space-x-2 text-muted-foreground hover:text-foreground transition-colors"
-									>
-										<LogOut className="w-4 h-4" />
-										<span className="hidden sm:inline">Sign Out</span>
-									</Button>
-								</div>
-							) : (
-								// Unauthenticated user
-								<Button variant="accent" asChild>
-									<Link to="/login">
-										<Luggage className="size-5" />
-										View Bookings
+										<User className="size-5" />
+										<span className="hidden sm:inline">View Bookings</span>
 									</Link>
 								</Button>
-							))}
+								<Button
+									onClick={async () => {
+										try {
+											await signOut();
+											router.navigate({ to: '/' });
+										} catch (error) {
+											console.error('Logout error:', error);
+										}
+									}}
+									variant="outline"
+									className="text-background"
+								>
+									<LogOut className="w-4 h-4" />
+									<span className="hidden sm:inline">Logout</span>
+								</Button>
+							</div>
+						) : (
+							// Unauthenticated user - always show this if not pending and no session
+							<Button variant="accent" asChild>
+								<Link to="/login">
+									<Luggage className="size-5" />
+									View Bookings
+								</Link>
+							</Button>
+						)}
 
 						{/* Mobile Menu Button */}
 						<div className="md:hidden">

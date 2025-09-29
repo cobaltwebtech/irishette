@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "irishette",
+  "main": "./src/server.ts",
+  "compatibility_date": "2025-09-21",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "BETTER_AUTH_URL": "https://irishette.cobaltdev.workers.dev"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "irishette-prod",
+      "database_id": "04561426-7df1-4896-83a1-de154516023e",
+      "migrations_dir": "./drizzle"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "KV_SESSIONS",
+      "id": "2977770a40e04d1884006d74ab04b28e",
+      "preview_id": "6459b78d1fa947989de52e593a1da4da"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "triggers": {
+    "crons": [
+      // Every hour - sync external calendars
+      "0 * * * *",
+      // Weekly on Sunday at 2 AM - cleanup old logs
+      "0 2 * * 7"
+    ]
+  }
+}

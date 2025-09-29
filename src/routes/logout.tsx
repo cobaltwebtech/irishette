@@ -8,7 +8,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from '@/components/ui/card';
-import { client } from '@/lib/auth-client';
+import { authClient } from '@/lib/auth-client';
 
 export const Route = createFileRoute('/logout')({
 	component: LogoutPage,
@@ -21,20 +21,20 @@ function LogoutPage() {
 	useEffect(() => {
 		const handleSignOut = async () => {
 			try {
-				await client.signOut();
+				await authClient.signOut();
 				setStatus('success');
 
 				// Redirect to home page after a brief delay
 				setTimeout(() => {
 					router.navigate({ to: '/' });
-				}, 2000);
+				}, 4000);
 			} catch (error) {
 				console.error('Sign out error:', error);
 				// Even if there's an error, consider it successful for UX
 				setStatus('success');
 				setTimeout(() => {
 					router.navigate({ to: '/' });
-				}, 2000);
+				}, 4000);
 			}
 		};
 

@@ -1,4 +1,5 @@
-import { createServerFileRoute } from '@tanstack/react-start/server';
+import { env } from 'cloudflare:workers';
+import { createFileRoute } from '@tanstack/react-router';
 import Stripe from 'stripe';
 import { getAdminUsers } from '@/lib/admin-query';
 import {
@@ -9,20 +10,24 @@ import {
 } from '@/lib/email-service';
 import { PaymentService } from '@/lib/payment-service';
 import { stripeWebhookSchema } from '@/lib/payment-validation';
-import { getBindings } from '@/utils/bindings';
+// import { getBindings } from '@/utils/bindings';
 
 // Server route for Stripe webhook
-export const ServerRoute = createServerFileRoute('/api/stripe/$').methods({
-	POST: async ({ request }) => {
-		// Check if this is the webhook endpoint
-		const url = new URL(request.url);
-		const pathname = url.pathname;
+export const Route = createFileRoute('/api/stripe/$')({
+	server: {
+		handlers: {
+			POST: async ({ request }) => {
+				// Check if this is the webhook endpoint
+				const url = new URL(request.url);
+				const pathname = url.pathname;
 
-		if (pathname.endsWith('/webhook')) {
-			return handleStripeWebhook(request);
-		}
+				if (pathname.endsWith('/webhook')) {
+					return handleStripeWebhook(request);
+				}
 
-		return new Response('Not Found', { status: 404 });
+				return new Response('Not Found', { status: 404 });
+			},
+		},
 	},
 });
 
@@ -31,7 +36,7 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
 
 	try {
 		// Get the Cloudflare bindings
-		const bindings = getBindings();
+		// const bindings = getBindings();
 
 		// Get the raw body and signature
 		const body = await request.text();
@@ -43,7 +48,7 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
 		}
 
 		// Initialize Stripe with the binding
-		const stripe = new Stripe(bindings.STRIPE_SECRET_KEY, {
+		const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
 			apiVersion: '2025-08-27.basil',
 		});
 
@@ -53,7 +58,7 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
 			event = stripe.webhooks.constructEvent(
 				body,
 				signature,
-				bindings.STRIPE_TRPC_WEBHOOK_SECRET,
+				env.STRIPE_TRPC_WEBHOOK_SECRET,
 			);
 		} catch (err) {
 			console.error('Webhook signature verification failed:', err);
@@ -72,10 +77,10 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
 
 		// Initialize payment service with bindings
 		const paymentService = new PaymentService({
-			DB: bindings.DB,
-			STRIPE_SECRET_KEY: bindings.STRIPE_SECRET_KEY,
-			STRIPE_TRPC_WEBHOOK_SECRET: bindings.STRIPE_TRPC_WEBHOOK_SECRET,
-			BETTER_AUTH_URL: bindings.BETTER_AUTH_URL,
+			DB: env.DB,
+			STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY,
+			STRIPE_TRPC_WEBHOOK_SECRET: env.STRIPE_TRPC_WEBHOOK_SECRET,
+			BETTER_AUTH_URL: env.BETTER_AUTH_URL,
 		});
 
 		// Handle different event types
@@ -148,7 +153,7 @@ async function handleCheckoutCompleted(
 				console.log('Preparing email data...');
 
 				// Get bindings for RESEND_API_KEY
-				const bindings = getBindings();
+				// const bindings = getBindings();
 
 				const emailData: BookingEmailData = {
 					confirmationId: bookingDetails.booking.confirmationId,
@@ -165,15 +170,15 @@ async function handleCheckoutCompleted(
 					taxAmount: bookingDetails.booking.taxAmount || 0,
 					feesAmount: bookingDetails.booking.feesAmount || 0,
 					totalAmount: bookingDetails.booking.totalAmount,
-					baseUrl: bindings.BETTER_AUTH_URL,
+					baseUrl: env.BETTER_AUTH_URL,
 				};
 
 				console.log('Email data prepared. Checking RESEND_API_KEY...');
-				console.log('RESEND_API_KEY exists:', !!bindings.RESEND_API_KEY);
+				console.log('RESEND_API_KEY exists:', !!env.RESEND_API_KEY);
 
 				console.log('Calling sendBookingConfirmationEmail...');
 				const emailResult = await sendBookingConfirmationEmail(emailData, {
-					RESEND_API_KEY: bindings.RESEND_API_KEY,
+					RESEND_API_KEY: env.RESEND_API_KEY,
 				});
 
 				console.log('Email sending result:', emailResult);
@@ -194,7 +199,7 @@ async function handleCheckoutCompleted(
 				console.log('Starting admin notification email process...');
 				try {
 					// Get admin users
-					const adminEmails = await getAdminUsers(bindings.DB);
+					const adminEmails = await getAdminUsers(env.DB);
 
 					if (adminEmails.length > 0) {
 						const adminEmailData: AdminNotificationEmailData = {
@@ -210,14 +215,14 @@ async function handleCheckoutCompleted(
 							specialRequests:
 								bookingDetails.booking.specialRequests || undefined,
 							totalAmount: bookingDetails.booking.totalAmount,
-							baseUrl: bindings.BETTER_AUTH_URL,
+							baseUrl: env.BETTER_AUTH_URL,
 						};
 
 						const adminEmailResult = await sendAdminBookingNotification(
 							adminEmailData,
 							adminEmails,
 							{
-								RESEND_API_KEY: bindings.RESEND_API_KEY,
+								RESEND_API_KEY: env.RESEND_API_KEY,
 							},
 						);
 

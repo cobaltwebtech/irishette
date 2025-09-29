@@ -36,10 +36,9 @@ export const bookingsRouter = createTRPCRouter({
 		.query(async ({ ctx, input }) => {
 			const paymentService = new PaymentService({
 				DB: ctx.db,
-				STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
-				STRIPE_TRPC_WEBHOOK_SECRET:
-					process.env.STRIPE_TRPC_WEBHOOK_SECRET || '',
-				BETTER_AUTH_URL: process.env.BETTER_AUTH_URL || '',
+				STRIPE_SECRET_KEY: ctx.env.STRIPE_SECRET_KEY,
+				STRIPE_TRPC_WEBHOOK_SECRET: ctx.env.STRIPE_TRPC_WEBHOOK_SECRET,
+				BETTER_AUTH_URL: ctx.env.BETTER_AUTH_URL,
 			});
 
 			try {
@@ -75,10 +74,9 @@ export const bookingsRouter = createTRPCRouter({
 		.mutation(async ({ ctx, input }) => {
 			const paymentService = new PaymentService({
 				DB: ctx.db,
-				STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
-				STRIPE_TRPC_WEBHOOK_SECRET:
-					process.env.STRIPE_TRPC_WEBHOOK_SECRET || '',
-				BETTER_AUTH_URL: process.env.BETTER_AUTH_URL || '',
+				STRIPE_SECRET_KEY: ctx.env.STRIPE_SECRET_KEY,
+				STRIPE_TRPC_WEBHOOK_SECRET: ctx.env.STRIPE_TRPC_WEBHOOK_SECRET,
+				BETTER_AUTH_URL: ctx.env.BETTER_AUTH_URL,
 			});
 
 			try {
@@ -114,10 +112,9 @@ export const bookingsRouter = createTRPCRouter({
 		.mutation(async ({ ctx, input }) => {
 			const paymentService = new PaymentService({
 				DB: ctx.db,
-				STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
-				STRIPE_TRPC_WEBHOOK_SECRET:
-					process.env.STRIPE_TRPC_WEBHOOK_SECRET || '',
-				BETTER_AUTH_URL: process.env.BETTER_AUTH_URL || '',
+				STRIPE_SECRET_KEY: ctx.env.STRIPE_SECRET_KEY,
+				STRIPE_TRPC_WEBHOOK_SECRET: ctx.env.STRIPE_TRPC_WEBHOOK_SECRET,
+				BETTER_AUTH_URL: ctx.env.BETTER_AUTH_URL,
 			});
 
 			try {
@@ -153,10 +150,9 @@ export const bookingsRouter = createTRPCRouter({
 			const db = createDrizzle(ctx.db);
 			const paymentService = new PaymentService({
 				DB: ctx.db,
-				STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
-				STRIPE_TRPC_WEBHOOK_SECRET:
-					process.env.STRIPE_TRPC_WEBHOOK_SECRET || '',
-				BETTER_AUTH_URL: process.env.BETTER_AUTH_URL || '',
+				STRIPE_SECRET_KEY: ctx.env.STRIPE_SECRET_KEY,
+				STRIPE_TRPC_WEBHOOK_SECRET: ctx.env.STRIPE_TRPC_WEBHOOK_SECRET,
+				BETTER_AUTH_URL: ctx.env.BETTER_AUTH_URL,
 			});
 
 			try {
@@ -221,10 +217,9 @@ export const bookingsRouter = createTRPCRouter({
 			const db = createDrizzle(ctx.db);
 			const paymentService = new PaymentService({
 				DB: ctx.db,
-				STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
-				STRIPE_TRPC_WEBHOOK_SECRET:
-					process.env.STRIPE_TRPC_WEBHOOK_SECRET || '',
-				BETTER_AUTH_URL: process.env.BETTER_AUTH_URL || '',
+				STRIPE_SECRET_KEY: ctx.env.STRIPE_SECRET_KEY,
+				STRIPE_TRPC_WEBHOOK_SECRET: ctx.env.STRIPE_TRPC_WEBHOOK_SECRET,
+				BETTER_AUTH_URL: ctx.env.BETTER_AUTH_URL,
 			});
 
 			try {
@@ -571,10 +566,9 @@ export const bookingsRouter = createTRPCRouter({
 			const db = createDrizzle(ctx.db);
 			const paymentService = new PaymentService({
 				DB: ctx.db,
-				STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
-				STRIPE_TRPC_WEBHOOK_SECRET:
-					process.env.STRIPE_TRPC_WEBHOOK_SECRET || '',
-				BETTER_AUTH_URL: process.env.BETTER_AUTH_URL || '',
+				STRIPE_SECRET_KEY: ctx.env.STRIPE_SECRET_KEY,
+				STRIPE_TRPC_WEBHOOK_SECRET: ctx.env.STRIPE_TRPC_WEBHOOK_SECRET,
+				BETTER_AUTH_URL: ctx.env.BETTER_AUTH_URL,
 			});
 
 			try {
@@ -624,7 +618,7 @@ export const bookingsRouter = createTRPCRouter({
 					taxAmount: bookingDetails.booking.taxAmount || 0,
 					feesAmount: bookingDetails.booking.feesAmount || 0,
 					totalAmount: bookingDetails.booking.totalAmount,
-					baseUrl: process.env.BETTER_AUTH_URL || '',
+					baseUrl: ctx.env.BETTER_AUTH_URL,
 				};
 
 				// Send the confirmation email

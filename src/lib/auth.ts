@@ -1,3 +1,4 @@
+import { env } from 'cloudflare:workers';
 import { stripe } from '@better-auth/stripe';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
@@ -8,15 +9,20 @@ import { Resend } from 'resend';
 import Stripe from 'stripe';
 import { MagicLinkEmail } from '@/components/email/MagicLinkEmail';
 import * as authSchema from '@/db/auth-schema';
-import { getBindings } from '@/utils/bindings';
-
 // Initialize Drizzle with the Cloudflare D1 database
 export const createDrizzle = (db: D1Database) =>
 	drizzle(db, { schema: authSchema });
 
 // Create Better Auth instance using Cloudflare bindings
-export const auth = () => {
-	const env = getBindings();
+export const auth = async () => {
+	// const env = await initializeBindings();
+	console.log('Auth - Using bindings:', {
+		hasDB:
+			!!env.DB && typeof env.DB === 'object' && Object.keys(env.DB).length > 0,
+		authUrl: env.BETTER_AUTH_URL,
+		hasStripeKey: !!env.STRIPE_SECRET_KEY,
+		hasResendKey: !!env.RESEND_API_KEY,
+	});
 
 	// Initialize Stripe with environment variables
 	const stripeClient = new Stripe(env.STRIPE_SECRET_KEY, {
@@ -25,6 +31,33 @@ export const auth = () => {
 
 	// Initialize Resend for email service
 	const resend = new Resend(env.RESEND_API_KEY);
+
+	// For development, use a simpler configuration without database
+	if (import.meta.env.DEV && (!env.DB || Object.keys(env.DB).length === 0)) {
+		console.warn(
+			'Running in dev mode without D1 database - using memory storage',
+		);
+		return betterAuth({
+			secret: env.BETTER_AUTH_SECRET,
+			baseURL: env.BETTER_AUTH_URL,
+			// No database adapter for development
+			plugins: [
+				admin(),
+				magicLink({
+					sendMagicLink: async ({ email, url }) => {
+						console.log('DEV: Magic link for', email, ':', url);
+						// Don't send emails in development
+					},
+				}),
+				stripe({
+					stripeClient,
+					stripeWebhookSecret: env.STRIPE_BETTER_AUTH_WEBHOOK_SECRET,
+					createCustomerOnSignUp: true,
+				}),
+				reactStartCookies(),
+			],
+		});
+	}
 
 	return betterAuth({
 		secret: env.BETTER_AUTH_SECRET,

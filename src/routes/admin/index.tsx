@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { CalendarDays, House, Pencil } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { trpc } from '@/integrations/tanstack-query/root-provider';
-import { useSession } from '@/lib/auth-client';
+import { authClient, useSession } from '@/lib/auth-client';
 
 export const Route = createFileRoute('/admin/')({
 	head: () => ({
@@ -36,45 +36,44 @@ function AdminDashboard() {
 	const { data: session, isPending } = useSession();
 	const navigate = useNavigate();
 
-	// Replace manual loadRooms with useQuery - using direct trpc import
-	const {
-		data: roomsData,
-		isLoading: loadingRooms,
-		error: roomsError,
-		isError: roomsIsError,
-	} = useQuery(
-		trpc.rooms.list.queryOptions(
-			{
-				limit: 10,
-				status: 'active',
-			},
-			{
-				enabled: !isPending && !!session?.user && session.user.role === 'admin',
-				retry: false, // Avoid retries during SSR issues
-				staleTime: 5 * 60 * 1000, // 5 minutes
-			},
-		),
+	// Use manual tRPC client call for now since tRPC hooks aren't working
+	const [roomsData, setRoomsData] = useState<{ rooms: Room[] } | undefined>(
+		undefined,
 	);
+	const [loadingRooms, setLoadingRooms] = useState(false);
+	const [roomsError, setRoomsError] = useState<Error | null>(null);
+	const roomsIsError = !!roomsError;
 
-	console.log('Admin Dashboard - rooms useQuery state:', {
-		roomsData,
-		loadingRooms,
-		roomsError,
-		roomsIsError,
-		hasSession: !!session?.user,
-		isAdmin: session?.user?.role === 'admin',
-	});
+	// Load rooms manually with useEffect
+	useEffect(() => {
+		if (!isPending && session?.user && session.user.role === 'admin') {
+			setLoadingRooms(true);
+			import('@/integrations/tanstack-query/root-provider')
+				.then(({ trpcClient }) => {
+					return trpcClient.rooms.list.query({
+						limit: 10,
+						status: 'active',
+					});
+				})
+				.then((data) => {
+					setRoomsData(data);
+					setRoomsError(null);
+				})
+				.catch((error) => {
+					console.error('Error loading rooms:', error);
+					setRoomsError(error);
+				})
+				.finally(() => {
+					setLoadingRooms(false);
+				});
+		}
+	}, [isPending, session]);
 
 	const rooms = roomsData?.rooms || [];
 
 	// Replace manual loadBookings with useQuery
 	// Replace manual loadBookings with useQuery - using direct trpc import
-	const {
-		data: bookings = [],
-		isLoading: loadingBookings,
-		error: bookingsError,
-		isError: bookingsIsError,
-	} = useQuery(
+	const { data: bookings = [], isLoading: loadingBookings } = useQuery(
 		trpc.bookings.adminListBookings.queryOptions(
 			{
 				limit: 50,
@@ -87,15 +86,6 @@ function AdminDashboard() {
 			},
 		),
 	);
-
-	console.log('Admin Dashboard - bookings useQuery state:', {
-		bookings,
-		loadingBookings,
-		bookingsError,
-		bookingsIsError,
-		hasSession: !!session?.user,
-		isAdmin: session?.user?.role === 'admin',
-	});
 
 	// Client-side auth check
 	useEffect(() => {

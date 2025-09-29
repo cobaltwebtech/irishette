@@ -31,7 +31,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { trpcClient } from '@/integrations/tanstack-query/root-provider';
-import { useSession } from '@/lib/auth-client';
+import { authClient, useSession } from '@/lib/auth-client';
 import type {
 	CreateBlockedPeriod,
 	CreatePricingRule,

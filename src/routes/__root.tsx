@@ -1,27 +1,26 @@
+/// <reference types="vite/client" />
+
 import type { QueryClient } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import {
 	createRootRouteWithContext,
 	HeadContent,
 	Scripts,
 } from '@tanstack/react-router';
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
-import type { TRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import { ReactLenis } from 'lenis/react';
+import type * as React from 'react';
+import { DefaultCatchBoundary } from '@/components/default-catch-boundary';
+import Footer from '@/components/Footer';
+import Header from '@/components/Header';
+import { NotFound } from '@/components/not-found';
 import { Toaster } from '@/components/ui/sonner';
-import type { TRPCRouter } from '@/integrations/trpc/router';
-import Footer from '../components/Footer';
-import Header from '../components/Header';
-import NotFoundPage from '../components/NotFoundPage';
-import TanStackQueryLayout from '../integrations/tanstack-query/layout.tsx';
-import appCss from '../styles.css?url';
+import appCss from '@/styles.css?url';
+import { seo } from '@/utils/seo';
 
-interface MyRouterContext {
+export const Route = createRootRouteWithContext<{
 	queryClient: QueryClient;
-
-	trpc: TRPCOptionsProxy<TRPCRouter>;
-}
-
-export const Route = createRootRouteWithContext<MyRouterContext>()({
+}>()({
 	head: () => ({
 		meta: [
 			{
@@ -31,35 +30,42 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 				name: 'viewport',
 				content: 'width=device-width, initial-scale=1',
 			},
-			{
+			...seo({
 				title: 'Irishette | Victorian Charm in Dublin, Texas',
-			},
+				description: `Experience the timeless elegance of Irishette, a charming Victorian bed and breakfast in the heart of Dublin, Texas. Enjoy cozy rooms, modern amenities, and warm hospitality for an unforgettable stay.`,
+			}),
 		],
 		links: [
+			{ rel: 'stylesheet', href: appCss },
 			{
-				rel: 'preload',
-				href: '/fonts/SchibstedGrotesk-Regular.woff2',
-				as: 'font',
-				type: 'font/woff2',
-				crossOrigin: 'anonymous',
-				name: 'Schibsted Grotesk',
+				rel: 'apple-touch-icon',
+				sizes: '180x180',
+				href: '/apple-touch-icon.png',
 			},
 			{
-				rel: 'preload',
-				href: '/fonts/SchibstedGrotesk-Italic.woff2',
-				as: 'font',
-				type: 'font/woff2',
-				crossOrigin: 'anonymous',
-				name: 'Schibsted Grotesk',
+				rel: 'icon',
+				type: 'image/png',
+				sizes: '32x32',
+				href: '/favicon-32x32.png',
 			},
 			{
-				rel: 'stylesheet',
-				href: appCss,
+				rel: 'icon',
+				type: 'image/png',
+				sizes: '16x16',
+				href: '/favicon-16x16.png',
 			},
+			{ rel: 'manifest', href: '/site.webmanifest', color: '#fffff' },
+			{ rel: 'icon', href: '/favicon.ico' },
 		],
 	}),
-
-	notFoundComponent: NotFoundPage,
+	errorComponent: (props) => {
+		return (
+			<RootDocument>
+				<DefaultCatchBoundary {...props} />
+			</RootDocument>
+		);
+	},
+	notFoundComponent: () => <NotFound />,
 	shellComponent: RootDocument,
 });
 
@@ -70,14 +76,16 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 				<HeadContent />
 			</head>
 			<body>
-				<ReactLenis root>
-					<Header />
-					{children}
-					<Footer />
-					<Toaster />
-					<TanStackRouterDevtools />
-					<TanStackQueryLayout />
-				</ReactLenis>
+				<div className="min-h-screen flex flex-col">
+					<ReactLenis root>
+						<Header />
+						{children}
+						<Footer />
+						<Toaster />
+					</ReactLenis>
+				</div>
+				<TanStackRouterDevtools position="bottom-right" />
+				<ReactQueryDevtools buttonPosition="bottom-left" />
 				<Scripts />
 			</body>
 		</html>

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { trpcClient } from '@/integrations/tanstack-query/root-provider';
-import { signIn, updateUser, useSession } from '@/lib/auth-client';
+import { authClient, useSession } from '@/lib/auth-client';
 import { type BookingStep, useBookingStore } from '@/stores';
 
 // Helper function to create a date from YYYY-MM-DD string without timezone conversion
@@ -325,7 +325,7 @@ function AuthenticationStep() {
 		setLoading(true);
 		try {
 			// Send magic link using Better Auth client-side API
-			const { error } = await signIn.magicLink({
+			const { error } = await authClient.signIn.magicLink({
 				email: email,
 				callbackURL: '/booking', // Redirect back to booking after authentication
 				newUserCallbackURL: '/booking', // Also redirect new users to booking
@@ -472,7 +472,7 @@ function BookingDetailsStep() {
 		// Update user's name in Better Auth if it's different and user is logged in
 		if (session?.user && guestName.trim() !== session.user.name) {
 			try {
-				await updateUser({
+				await authClient.updateUser({
 					name: guestName.trim(),
 				});
 				console.log('User name updated in Better Auth:', guestName.trim());
