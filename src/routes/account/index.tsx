@@ -11,7 +11,7 @@ import {
 	type SortingState,
 	useReactTable,
 } from '@tanstack/react-table';
-import { ArrowUpDown, LogOut, Search, Settings, User } from 'lucide-react';
+import { ArrowUpDown, Calendar, Search, Settings, User } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,7 @@ import {
 	TableHeader,
 	TableRow,
 } from '@/components/ui/table';
+import { trpc } from '@/integrations/tanstack-query/root-provider';
 import { useSession } from '@/lib/auth-client';
 
 // Interface for booking data returned from tRPC
@@ -86,7 +87,6 @@ export const Route = createFileRoute('/account/')({
 function AccountPage() {
 	const { data: session, isPending } = useSession();
 	const router = useRouter();
-	const routeContext = Route.useRouteContext();
 	const [sorting, setSorting] = useState<SortingState>([
 		{ id: 'booking.checkInDate', desc: false }, // Default sort by check-in date (ascending)
 	]);
@@ -105,16 +105,20 @@ function AccountPage() {
 		data: allBookings = [],
 		isLoading,
 		isError,
-	} = useQuery({
-		...routeContext.trpc.bookings.getMyBookings.queryOptions({
-			userId: session?.user?.id || '',
-			limit: 10,
-			offset: 0,
-		}),
-		enabled: !isPending && !!session?.user?.id, // Cookie caching should handle SSR now
-		retry: false, // Avoid retries during SSR issues
-		staleTime: 5 * 60 * 1000, // 5 minutes
-	});
+	} = useQuery(
+		trpc.bookings.getMyBookings.queryOptions(
+			{
+				userId: session?.user?.id || '',
+				limit: 10,
+				offset: 0,
+			},
+			{
+				enabled: !isPending && !!session?.user?.id, // Cookie caching should handle SSR now
+				retry: false,
+				staleTime: 5 * 60 * 1000,
+			},
+		),
+	);
 
 	// Filter to only show confirmed bookings (exclude pending/incomplete bookings)
 	const bookings = useMemo(() => {
@@ -327,8 +331,8 @@ function AccountPage() {
 
 			{/* Dashboard Content */}
 			<div className="container mx-auto px-4 py-8">
-				{/* Bookings Table */}
-				{bookings.length > 0 && (
+				{/* Conditional Rendering: Show table if bookings exist, otherwise show empty state */}
+				{bookings.length > 0 ? (
 					<Card className="mb-8">
 						<CardHeader>
 							<div className="flex items-center justify-between">
@@ -440,6 +444,20 @@ function AccountPage() {
 									</div>
 								</div>
 							)}
+						</CardContent>
+					</Card>
+				) : (
+					<Card className="mb-8">
+						<CardContent className="flex flex-col items-center justify-center py-12">
+							<Calendar className="h-16 w-16 text-muted-foreground mb-4" />
+							<h3 className="text-xl font-semibold mb-2">No Bookings Yet</h3>
+							<p className="text-muted-foreground text-center mb-6 max-w-md">
+								You have no bookings with us. Start exploring our available
+								rooms and make your first reservation!
+							</p>
+							<Button asChild>
+								<Link to="/">Browse Rooms</Link>
+							</Button>
 						</CardContent>
 					</Card>
 				)}

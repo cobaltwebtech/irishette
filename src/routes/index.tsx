@@ -10,6 +10,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from '@/components/ui/card';
+import '@/styles/custom-swiper.css';
 
 export const Route = createFileRoute('/')({
 	component: HomePage,
@@ -51,10 +52,10 @@ function HomePage() {
 
 				{/* Content */}
 				<div className="relative z-20 container mx-auto max-w-4xl text-center px-4">
-					<h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold mb-6 bg-gradient-to-r from-green-500 via-green-200 to-orange-400 bg-clip-text text-transparent">
+					<h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold mb-6 bg-gradient-to-r from-orange-500 via-green-200 to-green-500 bg-clip-text text-transparent">
 						Welcome to Irishette
 					</h1>
-					<p className="text-xl md:text-2xl text-popover mb-8 font-medium italic drop-shadow-md max-w-3xl mx-auto">
+					<p className="text-xl md:text-2xl text-popover mb-8 italic drop-shadow-md max-w-3xl mx-auto">
 						Built in 1893, Irishette blends timeless character with a welcoming
 						stay. Just minutes from Tarleton State University.
 					</p>

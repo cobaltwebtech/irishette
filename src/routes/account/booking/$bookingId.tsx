@@ -6,8 +6,8 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { trpcClient } from '@/integrations/tanstack-query/root-provider';
-import { authClient, useSession } from '@/lib/auth-client';
+import { trpc, trpcClient } from '@/integrations/tanstack-query/root-provider';
+import { useSession } from '@/lib/auth-client';
 
 export const Route = createFileRoute('/account/booking/$bookingId')({
 	head: () => ({
@@ -25,7 +25,7 @@ function BookingDetailPage() {
 	const bookingId = params.bookingId;
 	const { data: session, isPending } = useSession();
 	const router = useRouter();
-	const routeContext = Route.useRouteContext();
+	// useRouteContext not needed since we import trpc directly
 	const [isResendingEmail, setIsResendingEmail] = useState(false);
 
 	// Redirect if not logged in
@@ -36,15 +36,19 @@ function BookingDetailPage() {
 	}, [session, isPending, router]);
 
 	// Use tRPC query to fetch booking details
-	const bookingQuery = useQuery({
-		...routeContext.trpc.bookings.getBooking.queryOptions({
-			bookingId: bookingId,
-			userId: session?.user?.id || '',
-		}),
-		enabled: !isPending && !!session?.user?.id && !!bookingId,
-		retry: false, // Avoid retries during SSR issues
-		staleTime: 5 * 60 * 1000, // 5 minutes
-	});
+	const bookingQuery = useQuery(
+		trpc.bookings.getBooking.queryOptions(
+			{
+				bookingId: bookingId,
+				userId: session?.user?.id || '',
+			},
+			{
+				enabled: !isPending && !!session?.user?.id && !!bookingId,
+				retry: false,
+				staleTime: 5 * 60 * 1000,
+			},
+		),
+	);
 
 	const booking = bookingQuery.data;
 

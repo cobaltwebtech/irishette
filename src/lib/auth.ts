@@ -13,17 +13,8 @@ import * as authSchema from '@/db/auth-schema';
 export const createDrizzle = (db: D1Database) =>
 	drizzle(db, { schema: authSchema });
 
-// Create Better Auth instance using Cloudflare bindings
+// Create Better Auth instance and connect to Cloudflare D1 database
 export const auth = async () => {
-	// const env = await initializeBindings();
-	console.log('Auth - Using bindings:', {
-		hasDB:
-			!!env.DB && typeof env.DB === 'object' && Object.keys(env.DB).length > 0,
-		authUrl: env.BETTER_AUTH_URL,
-		hasStripeKey: !!env.STRIPE_SECRET_KEY,
-		hasResendKey: !!env.RESEND_API_KEY,
-	});
-
 	// Initialize Stripe with environment variables
 	const stripeClient = new Stripe(env.STRIPE_SECRET_KEY, {
 		apiVersion: '2025-08-27.basil',

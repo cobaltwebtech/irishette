@@ -1,0 +1,47 @@
+@layer utilities {
+	/* default duration (can be overridden by setting --kb-duration on the Swiper container) */
+	:root {
+		--zoom-duration: 3000ms;
+	}
+
+	.zoom-container {
+		@apply w-full h-full overflow-hidden;
+	}
+
+	.zoom-img {
+		@apply object-cover w-full h-full;
+		transform-origin: center center;
+		will-change: transform;
+		/* ensure a predictable baseline */
+		transform: scale(1);
+		animation: none;
+	}
+
+	/* Run the zoom effect only for the active slide (Swiper applies .swiper-slide-active) */
+	.swiper-slide.swiper-slide-active .zoom-img {
+		animation: zoomslide var(--zoom-duration, 3000ms) ease-in-out forwards;
+	}
+
+	/* Inactive state (match the scale to prevent flashing back to original size during slide transition */
+	.swiper-slide:not(.swiper-slide-active) .zoom-img {
+		transform: scale(1.1);
+		animation: none;
+	}
+
+	/* accessible: respect reduced motion */
+	@media (prefers-reduced-motion: reduce) {
+		.zoom-img {
+			animation: none !important;
+			transform: none !important;
+		}
+	}
+
+	@keyframes zoomslide {
+		0% {
+			transform: scale(1);
+		}
+		100% {
+			transform: scale(1.1);
+		}
+	}
+}

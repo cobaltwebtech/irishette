@@ -19,14 +19,6 @@ export const Route = createFileRoute('/api/trpc/$')({
 });
 
 async function handleTRPCRequest(request: Request): Promise<Response> {
-	console.log('Using fetchRequestHandler - UPDATED VERSION');
-
-	console.log('Bindings initialized:', {
-		hasDB: !!env.DB && typeof env.DB === 'object',
-		hasKV: !!env.KV_SESSIONS && typeof env.KV_SESSIONS === 'object',
-		authUrl: env.BETTER_AUTH_URL,
-	});
-
 	// Create tRPC context
 	const context: TRPCContext = {
 		db: env.DB,

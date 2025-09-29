@@ -190,6 +190,29 @@ function RoseRoomPage() {
 
 				{/* Content */}
 				<div className="relative z-10 container mx-auto max-w-4xl text-center px-4">
+					<div className="flex justify-center mb-4 text-rose-400">
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="24"
+							height="24"
+							viewBox="0 0 24 24"
+							className="size-24"
+						>
+							<title>Rose Icon</title>
+							<g
+								fill="none"
+								stroke="currentColor"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+							>
+								<path d="M17 10h-1a4 4 0 1 1 4-4v.534" />
+								<path d="M17 6h1a4 4 0 0 1 1.42 7.74l-2.29.87a6 6 0 0 1-5.339-10.68l2.069-1.31M4.5 17c2.8-.5 4.4 0 5.5.8s1.8 2.2 2.3 3.7c-2 .4-3.5.4-4.8-.3c-1.2-.6-2.3-1.9-3-4.2" />
+								<path d="M9.77 12C4 15 2 22 2 22" />
+								<circle cx="17" cy="8" r="2" />
+							</g>
+						</svg>
+					</div>
 					<h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-6 bg-gradient-to-r from-rose-800 via-pink-400 to-rose-800 bg-clip-text text-transparent">
 						Rose Room
 					</h1>
@@ -234,7 +257,7 @@ function RoseRoomPage() {
 
 			{/* Availability Calendar */}
 			<section
-				className="py-16 px-4 bg-gradient-to-b from-secondary to-background"
+				className="py-16 px-4 bg-gradient-to-b from-rose-200 to-background"
 				data-calendar-section
 			>
 				<div className="container mx-auto max-w-screen-lg">

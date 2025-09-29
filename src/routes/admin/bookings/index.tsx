@@ -25,6 +25,7 @@ import {
 	TableHeader,
 	TableRow,
 } from '@/components/ui/table';
+import { trpc } from '@/integrations/tanstack-query/root-provider';
 import { useSession } from '@/lib/auth-client';
 
 export const Route = createFileRoute('/admin/bookings/')({
@@ -64,22 +65,24 @@ function AdminBookings() {
 	const [sorting, setSorting] = useState<SortingState>([]);
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 	const [globalFilter, setGlobalFilter] = useState('');
-	const routeContext = Route.useRouteContext();
-
 	// Use tRPC query to fetch admin bookings
 	const {
 		data: bookingsData = [],
 		isLoading,
 		error,
-	} = useQuery({
-		...routeContext.trpc.bookings.adminListBookings.queryOptions({
-			limit: 100,
-			offset: 0,
-		}),
-		enabled: !isPending && !!session?.user && session.user.role === 'admin',
-		retry: false, // Avoid retries during SSR issues
-		staleTime: 5 * 60 * 1000, // 5 minutes
-	});
+	} = useQuery(
+		trpc.bookings.adminListBookings.queryOptions(
+			{
+				limit: 100,
+				offset: 0,
+			},
+			{
+				enabled: !isPending && !!session?.user && session.user.role === 'admin',
+				retry: false, // Avoid retries during SSR issues
+				staleTime: 5 * 60 * 1000, // 5 minutes
+			},
+		),
+	);
 
 	// Filter to only show confirmed bookings (exclude pending/incomplete bookings)
 	const bookings = useMemo(() => {
@@ -211,23 +214,6 @@ function AdminBookings() {
 				),
 				cell: (info) => (
 					<span className="font-medium">${info.getValue().toFixed(2)}</span>
-				),
-			}),
-			columnHelper.accessor('booking.createdAt', {
-				header: ({ column }) => (
-					<Button
-						variant="ghost"
-						onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-						className="h-8 px-2"
-					>
-						Created
-						<ArrowUpDown className="ml-2 h-4 w-4" />
-					</Button>
-				),
-				cell: (info) => (
-					<span className="text-sm">
-						{new Date(info.getValue() + 'T00:00:00').toLocaleDateString()}
-					</span>
 				),
 			}),
 		],

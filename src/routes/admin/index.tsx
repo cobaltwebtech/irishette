@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { CalendarDays, House, Pencil } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,38 +36,20 @@ function AdminDashboard() {
 	const { data: session, isPending } = useSession();
 	const navigate = useNavigate();
 
-	// Use manual tRPC client call for now since tRPC hooks aren't working
-	const [roomsData, setRoomsData] = useState<{ rooms: Room[] } | undefined>(
-		undefined,
+	// Use TanStack Query for rooms
+	const { data: roomsData, isLoading: loadingRooms } = useQuery(
+		trpc.rooms.list.queryOptions(
+			{
+				limit: 10,
+				status: 'active',
+			},
+			{
+				enabled: !isPending && !!session?.user && session.user.role === 'admin',
+				retry: false,
+				staleTime: 5 * 60 * 1000,
+			},
+		),
 	);
-	const [loadingRooms, setLoadingRooms] = useState(false);
-	const [roomsError, setRoomsError] = useState<Error | null>(null);
-	const roomsIsError = !!roomsError;
-
-	// Load rooms manually with useEffect
-	useEffect(() => {
-		if (!isPending && session?.user && session.user.role === 'admin') {
-			setLoadingRooms(true);
-			import('@/integrations/tanstack-query/root-provider')
-				.then(({ trpcClient }) => {
-					return trpcClient.rooms.list.query({
-						limit: 10,
-						status: 'active',
-					});
-				})
-				.then((data) => {
-					setRoomsData(data);
-					setRoomsError(null);
-				})
-				.catch((error) => {
-					console.error('Error loading rooms:', error);
-					setRoomsError(error);
-				})
-				.finally(() => {
-					setLoadingRooms(false);
-				});
-		}
-	}, [isPending, session]);
 
 	const rooms = roomsData?.rooms || [];
 
@@ -99,9 +81,9 @@ function AdminDashboard() {
 		return <div className="container mx-auto px-4 py-8">Loading...</div>;
 	}
 
-	// Filter bookings to get upcoming confirmed ones (check-in date >= today)
+	// Filter bookings to get confirmed ones with check-in date today or in the future
 	const today = new Date();
-	today.setHours(0, 0, 0, 0);
+	const todayDateString = today.toISOString().slice(0, 10); // 'YYYY-MM-DD'
 
 	// Create a map of room IDs to room names for lookup
 	const roomMap = rooms.reduce((acc: Record<string, string>, room: Room) => {
@@ -111,9 +93,11 @@ function AdminDashboard() {
 
 	const upcomingBookings = bookings
 		.filter((bookingData) => {
-			const checkInDate = new Date(bookingData.booking.checkInDate);
-			checkInDate.setHours(0, 0, 0, 0);
-			return checkInDate >= today && bookingData.booking.status === 'confirmed';
+			const checkInDateString = bookingData.booking.checkInDate.slice(0, 10); // 'YYYY-MM-DD'
+			return (
+				checkInDateString >= todayDateString &&
+				bookingData.booking.status === 'confirmed'
+			);
 		})
 		.sort(
 			(a, b) =>

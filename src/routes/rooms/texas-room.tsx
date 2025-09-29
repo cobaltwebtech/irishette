@@ -182,6 +182,20 @@ function TexasRoomPage() {
 
 				{/* Content */}
 				<div className="relative z-10 container mx-auto max-w-4xl text-center px-4">
+					<div className="flex justify-center mb-4 text-blue-500">
+						<svg
+							width="512"
+							height="512"
+							viewBox="0 0 512 512"
+							className="size-24"
+						>
+							<title>Texas Icon</title>
+							<path
+								fill="currentColor"
+								d="M156.3 41.88V222.6l-130.57 3c35.98 40.7 60.88 78.7 123.07 126c36.4-48.2 78.8-54.7 144.7 100.5l66.8 18c.7-49.4-15.2-97.8 126-155.3l-11.3-93l-3-60.7l-211.9-39.8V41.88z"
+							/>
+						</svg>
+					</div>
 					<h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-6 bg-gradient-to-r from-blue-700 via-white to-red-900 bg-clip-text text-transparent">
 						Texas Room
 					</h1>
@@ -226,7 +240,7 @@ function TexasRoomPage() {
 
 			{/* Availability Calendar */}
 			<section
-				className="py-16 px-4 bg-gradient-to-b from-secondary to-background"
+				className="py-16 px-4 bg-gradient-to-b from-blue-200 to-background"
 				data-calendar-section
 			>
 				<div className="container mx-auto max-w-screen-lg">

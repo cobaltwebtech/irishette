@@ -15,11 +15,6 @@ export const authClient = createAuthClient({
 		},
 	},
 });
-console.log('Auth Client Base URL:', import.meta.env.VITE_BETTER_AUTH_URL);
-console.log(
-	'All VITE env vars:',
-	Object.keys(import.meta.env).filter((k) => k.startsWith('VITE_')),
-);
 
 export const {
 	signIn,

@@ -15,7 +15,7 @@ import Footer from '@/components/Footer';
 import Header from '@/components/Header';
 import { NotFound } from '@/components/not-found';
 import { Toaster } from '@/components/ui/sonner';
-import appCss from '@/styles.css?url';
+import appCss from '@/styles/styles.css?url';
 import { seo } from '@/utils/seo';
 
 export const Route = createRootRouteWithContext<{

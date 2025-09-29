@@ -20,7 +20,7 @@ export default function Header() {
 					{/* Logo/Brand */}
 					<Link
 						to="/"
-						className="text-2xl font-extrabold text-background hover:text-primary/80 transition-colors"
+						className="text-2xl font-extrabold text-background hover:text-background/80 transition-colors"
 						onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
 					>
 						Irishette
@@ -34,7 +34,7 @@ export default function Header() {
 							<Link
 								key={link.to}
 								to={link.to}
-								className="text-background hover:text-accent/80 transition-colors font-semibold [&.active]:text-accent"
+								className="text-background hover:text-secondary transition-colors font-semibold [&.active]:text-accent"
 							>
 								{link.label}
 							</Link>
@@ -50,10 +50,7 @@ export default function Header() {
 							// Authenticated user menu
 							<div className="flex items-center space-x-4">
 								<Button variant="accent" asChild>
-									<Link
-										to="/account"
-										className="flex items-center space-x-2 text-background hover:text-background/80 transition-colors"
-									>
+									<Link to="/account">
 										<User className="size-5" />
 										<span className="hidden sm:inline">View Bookings</span>
 									</Link>

@@ -10,7 +10,6 @@ import {
 } from '@/lib/email-service';
 import { PaymentService } from '@/lib/payment-service';
 import { stripeWebhookSchema } from '@/lib/payment-validation';
-// import { getBindings } from '@/utils/bindings';
 
 // Server route for Stripe webhook
 export const Route = createFileRoute('/api/stripe/$')({
@@ -35,9 +34,6 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
 	console.log('Stripe webhook received');
 
 	try {
-		// Get the Cloudflare bindings
-		// const bindings = getBindings();
-
 		// Get the raw body and signature
 		const body = await request.text();
 		const signature = request.headers.get('stripe-signature');
@@ -55,7 +51,7 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
 		// Verify the webhook signature
 		let event: Stripe.Event;
 		try {
-			event = stripe.webhooks.constructEvent(
+			event = await stripe.webhooks.constructEventAsync(
 				body,
 				signature,
 				env.STRIPE_TRPC_WEBHOOK_SECRET,

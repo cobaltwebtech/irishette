@@ -22,16 +22,11 @@ import { RoomBlockingManagement } from '@/components/RoomBlockingManagement';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { trpcClient } from '@/integrations/tanstack-query/root-provider';
-import { authClient, useSession } from '@/lib/auth-client';
+import { Switch } from '@/components/ui/switch';
+import { trpc, trpcClient } from '@/integrations/tanstack-query/root-provider';
+import { useSession } from '@/lib/auth-client';
 import type {
 	CreateBlockedPeriod,
 	CreatePricingRule,
@@ -86,7 +81,7 @@ function EditRoom() {
 	const params = Route.useParams() as { roomId: string };
 	const roomId = params.roomId;
 	const navigate = useNavigate();
-	const routeContext = Route.useRouteContext();
+	// useRouteContext not needed since we import trpc directly
 	const roomNameId = useId();
 	const roomSlugId = useId();
 	const roomDescriptionId = useId();
@@ -97,10 +92,9 @@ function EditRoom() {
 	const icalUrlId = useId();
 
 	// Use tRPC query to fetch room data
-	const roomQuery = useQuery({
-		...routeContext.trpc.rooms.get.queryOptions({ id: roomId }),
-		enabled: !!roomId,
-	});
+	const roomQuery = useQuery(
+		trpc.rooms.get.queryOptions({ id: roomId }, { enabled: !!roomId }),
+	);
 
 	const room = roomQuery.data;
 	const loading = roomQuery.isLoading;
@@ -130,10 +124,12 @@ function EditRoom() {
 	const [pricingRules, setPricingRules] = useState<RoomPricingRule[]>([]);
 
 	// Use tRPC query to fetch pricing rules
-	const pricingRulesQuery = useQuery({
-		...routeContext.trpc.rooms.getPricingRules.queryOptions({ roomId }),
-		enabled: !!roomId && !!room,
-	});
+	const pricingRulesQuery = useQuery(
+		trpc.rooms.getPricingRules.queryOptions(
+			{ roomId },
+			{ enabled: !!roomId && !!room },
+		),
+	);
 
 	// Update pricing rules state when query data changes
 	useEffect(() => {
@@ -151,10 +147,12 @@ function EditRoom() {
 	const [blockedPeriods, setBlockedPeriods] = useState<RoomBlockedPeriod[]>([]);
 
 	// Use tRPC query to fetch blocked periods
-	const blockedPeriodsQuery = useQuery({
-		...routeContext.trpc.rooms.getBlockedPeriods.queryOptions({ roomId }),
-		enabled: !!roomId && !!room,
-	});
+	const blockedPeriodsQuery = useQuery(
+		trpc.rooms.getBlockedPeriods.queryOptions(
+			{ roomId },
+			{ enabled: !!roomId && !!room },
+		),
+	);
 
 	const blockedPeriodsLoading = blockedPeriodsQuery.isLoading;
 
@@ -437,8 +435,20 @@ function EditRoom() {
 			});
 
 			await roomQuery.refetch();
+
+			toast.success('Calendar sync started', {
+				description: `Calendar sync for ${provider} was triggered successfully.`,
+				duration: 4000,
+			});
 		} catch (error) {
 			console.error('Failed to sync calendar:', error);
+			toast.error('Failed to sync calendar', {
+				description:
+					error instanceof Error
+						? error.message
+						: 'An unexpected error occurred while syncing the calendar.',
+				duration: 6000,
+			});
 		}
 	};
 
@@ -615,40 +625,27 @@ function EditRoom() {
 					<div className="grid md:grid-cols-3 gap-6">
 						<div>
 							<div className="text-sm font-medium mb-2">Room Status</div>
-							<DropdownMenu>
-								<DropdownMenuTrigger asChild>
-									<Button
-										variant="outline"
-										className="w-full justify-start capitalize"
-									>
-										{formData.status}
-									</Button>
-								</DropdownMenuTrigger>
-								<DropdownMenuContent className="w-full">
-									<DropdownMenuItem
-										onClick={() =>
-											setFormData((prev) => ({
+							<div className="flex items-center gap-3">
+								<Switch
+									checked={formData.isActive}
+									onCheckedChange={(checked: boolean) => {
+										setFormData((prev) => {
+											const updated = {
 												...prev,
-												status: 'active',
-												isActive: true,
-											}))
-										}
-									>
-										Active
-									</DropdownMenuItem>
-									<DropdownMenuItem
-										onClick={() =>
-											setFormData((prev) => ({
-												...prev,
-												status: 'inactive',
-												isActive: false,
-											}))
-										}
-									>
-										Inactive
-									</DropdownMenuItem>
-								</DropdownMenuContent>
-							</DropdownMenu>
+												isActive: checked,
+												status: checked
+													? ('active' as const)
+													: ('inactive' as const),
+											};
+											// Persist change immediately
+											if (room) updateRoomMutation.mutate(updated);
+											return updated;
+										});
+									}}
+									aria-label="Toggle room active status"
+								/>
+								<span className="capitalize text-sm">{formData.status}</span>
+							</div>
 						</div>
 					</div>
 
@@ -783,7 +780,7 @@ function EditRoom() {
 							</div>
 							<div>
 								<span className="font-medium">Public URL:</span>{' '}
-								<code className="text-blue-600">/{room.slug}</code>
+								<code>https://www.irishette.com/rooms/{room.slug}</code>
 							</div>
 						</div>
 					</div>

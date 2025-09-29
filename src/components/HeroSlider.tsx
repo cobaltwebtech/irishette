@@ -55,13 +55,14 @@ export function HeroSlider({
 				}}
 				loop={true}
 				allowTouchMove={false}
-				className="w-full h-full z-0"
+				className="zoom-container w-full h-full z-0"
 			>
 				{images.map((image, index) => (
 					<SwiperSlide key={`slide-${image.src}-${index}`}>
 						<Image
 							src={image.src}
 							alt={image.alt}
+							className="zoom-img"
 							width={1920}
 							height={1080}
 							priority={index === 0} // Prioritize loading the first image

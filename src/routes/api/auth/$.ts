@@ -4,15 +4,12 @@ import { auth } from '@/lib/auth';
 // Better Auth handler for all HTTP methods
 const authHandler = async ({
 	request,
-	params,
 }: {
 	request: Request;
 	params: Record<string, string>;
 }) => {
-	console.log('AUTH API:', request.method, request.url, 'params:', params);
 	try {
 		const authInstance = await auth();
-		console.log('Auth instance created successfully');
 		return authInstance.handler(request);
 	} catch (error) {
 		console.error('Error in auth handler:', error);

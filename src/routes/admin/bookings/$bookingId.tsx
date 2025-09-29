@@ -14,8 +14,8 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { trpcClient } from '@/integrations/tanstack-query/root-provider';
-import { authClient, useSession } from '@/lib/auth-client';
+import { trpc, trpcClient } from '@/integrations/tanstack-query/root-provider';
+import { useSession } from '@/lib/auth-client';
 
 export const Route = createFileRoute('/admin/bookings/$bookingId')({
 	head: () => ({
@@ -33,7 +33,7 @@ function AdminBookingDetailPage() {
 	const bookingId = params.bookingId;
 	const { data: session, isPending } = useSession();
 	const router = useRouter();
-	const routeContext = Route.useRouteContext();
+	// useRouteContext not needed since we import trpc directly
 	const [isResendingEmail, setIsResendingEmail] = useState(false);
 
 	// Redirect if not admin
@@ -48,19 +48,23 @@ function AdminBookingDetailPage() {
 		data: booking,
 		isLoading,
 		error,
-	} = useQuery({
-		...routeContext.trpc.bookings.getBooking.queryOptions({
-			bookingId: bookingId,
-			// Don't pass userId for admin access - this ensures we get user data
-		}),
-		enabled:
-			!isPending &&
-			!!session?.user?.id &&
-			session.user.role === 'admin' &&
-			!!bookingId,
-		retry: false, // Avoid retries during SSR issues
-		staleTime: 5 * 60 * 1000, // 5 minutes
-	});
+	} = useQuery(
+		trpc.bookings.getBooking.queryOptions(
+			{
+				bookingId: bookingId,
+				// Don't pass userId for admin access - this ensures we get user data
+			},
+			{
+				enabled:
+					!isPending &&
+					!!session?.user?.id &&
+					session.user.role === 'admin' &&
+					!!bookingId,
+				retry: false,
+				staleTime: 5 * 60 * 1000,
+			},
+		),
+	);
 
 	// Handle resending confirmation email (admin can resend for any booking)
 	const handleResendEmail = async () => {
