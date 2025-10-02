@@ -196,7 +196,7 @@ function TexasRoomPage() {
 							/>
 						</svg>
 					</div>
-					<h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-6 bg-gradient-to-r from-blue-700 via-white to-red-900 bg-clip-text text-transparent">
+					<h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-6 bg-gradient-to-br from-blue-500 from-30% via-white to-red-500 to-70% bg-clip-text text-transparent">
 						Texas Room
 					</h1>
 					<p className="text-xl md:text-2xl italic text-popover mb-8 font-medium drop-shadow-md max-w-3xl mx-auto">

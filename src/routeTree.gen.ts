@@ -10,7 +10,6 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LogoutRouteImport } from './routes/logout'
-import { Route as LoginRouteImport } from './routes/login'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as BookingRouteImport } from './routes/booking'
 import { Route as IndexRouteImport } from './routes/index'
@@ -18,6 +17,9 @@ import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AccountIndexRouteImport } from './routes/account/index'
 import { Route as RoomsTexasRoomRouteImport } from './routes/rooms/texas-room'
 import { Route as RoomsRoseRoomRouteImport } from './routes/rooms/rose-room'
+import { Route as AuthResetPasswordRouteImport } from './routes/auth/reset-password'
+import { Route as AuthLoginRouteImport } from './routes/auth/login'
+import { Route as AuthForgotPasswordRouteImport } from './routes/auth/forgot-password'
 import { Route as AdminPropertyManagementIndexRouteImport } from './routes/admin/property-management/index'
 import { Route as AdminBookingsIndexRouteImport } from './routes/admin/bookings/index'
 import { Route as ApiTrpcSplatRouteImport } from './routes/api/trpc/$'
@@ -32,11 +34,6 @@ import { Route as AccountBookingBookingIdRouteImport } from './routes/account/bo
 const LogoutRoute = LogoutRouteImport.update({
   id: '/logout',
   path: '/logout',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContactRoute = ContactRouteImport.update({
@@ -72,6 +69,21 @@ const RoomsTexasRoomRoute = RoomsTexasRoomRouteImport.update({
 const RoomsRoseRoomRoute = RoomsRoseRoomRouteImport.update({
   id: '/rooms/rose-room',
   path: '/rooms/rose-room',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthResetPasswordRoute = AuthResetPasswordRouteImport.update({
+  id: '/auth/reset-password',
+  path: '/auth/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthLoginRoute = AuthLoginRouteImport.update({
+  id: '/auth/login',
+  path: '/auth/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
+  id: '/auth/forgot-password',
+  path: '/auth/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminPropertyManagementIndexRoute =
@@ -132,8 +144,10 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/booking': typeof BookingRoute
   '/contact': typeof ContactRoute
-  '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
+  '/auth/forgot-password': typeof AuthForgotPasswordRoute
+  '/auth/login': typeof AuthLoginRoute
+  '/auth/reset-password': typeof AuthResetPasswordRoute
   '/rooms/rose-room': typeof RoomsRoseRoomRoute
   '/rooms/texas-room': typeof RoomsTexasRoomRoute
   '/account': typeof AccountIndexRoute
@@ -153,8 +167,10 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/booking': typeof BookingRoute
   '/contact': typeof ContactRoute
-  '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
+  '/auth/forgot-password': typeof AuthForgotPasswordRoute
+  '/auth/login': typeof AuthLoginRoute
+  '/auth/reset-password': typeof AuthResetPasswordRoute
   '/rooms/rose-room': typeof RoomsRoseRoomRoute
   '/rooms/texas-room': typeof RoomsTexasRoomRoute
   '/account': typeof AccountIndexRoute
@@ -175,8 +191,10 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/booking': typeof BookingRoute
   '/contact': typeof ContactRoute
-  '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
+  '/auth/forgot-password': typeof AuthForgotPasswordRoute
+  '/auth/login': typeof AuthLoginRoute
+  '/auth/reset-password': typeof AuthResetPasswordRoute
   '/rooms/rose-room': typeof RoomsRoseRoomRoute
   '/rooms/texas-room': typeof RoomsTexasRoomRoute
   '/account/': typeof AccountIndexRoute
@@ -198,8 +216,10 @@ export interface FileRouteTypes {
     | '/'
     | '/booking'
     | '/contact'
-    | '/login'
     | '/logout'
+    | '/auth/forgot-password'
+    | '/auth/login'
+    | '/auth/reset-password'
     | '/rooms/rose-room'
     | '/rooms/texas-room'
     | '/account'
@@ -219,8 +239,10 @@ export interface FileRouteTypes {
     | '/'
     | '/booking'
     | '/contact'
-    | '/login'
     | '/logout'
+    | '/auth/forgot-password'
+    | '/auth/login'
+    | '/auth/reset-password'
     | '/rooms/rose-room'
     | '/rooms/texas-room'
     | '/account'
@@ -240,8 +262,10 @@ export interface FileRouteTypes {
     | '/'
     | '/booking'
     | '/contact'
-    | '/login'
     | '/logout'
+    | '/auth/forgot-password'
+    | '/auth/login'
+    | '/auth/reset-password'
     | '/rooms/rose-room'
     | '/rooms/texas-room'
     | '/account/'
@@ -262,8 +286,10 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BookingRoute: typeof BookingRoute
   ContactRoute: typeof ContactRoute
-  LoginRoute: typeof LoginRoute
   LogoutRoute: typeof LogoutRoute
+  AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
+  AuthLoginRoute: typeof AuthLoginRoute
+  AuthResetPasswordRoute: typeof AuthResetPasswordRoute
   RoomsRoseRoomRoute: typeof RoomsRoseRoomRoute
   RoomsTexasRoomRoute: typeof RoomsTexasRoomRoute
   AccountIndexRoute: typeof AccountIndexRoute
@@ -287,13 +313,6 @@ declare module '@tanstack/react-router' {
       path: '/logout'
       fullPath: '/logout'
       preLoaderRoute: typeof LogoutRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/contact': {
@@ -343,6 +362,27 @@ declare module '@tanstack/react-router' {
       path: '/rooms/rose-room'
       fullPath: '/rooms/rose-room'
       preLoaderRoute: typeof RoomsRoseRoomRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/reset-password': {
+      id: '/auth/reset-password'
+      path: '/auth/reset-password'
+      fullPath: '/auth/reset-password'
+      preLoaderRoute: typeof AuthResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/login': {
+      id: '/auth/login'
+      path: '/auth/login'
+      fullPath: '/auth/login'
+      preLoaderRoute: typeof AuthLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/forgot-password': {
+      id: '/auth/forgot-password'
+      path: '/auth/forgot-password'
+      fullPath: '/auth/forgot-password'
+      preLoaderRoute: typeof AuthForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/property-management/': {
@@ -422,8 +462,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BookingRoute: BookingRoute,
   ContactRoute: ContactRoute,
-  LoginRoute: LoginRoute,
   LogoutRoute: LogoutRoute,
+  AuthForgotPasswordRoute: AuthForgotPasswordRoute,
+  AuthLoginRoute: AuthLoginRoute,
+  AuthResetPasswordRoute: AuthResetPasswordRoute,
   RoomsRoseRoomRoute: RoomsRoseRoomRoute,
   RoomsTexasRoomRoute: RoomsTexasRoomRoute,
   AccountIndexRoute: AccountIndexRoute,

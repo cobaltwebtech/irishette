@@ -213,7 +213,7 @@ function RoseRoomPage() {
 							</g>
 						</svg>
 					</div>
-					<h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-6 bg-gradient-to-r from-rose-800 via-pink-400 to-rose-800 bg-clip-text text-transparent">
+					<h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-6 bg-gradient-to-r from-rose-700 via-pink-200 to-rose-700 bg-clip-text text-transparent">
 						Rose Room
 					</h1>
 					<p className="text-xl md:text-2xl italic text-popover mb-8 font-medium drop-shadow-md max-w-3xl mx-auto">

@@ -300,6 +300,59 @@ You can find out everything you need to know on how to use TanStack Store in the
 
 Files prefixed with `demo` can be safely deleted. They are there to provide a starting point for you to play around with the features you've installed.
 
+# Cron Jobs (Scheduled Tasks)
+
+This application includes automated calendar syncing with Airbnb and Expedia via Cloudflare Workers cron triggers.
+
+## Testing Cron Jobs Locally
+
+### Quick Test
+
+1. **Start the dev server:**
+```bash
+pnpm dev
+# or
+wrangler dev
+```
+
+2. **In another terminal, trigger the cron:**
+```bash
+# Easy way - use the helper script
+./scripts/test-cron-local.sh
+
+# Or manually trigger with curl
+curl "http://localhost:8787/__scheduled?cron=0+*+*+*+*"
+```
+
+### What to Expect
+
+You should see logs in your `wrangler dev` terminal showing:
+- 🚀 Calendar sync starting
+- 📋 Rooms being processed
+- ✅ Sync results
+- 📝 Summary stored in KV
+
+### Verify Results
+
+```bash
+# Check sync logs in database
+wrangler d1 execute irishette-dev --command="SELECT * FROM ical_sync_log ORDER BY createdAt DESC LIMIT 5;" --local
+
+# View KV sync summaries
+wrangler kv key list --namespace-id="481a64572c1145de958404c9512755d6" --prefix="sync_summary:"
+```
+
+## Cron Schedules
+
+- **Hourly (0 * * * *)**: Syncs external calendars from Airbnb and Expedia
+- **Weekly (0 2 * * 7)**: Cleans up old sync logs
+
+## Documentation
+
+- [Testing Cron Jobs Locally](./docs/TESTING_CRON_JOBS_LOCALLY.md) - Detailed testing guide
+- [Cron Jobs Setup](./docs/CRON_JOBS_SETUP.md) - Complete setup documentation
+- [Quick Start](./docs/CRON_QUICKSTART.md) - One-page reference
+
 # Learn More
 
 You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).

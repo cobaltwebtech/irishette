@@ -8,6 +8,7 @@ import { drizzle } from 'drizzle-orm/d1';
 import { Resend } from 'resend';
 import Stripe from 'stripe';
 import { MagicLinkEmail } from '@/components/email/MagicLinkEmail';
+import { PasswordReset } from '@/components/email/PasswordReset';
 import * as authSchema from '@/db/auth-schema';
 // Initialize Drizzle with the Cloudflare D1 database
 export const createDrizzle = (db: D1Database) =>
@@ -22,33 +23,6 @@ export const auth = async () => {
 
 	// Initialize Resend for email service
 	const resend = new Resend(env.RESEND_API_KEY);
-
-	// For development, use a simpler configuration without database
-	if (import.meta.env.DEV && (!env.DB || Object.keys(env.DB).length === 0)) {
-		console.warn(
-			'Running in dev mode without D1 database - using memory storage',
-		);
-		return betterAuth({
-			secret: env.BETTER_AUTH_SECRET,
-			baseURL: env.BETTER_AUTH_URL,
-			// No database adapter for development
-			plugins: [
-				admin(),
-				magicLink({
-					sendMagicLink: async ({ email, url }) => {
-						console.log('DEV: Magic link for', email, ':', url);
-						// Don't send emails in development
-					},
-				}),
-				stripe({
-					stripeClient,
-					stripeWebhookSecret: env.STRIPE_BETTER_AUTH_WEBHOOK_SECRET,
-					createCustomerOnSignUp: true,
-				}),
-				reactStartCookies(),
-			],
-		});
-	}
 
 	return betterAuth({
 		secret: env.BETTER_AUTH_SECRET,
@@ -71,6 +45,25 @@ export const auth = async () => {
 			ipAddress: {
 				// Cloudflare specific header for rate limiting
 				ipAddressHeaders: ['cf-connecting-ip'],
+			},
+		},
+		emailAndPassword: {
+			enabled: true,
+			requireEmailVerification: true,
+			sendResetPassword: async ({ user, url }) => {
+				try {
+					await resend.emails.send({
+						from: 'Irishette <auth@contact.cobaltweb.tech>',
+						to: user.email,
+						subject: 'Password Reset',
+						react: await PasswordReset({
+							url: url,
+						}),
+					});
+				} catch (error) {
+					console.error('Error sending password reset:', error);
+					throw error;
+				}
 			},
 		},
 		plugins: [

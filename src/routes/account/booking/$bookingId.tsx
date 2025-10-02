@@ -31,7 +31,7 @@ function BookingDetailPage() {
 	// Redirect if not logged in
 	useEffect(() => {
 		if (!isPending && !session) {
-			router.navigate({ to: '/login' });
+			router.navigate({ to: '/auth/login' });
 		}
 	}, [session, isPending, router]);
 

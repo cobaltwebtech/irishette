@@ -74,7 +74,7 @@ export default function Header() {
 						) : (
 							// Unauthenticated user - always show this if not pending and no session
 							<Button variant="accent" asChild>
-								<Link to="/login">
+								<Link to="/auth/login">
 									<Luggage className="size-5" />
 									View Bookings
 								</Link>

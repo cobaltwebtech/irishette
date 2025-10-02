@@ -86,7 +86,7 @@ function LogoutPage() {
 							Return to Home
 						</Link>
 						<Link
-							to="/login"
+							to="/auth/login"
 							className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors w-full"
 						>
 							Sign In Again
