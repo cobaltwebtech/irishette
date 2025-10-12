@@ -155,6 +155,7 @@ export class iCalService {
 			// Process each event
 			for (const event of events) {
 				const dates = this.getDateRange(event.startDate, event.endDate);
+				const now = new Date();
 
 				for (const date of dates) {
 					await this.db
@@ -167,8 +168,8 @@ export class iCalService {
 							isBlocked: true,
 							source: platform,
 							externalBookingId: event.uid,
-							createdAt: new Date(),
-							updatedAt: new Date(),
+							createdAt: now,
+							updatedAt: now,
 						})
 						.onConflictDoUpdate({
 							target: [roomAvailability.roomId, roomAvailability.date],
@@ -177,7 +178,7 @@ export class iCalService {
 								isBlocked: true,
 								source: platform,
 								externalBookingId: event.uid,
-								updatedAt: new Date(),
+								updatedAt: now,
 							},
 						});
 				}
@@ -188,11 +189,12 @@ export class iCalService {
 			// Update room sync timestamp
 			const updateField =
 				platform === 'airbnb' ? 'lastAirbnbSync' : 'lastExpediaSync';
+			const syncTime = new Date();
 			await this.db
 				.update(room)
 				.set({
-					[updateField]: new Date(),
-					updatedAt: new Date(),
+					[updateField]: syncTime,
+					updatedAt: syncTime,
 				})
 				.where(eq(room.id, roomId));
 
@@ -201,17 +203,32 @@ export class iCalService {
 			errorMessage = error instanceof Error ? error.message : 'Unknown error';
 			return { success: false, bookingsProcessed, errorMessage };
 		} finally {
-			// Log sync attempt
-			await this.db.insert(icalSyncLog).values({
-				id: nanoid(),
-				roomId,
-				platform,
-				status: errorMessage ? 'error' : 'success',
-				bookingsProcessed,
-				errorMessage,
-				syncDuration: Date.now() - syncStartTime,
-				createdAt: new Date(),
-			});
+			// Log sync attempt with error handling
+			try {
+				// Truncate error message if too long (SQLite has limits, D1 has stricter ones)
+				const truncatedError = errorMessage
+					? errorMessage.length > 500
+						? `${errorMessage.substring(0, 500)}... (truncated)`
+						: errorMessage
+					: undefined;
+
+				await this.db.insert(icalSyncLog).values({
+					id: nanoid(),
+					roomId,
+					platform,
+					status: errorMessage ? 'error' : 'success',
+					bookingsProcessed,
+					errorMessage: truncatedError,
+					syncDuration: Date.now() - syncStartTime,
+					createdAt: new Date(),
+				});
+			} catch (logError) {
+				// If logging fails, just console.error it - don't throw
+				console.error(
+					`Failed to log sync result for ${platform}:`,
+					logError instanceof Error ? logError.message : logError,
+				);
+			}
 		}
 	}
 
