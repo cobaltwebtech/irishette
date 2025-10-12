@@ -171,30 +171,56 @@ export class iCalService {
 
 			// Insert/update availability records
 			// Note: Each insert must be separate due to onConflictDoUpdate
+			let insertErrors = 0;
 			for (const [date, externalBookingId] of datesToBlock) {
-				await this.db
-					.insert(roomAvailability)
-					.values({
-						id: nanoid(),
-						roomId,
-						date,
-						isAvailable: false,
-						isBlocked: true,
-						source: platform,
-						externalBookingId,
-						createdAt: now,
-						updatedAt: now,
-					})
-					.onConflictDoUpdate({
-						target: [roomAvailability.roomId, roomAvailability.date],
-						set: {
+				try {
+					await this.db
+						.insert(roomAvailability)
+						.values({
+							id: nanoid(),
+							roomId,
+							date,
 							isAvailable: false,
 							isBlocked: true,
 							source: platform,
 							externalBookingId,
+							createdAt: now,
 							updatedAt: now,
-						},
-					});
+						})
+						.onConflictDoUpdate({
+							target: [roomAvailability.roomId, roomAvailability.date],
+							set: {
+								isAvailable: false,
+								isBlocked: true,
+								source: platform,
+								externalBookingId,
+								updatedAt: now,
+							},
+						});
+				} catch (insertError) {
+					insertErrors++;
+					// Log but continue processing other dates
+					if (insertErrors === 1) {
+						// Only log the first error to avoid spam
+						console.warn(
+							`⚠️ Error inserting availability for ${date}:`,
+							insertError instanceof Error
+								? insertError.message.substring(0, 100)
+								: 'Unknown',
+						);
+					}
+				}
+			}
+
+			// If we had too many insert errors, consider it a failure
+			if (insertErrors > datesToBlock.size * 0.5) {
+				throw new Error(
+					`Too many insert errors (${insertErrors}/${datesToBlock.size})`,
+				);
+			} else if (insertErrors > 0) {
+				console.warn(
+					`⚠️ Completed with ${insertErrors} errors out of ${datesToBlock.size} dates`,
+				);
 			}
 
 			// Update room sync timestamp
@@ -211,15 +237,35 @@ export class iCalService {
 
 			return { success: true, bookingsProcessed };
 		} catch (error) {
-			errorMessage = error instanceof Error ? error.message : 'Unknown error';
+			// Extract a clean error message, avoiding nested SQL queries
+			let cleanErrorMessage = 'Unknown error';
+			if (error instanceof Error) {
+				// If it's a database error, extract just the first line/core message
+				const fullMessage = error.message;
+				if (fullMessage.includes('Failed query:')) {
+					// Extract just the error type, not the full SQL
+					const match = fullMessage.match(/^([^:]+):/);
+					cleanErrorMessage = match
+						? match[1]
+						: 'Database operation failed';
+				} else {
+					cleanErrorMessage = fullMessage;
+				}
+			}
+			// Ensure message is reasonably short
+			errorMessage =
+				cleanErrorMessage.length > 200
+					? `${cleanErrorMessage.substring(0, 200)}...`
+					: cleanErrorMessage;
+
 			return { success: false, bookingsProcessed, errorMessage };
 		} finally {
 			// Log sync attempt with error handling
 			try {
-				// Truncate error message if too long (SQLite has limits, D1 has stricter ones)
+				// Further truncate for database storage (max 150 chars to be safe)
 				const truncatedError = errorMessage
-					? errorMessage.length > 500
-						? `${errorMessage.substring(0, 500)}... (truncated)`
+					? errorMessage.length > 150
+						? `${errorMessage.substring(0, 150)}...`
 						: errorMessage
 					: undefined;
 
@@ -235,10 +281,14 @@ export class iCalService {
 				});
 			} catch (logError) {
 				// If logging fails, just console.error it - don't throw
-				console.error(
-					`Failed to log sync result for ${platform}:`,
-					logError instanceof Error ? logError.message : logError,
-				);
+				// Extract just the core error, not nested SQL
+				const logErrorMsg =
+					logError instanceof Error
+						? logError.message.includes('Failed query:')
+							? 'Database logging failed'
+							: logError.message.substring(0, 100)
+						: 'Unknown logging error';
+				console.error(`Failed to log sync result for ${platform}:`, logErrorMsg);
 			}
 		}
 	}
