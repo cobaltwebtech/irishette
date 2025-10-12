@@ -72,13 +72,24 @@ export async function scheduledCalendarSync(env: ScheduledEnv) {
 						);
 					} else {
 						totalErrors++;
-						console.error(`  ❌ Airbnb sync failed: ${result.errorMessage}`);
+						// Truncate long error messages for logging
+						const truncatedError = result.errorMessage
+							? result.errorMessage.length > 200
+								? `${result.errorMessage.substring(0, 200)}... (truncated)`
+								: result.errorMessage
+							: 'Unknown error';
+						console.error(`  ❌ Airbnb sync failed: ${truncatedError}`);
 					}
 				} catch (error) {
 					totalErrors++;
 					const errorMsg =
 						error instanceof Error ? error.message : 'Unknown error';
-					console.error(`  ❌ Airbnb sync error: ${errorMsg}`);
+					// Truncate long error messages for logging
+					const truncatedError =
+						errorMsg.length > 200
+							? `${errorMsg.substring(0, 200)}... (truncated)`
+							: errorMsg;
+					console.error(`  ❌ Airbnb sync error: ${truncatedError}`);
 
 					syncResults.push({
 						roomId: roomData.id,
@@ -118,15 +129,24 @@ export async function scheduledCalendarSync(env: ScheduledEnv) {
 						);
 					} else {
 						totalErrors++;
-						console.error(
-							`  ❌ Expedia.com sync failed: ${result.errorMessage}`,
-						);
+						// Truncate long error messages for logging
+						const truncatedError = result.errorMessage
+							? result.errorMessage.length > 200
+								? `${result.errorMessage.substring(0, 200)}... (truncated)`
+								: result.errorMessage
+							: 'Unknown error';
+						console.error(`  ❌ Expedia.com sync failed: ${truncatedError}`);
 					}
 				} catch (error) {
 					totalErrors++;
 					const errorMsg =
 						error instanceof Error ? error.message : 'Unknown error';
-					console.error(`  ❌ Expedia.com sync error: ${errorMsg}`);
+					// Truncate long error messages for logging
+					const truncatedError =
+						errorMsg.length > 200
+							? `${errorMsg.substring(0, 200)}... (truncated)`
+							: errorMsg;
+					console.error(`  ❌ Expedia.com sync error: ${truncatedError}`);
 
 					syncResults.push({
 						roomId: roomData.id,
@@ -148,7 +168,20 @@ export async function scheduledCalendarSync(env: ScheduledEnv) {
 			totalSynced,
 			totalErrors,
 			timestamp: new Date().toISOString(),
-			syncResults,
+			// Only store summary of results, not full details (reduces size)
+			successfulSyncs: syncResults
+				.filter((r) => r.success)
+				.map((r) => ({ roomId: r.roomId, platform: r.platform })),
+			failedSyncs: syncResults
+				.filter((r) => !r.success)
+				.map((r) => ({
+					roomId: r.roomId,
+					platform: r.platform,
+					error:
+						r.errorMessage && r.errorMessage.length > 100
+							? `${r.errorMessage.substring(0, 100)}...`
+							: r.errorMessage,
+				})),
 		};
 
 		console.log(`🎉 Calendar sync completed:`);
@@ -158,14 +191,20 @@ export async function scheduledCalendarSync(env: ScheduledEnv) {
 		console.log(`  ❌ Errors: ${summary.totalErrors}`);
 
 		// Store summary in KV for monitoring dashboard (optional)
+		// Add a small delay to avoid hitting rate limits after heavy DB operations
 		try {
+			await new Promise((resolve) => setTimeout(resolve, 100));
 			const key = `sync_summary:${Date.now()}`;
 			await env.KV_ICAL_SYNC_LOG.put(key, JSON.stringify(summary), {
 				expirationTtl: 86400 * 7, // Keep for 7 days
 			});
 			console.log(`📝 Sync summary stored in KV: ${key}`);
 		} catch (kvError) {
-			console.error('Failed to store sync summary in KV:', kvError);
+			// KV storage is optional, don't let it break the sync
+			console.warn(
+				'⚠️ Failed to store sync summary in KV (non-critical):',
+				kvError instanceof Error ? kvError.message : 'Unknown error',
+			);
 		}
 
 		return summary;

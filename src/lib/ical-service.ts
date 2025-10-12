@@ -152,38 +152,49 @@ export class iCalService {
 					),
 				);
 
-			// Process each event
+			// Process events and collect all dates to block
+			const now = new Date();
+			const datesToBlock = new Map<string, string>(); // date -> externalBookingId
+
 			for (const event of events) {
 				const dates = this.getDateRange(event.startDate, event.endDate);
-				const now = new Date();
 
 				for (const date of dates) {
-					await this.db
-						.insert(roomAvailability)
-						.values({
-							id: nanoid(),
-							roomId,
-							date,
-							isAvailable: false,
-							isBlocked: true,
-							source: platform,
-							externalBookingId: event.uid,
-							createdAt: now,
-							updatedAt: now,
-						})
-						.onConflictDoUpdate({
-							target: [roomAvailability.roomId, roomAvailability.date],
-							set: {
-								isAvailable: false,
-								isBlocked: true,
-								source: platform,
-								externalBookingId: event.uid,
-								updatedAt: now,
-							},
-						});
+					// If date already exists, keep the first booking ID
+					if (!datesToBlock.has(date)) {
+						datesToBlock.set(date, event.uid);
+					}
 				}
 
 				bookingsProcessed++;
+			}
+
+			// Insert/update availability records
+			// Note: Each insert must be separate due to onConflictDoUpdate
+			for (const [date, externalBookingId] of datesToBlock) {
+				await this.db
+					.insert(roomAvailability)
+					.values({
+						id: nanoid(),
+						roomId,
+						date,
+						isAvailable: false,
+						isBlocked: true,
+						source: platform,
+						externalBookingId,
+						createdAt: now,
+						updatedAt: now,
+					})
+					.onConflictDoUpdate({
+						target: [roomAvailability.roomId, roomAvailability.date],
+						set: {
+							isAvailable: false,
+							isBlocked: true,
+							source: platform,
+							externalBookingId,
+							updatedAt: now,
+						},
+					});
 			}
 
 			// Update room sync timestamp
@@ -282,8 +293,7 @@ export class iCalService {
 			'METHOD:PUBLISH',
 		];
 
-		const now =
-			new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+		const now = `${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z`;
 
 		// Add events for confirmed bookings
 		for (const booking of confirmedBookings) {
