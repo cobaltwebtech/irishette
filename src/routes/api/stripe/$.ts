@@ -148,9 +148,6 @@ async function handleCheckoutCompleted(
 			if (bookingDetails?.booking && bookingDetails?.room) {
 				console.log('Preparing email data...');
 
-				// Get bindings for RESEND_API_KEY
-				// const bindings = getBindings();
-
 				const emailData: BookingEmailData = {
 					confirmationId: bookingDetails.booking.confirmationId,
 					guestName: bookingDetails.booking.guestName,
@@ -250,9 +247,6 @@ async function handleCheckoutCompleted(
 			console.error('Error in email sending process:', emailError);
 			// Don't throw here - email failure shouldn't fail the webhook
 		}
-
-		// TODO: Update room availability
-		// TODO: Trigger other post-booking workflows
 	} catch (error) {
 		console.error('Failed to confirm booking payment:', error);
 		throw error;

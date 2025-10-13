@@ -264,7 +264,7 @@ export async function handleScheduledEvent(
 	try {
 		// Handle different cron schedules
 		switch (cron) {
-			case '0 * * * *': // Every hour - calendar sync
+			case '*/30 * * * *': // Every 30 minutes run calendar sync
 				await scheduledCalendarSync(env);
 				break;
 

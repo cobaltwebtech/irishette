@@ -1,4 +1,3 @@
-// import { getBindings } from '@/utils/bindings';
 import { env } from 'cloudflare:workers';
 import { createFileRoute } from '@tanstack/react-router';
 import {
@@ -13,9 +12,6 @@ export const Route = createFileRoute('/api/send-confirmation-email/$')({
 				try {
 					// Parse request body to get the booking email data
 					const emailData = (await request.json()) as BookingEmailData;
-
-					// Get Cloudflare bindings for environment variables
-					// const bindings = getBindings();
 
 					// Send the confirmation email
 					const emailResult = await sendBookingConfirmationEmail(emailData, {

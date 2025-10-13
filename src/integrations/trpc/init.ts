@@ -3,7 +3,6 @@ import superjson from 'superjson';
 
 export type TRPCContext = {
 	db: D1Database;
-	kv: KVNamespace;
 	env: {
 		STRIPE_SECRET_KEY: string;
 		STRIPE_TRPC_WEBHOOK_SECRET: string;

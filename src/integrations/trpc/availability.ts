@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte, or } from 'drizzle-orm';
+import { and, eq, gte, inArray, lte } from 'drizzle-orm';
 import { z } from 'zod';
 import { createDrizzle } from '@/db/drizzle-init';
 import {
@@ -65,16 +65,17 @@ export const availabilityRouter = createTRPCRouter({
 				throw new Error('Room not found or inactive');
 			}
 
-			// Check availability records for the date range (blocked dates)
+			// Check for blocked periods in roomAvailability (overlapping check-in/check-out)
 			const availabilityResult = await db
 				.select()
 				.from(roomAvailability)
 				.where(
 					and(
 						eq(roomAvailability.roomId, input.roomId),
-						gte(roomAvailability.date, input.startDate),
-						lte(roomAvailability.date, input.endDate),
 						eq(roomAvailability.isBlocked, true),
+						// Overlapping: block starts before our end, block ends after our start
+						lte(roomAvailability.checkInDate, input.endDate),
+						gte(roomAvailability.checkOutDate, input.startDate),
 					),
 				);
 
@@ -86,22 +87,17 @@ export const availabilityRouter = createTRPCRouter({
 					and(
 						eq(bookings.roomId, input.roomId),
 						eq(bookings.status, 'confirmed'),
-						// Check for overlapping date ranges: booking starts before our end AND booking ends after our start
-						or(
-							and(
-								lte(bookings.checkInDate, input.endDate),
-								gte(bookings.checkOutDate, input.startDate),
-							),
-						),
+						lte(bookings.checkInDate, input.endDate),
+						gte(bookings.checkOutDate, input.startDate),
 					),
 				);
 
 			const conflictingAvailability = availabilityResult.map((record) => ({
-				date: record.date,
+				checkInDate: record.checkInDate,
+				checkOutDate: record.checkOutDate,
 				source: record.source,
 				externalBookingId: record.externalBookingId,
 			}));
-
 			const conflictingBookings = bookingResult.map((booking) => ({
 				bookingId: booking.id,
 				confirmationId: booking.confirmationId,
@@ -155,16 +151,16 @@ export const availabilityRouter = createTRPCRouter({
 			const availability = [];
 
 			for (const roomData of roomsResult) {
-				// Check availability for each room
+				// Check for blocked periods in roomAvailability (overlapping check-in/check-out)
 				const availabilityResult = await db
 					.select()
 					.from(roomAvailability)
 					.where(
 						and(
 							eq(roomAvailability.roomId, roomData.id),
-							gte(roomAvailability.date, input.startDate),
-							lte(roomAvailability.date, input.endDate),
 							eq(roomAvailability.isBlocked, true),
+							lte(roomAvailability.checkInDate, input.endDate),
+							gte(roomAvailability.checkOutDate, input.startDate),
 						),
 					);
 
@@ -175,15 +171,10 @@ export const availabilityRouter = createTRPCRouter({
 						and(
 							eq(bookings.roomId, roomData.id),
 							eq(bookings.status, 'confirmed'),
-							or(
-								and(
-									lte(bookings.checkInDate, input.endDate),
-									gte(bookings.checkOutDate, input.startDate),
-								),
-							),
+							lte(bookings.checkInDate, input.endDate),
+							gte(bookings.checkOutDate, input.startDate),
 						),
 					);
-
 				const isAvailable =
 					availabilityResult.length === 0 && bookingResult.length === 0;
 
@@ -317,14 +308,15 @@ export const availabilityRouter = createTRPCRouter({
 				throw new Error('Room not found');
 			}
 
+			// Get all roomAvailability records overlapping the range
 			const availabilityResult = await db
 				.select()
 				.from(roomAvailability)
 				.where(
 					and(
 						eq(roomAvailability.roomId, input.roomId),
-						gte(roomAvailability.date, input.startDate),
-						lte(roomAvailability.date, input.endDate),
+						lte(roomAvailability.checkInDate, input.endDate),
+						gte(roomAvailability.checkOutDate, input.startDate),
 					),
 				);
 
@@ -340,55 +332,49 @@ export const availabilityRouter = createTRPCRouter({
 					),
 				);
 
-			// Create a map to track blocked dates from blocked periods
-			const blockedDatesFromPeriods = new Set<string>();
-			for (const blockedPeriod of blockedPeriodsResult) {
-				const blockStart = new Date(blockedPeriod.startDate);
-				const blockEnd = new Date(blockedPeriod.endDate);
+			// Expand all blocked/booking periods into daily entries for the range
+			const calendarData: Array<{
+				date: string;
+				available: boolean;
+				blocked: boolean;
+				source: string | null;
+				priceOverride: number | null;
+				externalBookingId: string | null;
+			}> = [];
 
-				for (
-					let d = new Date(blockStart);
-					d <= blockEnd;
-					d.setDate(d.getDate() + 1)
-				) {
-					const dateKey = d.toISOString().split('T')[0];
-					if (dateKey >= input.startDate && dateKey <= input.endDate) {
-						blockedDatesFromPeriods.add(dateKey);
-					}
-				}
-			}
+			const start = new Date(input.startDate);
+			const end = new Date(input.endDate);
+			for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+				const dateKey = d.toISOString().split('T')[0];
 
-			// Process availability records and override with blocked periods
-			const calendarData = availabilityResult.map((record) => {
-				const isBlockedByPeriod = blockedDatesFromPeriods.has(record.date);
-				return {
-					date: record.date,
-					available: isBlockedByPeriod ? false : record.isAvailable,
-					blocked: isBlockedByPeriod ? true : record.isBlocked,
-					source: isBlockedByPeriod ? 'blocked' : record.source,
-					priceOverride: record.priceOverride,
-					externalBookingId: record.externalBookingId,
-				};
-			});
+				// Check if this date is blocked by a roomAvailability record
+				const block = availabilityResult.find(
+					(rec) =>
+						rec.isBlocked &&
+						rec.checkInDate <= dateKey &&
+						rec.checkOutDate &&
+						rec.checkOutDate > dateKey, // exclusive checkout
+				);
 
-			// Add entries for dates that are only in blocked periods but not in availability records
-			const existingDates = new Set(availabilityResult.map((r) => r.date));
-			for (const blockedDate of blockedDatesFromPeriods) {
-				if (!existingDates.has(blockedDate)) {
-					calendarData.push({
-						date: blockedDate,
-						available: false,
-						blocked: true,
-						source: 'blocked',
-						priceOverride: null,
-						externalBookingId: null,
-					});
-				}
+				// Check if blocked by a blocked period
+				const blockedPeriod = blockedPeriodsResult.find(
+					(bp) => bp.startDate <= dateKey && bp.endDate >= dateKey,
+				);
+
+				const isBlocked = !!block || !!blockedPeriod;
+
+				calendarData.push({
+					date: dateKey,
+					available: !isBlocked,
+					blocked: isBlocked,
+					source: block ? block.source : blockedPeriod ? 'blocked' : null,
+					priceOverride: block ? block.priceOverride : null,
+					externalBookingId: block ? block.externalBookingId : null,
+				});
 			}
 
 			// Sort by date
 			calendarData.sort((a, b) => a.date.localeCompare(b.date));
-
 			return {
 				roomId: input.roomId,
 				roomSlug: roomResult[0].slug,
@@ -492,15 +478,15 @@ export const availabilityRouter = createTRPCRouter({
 			const endDate =
 				input.endDate || defaultEndDate.toISOString().split('T')[0];
 
-			// Get availability records for the date range
+			// Get all roomAvailability records overlapping the range
 			const availabilityResult = await db
 				.select()
 				.from(roomAvailability)
 				.where(
 					and(
 						eq(roomAvailability.roomId, roomData.id),
-						gte(roomAvailability.date, startDate),
-						lte(roomAvailability.date, endDate),
+						lte(roomAvailability.checkInDate, endDate),
+						gte(roomAvailability.checkOutDate, startDate),
 					),
 				);
 
@@ -546,17 +532,37 @@ export const availabilityRouter = createTRPCRouter({
 				}
 			>();
 
-			// Process availability records
+			// Process roomAvailability records - expand periods into daily entries
 			for (const record of availabilityResult) {
-				dateMap.set(record.date, {
-					available: record.isAvailable ?? true,
-					blocked: record.isBlocked ?? false,
-					price: record.priceOverride || roomData.basePrice,
-					source: record.source || undefined,
-				});
-			}
+				if (!record.checkOutDate) continue;
 
-			// Process booking records - mark dates as unavailable
+				const checkIn = new Date(record.checkInDate);
+				const checkOut = new Date(record.checkOutDate);
+
+				// Mark all dates in availability range
+				for (
+					let d = new Date(checkIn);
+					d < checkOut;
+					d.setDate(d.getDate() + 1)
+				) {
+					const dateKey = d.toISOString().split('T')[0];
+					if (dateKey >= startDate && dateKey <= endDate) {
+						dateMap.set(dateKey, {
+							available: record.isAvailable ?? true,
+							blocked: record.isBlocked ?? false,
+							price: record.priceOverride || roomData.basePrice,
+							source: record.source || undefined,
+							// Include booking info for external bookings so frontend can identify checkout-only dates
+							booking: {
+								id: record.id,
+								confirmationId: record.externalBookingId || record.id,
+								checkInDate: record.checkInDate,
+								checkOutDate: record.checkOutDate,
+							},
+						});
+					}
+				}
+			} // Process booking records - mark dates as unavailable
 			for (const booking of bookingResult) {
 				const checkIn = new Date(booking.checkInDate);
 				const checkOut = new Date(booking.checkOutDate);

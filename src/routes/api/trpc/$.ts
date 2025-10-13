@@ -22,7 +22,6 @@ async function handleTRPCRequest(request: Request): Promise<Response> {
 	// Create tRPC context
 	const context: TRPCContext = {
 		db: env.DB,
-		kv: env.KV_SESSIONS,
 		env: {
 			STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY,
 			STRIPE_TRPC_WEBHOOK_SECRET: env.STRIPE_TRPC_WEBHOOK_SECRET,

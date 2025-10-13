@@ -74,23 +74,6 @@ export class iCalService {
 	}
 
 	/**
-	 * Generate date range between start and end dates
-	 */
-	private getDateRange(startDate: string, endDate: string): string[] {
-		const dates: string[] = [];
-		const start = new Date(startDate);
-		const end = new Date(endDate);
-
-		// Don't include the end date for availability blocking
-		while (start < end) {
-			dates.push(start.toISOString().split('T')[0]);
-			start.setDate(start.getDate() + 1);
-		}
-
-		return dates;
-	}
-
-	/**
 	 * Sync external calendar for a specific room and platform
 	 */
 	async syncExternalCalendar(
@@ -142,9 +125,14 @@ export class iCalService {
 			const icalContent = await response.text();
 			const events = this.parseICalContent(icalContent);
 
-			// Remove existing availability records for this platform
-			await this.db
-				.delete(roomAvailability)
+			console.log(
+				`📅 Parsed ${events.length} events from ${platform} calendar for room ${roomId}`,
+			);
+
+			// Fetch existing availability records for this platform to compare
+			const existingRecords = await this.db
+				.select()
+				.from(roomAvailability)
 				.where(
 					and(
 						eq(roomAvailability.roomId, roomId),
@@ -152,58 +140,195 @@ export class iCalService {
 					),
 				);
 
-			// Process events and collect all dates to block
+			// Create a map of existing bookings for quick lookup using externalBookingId as key
+			const existingBookingsMap = new Map<
+				string,
+				{ id: string; checkInDate: string; checkOutDate: string }
+			>();
+			for (const record of existingRecords) {
+				if (record.externalBookingId && record.checkOutDate) {
+					existingBookingsMap.set(record.externalBookingId, {
+						id: record.id,
+						checkInDate: record.checkInDate,
+						checkOutDate: record.checkOutDate,
+					});
+				}
+			} // Process events and collect all bookings to create/update
 			const now = new Date();
-			const datesToBlock = new Map<string, string>(); // date -> externalBookingId
+			now.setHours(0, 0, 0, 0); // Start of today
+			const bookingsToProcess = new Map<
+				string,
+				{ checkInDate: string; checkOutDate: string }
+			>(); // externalBookingId -> {checkInDate, checkOutDate}
+			let skippedUnavailable = 0;
+			let skippedPast = 0;
 
 			for (const event of events) {
-				const dates = this.getDateRange(event.startDate, event.endDate);
+				// Skip "Unavailable" events - these are just dates blocked on the platform, not actual reservations
+				const isExpediaUnavailable =
+					platform === 'expedia' &&
+					event.summary?.includes('Unavailable on Expedia');
+				const isAirbnbUnavailable =
+					platform === 'airbnb' &&
+					event.summary?.includes('Airbnb (Not available)');
 
-				for (const date of dates) {
-					// If date already exists, keep the first booking ID
-					if (!datesToBlock.has(date)) {
-						datesToBlock.set(date, event.uid);
-					}
+				if (isExpediaUnavailable || isAirbnbUnavailable) {
+					skippedUnavailable++;
+					continue;
 				}
+
+				// Skip past events - only skip if the event has ENDED (not just started) in the past
+				// This ensures ongoing reservations (started yesterday, ends tomorrow) are still processed
+				const eventEndDate = new Date(event.endDate);
+				if (eventEndDate < now) {
+					skippedPast++;
+					console.log(
+						`⏭️ Skipping past event: ${event.summary} (${event.startDate} - ${event.endDate})`,
+					);
+					continue;
+				}
+
+				// Log events being processed
+				console.log(
+					`✅ Processing event: ${event.summary} (${event.startDate} - ${event.endDate})`,
+				);
+
+				// Adjust check-in date if it's in the past (for ongoing reservations)
+				const checkInDate =
+					new Date(event.startDate) < now
+						? now.toISOString().split('T')[0]
+						: event.startDate;
+
+				bookingsToProcess.set(event.uid, {
+					checkInDate,
+					checkOutDate: event.endDate,
+				});
 
 				bookingsProcessed++;
 			}
 
-			// Insert/update availability records
-			// Note: Each insert must be separate due to onConflictDoUpdate
+			// Log filtering results
+			const totalSkipped = skippedUnavailable + skippedPast;
+			if (totalSkipped > 0) {
+				console.log(
+					`🔍 Filtered events: ${bookingsProcessed} relevant, ${totalSkipped} skipped (${skippedUnavailable} unavailable, ${skippedPast} past)`,
+				);
+			}
+
+			console.log(
+				`📊 Total bookings to process: ${bookingsToProcess.size}, Existing bookings in DB: ${existingBookingsMap.size}`,
+			);
+
+			// Compare with existing data to detect changes
+			const bookingsToAdd: string[] = []; // externalBookingIds to add
+			const bookingsToUpdate: string[] = []; // externalBookingIds to update
+			const bookingsToRemove: string[] = []; // database record IDs to remove
+
+			// Find additions and updates
+			for (const [externalBookingId, booking] of bookingsToProcess) {
+				const existingBooking = existingBookingsMap.get(externalBookingId);
+				if (!existingBooking) {
+					// New booking not in database
+					bookingsToAdd.push(externalBookingId);
+				} else if (
+					existingBooking.checkInDate !== booking.checkInDate ||
+					existingBooking.checkOutDate !== booking.checkOutDate
+				) {
+					// Booking exists but dates changed
+					bookingsToUpdate.push(externalBookingId);
+				}
+				// else: no change, skip
+			}
+
+			// Find removals (bookings in DB but not in new calendar)
+			for (const [externalBookingId, existingBooking] of existingBookingsMap) {
+				if (!bookingsToProcess.has(externalBookingId)) {
+					bookingsToRemove.push(existingBooking.id);
+				}
+			}
+
+			const totalChanges =
+				bookingsToAdd.length +
+				bookingsToUpdate.length +
+				bookingsToRemove.length;
+
+			if (totalChanges === 0) {
+				console.log(
+					`✨ No changes detected for ${platform} calendar (${bookingsToProcess.size} bookings unchanged)`,
+				);
+				// Still record the sync but with 0 writes
+				return {
+					success: true,
+					bookingsProcessed,
+					errorMessage: undefined,
+				};
+			}
+
+			console.log(
+				`📝 Changes detected: ${bookingsToAdd.length} additions, ${bookingsToUpdate.length} updates, ${bookingsToRemove.length} removals`,
+			);
+
+			// Remove bookings that are no longer in the calendar
+			if (bookingsToRemove.length > 0) {
+				for (const recordId of bookingsToRemove) {
+					try {
+						await this.db
+							.delete(roomAvailability)
+							.where(eq(roomAvailability.id, recordId));
+					} catch (error) {
+						console.warn(
+							`⚠️ Error removing booking ${recordId}:`,
+							error instanceof Error
+								? error.message.substring(0, 100)
+								: 'Unknown',
+						);
+					}
+				}
+			}
+
+			// Insert new bookings and update changed bookings
+			const bookingsToWrite = [...bookingsToAdd, ...bookingsToUpdate];
 			let insertErrors = 0;
-			for (const [date, externalBookingId] of datesToBlock) {
+
+			for (const externalBookingId of bookingsToWrite) {
+				const booking = bookingsToProcess.get(externalBookingId);
+				if (!booking) continue;
+
+				const existingBooking = existingBookingsMap.get(externalBookingId);
+
 				try {
-					await this.db
-						.insert(roomAvailability)
-						.values({
+					if (existingBooking) {
+						// Update existing booking
+						await this.db
+							.update(roomAvailability)
+							.set({
+								checkInDate: booking.checkInDate,
+								checkOutDate: booking.checkOutDate,
+								updatedAt: now,
+							})
+							.where(eq(roomAvailability.id, existingBooking.id));
+					} else {
+						// Insert new booking
+						await this.db.insert(roomAvailability).values({
 							id: nanoid(),
 							roomId,
-							date,
+							checkInDate: booking.checkInDate,
+							checkOutDate: booking.checkOutDate,
 							isAvailable: false,
 							isBlocked: true,
 							source: platform,
 							externalBookingId,
 							createdAt: now,
 							updatedAt: now,
-						})
-						.onConflictDoUpdate({
-							target: [roomAvailability.roomId, roomAvailability.date],
-							set: {
-								isAvailable: false,
-								isBlocked: true,
-								source: platform,
-								externalBookingId,
-								updatedAt: now,
-							},
 						});
+					}
 				} catch (insertError) {
 					insertErrors++;
-					// Log but continue processing other dates
+					// Log but continue processing other bookings
 					if (insertErrors === 1) {
 						// Only log the first error to avoid spam
 						console.warn(
-							`⚠️ Error inserting availability for ${date}:`,
+							`⚠️ Error writing availability for booking ${externalBookingId}:`,
 							insertError instanceof Error
 								? insertError.message.substring(0, 100)
 								: 'Unknown',
@@ -213,13 +338,13 @@ export class iCalService {
 			}
 
 			// If we had too many insert errors, consider it a failure
-			if (insertErrors > datesToBlock.size * 0.5) {
+			if (insertErrors > bookingsToWrite.length * 0.5) {
 				throw new Error(
-					`Too many insert errors (${insertErrors}/${datesToBlock.size})`,
+					`Too many insert errors (${insertErrors}/${bookingsToWrite.length})`,
 				);
 			} else if (insertErrors > 0) {
 				console.warn(
-					`⚠️ Completed with ${insertErrors} errors out of ${datesToBlock.size} dates`,
+					`⚠️ Completed with ${insertErrors} errors out of ${bookingsToWrite.length} bookings`,
 				);
 			}
 
@@ -245,9 +370,7 @@ export class iCalService {
 				if (fullMessage.includes('Failed query:')) {
 					// Extract just the error type, not the full SQL
 					const match = fullMessage.match(/^([^:]+):/);
-					cleanErrorMessage = match
-						? match[1]
-						: 'Database operation failed';
+					cleanErrorMessage = match ? match[1] : 'Database operation failed';
 				} else {
 					cleanErrorMessage = fullMessage;
 				}
@@ -288,7 +411,10 @@ export class iCalService {
 							? 'Database logging failed'
 							: logError.message.substring(0, 100)
 						: 'Unknown logging error';
-				console.error(`Failed to log sync result for ${platform}:`, logErrorMsg);
+				console.error(
+					`Failed to log sync result for ${platform}:`,
+					logErrorMsg,
+				);
 			}
 		}
 	}

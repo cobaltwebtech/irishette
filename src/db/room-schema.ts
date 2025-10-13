@@ -5,7 +5,6 @@ import {
 	real,
 	sqliteTable,
 	text,
-	unique,
 } from 'drizzle-orm/sqlite-core';
 
 export const room = sqliteTable('room', {
@@ -55,7 +54,10 @@ export const roomAvailability = sqliteTable(
 		roomId: text('room_id')
 			.notNull()
 			.references(() => room.id, { onDelete: 'cascade' }),
-		date: text('date').notNull(), // YYYY-MM-DD
+
+		// Date range for the booking period
+		checkInDate: text('check_in_date').notNull(), // YYYY-MM-DD
+		checkOutDate: text('check_out_date').notNull(), // YYYY-MM-DD
 
 		// Availability status
 		isAvailable: integer('is_available', { mode: 'boolean' }).default(true),
@@ -76,11 +78,13 @@ export const roomAvailability = sqliteTable(
 			.notNull(),
 	},
 	(table) => [
-		// Ensure only one availability record per room per date
-		unique().on(table.roomId, table.date),
+		// Allow multiple bookings for same room (different date ranges)
+		// No unique constraint needed - same room can have multiple bookings
 		index('room_availability_room_id_idx').on(table.roomId),
-		index('room_availability_date_idx').on(table.date),
+		index('room_availability_check_in_date_idx').on(table.checkInDate),
+		index('room_availability_check_out_date_idx').on(table.checkOutDate),
 		index('room_availability_source_idx').on(table.source),
+		index('room_availability_external_booking_idx').on(table.externalBookingId),
 	],
 );
 

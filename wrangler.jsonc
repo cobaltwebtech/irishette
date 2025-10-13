@@ -28,8 +28,8 @@
 	},
 	"triggers": {
 		"crons": [
-			// Every hour - sync external calendars
-			"0 * * * *",
+			// Every 30 minutes - sync external calendars
+			"*/30 * * * *",
 			// Weekly on Sunday at 2 AM - cleanup old logs
 			"0 2 * * 7"
 		]

@@ -1,5 +1,3 @@
-'use client';
-
 import { useQuery } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -55,12 +53,12 @@ export default function RoomAvailabilityCalendar({
 		selectedDateRange,
 	);
 
-	// Calculate date range for the API call (3 months from today)
+	// Calculate date range for the API call (10 months from today)
 	const dateParams = useMemo(() => {
 		const today = new Date();
 		const startDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 		const endDate = new Date();
-		endDate.setMonth(today.getMonth() + 3);
+		endDate.setMonth(today.getMonth() + 10);
 		const endDateStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
 
 		return {
@@ -192,29 +190,49 @@ export default function RoomAvailabilityCalendar({
 				return new Date(year, month - 1, day); // month is 0-indexed in JavaScript Date
 			};
 
+			// Find dates that are blocked but can be used as checkout dates
+			// These are dates where a booking starts (check-in day for someone else)
+			const findCheckoutOnlyDates = () => {
+				const checkoutDates = new Set<string>();
+
+				// Look through all blocked dates to find check-in dates
+				for (let i = 0; i < calendar.length; i++) {
+					const day = calendar[i];
+
+					// If this date is blocked and has booking info
+					if ((!day.available || day.blocked) && day.booking) {
+						// The check-in date of this booking can be used as a checkout date
+						// by someone who books the night before
+						const checkInDate = day.booking.checkInDate;
+						checkoutDates.add(checkInDate);
+					}
+				}
+
+				return Array.from(checkoutDates).map((dateStr) => createDate(dateStr));
+			};
+
+			const checkoutOnly = findCheckoutOnlyDates();
+
 			return {
-				// Available dates
+				// Available dates (excluding checkout-only dates)
 				availableDates: calendar
 					.filter((day: CalendarDay) => day.available && !day.blocked)
 					.map((day: CalendarDay) => createDate(day.date)),
 
-				// External blocked dates that can be used for checkout only (from Airbnb, Expedia, etc.)
-				checkoutOnlyDates: calendar
-					.filter(
-						(day: CalendarDay) =>
-							(!day.available || day.blocked) &&
-							(day.source === 'airbnb' || day.source === 'expedia'),
-					)
-					.map((day: CalendarDay) => createDate(day.date)),
+				// Checkout-only dates: dates that are blocked but can be used as checkout dates
+				checkoutOnlyDates: checkoutOnly,
 
-				// All unavailable dates (combines bookings and blocked periods)
+				// All unavailable dates (excluding checkout-only dates for visual distinction)
 				unavailableDates: calendar
-					.filter(
-						(day: CalendarDay) =>
-							(!day.available || day.blocked) &&
-							day.source !== 'airbnb' &&
-							day.source !== 'expedia',
-					)
+					.filter((day: CalendarDay) => {
+						if (!day.available || day.blocked) {
+							// Exclude checkout-only dates from unavailable visual styling
+							const isCheckoutOnly =
+								day.booking && day.date === day.booking.checkInDate;
+							return !isCheckoutOnly;
+						}
+						return false;
+					})
 					.map((day: CalendarDay) => createDate(day.date)),
 			};
 		}, [availabilityQuery.data?.calendar]);
@@ -244,8 +262,10 @@ export default function RoomAvailabilityCalendar({
 				</button>
 			</div>
 		);
-	} // Custom disabled function that allows checkout on blocked dates
-	const getDisabledDates = (date: Date, selectedRange?: DateRange) => {
+	}
+
+	// Custom disabled function that allows checkout-only dates for range end selection
+	const getDisabledDates = (date: Date) => {
 		// Always disable past dates
 		const today = new Date();
 		today.setHours(0, 0, 0, 0);
@@ -263,23 +283,16 @@ export default function RoomAvailabilityCalendar({
 
 		// If this date is blocked/unavailable
 		if (!dayData.available || dayData.blocked) {
-			// If this is an external block (Airbnb/Expedia), allow it for checkout only
-			if (dayData.source === 'airbnb' || dayData.source === 'expedia') {
-				// If we already have a "from" date selected, check if this could be a valid checkout date
-				if (selectedRange?.from && !selectedRange?.to) {
-					// Allow any external blocked date as checkout (not just next day)
-					return false; // Allow as checkout
-				}
-				// Otherwise, disable for check-in
-				return true;
+			// Check if this is a checkout-only date (check-in date for another booking)
+			const isCheckoutOnly =
+				dayData.booking && dayData.date === dayData.booking.checkInDate;
+
+			// If we're selecting the end date (already have a start date) and this is checkout-only, allow it
+			if (dateRange?.from && !dateRange?.to && isCheckoutOnly) {
+				return false; // Allow as checkout date
 			}
 
-			// If this is a booking block, always disable
-			if (dayData.source === 'booking') {
-				return true;
-			}
-
-			// For any other blocked dates, disable
+			// Otherwise, disable all blocked dates (including checkout-only for check-in)
 			return true;
 		}
 
@@ -293,7 +306,15 @@ export default function RoomAvailabilityCalendar({
 				selected={dateRange}
 				onSelect={handleDateRangeSelect}
 				defaultMonth={dateRange?.from || new Date()}
-				disabled={(date) => getDisabledDates(date, dateRange)}
+				disabled={getDisabledDates}
+				hidden={{
+					before: new Date(),
+					after: (() => {
+						const maxDate = new Date();
+						maxDate.setMonth(maxDate.getMonth() + 10);
+						return maxDate;
+					})(),
+				}}
 				modifiers={{
 					unavailable: unavailableDates,
 					available: availableDates,
@@ -302,10 +323,13 @@ export default function RoomAvailabilityCalendar({
 				modifiersClassNames={{
 					unavailable:
 						'bg-destructive/20 text-destructive line-through opacity-75',
-					available: 'bg-secondary hover:bg-secondary/80 border-primary/20',
+					available:
+						'bg-secondary hover:bg-secondary/80 border-primary/20 hover:rounded-none',
 					checkoutOnly:
-						'bg-gradient-to-br from-secondary from-50% via-white via-0 to-white to-0 text-foreground border-accent/30 hover:bg-secondary/40 opacity-100',
-					selected: 'bg-primary text-primary-foreground hover:bg-primary/90',
+						'bg-secondary/50 border-orange-300 hover:bg-secondary/80 font-medium',
+					selected:
+						'bg-primary text-primary-foreground hover:bg-primary/0 rounded-none',
+					disabled: 'opacity-100 rounded-none',
 				}}
 				numberOfMonths={2}
 				min={minNights}
@@ -338,7 +362,7 @@ export default function RoomAvailabilityCalendar({
 						<span>Available</span>
 					</div>
 					<div className="flex items-center gap-2">
-						<div className="size-6 bg-gradient-to-br from-secondary from-50% via-white via-0 to-white to-0 border border-accent/30 rounded"></div>
+						<div className="size-6 bg-secondary/50 border border-secondary rounded"></div>
 						<span>Checkout Only</span>
 					</div>
 					<div className="flex items-center gap-2">
@@ -352,8 +376,17 @@ export default function RoomAvailabilityCalendar({
 				</div>
 
 				{/* Stay requirements */}
-				<div className="text-muted-foreground text-center text-xs">
-					Your stay must be between {minNights} and {maxNights} nights
+				<div className="text-muted-foreground text-center text-xs space-y-1">
+					<p>
+						Your stay must be between {minNights} and {maxNights} nights
+					</p>
+					<p>
+						Maximum availability to book a room is up to 10 months from today.
+					</p>
+					<p>
+						"Checkout Only" dates can only be selected as your checkout date,
+						not check-in.
+					</p>
 				</div>
 			</div>
 		</div>
