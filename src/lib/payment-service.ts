@@ -1,4 +1,4 @@
-import { and, eq, gte, lte, or } from 'drizzle-orm';
+import { and, eq, gte, lte } from 'drizzle-orm';
 import { customAlphabet, nanoid } from 'nanoid';
 import Stripe from 'stripe';
 import { createDrizzle } from '@/db/drizzle-init';
@@ -261,7 +261,8 @@ export class PaymentService {
 			checkOutDate: string;
 		}>;
 		externalConflicts: Array<{
-			date: string;
+			checkInDate: string;
+			checkOutDate: string;
 			source: string | null;
 			externalBookingId: string | null;
 		}>;
@@ -284,16 +285,17 @@ export class PaymentService {
 			throw new Error('Room not found or inactive');
 		}
 
-		// Check availability records for blocked dates
+		// Check for blocked periods in roomAvailability (overlapping check-in/check-out)
 		const availabilityResult = await this.db
 			.select()
 			.from(roomAvailability)
 			.where(
 				and(
 					eq(roomAvailability.roomId, roomId),
-					gte(roomAvailability.date, startDate),
-					lte(roomAvailability.date, endDate),
 					eq(roomAvailability.isBlocked, true),
+					// Overlapping: block starts before our end, block ends after our start
+					lte(roomAvailability.checkInDate, endDate),
+					gte(roomAvailability.checkOutDate, startDate),
 				),
 			);
 
@@ -306,17 +308,14 @@ export class PaymentService {
 					eq(bookings.roomId, roomId),
 					eq(bookings.status, 'confirmed'),
 					// Check for overlapping date ranges: booking starts before our end AND booking ends after our start
-					or(
-						and(
-							lte(bookings.checkInDate, endDate),
-							gte(bookings.checkOutDate, startDate),
-						),
-					),
+					lte(bookings.checkInDate, endDate),
+					gte(bookings.checkOutDate, startDate),
 				),
 			);
 
 		const conflictingAvailability = availabilityResult.map((record) => ({
-			date: record.date,
+			checkInDate: record.checkInDate,
+			checkOutDate: record.checkOutDate,
 			source: record.source,
 			externalBookingId: record.externalBookingId,
 		}));
@@ -862,49 +861,26 @@ export class PaymentService {
 				checkOutDate,
 			});
 
-			// Generate all dates between check-in and check-out
-			const startDate = new Date(checkInDate);
-			const endDate = new Date(checkOutDate);
-			const dates: string[] = [];
+			// Insert a single blocked period record for the entire booking
+			try {
+				await this.db.insert(roomAvailability).values({
+					id: nanoid(),
+					roomId,
+					checkInDate,
+					checkOutDate,
+					isBlocked: true,
+					source: 'booking_confirmed',
+					externalBookingId: null, // This is an internal booking
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				});
 
-			const currentDate = new Date(startDate);
-			while (currentDate < endDate) {
-				dates.push(currentDate.toISOString().split('T')[0]);
-				currentDate.setDate(currentDate.getDate() + 1);
+				console.log('Room dates blocked successfully as single period');
+			} catch (error) {
+				// If there's a conflict with existing availability record, log it
+				console.error('Failed to block room dates:', error);
+				throw error;
 			}
-
-			// Insert blocked dates into room availability
-			for (const date of dates) {
-				try {
-					await this.db.insert(roomAvailability).values({
-						id: nanoid(),
-						roomId,
-						date,
-						isBlocked: true,
-						source: 'booking_confirmed',
-						externalBookingId: null, // This is an internal booking
-						createdAt: new Date(),
-						updatedAt: new Date(),
-					});
-				} catch {
-					// If date already exists, update it
-					await this.db
-						.update(roomAvailability)
-						.set({
-							isBlocked: true,
-							source: 'booking_confirmed',
-							updatedAt: new Date(),
-						})
-						.where(
-							and(
-								eq(roomAvailability.roomId, roomId),
-								eq(roomAvailability.date, date),
-							),
-						);
-				}
-			}
-
-			console.log('Room dates blocked successfully:', dates.length, 'dates');
 		} catch (error) {
 			console.error('Failed to block room dates:', error);
 			// Don't throw here - booking is already confirmed, this is just cleanup

@@ -11,8 +11,9 @@ import {
 	type SortingState,
 	useReactTable,
 } from '@tanstack/react-table';
-import { ArrowLeft, ArrowUpDown, Edit, Home, Plus, Search } from 'lucide-react';
+import { ArrowUpDown, Edit, Home, Plus, Search } from 'lucide-react';
 import { useId, useMemo, useState } from 'react';
+import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +24,7 @@ import {
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import {
 	Table,
 	TableBody,
@@ -203,15 +205,32 @@ function PropertyManagement() {
 				cell: (info) => (
 					<div>
 						<div className="font-medium">{info.getValue()}</div>
-						<div className="text-sm text-muted-foreground">
-							/{info.row.original.slug}
-						</div>
 						{info.row.original.description && (
 							<div className="text-sm text-muted-foreground mt-1">
 								{info.row.original.description}
 							</div>
 						)}
 					</div>
+				),
+			}),
+			columnHelper.display({
+				id: 'actions',
+				header: 'Actions',
+				size: 100,
+				cell: (info) => (
+					<Link
+						to="/admin/property-management/$roomId"
+						params={{ roomId: info.row.original.id }}
+					>
+						<Button
+							variant="outline"
+							size="sm"
+							className="flex items-center gap-1 whitespace-nowrap"
+						>
+							<Edit className="h-4 w-4" />
+							Edit
+						</Button>
+					</Link>
 				),
 			}),
 			columnHelper.accessor('status', {
@@ -263,26 +282,6 @@ function PropertyManagement() {
 					</span>
 				),
 			}),
-			columnHelper.display({
-				id: 'actions',
-				header: 'Actions',
-				size: 100,
-				cell: (info) => (
-					<Link
-						to="/admin/property-management/$roomId"
-						params={{ roomId: info.row.original.id }}
-					>
-						<Button
-							variant="outline"
-							size="sm"
-							className="flex items-center gap-1 whitespace-nowrap"
-						>
-							<Edit className="h-4 w-4" />
-							Edit
-						</Button>
-					</Link>
-				),
-			}),
 		],
 		[columnHelper],
 	);
@@ -305,38 +304,15 @@ function PropertyManagement() {
 	});
 
 	if (!session) {
-		return (
-			<div className="container mx-auto px-4 py-8">
-				<div className="text-center">
-					<h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-					<p className="mb-4">You must be logged in to access this page.</p>
-					<Link to="/auth/login" className="text-blue-600 hover:underline">
-						Go to Login
-					</Link>
-				</div>
-			</div>
-		);
+		return null; // AdminLayout will handle auth and redirect
 	}
 
 	return (
-		<div className="container mx-auto px-4 py-8">
+		<AdminLayout title="Property Management">
 			<div className="mb-6">
-				<Link
-					to="/admin"
-					className="inline-flex items-center text-blue-600 hover:underline mb-4"
-				>
-					<ArrowLeft className="h-4 w-4 mr-2" />
-					Back to Admin
-				</Link>
 				<div className="flex items-center justify-between">
 					<div>
-						<h1 className="text-3xl font-bold flex items-center gap-2">
-							<Home className="h-8 w-8" />
-							Property Management
-						</h1>
-						<p className="text-gray-600 mt-2">
-							Manage your rooms and properties
-						</p>
+						<p className="text-gray-600 mt-2">Manage rooms for the property</p>
 					</div>
 					<Button onClick={handleAddRoom} className="flex items-center gap-2">
 						<Plus className="h-4 w-4" />
@@ -498,7 +474,7 @@ function PropertyManagement() {
 							</CardContent>
 						</Card>
 					) : (
-						<Card>
+						<Card className="max-w-full overflow-hidden">
 							<CardHeader>
 								<div className="flex items-center justify-between flex-col sm:flex-row gap-4">
 									<CardTitle>
@@ -520,66 +496,69 @@ function PropertyManagement() {
 								</div>
 							</CardHeader>
 							<CardContent>
-								<Table>
-									<TableHeader>
-										{table.getHeaderGroups().map((headerGroup) => (
-											<TableRow key={headerGroup.id}>
-												{headerGroup.headers.map((header) => (
-													<TableHead
-														key={header.id}
-														className={
-															header.id === 'updatedAt'
-																? 'hidden sm:table-cell'
-																: ''
-														}
-													>
-														{header.isPlaceholder
-															? null
-															: flexRender(
-																	header.column.columnDef.header,
-																	header.getContext(),
-																)}
-													</TableHead>
-												))}
-											</TableRow>
-										))}
-									</TableHeader>
-									<TableBody>
-										{table.getRowModel().rows?.length ? (
-											table.getRowModel().rows.map((row) => (
-												<TableRow
-													key={row.id}
-													data-state={row.getIsSelected() && 'selected'}
-												>
-													{row.getVisibleCells().map((cell) => (
-														<TableCell
-															key={cell.id}
+								<ScrollArea className="w-full">
+									<Table>
+										<TableHeader>
+											{table.getHeaderGroups().map((headerGroup) => (
+												<TableRow key={headerGroup.id}>
+													{headerGroup.headers.map((header) => (
+														<TableHead
+															key={header.id}
 															className={
-																cell.column.id === 'updatedAt'
+																header.id === 'updatedAt'
 																	? 'hidden sm:table-cell'
 																	: ''
 															}
 														>
-															{flexRender(
-																cell.column.columnDef.cell,
-																cell.getContext(),
-															)}
-														</TableCell>
+															{header.isPlaceholder
+																? null
+																: flexRender(
+																		header.column.columnDef.header,
+																		header.getContext(),
+																	)}
+														</TableHead>
 													))}
 												</TableRow>
-											))
-										) : (
-											<TableRow>
-												<TableCell
-													colSpan={columns.length}
-													className="h-24 text-center"
-												>
-													No results.
-												</TableCell>
-											</TableRow>
-										)}
-									</TableBody>
-								</Table>
+											))}
+										</TableHeader>
+										<TableBody>
+											{table.getRowModel().rows?.length ? (
+												table.getRowModel().rows.map((row) => (
+													<TableRow
+														key={row.id}
+														data-state={row.getIsSelected() && 'selected'}
+													>
+														{row.getVisibleCells().map((cell) => (
+															<TableCell
+																key={cell.id}
+																className={
+																	cell.column.id === 'updatedAt'
+																		? 'hidden sm:table-cell'
+																		: ''
+																}
+															>
+																{flexRender(
+																	cell.column.columnDef.cell,
+																	cell.getContext(),
+																)}
+															</TableCell>
+														))}
+													</TableRow>
+												))
+											) : (
+												<TableRow>
+													<TableCell
+														colSpan={columns.length}
+														className="h-24 text-center"
+													>
+														No results.
+													</TableCell>
+												</TableRow>
+											)}
+										</TableBody>
+									</Table>
+									<ScrollBar orientation="horizontal" />
+								</ScrollArea>
 
 								{/* Pagination */}
 								<div className="flex items-center justify-between space-x-2 py-4 flex-col sm:flex-row gap-4">
@@ -610,6 +589,6 @@ function PropertyManagement() {
 					)}
 				</>
 			)}
-		</div>
+		</AdminLayout>
 	);
 }

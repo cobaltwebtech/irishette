@@ -13,7 +13,7 @@ export const createBookingSchema = z.object({
 
 	// Guest information
 	guestName: z.string().min(2).max(100),
-	guestEmail: z.string().email(),
+	guestEmail: z.email(),
 	guestPhone: z.string().min(10).max(20),
 
 	// Special requests and notes
@@ -29,8 +29,8 @@ export const createBookingSchema = z.object({
 // Stripe checkout session creation schema
 export const createCheckoutSessionSchema = z.object({
 	bookingId: z.string(), // Temporary booking ID
-	successUrl: z.string().url(),
-	cancelUrl: z.string().url(),
+	successUrl: z.url(),
+	cancelUrl: z.url(),
 });
 
 // Update booking schema for modifications

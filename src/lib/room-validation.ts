@@ -35,8 +35,8 @@ export const roomSchema = z.object({
 	isActive: z.boolean().default(true),
 
 	// iCal sync URLs for external platforms
-	airbnbIcalUrl: z.string().url().optional(),
-	expediaIcalUrl: z.string().url().optional(),
+	airbnbIcalUrl: z.url().optional(),
+	expediaIcalUrl: z.url().optional(),
 
 	// Last sync timestamps (handled by system, not input)
 	lastAirbnbSync: z.date().optional(),

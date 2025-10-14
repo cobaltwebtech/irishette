@@ -6,6 +6,8 @@
 @import "swiper/css/effect-fade";
 @import "tw-animate-css";
 
+@custom-variant dark (&:is(.dark *));
+
 @font-face {
 	font-family: Schibsted Grotesk;
 	font-style: normal;
@@ -22,7 +24,22 @@
 	font-optical-sizing: auto;
 	src: url("/fonts/SchibstedGrotesk-Italic.woff2") format("woff2");
 }
-
+@font-face {
+	font-family: Fleur De Leah;
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	font-optical-sizing: auto;
+	src: url("/fonts/FleurDeLeah.woff2") format("woff2");
+}
+@font-face {
+	font-family: Rye;
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	font-optical-sizing: auto;
+	src: url("/fonts/Rye.woff2") format("woff2");
+}
 :root {
 	--background: oklch(0.98 0.01 90);
 	--foreground: oklch(0.25 0.08 140);
@@ -36,7 +53,7 @@
 	--secondary-foreground: oklch(0.35 0.12 140);
 	--muted: oklch(0.92 0.04 130);
 	--muted-foreground: oklch(0.45 0.1 142);
-	--accent: oklch(0.68 0.15387 51.484);
+	--accent: oklch(0.75 0.183 55.934);
 	--accent-foreground: oklch(0.98 0.01 90);
 	--destructive: oklch(0.65 0.18 25);
 	--destructive-foreground: oklch(0.98 0.01 90);
@@ -63,6 +80,12 @@
 	--default-font-family:
 		"Schibsted Grotesk", ui-sans-serif, system-ui, -apple-system,
 		BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+	--font-fleur:
+		"Fleur De Leah", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+		Roboto, Helvetica, Arial, sans-serif;
+	--font-rye:
+		"Rye", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Roboto,
+		Helvetica, Arial, sans-serif;
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);
 	--color-card: var(--card);
@@ -108,4 +131,15 @@
 	body {
 		@apply bg-background text-foreground;
 	}
+}
+
+.dark {
+	--sidebar: hsl(240 5.9% 10%);
+	--sidebar-foreground: hsl(240 4.8% 95.9%);
+	--sidebar-primary: hsl(224.3 76.3% 48%);
+	--sidebar-primary-foreground: hsl(0 0% 100%);
+	--sidebar-accent: hsl(240 3.7% 15.9%);
+	--sidebar-accent-foreground: hsl(240 4.8% 95.9%);
+	--sidebar-border: hsl(240 3.7% 15.9%);
+	--sidebar-ring: hsl(217.2 91.2% 59.8%);
 }

@@ -21,13 +21,16 @@ import { Route as AuthResetPasswordRouteImport } from './routes/auth/reset-passw
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthForgotPasswordRouteImport } from './routes/auth/forgot-password'
 import { Route as AdminPropertyManagementIndexRouteImport } from './routes/admin/property-management/index'
-import { Route as AdminBookingsIndexRouteImport } from './routes/admin/bookings/index'
+import { Route as AdminGuestIndexRouteImport } from './routes/admin/guest/index'
 import { Route as ApiTrpcSplatRouteImport } from './routes/api/trpc/$'
 import { Route as ApiStripeSplatRouteImport } from './routes/api/stripe/$'
 import { Route as ApiSendConfirmationEmailSplatRouteImport } from './routes/api/send-confirmation-email/$'
 import { Route as ApiIcalSplatRouteImport } from './routes/api/ical/$'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AdminPropertyManagementRoomIdRouteImport } from './routes/admin/property-management/$roomId'
+import { Route as AdminGuestUserIdRouteImport } from './routes/admin/guest/$userId'
+import { Route as AdminBookingsPastBookingsRouteImport } from './routes/admin/bookings/past-bookings'
+import { Route as AdminBookingsCurrentBookingsRouteImport } from './routes/admin/bookings/current-bookings'
 import { Route as AdminBookingsBookingIdRouteImport } from './routes/admin/bookings/$bookingId'
 import { Route as AccountBookingBookingIdRouteImport } from './routes/account/booking/$bookingId'
 
@@ -92,9 +95,9 @@ const AdminPropertyManagementIndexRoute =
     path: '/admin/property-management/',
     getParentRoute: () => rootRouteImport,
   } as any)
-const AdminBookingsIndexRoute = AdminBookingsIndexRouteImport.update({
-  id: '/admin/bookings/',
-  path: '/admin/bookings/',
+const AdminGuestIndexRoute = AdminGuestIndexRouteImport.update({
+  id: '/admin/guest/',
+  path: '/admin/guest/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiTrpcSplatRoute = ApiTrpcSplatRouteImport.update({
@@ -129,6 +132,23 @@ const AdminPropertyManagementRoomIdRoute =
     path: '/admin/property-management/$roomId',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AdminGuestUserIdRoute = AdminGuestUserIdRouteImport.update({
+  id: '/admin/guest/$userId',
+  path: '/admin/guest/$userId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminBookingsPastBookingsRoute =
+  AdminBookingsPastBookingsRouteImport.update({
+    id: '/admin/bookings/past-bookings',
+    path: '/admin/bookings/past-bookings',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AdminBookingsCurrentBookingsRoute =
+  AdminBookingsCurrentBookingsRouteImport.update({
+    id: '/admin/bookings/current-bookings',
+    path: '/admin/bookings/current-bookings',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AdminBookingsBookingIdRoute = AdminBookingsBookingIdRouteImport.update({
   id: '/admin/bookings/$bookingId',
   path: '/admin/bookings/$bookingId',
@@ -154,13 +174,16 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminIndexRoute
   '/account/booking/$bookingId': typeof AccountBookingBookingIdRoute
   '/admin/bookings/$bookingId': typeof AdminBookingsBookingIdRoute
+  '/admin/bookings/current-bookings': typeof AdminBookingsCurrentBookingsRoute
+  '/admin/bookings/past-bookings': typeof AdminBookingsPastBookingsRoute
+  '/admin/guest/$userId': typeof AdminGuestUserIdRoute
   '/admin/property-management/$roomId': typeof AdminPropertyManagementRoomIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/ical/$': typeof ApiIcalSplatRoute
   '/api/send-confirmation-email/$': typeof ApiSendConfirmationEmailSplatRoute
   '/api/stripe/$': typeof ApiStripeSplatRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
-  '/admin/bookings': typeof AdminBookingsIndexRoute
+  '/admin/guest': typeof AdminGuestIndexRoute
   '/admin/property-management': typeof AdminPropertyManagementIndexRoute
 }
 export interface FileRoutesByTo {
@@ -177,13 +200,16 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminIndexRoute
   '/account/booking/$bookingId': typeof AccountBookingBookingIdRoute
   '/admin/bookings/$bookingId': typeof AdminBookingsBookingIdRoute
+  '/admin/bookings/current-bookings': typeof AdminBookingsCurrentBookingsRoute
+  '/admin/bookings/past-bookings': typeof AdminBookingsPastBookingsRoute
+  '/admin/guest/$userId': typeof AdminGuestUserIdRoute
   '/admin/property-management/$roomId': typeof AdminPropertyManagementRoomIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/ical/$': typeof ApiIcalSplatRoute
   '/api/send-confirmation-email/$': typeof ApiSendConfirmationEmailSplatRoute
   '/api/stripe/$': typeof ApiStripeSplatRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
-  '/admin/bookings': typeof AdminBookingsIndexRoute
+  '/admin/guest': typeof AdminGuestIndexRoute
   '/admin/property-management': typeof AdminPropertyManagementIndexRoute
 }
 export interface FileRoutesById {
@@ -201,13 +227,16 @@ export interface FileRoutesById {
   '/admin/': typeof AdminIndexRoute
   '/account/booking/$bookingId': typeof AccountBookingBookingIdRoute
   '/admin/bookings/$bookingId': typeof AdminBookingsBookingIdRoute
+  '/admin/bookings/current-bookings': typeof AdminBookingsCurrentBookingsRoute
+  '/admin/bookings/past-bookings': typeof AdminBookingsPastBookingsRoute
+  '/admin/guest/$userId': typeof AdminGuestUserIdRoute
   '/admin/property-management/$roomId': typeof AdminPropertyManagementRoomIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/ical/$': typeof ApiIcalSplatRoute
   '/api/send-confirmation-email/$': typeof ApiSendConfirmationEmailSplatRoute
   '/api/stripe/$': typeof ApiStripeSplatRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
-  '/admin/bookings/': typeof AdminBookingsIndexRoute
+  '/admin/guest/': typeof AdminGuestIndexRoute
   '/admin/property-management/': typeof AdminPropertyManagementIndexRoute
 }
 export interface FileRouteTypes {
@@ -226,13 +255,16 @@ export interface FileRouteTypes {
     | '/admin'
     | '/account/booking/$bookingId'
     | '/admin/bookings/$bookingId'
+    | '/admin/bookings/current-bookings'
+    | '/admin/bookings/past-bookings'
+    | '/admin/guest/$userId'
     | '/admin/property-management/$roomId'
     | '/api/auth/$'
     | '/api/ical/$'
     | '/api/send-confirmation-email/$'
     | '/api/stripe/$'
     | '/api/trpc/$'
-    | '/admin/bookings'
+    | '/admin/guest'
     | '/admin/property-management'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -249,13 +281,16 @@ export interface FileRouteTypes {
     | '/admin'
     | '/account/booking/$bookingId'
     | '/admin/bookings/$bookingId'
+    | '/admin/bookings/current-bookings'
+    | '/admin/bookings/past-bookings'
+    | '/admin/guest/$userId'
     | '/admin/property-management/$roomId'
     | '/api/auth/$'
     | '/api/ical/$'
     | '/api/send-confirmation-email/$'
     | '/api/stripe/$'
     | '/api/trpc/$'
-    | '/admin/bookings'
+    | '/admin/guest'
     | '/admin/property-management'
   id:
     | '__root__'
@@ -272,13 +307,16 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/account/booking/$bookingId'
     | '/admin/bookings/$bookingId'
+    | '/admin/bookings/current-bookings'
+    | '/admin/bookings/past-bookings'
+    | '/admin/guest/$userId'
     | '/admin/property-management/$roomId'
     | '/api/auth/$'
     | '/api/ical/$'
     | '/api/send-confirmation-email/$'
     | '/api/stripe/$'
     | '/api/trpc/$'
-    | '/admin/bookings/'
+    | '/admin/guest/'
     | '/admin/property-management/'
   fileRoutesById: FileRoutesById
 }
@@ -296,13 +334,16 @@ export interface RootRouteChildren {
   AdminIndexRoute: typeof AdminIndexRoute
   AccountBookingBookingIdRoute: typeof AccountBookingBookingIdRoute
   AdminBookingsBookingIdRoute: typeof AdminBookingsBookingIdRoute
+  AdminBookingsCurrentBookingsRoute: typeof AdminBookingsCurrentBookingsRoute
+  AdminBookingsPastBookingsRoute: typeof AdminBookingsPastBookingsRoute
+  AdminGuestUserIdRoute: typeof AdminGuestUserIdRoute
   AdminPropertyManagementRoomIdRoute: typeof AdminPropertyManagementRoomIdRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiIcalSplatRoute: typeof ApiIcalSplatRoute
   ApiSendConfirmationEmailSplatRoute: typeof ApiSendConfirmationEmailSplatRoute
   ApiStripeSplatRoute: typeof ApiStripeSplatRoute
   ApiTrpcSplatRoute: typeof ApiTrpcSplatRoute
-  AdminBookingsIndexRoute: typeof AdminBookingsIndexRoute
+  AdminGuestIndexRoute: typeof AdminGuestIndexRoute
   AdminPropertyManagementIndexRoute: typeof AdminPropertyManagementIndexRoute
 }
 
@@ -392,11 +433,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPropertyManagementIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/bookings/': {
-      id: '/admin/bookings/'
-      path: '/admin/bookings'
-      fullPath: '/admin/bookings'
-      preLoaderRoute: typeof AdminBookingsIndexRouteImport
+    '/admin/guest/': {
+      id: '/admin/guest/'
+      path: '/admin/guest'
+      fullPath: '/admin/guest'
+      preLoaderRoute: typeof AdminGuestIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/trpc/$': {
@@ -441,6 +482,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPropertyManagementRoomIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/guest/$userId': {
+      id: '/admin/guest/$userId'
+      path: '/admin/guest/$userId'
+      fullPath: '/admin/guest/$userId'
+      preLoaderRoute: typeof AdminGuestUserIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/bookings/past-bookings': {
+      id: '/admin/bookings/past-bookings'
+      path: '/admin/bookings/past-bookings'
+      fullPath: '/admin/bookings/past-bookings'
+      preLoaderRoute: typeof AdminBookingsPastBookingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/bookings/current-bookings': {
+      id: '/admin/bookings/current-bookings'
+      path: '/admin/bookings/current-bookings'
+      fullPath: '/admin/bookings/current-bookings'
+      preLoaderRoute: typeof AdminBookingsCurrentBookingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/bookings/$bookingId': {
       id: '/admin/bookings/$bookingId'
       path: '/admin/bookings/$bookingId'
@@ -472,13 +534,16 @@ const rootRouteChildren: RootRouteChildren = {
   AdminIndexRoute: AdminIndexRoute,
   AccountBookingBookingIdRoute: AccountBookingBookingIdRoute,
   AdminBookingsBookingIdRoute: AdminBookingsBookingIdRoute,
+  AdminBookingsCurrentBookingsRoute: AdminBookingsCurrentBookingsRoute,
+  AdminBookingsPastBookingsRoute: AdminBookingsPastBookingsRoute,
+  AdminGuestUserIdRoute: AdminGuestUserIdRoute,
   AdminPropertyManagementRoomIdRoute: AdminPropertyManagementRoomIdRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiIcalSplatRoute: ApiIcalSplatRoute,
   ApiSendConfirmationEmailSplatRoute: ApiSendConfirmationEmailSplatRoute,
   ApiStripeSplatRoute: ApiStripeSplatRoute,
   ApiTrpcSplatRoute: ApiTrpcSplatRoute,
-  AdminBookingsIndexRoute: AdminBookingsIndexRoute,
+  AdminGuestIndexRoute: AdminGuestIndexRoute,
   AdminPropertyManagementIndexRoute: AdminPropertyManagementIndexRoute,
 }
 export const routeTree = rootRouteImport

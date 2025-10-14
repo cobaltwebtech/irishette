@@ -2,7 +2,6 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import {
 	AlertCircle,
-	ArrowLeft,
 	Calendar,
 	CheckCircle,
 	Copy,
@@ -17,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
+import { AdminLayout } from '@/components/admin/AdminLayout';
 import { PricingRulesManagement } from '@/components/PricingRulesManagement';
 import { RoomBlockingManagement } from '@/components/RoomBlockingManagement';
 import { Badge } from '@/components/ui/badge';
@@ -468,90 +468,37 @@ function EditRoom() {
 		}
 	};
 
-	if (!session) {
-		return (
-			<div className="container mx-auto px-4 py-8">
-				<div className="text-center">
-					<h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-					<p className="mb-4">You must be logged in to access this page.</p>
-					<Link to="/auth/login" className="text-blue-600 hover:underline">
-						Go to Login
-					</Link>
-				</div>
-			</div>
-		);
-	}
-
-	if (loading) {
-		return (
-			<div className="container mx-auto px-4 py-8">
-				<div className="text-center py-8">
-					<div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-					<p className="mt-2 text-gray-600">Loading room...</p>
-				</div>
-			</div>
-		);
-	}
-
-	if (!room) {
-		return (
-			<div className="container mx-auto px-4 py-8">
-				<div className="text-center">
-					<h1 className="text-2xl font-bold mb-4">Room Not Found</h1>
-					<p className="mb-4">The room you're looking for doesn't exist.</p>
-					<Link
-						to="/admin/property-management"
-						className="text-blue-600 hover:underline"
-					>
-						Back to Property Management
-					</Link>
-				</div>
-			</div>
-		);
+	if (!session || loading || !room) {
+		return null; // AdminLayout will handle auth and redirect
 	}
 
 	return (
-		<div className="container mx-auto px-4 py-8">
-			<div className="mb-6">
-				<Link
-					to="/admin/property-management"
-					className="inline-flex items-center text-blue-600 hover:underline mb-4"
-				>
-					<ArrowLeft className="h-4 w-4 mr-2" />
-					Back to Property Management
+		<AdminLayout title={`Edit Room: ${room.name}`}>
+			<div className="mb-6 flex items-center justify-between">
+				<Link to="/admin/property-management">
+					<Button variant="outline" size="sm">
+						← Back to Rooms
+					</Button>
 				</Link>
-				<div className="flex items-center justify-between">
-					<div>
-						<h1 className="text-3xl font-bold flex items-center gap-2">
-							<Edit className="h-8 w-8" />
-							Edit Room: {room.name}
-						</h1>
-						<p className="text-gray-600 mt-2">
-							Update room details and settings
-						</p>
-					</div>
-					<div className="flex gap-2">
-						<Button
-							onClick={handleSaveRoom}
-							disabled={saving}
-							className="flex items-center gap-2"
-						>
-							{saving ? (
-								<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-							) : (
-								<Save className="h-4 w-4" />
-							)}
-							{saving ? 'Saving...' : 'Save Changes'}
-						</Button>
-						<Button
-							variant="outline"
-							onClick={() => navigate({ to: '/admin/property-management' })}
-							className="flex items-center gap-2"
-						>
-							<X className="h-4 w-4" />
-							Cancel
-						</Button>
-					</div>
+				<div className="flex gap-2">
+					<Button
+						onClick={handleSaveRoom}
+						disabled={saving}
+						className="flex items-center gap-2"
+					>
+						{saving ? (
+							<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+						) : (
+							<Save className="h-4 w-4" />
+						)}
+						{saving ? 'Saving...' : 'Save Changes'}
+					</Button>
+					<Badge
+						variant={room.status === 'active' ? 'default' : 'secondary'}
+						className="capitalize text-lg px-4 py-1"
+					>
+						{room.status}
+					</Badge>
 				</div>
 			</div>
 
@@ -1146,6 +1093,6 @@ function EditRoom() {
 					</Card>
 				</div>
 			)}
-		</div>
+		</AdminLayout>
 	);
 }

@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import {
-	ArrowLeft,
 	Calendar,
 	CreditCard,
 	ExternalLink,
@@ -11,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -101,532 +101,431 @@ function AdminBookingDetailPage() {
 		}
 	};
 
-	// Early returns for various states
-	if (isPending || isLoading) {
-		return (
-			<div className="min-h-screen bg-background flex items-center justify-center">
-				<div className="text-center">
-					<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-					<p className="text-muted-foreground">Loading booking details...</p>
-				</div>
-			</div>
-		);
+	// Early returns consolidated - AdminLayout will handle auth
+	if (
+		isPending ||
+		isLoading ||
+		!session ||
+		session.user.role !== 'admin' ||
+		!booking ||
+		!booking.booking ||
+		!booking.room
+	) {
+		return null; // AdminLayout will handle loading/auth states
 	}
 
-	if (!session || session.user.role !== 'admin') {
+	if (error) {
 		return (
-			<div className="min-h-screen bg-background flex items-center justify-center">
-				<div className="text-center">
-					<h2 className="text-2xl font-bold mb-4">Access Denied</h2>
-					<p className="text-muted-foreground">
-						You don't have permission to view this page.
-					</p>
-				</div>
-			</div>
-		);
-	}
-
-	if (error || (!isLoading && !booking)) {
-		return (
-			<div className="min-h-screen bg-background">
-				<div className="bg-primary/5 border-b">
-					<div className="container mx-auto px-4 py-6">
-						<div className="flex items-center gap-4">
-							<Link
-								to="/admin/bookings"
-								className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors"
+			<AdminLayout title="Booking Error">
+				<Card>
+					<CardHeader>
+						<CardTitle>Error</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<p className="text-red-600 mb-4">
+							{error instanceof Error
+								? error.message
+								: 'Failed to load booking details'}
+						</p>
+						<div className="flex gap-2">
+							<Button
+								variant="outline"
+								onClick={() => window.location.reload()}
 							>
-								<ArrowLeft className="w-4 h-4 mr-2" />
-								Back to Bookings
-							</Link>
-						</div>
-					</div>
-				</div>
-				<div className="container mx-auto px-4 py-8">
-					<Card>
-						<CardHeader>
-							<CardTitle>Error</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<p className="text-red-600 mb-4">
-								{error instanceof Error
-									? error.message
-									: 'Failed to load booking details'}
-							</p>
-							<div className="flex gap-2">
-								<Button
-									variant="outline"
-									onClick={() => window.location.reload()}
-								>
-									Try Again
-								</Button>
-								<Link to="/admin/bookings">
-									<Button>Back to Bookings</Button>
-								</Link>
-							</div>
-						</CardContent>
-					</Card>
-				</div>
-			</div>
-		);
-	}
-
-	if (!booking) {
-		return (
-			<div className="min-h-screen bg-background">
-				<div className="bg-primary/5 border-b">
-					<div className="container mx-auto px-4 py-6">
-						<div className="flex items-center gap-4">
-							<Link
-								to="/admin/bookings"
-								className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors"
-							>
-								<ArrowLeft className="w-4 h-4 mr-2" />
-								Back to Bookings
-							</Link>
-						</div>
-					</div>
-				</div>
-				<div className="container mx-auto px-4 py-8">
-					<Card>
-						<CardHeader>
-							<CardTitle>Booking Not Found</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<p className="text-muted-foreground mb-4">
-								The booking you're looking for could not be found.
-							</p>
-							<Link to="/admin/bookings">
+								Try Again
+							</Button>
+							<Link to="/admin/bookings/current-bookings">
 								<Button>Back to Bookings</Button>
 							</Link>
-						</CardContent>
-					</Card>
-				</div>
-			</div>
-		);
-	}
-
-	// Final safety check - should not be needed but prevents runtime errors
-	if (!booking || !booking.booking || !booking.room) {
-		return (
-			<div className="min-h-screen bg-background flex items-center justify-center">
-				<div className="text-center">
-					<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-					<p className="text-muted-foreground">Loading booking details...</p>
-				</div>
-			</div>
+						</div>
+					</CardContent>
+				</Card>
+			</AdminLayout>
 		);
 	}
 
 	return (
-		<div className="min-h-screen bg-background">
-			{/* Header */}
-			<div className="bg-primary/5 border-b">
-				<div className="container mx-auto px-4 py-6">
-					<div className="flex items-center justify-between">
-						<div className="flex items-center gap-4">
-							<Button asChild>
-								<Link to="/admin/bookings">
-									<ArrowLeft className="w-4 h-4 mr-2" />
-									Back to Bookings
-								</Link>
-							</Button>
-							<div>
-								<h1 className="text-2xl font-bold text-foreground">
-									Admin Booking Details
-								</h1>
-								<p className="text-sm text-muted-foreground">
-									Confirmation ID: {booking.booking.confirmationId}
-								</p>
-							</div>
-						</div>
-						<div className="flex items-center gap-2">
-							<Badge
-								variant={
-									booking.booking.status === 'confirmed'
-										? 'default'
-										: booking.booking.status === 'cancelled'
-											? 'destructive'
-											: 'secondary'
-								}
-								className="text-sm"
-							>
-								{booking.booking.status.toUpperCase()}
-							</Badge>
-							<Badge
-								variant={
-									booking.booking.paymentStatus === 'paid'
-										? 'default'
-										: booking.booking.paymentStatus === 'failed'
-											? 'destructive'
-											: 'secondary'
-								}
-								className="text-sm"
-							>
-								{booking.booking.paymentStatus.toUpperCase()}
-							</Badge>
-						</div>
-					</div>
+		<AdminLayout title={`Booking: ${booking.booking.confirmationId}`}>
+			<div className="mb-6 flex items-center justify-between">
+				<Link to="/admin/bookings/current-bookings">
+					<Button variant="outline" size="sm">
+						← Back to Bookings
+					</Button>
+				</Link>
+				<div className="flex items-center gap-2">
+					<Badge
+						variant={
+							booking.booking.status === 'confirmed'
+								? 'default'
+								: booking.booking.status === 'cancelled'
+									? 'destructive'
+									: 'secondary'
+						}
+						className="text-sm"
+					>
+						{booking.booking.status.toUpperCase()}
+					</Badge>
+					<Badge
+						variant={
+							booking.booking.paymentStatus === 'paid'
+								? 'default'
+								: booking.booking.paymentStatus === 'failed'
+									? 'destructive'
+									: 'secondary'
+						}
+						className="text-sm"
+					>
+						{booking.booking.paymentStatus.toUpperCase()}
+					</Badge>
 				</div>
 			</div>
 
-			{/* Main Content */}
-			<div className="container mx-auto px-4 py-8">
-				<div className="grid lg:grid-cols-3 gap-8">
-					{/* Left Column - Booking Details */}
-					<div className="lg:col-span-2 space-y-6">
-						{/* Customer Information */}
-						<Card>
-							<CardHeader>
-								<CardTitle className="flex items-center gap-2">
-									<User className="w-5 h-5" />
-									Customer Information
-								</CardTitle>
-							</CardHeader>
-							<CardContent className="space-y-4">
-								<div className="grid sm:grid-cols-2 gap-4">
+			<div className="grid lg:grid-cols-3 gap-8">
+				{/* Left Column - Booking Details */}
+				<div className="lg:col-span-2 space-y-6">
+					{/* Customer Information */}
+					<Card>
+						<CardHeader>
+							<CardTitle className="flex items-center gap-2">
+								<User className="w-5 h-5" />
+								Customer Information
+							</CardTitle>
+						</CardHeader>
+						<CardContent className="space-y-4">
+							<div className="grid sm:grid-cols-2 gap-4">
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										Guest Name
+									</p>
+									<p className="font-semibold">{booking.booking.guestName}</p>
+								</div>
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										Email
+									</p>
+									<p className="font-semibold">{booking.booking.guestEmail}</p>
+								</div>
+							</div>
+							<div className="grid sm:grid-cols-2 gap-4">
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										Account Email
+									</p>
+									<p className="font-semibold">
+										{(booking as typeof booking & { user?: { email: string } })
+											.user?.email || 'N/A'}
+									</p>
+								</div>
+								{booking.booking.guestPhone && (
 									<div>
 										<p className="text-sm font-medium text-muted-foreground">
-											Guest Name
-										</p>
-										<p className="font-semibold">{booking.booking.guestName}</p>
-									</div>
-									<div>
-										<p className="text-sm font-medium text-muted-foreground">
-											Email
+											Phone
 										</p>
 										<p className="font-semibold">
-											{booking.booking.guestEmail}
-										</p>
-									</div>
-								</div>
-								<div className="grid sm:grid-cols-2 gap-4">
-									<div>
-										<p className="text-sm font-medium text-muted-foreground">
-											Account Email
-										</p>
-										<p className="font-semibold">
-											{(
-												booking as typeof booking & { user?: { email: string } }
-											).user?.email || 'N/A'}
-										</p>
-									</div>
-									{booking.booking.guestPhone && (
-										<div>
-											<p className="text-sm font-medium text-muted-foreground">
-												Phone
-											</p>
-											<p className="font-semibold">
-												{booking.booking.guestPhone}
-											</p>
-										</div>
-									)}
-								</div>
-								{booking.booking.specialRequests && (
-									<div>
-										<p className="text-sm font-medium text-muted-foreground">
-											Special Requests
-										</p>
-										<p className="text-sm bg-muted p-3 rounded-md">
-											{booking.booking.specialRequests}
+											{booking.booking.guestPhone}
 										</p>
 									</div>
 								)}
-							</CardContent>
-						</Card>
-
-						{/* Reservation Details */}
-						<Card>
-							<CardHeader>
-								<CardTitle className="flex items-center gap-2">
-									<Calendar className="w-5 h-5" />
-									Reservation Details
-								</CardTitle>
-							</CardHeader>
-							<CardContent className="space-y-4">
-								<div className="grid sm:grid-cols-2 gap-4">
-									<div>
-										<p className="text-sm font-medium text-muted-foreground">
-											Confirmation ID
-										</p>
-										<Badge
-											variant="secondary"
-											className="font-semibold font-mono tracking-wider text-lg"
-										>
-											{booking.booking.confirmationId}
-										</Badge>
-									</div>
-									<div>
-										<p className="text-sm font-medium text-muted-foreground">
-											Room
-										</p>
-										<p className="font-semibold">{booking.room.name}</p>
-									</div>
+							</div>
+							{booking.booking.specialRequests && (
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										Special Requests
+									</p>
+									<p className="text-sm bg-muted p-3 rounded-md">
+										{booking.booking.specialRequests}
+									</p>
 								</div>
+							)}
+						</CardContent>
+					</Card>
 
-								<div className="grid sm:grid-cols-2 gap-4">
-									<div>
-										<p className="text-sm font-medium text-muted-foreground">
-											Check-in
-										</p>
-										<p className="font-semibold">
-											{new Date(
-												booking.booking.checkInDate + 'T00:00:00',
-											).toLocaleDateString('en-US', {
-												weekday: 'long',
-												year: 'numeric',
-												month: 'long',
-												day: 'numeric',
-											})}
-										</p>
-										<p className="text-sm text-muted-foreground">
-											After 3:00 PM
-										</p>
-									</div>
-									<div>
-										<p className="text-sm font-medium text-muted-foreground">
-											Check-out
-										</p>
-										<p className="font-semibold">
-											{new Date(
-												booking.booking.checkOutDate + 'T00:00:00',
-											).toLocaleDateString('en-US', {
-												weekday: 'long',
-												year: 'numeric',
-												month: 'long',
-												day: 'numeric',
-											})}
-										</p>
-										<p className="text-sm text-muted-foreground">
-											Before 11:00 AM
-										</p>
-									</div>
+					{/* Reservation Details */}
+					<Card>
+						<CardHeader>
+							<CardTitle className="flex items-center gap-2">
+								<Calendar className="w-5 h-5" />
+								Reservation Details
+							</CardTitle>
+						</CardHeader>
+						<CardContent className="space-y-4">
+							<div className="grid sm:grid-cols-2 gap-4">
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										Confirmation ID
+									</p>
+									<Badge
+										variant="secondary"
+										className="font-semibold font-mono tracking-wider text-lg"
+									>
+										{booking.booking.confirmationId}
+									</Badge>
 								</div>
-
-								<div className="grid sm:grid-cols-2 gap-4">
-									<div>
-										<p className="text-sm font-medium text-muted-foreground">
-											Duration
-										</p>
-										<p className="font-semibold">
-											{booking.booking.numberOfNights} night
-											{booking.booking.numberOfNights !== 1 ? 's' : ''}
-										</p>
-									</div>
-									<div>
-										<p className="text-sm font-medium text-muted-foreground">
-											Guests
-										</p>
-										<p className="font-semibold">
-											{booking.booking.numberOfGuests} guest
-											{booking.booking.numberOfGuests !== 1 ? 's' : ''}
-										</p>
-									</div>
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										Room
+									</p>
+									<p className="font-semibold">{booking.room.name}</p>
 								</div>
-							</CardContent>
-						</Card>
+							</div>
 
-						{/* Admin Information */}
-						<Card>
-							<CardHeader>
-								<CardTitle className="flex items-center gap-2">
-									<Settings className="w-5 h-5" />
-									Admin Information
-								</CardTitle>
-							</CardHeader>
-							<CardContent className="space-y-4">
+							<div className="grid sm:grid-cols-2 gap-4">
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										Check-in
+									</p>
+									<p className="font-semibold">
+										{new Date(
+											booking.booking.checkInDate + 'T00:00:00',
+										).toLocaleDateString('en-US', {
+											weekday: 'long',
+											year: 'numeric',
+											month: 'long',
+											day: 'numeric',
+										})}
+									</p>
+									<p className="text-sm text-muted-foreground">After 3:00 PM</p>
+								</div>
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										Check-out
+									</p>
+									<p className="font-semibold">
+										{new Date(
+											booking.booking.checkOutDate + 'T00:00:00',
+										).toLocaleDateString('en-US', {
+											weekday: 'long',
+											year: 'numeric',
+											month: 'long',
+											day: 'numeric',
+										})}
+									</p>
+									<p className="text-sm text-muted-foreground">
+										Before 11:00 AM
+									</p>
+								</div>
+							</div>
+
+							<div className="grid sm:grid-cols-2 gap-4">
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										Duration
+									</p>
+									<p className="font-semibold">
+										{booking.booking.numberOfNights} night
+										{booking.booking.numberOfNights !== 1 ? 's' : ''}
+									</p>
+								</div>
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										Guests
+									</p>
+									<p className="font-semibold">
+										{booking.booking.numberOfGuests} guest
+										{booking.booking.numberOfGuests !== 1 ? 's' : ''}
+									</p>
+								</div>
+							</div>
+						</CardContent>
+					</Card>
+
+					{/* Admin Information */}
+					<Card>
+						<CardHeader>
+							<CardTitle className="flex items-center gap-2">
+								<Settings className="w-5 h-5" />
+								Admin Information
+							</CardTitle>
+						</CardHeader>
+						<CardContent className="space-y-4">
+							<div className="grid sm:grid-cols-2 gap-4">
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										Booking ID
+									</p>
+									<p className="font-mono text-sm">{booking.booking.id}</p>
+								</div>
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										User ID
+									</p>
+									<p className="font-mono text-sm">{booking.booking.userId}</p>
+								</div>
+							</div>
+							<div className="grid sm:grid-cols-2 gap-4">
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										Created At
+									</p>
+									<p className="text-sm">
+										{new Date(booking.booking.createdAt).toLocaleString()}
+									</p>
+								</div>
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										Updated At
+									</p>
+									<p className="text-sm">
+										{new Date(booking.booking.updatedAt).toLocaleString()}
+									</p>
+								</div>
+							</div>
+							{booking.booking.stripeCustomerId && (
 								<div className="grid sm:grid-cols-2 gap-4">
 									<div>
 										<p className="text-sm font-medium text-muted-foreground">
-											Booking ID
-										</p>
-										<p className="font-mono text-sm">{booking.booking.id}</p>
-									</div>
-									<div>
-										<p className="text-sm font-medium text-muted-foreground">
-											User ID
+											Stripe Customer ID
 										</p>
 										<p className="font-mono text-sm">
-											{booking.booking.userId}
+											{booking.booking.stripeCustomerId}
 										</p>
 									</div>
-								</div>
-								<div className="grid sm:grid-cols-2 gap-4">
-									<div>
-										<p className="text-sm font-medium text-muted-foreground">
-											Created At
-										</p>
-										<p className="text-sm">
-											{new Date(booking.booking.createdAt).toLocaleString()}
-										</p>
-									</div>
-									<div>
-										<p className="text-sm font-medium text-muted-foreground">
-											Updated At
-										</p>
-										<p className="text-sm">
-											{new Date(booking.booking.updatedAt).toLocaleString()}
-										</p>
-									</div>
-								</div>
-								{booking.booking.stripeCustomerId && (
-									<div className="grid sm:grid-cols-2 gap-4">
+									{booking.booking.stripePaymentIntentId && (
 										<div>
 											<p className="text-sm font-medium text-muted-foreground">
-												Stripe Customer ID
+												Stripe Payment Intent ID
 											</p>
 											<p className="font-mono text-sm">
-												{booking.booking.stripeCustomerId}
+												{booking.booking.stripePaymentIntentId}
 											</p>
 										</div>
-										{booking.booking.stripePaymentIntentId && (
-											<div>
-												<p className="text-sm font-medium text-muted-foreground">
-													Stripe Payment Intent ID
-												</p>
-												<p className="font-mono text-sm">
-													{booking.booking.stripePaymentIntentId}
-												</p>
-											</div>
-										)}
-									</div>
-								)}
-								{booking.booking.internalNotes && (
-									<div>
-										<p className="text-sm font-medium text-muted-foreground">
-											Internal Notes
-										</p>
-										<p className="text-sm bg-yellow-50 border border-yellow-200 p-3 rounded-md">
-											{booking.booking.internalNotes}
-										</p>
-									</div>
-								)}
-							</CardContent>
-						</Card>
-					</div>
+									)}
+								</div>
+							)}
+							{booking.booking.internalNotes && (
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										Internal Notes
+									</p>
+									<p className="text-sm bg-yellow-50 border border-yellow-200 p-3 rounded-md">
+										{booking.booking.internalNotes}
+									</p>
+								</div>
+							)}
+						</CardContent>
+					</Card>
+				</div>
 
-					{/* Right Column - Pricing Summary & Actions */}
-					<div className="lg:col-span-1">
-						<Card className="sticky top-4">
-							<CardHeader>
-								<CardTitle className="flex items-center gap-2">
-									<CreditCard className="w-5 h-5" />
-									Pricing Summary
-								</CardTitle>
-							</CardHeader>
-							<CardContent className="space-y-4">
-								<div className="space-y-3">
-									<div className="flex justify-between items-center">
-										<span className="text-sm">
-											$
-											{(
-												booking.booking.baseAmount /
-												booking.booking.numberOfNights
-											).toFixed(2)}{' '}
-											x {booking.booking.numberOfNights} night
-											{booking.booking.numberOfNights !== 1 ? 's' : ''}
-										</span>
-										<span className="font-medium">
-											${booking.booking.baseAmount.toFixed(2)}
-										</span>
-									</div>
-
-									{booking.booking.feesAmount &&
-										booking.booking.feesAmount > 0 && (
-											<div className="flex justify-between items-center">
-												<span className="text-sm">Service Fee</span>
-												<span className="font-medium">
-													${booking.booking.feesAmount.toFixed(2)}
-												</span>
-											</div>
-										)}
-
-									{booking.booking.taxAmount &&
-										booking.booking.taxAmount > 0 && (
-											<div className="flex justify-between items-center">
-												<span className="text-sm">Taxes</span>
-												<span className="font-medium">
-													${booking.booking.taxAmount.toFixed(2)}
-												</span>
-											</div>
-										)}
-
-									{booking.booking.discountAmount &&
-										booking.booking.discountAmount > 0 && (
-											<div className="flex justify-between items-center">
-												<span className="text-sm">Discount</span>
-												<span className="font-medium text-green-600">
-													-${booking.booking.discountAmount.toFixed(2)}
-												</span>
-											</div>
-										)}
+				{/* Right Column - Pricing Summary & Actions */}
+				<div className="lg:col-span-1">
+					<Card className="sticky top-4">
+						<CardHeader>
+							<CardTitle className="flex items-center gap-2">
+								<CreditCard className="w-5 h-5" />
+								Pricing Summary
+							</CardTitle>
+						</CardHeader>
+						<CardContent className="space-y-4">
+							<div className="space-y-3">
+								<div className="flex justify-between items-center">
+									<span className="text-sm">
+										$
+										{(
+											booking.booking.baseAmount /
+											booking.booking.numberOfNights
+										).toFixed(2)}{' '}
+										x {booking.booking.numberOfNights} night
+										{booking.booking.numberOfNights !== 1 ? 's' : ''}
+									</span>
+									<span className="font-medium">
+										${booking.booking.baseAmount.toFixed(2)}
+									</span>
 								</div>
 
-								<div className="border-t pt-3">
-									<div className="flex justify-between items-center">
-										<span className="font-semibold">Total</span>
-										<span className="font-bold text-lg">
-											${booking.booking.totalAmount.toFixed(2)}
-										</span>
-									</div>
-								</div>
-
-								{/* Payment Status */}
-								<div className="border-t pt-3">
-									<div className="flex justify-between items-center">
-										<span className="text-sm font-medium">Payment Status</span>
-										<Badge
-											variant={
-												booking.booking.paymentStatus === 'paid'
-													? 'default'
-													: booking.booking.paymentStatus === 'failed'
-														? 'destructive'
-														: 'secondary'
-											}
-										>
-											{booking.booking.paymentStatus.toUpperCase()}
-										</Badge>
-									</div>
-								</div>
-
-								{/* Admin Action Buttons */}
-								<div className="border-t pt-4 space-y-2">
-									{booking.booking.stripePaymentIntentId && (
-										<Button variant="outline" className="w-full" asChild>
-											<a
-												href={`https://dashboard.stripe.com/payments/${booking.booking.stripePaymentIntentId}`}
-												target="_blank"
-												rel="noopener noreferrer"
-												className="inline-flex items-center"
-											>
-												<ExternalLink className="w-4 h-4 mr-2" />
-												View Payment at Stripe
-											</a>
-										</Button>
+								{booking.booking.feesAmount &&
+									booking.booking.feesAmount > 0 && (
+										<div className="flex justify-between items-center">
+											<span className="text-sm">Service Fee</span>
+											<span className="font-medium">
+												${booking.booking.feesAmount.toFixed(2)}
+											</span>
+										</div>
 									)}
 
-									<Button
-										onClick={handleResendEmail}
-										disabled={isResendingEmail}
-										variant="outline"
-										className="w-full"
-									>
-										<Mail className="w-4 h-4 mr-2" />
-										{isResendingEmail
-											? 'Sending...'
-											: 'Resend Confirmation Email'}
-									</Button>
+								{booking.booking.taxAmount && booking.booking.taxAmount > 0 && (
+									<div className="flex justify-between items-center">
+										<span className="text-sm">Taxes</span>
+										<span className="font-medium">
+											${booking.booking.taxAmount.toFixed(2)}
+										</span>
+									</div>
+								)}
 
-									<Button variant="outline" className="w-full">
-										<Settings className="w-4 h-4 mr-2" />
-										Cancel Booking (NEED TO IMPLEMENT)
-									</Button>
+								{booking.booking.discountAmount &&
+									booking.booking.discountAmount > 0 && (
+										<div className="flex justify-between items-center">
+											<span className="text-sm">Discount</span>
+											<span className="font-medium text-green-600">
+												-${booking.booking.discountAmount.toFixed(2)}
+											</span>
+										</div>
+									)}
+							</div>
+
+							<div className="border-t pt-3">
+								<div className="flex justify-between items-center">
+									<span className="font-semibold">Total</span>
+									<span className="font-bold text-lg">
+										${booking.booking.totalAmount.toFixed(2)}
+									</span>
 								</div>
-							</CardContent>
-						</Card>
-					</div>
+							</div>
+
+							{/* Payment Status */}
+							<div className="border-t pt-3">
+								<div className="flex justify-between items-center">
+									<span className="text-sm font-medium">Payment Status</span>
+									<Badge
+										variant={
+											booking.booking.paymentStatus === 'paid'
+												? 'default'
+												: booking.booking.paymentStatus === 'failed'
+													? 'destructive'
+													: 'secondary'
+										}
+									>
+										{booking.booking.paymentStatus.toUpperCase()}
+									</Badge>
+								</div>
+							</div>
+
+							{/* Admin Action Buttons */}
+							<div className="border-t pt-4 space-y-2">
+								{booking.booking.stripePaymentIntentId && (
+									<Button variant="outline" className="w-full" asChild>
+										<a
+											href={`https://dashboard.stripe.com/payments/${booking.booking.stripePaymentIntentId}`}
+											target="_blank"
+											rel="noopener noreferrer"
+											className="inline-flex items-center"
+										>
+											<ExternalLink className="w-4 h-4 mr-2" />
+											View Payment at Stripe
+										</a>
+									</Button>
+								)}
+
+								<Button
+									onClick={handleResendEmail}
+									disabled={isResendingEmail}
+									variant="outline"
+									className="w-full"
+								>
+									<Mail className="w-4 h-4 mr-2" />
+									{isResendingEmail
+										? 'Sending...'
+										: 'Resend Confirmation Email'}
+								</Button>
+
+								<Button variant="outline" className="w-full">
+									<Settings className="w-4 h-4 mr-2" />
+									Cancel Booking (NEED TO IMPLEMENT)
+								</Button>
+							</div>
+						</CardContent>
+					</Card>
 				</div>
 			</div>
-		</div>
+		</AdminLayout>
 	);
 }

@@ -75,12 +75,7 @@ function HomePage() {
 							<BedDouble className="size-6" />
 							View Our Rooms
 						</Button>
-						<Button
-							variant="outline"
-							size="lg"
-							className="text-background"
-							asChild
-						>
+						<Button size="lg" className="text-background" asChild>
 							<Link to="/account">
 								<Luggage className="size-6" />
 								View Bookings
@@ -153,7 +148,7 @@ function HomePage() {
 									height={300}
 									className="mx-auto rounded-lg my-2 shadow-md shadow-foreground/50"
 								/>
-								<CardTitle className="flex flex-col items-center gap-2 text-2xl text-rose-600">
+								<CardTitle className="font-fleur flex flex-col items-center gap-2 text-4xl text-rose-600">
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
 										width="24"
@@ -209,7 +204,7 @@ function HomePage() {
 									height={300}
 									className="mx-auto rounded-lg my-2 shadow-md shadow-foreground/50"
 								/>
-								<CardTitle className="flex flex-col items-center gap-2 text-2xl text-blue-600">
+								<CardTitle className="font-rye flex flex-col items-center gap-2 text-3xl text-blue-600">
 									<svg
 										width="512"
 										height="512"

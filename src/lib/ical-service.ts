@@ -182,9 +182,6 @@ export class iCalService {
 				const eventEndDate = new Date(event.endDate);
 				if (eventEndDate < now) {
 					skippedPast++;
-					console.log(
-						`⏭️ Skipping past event: ${event.summary} (${event.startDate} - ${event.endDate})`,
-					);
 					continue;
 				}
 

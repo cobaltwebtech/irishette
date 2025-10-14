@@ -106,7 +106,7 @@ export async function scheduledCalendarSync(env: ScheduledEnv) {
 
 			// Sync expedia calendar if URL exists
 			if (roomData.expediaIcalUrl) {
-				console.log(`  📥 Syncing expedia calendar...`);
+				console.log(`  📥 Syncing Expedia calendar...`);
 				try {
 					const result = await icalService.syncExternalCalendar(
 						roomData.id,
@@ -226,12 +226,6 @@ export async function scheduledCleanup(_env: ScheduledEnv) {
 		const thirtyDaysAgo = new Date();
 		thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-		// Note: Actual database cleanup would be implemented here when needed
-		// For now, we just clean up KV storage of old sync summaries
-		// const db = createDrizzle(env.DB) // Uncomment when implementing actual cleanup
-
-		// Clean up old KV entries (sync summaries older than 30 days)
-		// This is a placeholder - actual implementation would list and delete old keys
 		console.log(
 			`🗑️ Would clean up sync logs older than: ${thirtyDaysAgo.toISOString()}`,
 		);

@@ -11,12 +11,14 @@ import {
 	type SortingState,
 	useReactTable,
 } from '@tanstack/react-table';
-import { ArrowLeft, ArrowUpDown, Search } from 'lucide-react';
+import { ArrowUpDown, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import {
 	Table,
 	TableBody,
@@ -28,8 +30,15 @@ import {
 import { trpc } from '@/integrations/tanstack-query/root-provider';
 import { useSession } from '@/lib/auth-client';
 
-export const Route = createFileRoute('/admin/bookings/')({
-	component: AdminBookings,
+export const Route = createFileRoute('/admin/bookings/past-bookings')({
+	head: () => ({
+		meta: [
+			{
+				title: 'Past Bookings | Irishette.com',
+			},
+		],
+	}),
+	component: PastBookings,
 });
 
 // Define the booking type based on the tRPC response structure
@@ -60,11 +69,14 @@ type BookingData = {
 	};
 };
 
-function AdminBookings() {
+function PastBookings() {
 	const { data: session, isPending } = useSession();
-	const [sorting, setSorting] = useState<SortingState>([]);
+	const [sorting, setSorting] = useState<SortingState>([
+		{ id: 'booking.checkOutDate', desc: true }, // Sort by checkout date, most recent first
+	]);
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 	const [globalFilter, setGlobalFilter] = useState('');
+
 	// Use tRPC query to fetch admin bookings
 	const {
 		data: bookingsData = [],
@@ -78,17 +90,22 @@ function AdminBookings() {
 			},
 			{
 				enabled: !isPending && !!session?.user && session.user.role === 'admin',
-				retry: false, // Avoid retries during SSR issues
+				retry: false,
 				staleTime: 5 * 60 * 1000, // 5 minutes
 			},
 		),
 	);
 
-	// Filter to only show confirmed bookings (exclude pending/incomplete bookings)
+	// Filter to only show past bookings (checkout date is before today)
 	const bookings = useMemo(() => {
-		return bookingsData.filter(
-			(booking) => booking.booking.status === 'confirmed',
-		);
+		const today = new Date();
+		today.setHours(0, 0, 0, 0); // Reset time to start of day for accurate comparison
+
+		return bookingsData.filter((booking) => {
+			const checkOutDate = new Date(booking.booking.checkOutDate + 'T00:00:00');
+			// Include only bookings where checkout date is in the past
+			return checkOutDate < today && booking.booking.status === 'confirmed';
+		});
 	}, [bookingsData]);
 
 	// Create columns using the column helper
@@ -122,11 +139,12 @@ function AdminBookings() {
 				cell: (info) => (
 					<div>
 						<div className="font-medium">{info.getValue()}</div>
-						<div className="text-sm text-muted-foreground">
+						<div className="text-sm text-muted-foreground break-all">
 							{info.row.original.booking.guestEmail}
 						</div>
 					</div>
 				),
+				size: 250,
 			}),
 			columnHelper.accessor('room.slug', {
 				header: 'Room',
@@ -143,7 +161,7 @@ function AdminBookings() {
 						onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
 						className="h-8 px-2"
 					>
-						Check-in
+						Dates
 						<ArrowUpDown className="ml-2 h-4 w-4" />
 					</Button>
 				),
@@ -235,6 +253,11 @@ function AdminBookings() {
 			columnFilters,
 			globalFilter,
 		},
+		initialState: {
+			pagination: {
+				pageSize: 25, // Show more records per page for historical view
+			},
+		},
 	});
 
 	// Early return for loading state
@@ -244,7 +267,7 @@ function AdminBookings() {
 				<div className="flex items-center justify-center h-64">
 					<div className="text-center">
 						<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-						<p className="text-muted-foreground">Loading bookings...</p>
+						<p className="text-muted-foreground">Loading past bookings...</p>
 					</div>
 				</div>
 			</div>
@@ -272,7 +295,9 @@ function AdminBookings() {
 				<div className="text-center">
 					<h2 className="text-2xl font-bold mb-4 text-red-600">Error</h2>
 					<p className="text-muted-foreground mb-4">
-						{error instanceof Error ? error.message : 'Failed to load bookings'}
+						{error instanceof Error
+							? error.message
+							: 'Failed to load past bookings'}
 					</p>
 					<button
 						type="button"
@@ -287,35 +312,24 @@ function AdminBookings() {
 	}
 
 	return (
-		<div className="container mx-auto px-4 py-8">
-			{/* Header */}
-			<div className="mb-8">
-				<div className="flex items-center gap-4 mb-4">
-					<Link
-						to="/admin"
-						className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors"
-					>
-						<ArrowLeft className="w-4 h-4 mr-2" />
-						Back to Dashboard
-					</Link>
-				</div>
-				<h1 className="text-3xl font-bold">All Bookings</h1>
+		<AdminLayout title="Past Bookings">
+			<div className="mb-6">
 				<p className="text-muted-foreground">
-					Manage and view all property bookings
+					Historical records of completed bookings
 				</p>
 			</div>
 
-			<Card>
+			<Card className="max-w-full overflow-hidden">
 				<CardHeader>
 					<div className="flex items-center justify-between">
 						<CardTitle>
-							Bookings ({table.getFilteredRowModel().rows.length})
+							Past Bookings ({table.getFilteredRowModel().rows.length})
 						</CardTitle>
 						<div className="flex items-center gap-2">
 							<div className="relative">
 								<Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
 								<Input
-									placeholder="Search bookings..."
+									placeholder="Search past bookings..."
 									value={globalFilter ?? ''}
 									onChange={(event) =>
 										setGlobalFilter(String(event.target.value))
@@ -327,52 +341,55 @@ function AdminBookings() {
 					</div>
 				</CardHeader>
 				<CardContent>
-					<Table>
-						<TableHeader>
-							{table.getHeaderGroups().map((headerGroup) => (
-								<TableRow key={headerGroup.id}>
-									{headerGroup.headers.map((header) => (
-										<TableHead key={header.id}>
-											{header.isPlaceholder
-												? null
-												: flexRender(
-														header.column.columnDef.header,
-														header.getContext(),
-													)}
-										</TableHead>
-									))}
-								</TableRow>
-							))}
-						</TableHeader>
-						<TableBody>
-							{table.getRowModel().rows?.length ? (
-								table.getRowModel().rows.map((row) => (
-									<TableRow
-										key={row.id}
-										data-state={row.getIsSelected() && 'selected'}
-									>
-										{row.getVisibleCells().map((cell) => (
-											<TableCell key={cell.id}>
-												{flexRender(
-													cell.column.columnDef.cell,
-													cell.getContext(),
-												)}
-											</TableCell>
+					<ScrollArea className="w-full">
+						<Table>
+							<TableHeader>
+								{table.getHeaderGroups().map((headerGroup) => (
+									<TableRow key={headerGroup.id}>
+										{headerGroup.headers.map((header) => (
+											<TableHead key={header.id}>
+												{header.isPlaceholder
+													? null
+													: flexRender(
+															header.column.columnDef.header,
+															header.getContext(),
+														)}
+											</TableHead>
 										))}
 									</TableRow>
-								))
-							) : (
-								<TableRow>
-									<TableCell
-										colSpan={columns.length}
-										className="h-24 text-center"
-									>
-										No bookings found.
-									</TableCell>
-								</TableRow>
-							)}
-						</TableBody>
-					</Table>
+								))}
+							</TableHeader>
+							<TableBody>
+								{table.getRowModel().rows?.length ? (
+									table.getRowModel().rows.map((row) => (
+										<TableRow
+											key={row.id}
+											data-state={row.getIsSelected() && 'selected'}
+										>
+											{row.getVisibleCells().map((cell) => (
+												<TableCell key={cell.id}>
+													{flexRender(
+														cell.column.columnDef.cell,
+														cell.getContext(),
+													)}
+												</TableCell>
+											))}
+										</TableRow>
+									))
+								) : (
+									<TableRow>
+										<TableCell
+											colSpan={columns.length}
+											className="h-24 text-center"
+										>
+											No past bookings found.
+										</TableCell>
+									</TableRow>
+								)}
+							</TableBody>
+						</Table>
+						<ScrollBar orientation="horizontal" />
+					</ScrollArea>
 
 					{/* Pagination */}
 					<div className="flex items-center justify-between space-x-2 py-4">
@@ -387,7 +404,7 @@ function AdminBookings() {
 									table.getState().pagination.pageSize,
 								table.getFilteredRowModel().rows.length,
 							)}{' '}
-							of {table.getFilteredRowModel().rows.length} bookings
+							of {table.getFilteredRowModel().rows.length} past bookings
 						</div>
 						<div className="space-x-2">
 							<Button
@@ -410,6 +427,6 @@ function AdminBookings() {
 					</div>
 				</CardContent>
 			</Card>
-		</div>
+		</AdminLayout>
 	);
 }

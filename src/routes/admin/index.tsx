@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { CalendarDays, House, Pencil } from 'lucide-react';
-import { useEffect } from 'react';
+import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,7 +12,7 @@ export const Route = createFileRoute('/admin/')({
 	head: () => ({
 		meta: [
 			{
-				title: 'Admin Dashboard | Irishette.com',
+				title: 'Property Admin | Irishette.com',
 			},
 		],
 	}),
@@ -34,7 +34,6 @@ type Room = {
 
 function AdminDashboard() {
 	const { data: session, isPending } = useSession();
-	const navigate = useNavigate();
 
 	// Use TanStack Query for rooms
 	const { data: roomsData, isLoading: loadingRooms } = useQuery(
@@ -53,7 +52,6 @@ function AdminDashboard() {
 
 	const rooms = roomsData?.rooms || [];
 
-	// Replace manual loadBookings with useQuery
 	// Replace manual loadBookings with useQuery - using direct trpc import
 	const { data: bookings = [], isLoading: loadingBookings } = useQuery(
 		trpc.bookings.adminListBookings.queryOptions(
@@ -63,23 +61,11 @@ function AdminDashboard() {
 			},
 			{
 				enabled: !isPending && !!session?.user && session.user.role === 'admin',
-				retry: false, // Avoid retries during SSR issues
-				staleTime: 5 * 60 * 1000, // 5 minutes
+				retry: false,
+				staleTime: 5 * 60 * 1000,
 			},
 		),
 	);
-
-	// Client-side auth check
-	useEffect(() => {
-		if (!isPending && (!session?.user || session.user.role !== 'admin')) {
-			navigate({ to: '/' });
-		}
-	}, [session, isPending, navigate]);
-
-	// Show loading or redirect if not authenticated
-	if (isPending || !session?.user || session.user.role !== 'admin') {
-		return <div className="container mx-auto px-4 py-8">Loading...</div>;
-	}
 
 	// Filter bookings to get confirmed ones with check-in date today or in the future
 	const today = new Date();
@@ -107,9 +93,8 @@ function AdminDashboard() {
 		.slice(0, 3);
 
 	return (
-		<div className="container mx-auto px-4 py-8">
-			<div className="mb-8">
-				<h1 className="text-3xl font-bold">Admin Dashboard</h1>
+		<AdminLayout title="Property Admin Dashboard">
+			<div className="mb-6">
 				<p className="text-muted-foreground">
 					Welcome back, {session?.user.name || session?.user.email}
 				</p>
@@ -120,12 +105,12 @@ function AdminDashboard() {
 				<Card>
 					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 						<CardTitle className="text-sm font-medium">
-							Upcoming Bookings
+							Current & Upcoming Bookings
 						</CardTitle>
 						<CalendarDays className="h-4 w-4 text-muted-foreground" />
 					</CardHeader>
 					<CardContent>
-						<Link to="/admin/bookings">
+						<Link to="/admin/bookings/current-bookings">
 							<div className="text-2xl font-bold">
 								{upcomingBookings.length}
 							</div>
@@ -143,27 +128,6 @@ function AdminDashboard() {
 						<div className="text-2xl font-bold">{rooms.length}</div>
 					</CardContent>
 				</Card>
-
-				{/* Quick Actions */}
-				<Card>
-					<CardHeader>
-						<CardTitle>Quick Actions</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className="space-y-3">
-							<Link to="/admin/bookings" className="block">
-								<Button className="w-full justify-start" variant="outline">
-									📋 View All Bookings
-								</Button>
-							</Link>
-							<Link to="/admin/property-management" className="block">
-								<Button className="w-full justify-start" variant="outline">
-									🏠 Property Management
-								</Button>
-							</Link>
-						</div>
-					</CardContent>
-				</Card>
 			</div>
 
 			{/* Rooms and Recent Bookings */}
@@ -172,9 +136,9 @@ function AdminDashboard() {
 				<Card>
 					<CardHeader>
 						<div className="flex items-center justify-between">
-							<CardTitle>Upcoming Bookings</CardTitle>
-							<Link to="/admin/bookings">
-								<Button size="sm">View All Bookings</Button>
+							<CardTitle>Current & Upcoming Bookings</CardTitle>
+							<Link to="/admin/bookings/current-bookings">
+								<Button size="sm">View Current Bookings</Button>
 							</Link>
 						</div>
 					</CardHeader>
@@ -204,10 +168,12 @@ function AdminDashboard() {
 													<p className="text-sm text-muted-foreground">
 														{roomMap[bookingData.booking.roomId] ||
 															'Unknown Room'}{' '}
-														• Check-in:{' '}
-														{new Date(
-															booking.checkInDate + 'T00:00:00',
-														).toLocaleDateString()}
+														<p className="text-sm text-muted-foreground">
+															Check-in:{' '}
+															{new Date(
+																booking.checkInDate + 'T00:00:00',
+															).toLocaleDateString()}
+														</p>
 													</p>
 													<p className="text-xs text-muted-foreground">
 														{booking.numberOfGuests} guest
@@ -302,6 +268,6 @@ function AdminDashboard() {
 					</CardContent>
 				</Card>
 			</div>
-		</div>
+		</AdminLayout>
 	);
 }
