@@ -31,7 +31,7 @@
 			// Every 30 minutes - sync external calendars
 			"*/30 * * * *",
 			// Weekly on Sunday at 2 AM - clean up old logs
-			"0 2 * * 0"
+			"0 2 * * SUN"
 		]
 	}
 }

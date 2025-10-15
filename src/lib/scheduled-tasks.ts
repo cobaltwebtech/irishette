@@ -262,7 +262,7 @@ export async function handleScheduledEvent(
 				await scheduledCalendarSync(env);
 				break;
 
-			case '0 2 * * 0': // Weekly on Sunday at 2 AM - cleanup
+			case '0 2 * * SUN': // Weekly on Sunday at 2 AM - cleanup
 				await scheduledCleanup(env);
 				break;
 
