@@ -46,6 +46,7 @@ export interface BookingState {
 	// Room and dates
 	roomId: string | null;
 	roomSlug: string | null;
+	roomName: string | null;
 	checkInDate: string | null; // ISO date string
 	checkOutDate: string | null; // ISO date string
 	guestCount: number;
@@ -77,6 +78,7 @@ const STORAGE_KEY = 'irishette-booking-draft';
 const initialState: BookingState = {
 	roomId: null,
 	roomSlug: null,
+	roomName: null,
 	checkInDate: null,
 	checkOutDate: null,
 	guestCount: 1,
@@ -140,11 +142,12 @@ bookingStore.subscribe(() => {
 // Store actions/utilities
 export const bookingActions = {
 	// Set room and initial dates
-	setRoom: (roomId: string, roomSlug: string) => {
+	setRoom: (roomId: string, roomSlug: string, roomName?: string) => {
 		bookingStore.setState((state) => ({
 			...state,
 			roomId,
 			roomSlug,
+			roomName: roomName || null,
 			currentStep: 'dates',
 			updatedAt: new Date().toISOString(),
 		}));
@@ -289,6 +292,7 @@ export const bookingActions = {
 		return {
 			roomId: state.roomId as string,
 			roomSlug: state.roomSlug as string,
+			roomName: state.roomName,
 			checkInDate: state.checkInDate as string,
 			checkOutDate: state.checkOutDate as string,
 			guestCount: state.guestCount,
@@ -306,11 +310,12 @@ export const bookingActions = {
 	},
 
 	// Initialize a new booking session
-	initializeBooking: (roomId: string, roomSlug: string) => {
+	initializeBooking: (roomId: string, roomSlug: string, roomName?: string) => {
 		bookingStore.setState({
 			...initialState,
 			roomId,
 			roomSlug,
+			roomName: roomName || null,
 			currentStep: 'dates',
 			createdAt: new Date().toISOString(),
 			updatedAt: new Date().toISOString(),

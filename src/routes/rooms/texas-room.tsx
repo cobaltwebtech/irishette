@@ -101,7 +101,11 @@ function TexasRoomPage() {
 		// Check if we have a room already set in the store
 		if (!booking.roomSlug || booking.roomSlug !== roomSlug) {
 			// This will reset any existing booking and start fresh for this room
-			booking.actions.initializeBooking('qSDFP06DGD7v8M3rC3DwE', roomSlug); // Actual Texas Room ID from database
+			booking.actions.initializeBooking(
+				'qSDFP06DGD7v8M3rC3DwE',
+				roomSlug,
+				'Texas Room',
+			); // Actual Texas Room ID from database
 		}
 	}, [booking.roomSlug, booking.actions]);
 
@@ -240,7 +244,7 @@ function TexasRoomPage() {
 
 			{/* Availability Calendar */}
 			<section
-				className="py-16 px-4 bg-gradient-to-b from-blue-200 to-background"
+				className="py-16 px-4 scroll-mt-20 bg-gradient-to-b from-blue-200 to-background"
 				data-calendar-section
 			>
 				<div className="container mx-auto max-w-screen-lg">
@@ -285,11 +289,17 @@ function TexasRoomPage() {
 					<Button asChild variant="secondary">
 						<Link to="/rooms/rose-room">View Rose Room</Link>
 					</Button>
+					<p>
+						<span className="bg-red-300 font-bold">
+							DO WE NEED ANYTHING ABOUT PETS OR OTHER NOT ALLOWED ITEMS
+							(ALCOHOL, MUSIC, ETC)?
+						</span>
+					</p>
 				</div>
 			</section>
 
 			{/* Photo Gallery */}
-			<section className="py-16 px-4" data-gallery-section>
+			<section className="py-16 px-4 scroll-mt-20" data-gallery-section>
 				<div className="container mx-auto max-w-4xl">
 					<h2 className="text-3xl font-bold text-center mb-12">
 						Texas Room Gallery
@@ -310,31 +320,19 @@ function TexasRoomPage() {
 				<div className="container mx-auto max-w-4xl">
 					<Card className="border-accent/20">
 						<CardHeader>
-							<CardTitle className="font-rye text-2xl flex items-center gap-3">
-								<svg
-									width="512"
-									height="512"
-									viewBox="0 0 512 512"
-									className="size-10 text-rose-600"
-								>
-									<title>Texas Icon</title>
-									<path
-										fill="currentColor"
-										d="M156.3 41.88V222.6l-130.57 3c35.98 40.7 60.88 78.7 123.07 126c36.4-48.2 78.8-54.7 144.7 100.5l66.8 18c.7-49.4-15.2-97.8 126-155.3l-11.3-93l-3-60.7l-211.9-39.8V41.88z"
-									/>
-								</svg>
-								<span>Your Texas Getaway</span>
+							<CardTitle className="font-rye text-3xl text-primary text-center">
+								Your Texas Getaway
 							</CardTitle>
 						</CardHeader>
-						<CardContent>
-							<div className="prose prose-lg max-w-none">
-								<p className="text-foreground/90 leading-relaxed mb-6">
+						<CardContent className="flex flex-col lg:flex-row gap-8 items-center">
+							<div className="space-y-4">
+								<p className="leading-relaxed text-justify">
 									The Texas Room offers a private entrance for a peaceful,
 									independent stay. Inside you'll find a convenient kitchenette
 									with a coffee maker, refrigerator, and microwave—plus plenty
 									of space for your belongings.
 								</p>
-								<p className="text-foreground/90 leading-relaxed">
+								<p className="leading-relaxed text-justify">
 									The Texas Room reflects the spirit of the Lone Star State with
 									its warm décor and distinctive touches. Relax in a cozy
 									king-sized bed in a light-filled space, and enjoy modern
@@ -345,6 +343,37 @@ function TexasRoomPage() {
 									work space and all the amenities you need complete this
 									uniquely Texan getaway.
 								</p>
+							</div>
+							<div>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="72"
+									height="72"
+									viewBox="0 0 72 72"
+									className="size-50"
+								>
+									<title>Texas Flag Graphic</title>
+									<path fill="#fff" d="M5 17h62v38H5z" />
+									<path fill="#d22f27" d="M5 36h62v19H5z" />
+									<path fill="#1e50a0" d="M6 17h19.67v38H6z" />
+									<path
+										fill="#fff"
+										fill-rule="evenodd"
+										stroke="#fff"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="1.629"
+										d="m19.68 41.31l-3.854-2.556l-3.859 2.549l1.24-4.455l-3.617-2.882l4.62-.198l1.624-4.33l1.616 4.333l4.62.206l-3.622 2.876z"
+									/>
+									<path
+										fill="none"
+										stroke="#000"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M5 17h62v38H5z"
+									/>
+								</svg>
 							</div>
 						</CardContent>
 					</Card>

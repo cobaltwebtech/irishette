@@ -131,7 +131,10 @@ function HomePage() {
 			</section>
 
 			{/* Rooms Section */}
-			<section className="py-16 px-4 bg-muted/80" data-rooms-section>
+			<section
+				className="py-16 px-4 scroll-mt-20 bg-muted/80"
+				data-rooms-section
+			>
 				<div className="container mx-auto max-w-6xl">
 					<h2 className="text-3xl md:text-4xl font-bold text-center mb-12">
 						Our Rooms

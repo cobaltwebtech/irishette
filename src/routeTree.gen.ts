@@ -9,8 +9,11 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TermsOfServiceRouteImport } from './routes/terms-of-service'
+import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as LogoutRouteImport } from './routes/logout'
 import { Route as ContactRouteImport } from './routes/contact'
+import { Route as CancellationRefundPolicyRouteImport } from './routes/cancellation-refund-policy'
 import { Route as BookingRouteImport } from './routes/booking'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
@@ -34,6 +37,16 @@ import { Route as AdminBookingsCurrentBookingsRouteImport } from './routes/admin
 import { Route as AdminBookingsBookingIdRouteImport } from './routes/admin/bookings/$bookingId'
 import { Route as AccountBookingBookingIdRouteImport } from './routes/account/booking/$bookingId'
 
+const TermsOfServiceRoute = TermsOfServiceRouteImport.update({
+  id: '/terms-of-service',
+  path: '/terms-of-service',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyPolicyRoute = PrivacyPolicyRouteImport.update({
+  id: '/privacy-policy',
+  path: '/privacy-policy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LogoutRoute = LogoutRouteImport.update({
   id: '/logout',
   path: '/logout',
@@ -44,6 +57,12 @@ const ContactRoute = ContactRouteImport.update({
   path: '/contact',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CancellationRefundPolicyRoute =
+  CancellationRefundPolicyRouteImport.update({
+    id: '/cancellation-refund-policy',
+    path: '/cancellation-refund-policy',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const BookingRoute = BookingRouteImport.update({
   id: '/booking',
   path: '/booking',
@@ -163,8 +182,11 @@ const AccountBookingBookingIdRoute = AccountBookingBookingIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/booking': typeof BookingRoute
+  '/cancellation-refund-policy': typeof CancellationRefundPolicyRoute
   '/contact': typeof ContactRoute
   '/logout': typeof LogoutRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
+  '/terms-of-service': typeof TermsOfServiceRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
@@ -189,8 +211,11 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/booking': typeof BookingRoute
+  '/cancellation-refund-policy': typeof CancellationRefundPolicyRoute
   '/contact': typeof ContactRoute
   '/logout': typeof LogoutRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
+  '/terms-of-service': typeof TermsOfServiceRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
@@ -216,8 +241,11 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/booking': typeof BookingRoute
+  '/cancellation-refund-policy': typeof CancellationRefundPolicyRoute
   '/contact': typeof ContactRoute
   '/logout': typeof LogoutRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
+  '/terms-of-service': typeof TermsOfServiceRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
@@ -244,8 +272,11 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/booking'
+    | '/cancellation-refund-policy'
     | '/contact'
     | '/logout'
+    | '/privacy-policy'
+    | '/terms-of-service'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/reset-password'
@@ -270,8 +301,11 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/booking'
+    | '/cancellation-refund-policy'
     | '/contact'
     | '/logout'
+    | '/privacy-policy'
+    | '/terms-of-service'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/reset-password'
@@ -296,8 +330,11 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/booking'
+    | '/cancellation-refund-policy'
     | '/contact'
     | '/logout'
+    | '/privacy-policy'
+    | '/terms-of-service'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/reset-password'
@@ -323,8 +360,11 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BookingRoute: typeof BookingRoute
+  CancellationRefundPolicyRoute: typeof CancellationRefundPolicyRoute
   ContactRoute: typeof ContactRoute
   LogoutRoute: typeof LogoutRoute
+  PrivacyPolicyRoute: typeof PrivacyPolicyRoute
+  TermsOfServiceRoute: typeof TermsOfServiceRoute
   AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthResetPasswordRoute: typeof AuthResetPasswordRoute
@@ -349,6 +389,20 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/terms-of-service': {
+      id: '/terms-of-service'
+      path: '/terms-of-service'
+      fullPath: '/terms-of-service'
+      preLoaderRoute: typeof TermsOfServiceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy-policy': {
+      id: '/privacy-policy'
+      path: '/privacy-policy'
+      fullPath: '/privacy-policy'
+      preLoaderRoute: typeof PrivacyPolicyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/logout': {
       id: '/logout'
       path: '/logout'
@@ -361,6 +415,13 @@ declare module '@tanstack/react-router' {
       path: '/contact'
       fullPath: '/contact'
       preLoaderRoute: typeof ContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cancellation-refund-policy': {
+      id: '/cancellation-refund-policy'
+      path: '/cancellation-refund-policy'
+      fullPath: '/cancellation-refund-policy'
+      preLoaderRoute: typeof CancellationRefundPolicyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/booking': {
@@ -523,8 +584,11 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BookingRoute: BookingRoute,
+  CancellationRefundPolicyRoute: CancellationRefundPolicyRoute,
   ContactRoute: ContactRoute,
   LogoutRoute: LogoutRoute,
+  PrivacyPolicyRoute: PrivacyPolicyRoute,
+  TermsOfServiceRoute: TermsOfServiceRoute,
   AuthForgotPasswordRoute: AuthForgotPasswordRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthResetPasswordRoute: AuthResetPasswordRoute,

@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { trpcClient } from '@/integrations/tanstack-query/root-provider';
 import { authClient, useSession } from '@/lib/auth-client';
@@ -31,10 +32,40 @@ function BookingFlow() {
 	const booking = useBookingStore();
 	const [isHydrated, setIsHydrated] = useState(false);
 
-	// Handle hydration
+	// Handle hydration and scroll to top on mount
 	useEffect(() => {
 		setIsHydrated(true);
+		window.scrollTo({ top: 0, behavior: 'smooth' });
 	}, []);
+
+	// Fetch room name if not available in booking store
+	useEffect(() => {
+		const fetchRoomName = async () => {
+			if (isHydrated && booking.roomId && !booking.roomName) {
+				try {
+					const room = await trpcClient.rooms.get.query({ id: booking.roomId });
+					// Update the booking store with the room name
+					if (booking.roomSlug) {
+						booking.actions.setRoom(
+							booking.roomId,
+							booking.roomSlug,
+							room.name,
+						);
+					}
+				} catch (error) {
+					console.error('Failed to fetch room name:', error);
+				}
+			}
+		};
+
+		fetchRoomName();
+	}, [
+		isHydrated,
+		booking.roomId,
+		booking.roomName,
+		booking.roomSlug,
+		booking.actions,
+	]);
 
 	// Handle URL parameters for step navigation
 	useEffect(() => {
@@ -176,12 +207,11 @@ function BookingFlow() {
 							Back to Room
 						</Link>
 						<div className="text-sm text-muted-foreground">
-							Booking: {booking.roomSlug}
+							Booking: {booking.roomName || booking.roomSlug || 'Room'}
 						</div>
 					</div>
 				</div>
-			</div>
-
+			</div>{' '}
 			{/* Progress Steps */}
 			<div className="bg-muted/20 border-b">
 				<div className="container mx-auto max-w-4xl px-4 py-6">
@@ -239,7 +269,6 @@ function BookingFlow() {
 					</div>
 				</div>
 			</div>
-
 			{/* Main Content */}
 			<div className="container mx-auto max-w-4xl px-4 py-8">
 				<div className="grid lg:grid-cols-3 gap-8">
@@ -410,6 +439,7 @@ function BookingDetailsStep() {
 	const phoneId = useId();
 	const guestsId = useId();
 	const requestsId = useId();
+	const policiesId = useId();
 
 	// Form state
 	const [guestName, setGuestName] = useState(session?.user?.name || '');
@@ -417,6 +447,7 @@ function BookingDetailsStep() {
 	const [guestPhone, setGuestPhone] = useState('');
 	const [numberOfGuests, setNumberOfGuests] = useState(booking.guestCount || 1);
 	const [specialRequests, setSpecialRequests] = useState('');
+	const [acceptedPolicies, setAcceptedPolicies] = useState(false);
 	const [errors, setErrors] = useState<Record<string, string>>({});
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -458,6 +489,10 @@ function BookingDetailsStep() {
 		} else if (guestPhone.length < 10) {
 			newErrors.guestPhone =
 				'Please enter a valid phone number (at least 10 digits)';
+		}
+
+		if (!acceptedPolicies) {
+			newErrors.acceptedPolicies = 'You must accept the policies to continue';
 		}
 
 		setErrors(newErrors);
@@ -750,7 +785,7 @@ function BookingDetailsStep() {
 								max="4"
 								value={numberOfGuests}
 								onChange={(e) =>
-									setNumberOfGuests(parseInt(e.target.value) || 1)
+									setNumberOfGuests(parseInt(e.target.value, 10) || 1)
 								}
 								className={errors.numberOfGuests ? 'border-red-500' : ''}
 							/>
@@ -778,6 +813,10 @@ function BookingDetailsStep() {
 						Examples: dietary restrictions, accessibility needs, early
 						check-in/late check-out requests, etc.
 					</p>
+					<p className="text-xs text-muted-foreground">
+						<strong>Note:</strong> While we cannot guarantee all requests will
+						be accommodated, we will make best effort to honor them.
+					</p>
 				</div>
 
 				{/* Summary */}
@@ -786,17 +825,35 @@ function BookingDetailsStep() {
 					<div className="text-sm space-y-1">
 						<p>
 							<span className="font-medium">Room:</span>{' '}
-							{booking.roomSlug
-								?.replace('-', ' ')
-								.replace(/\b\w/g, (l) => l.toUpperCase())}
+							{booking.roomName || booking.roomSlug || 'N/A'}
 						</p>
 						<p>
 							<span className="font-medium">Check-in:</span>{' '}
-							{booking.checkInDate}
+							{booking.checkInDate
+								? parseISODateString(booking.checkInDate).toLocaleDateString(
+										'en-US',
+										{
+											weekday: 'short',
+											month: 'short',
+											day: 'numeric',
+											year: 'numeric',
+										},
+									)
+								: 'N/A'}
 						</p>
 						<p>
 							<span className="font-medium">Check-out:</span>{' '}
-							{booking.checkOutDate}
+							{booking.checkOutDate
+								? parseISODateString(booking.checkOutDate).toLocaleDateString(
+										'en-US',
+										{
+											weekday: 'short',
+											month: 'short',
+											day: 'numeric',
+											year: 'numeric',
+										},
+									)
+								: 'N/A'}
 						</p>
 						<p>
 							<span className="font-medium">Guests:</span> {numberOfGuests}
@@ -815,11 +872,70 @@ function BookingDetailsStep() {
 					</div>
 				)}
 
-				{/* Continue Button */}
+				{/* Policy Acceptance Checkbox */}
+				<div className="space-y-2">
+					<p className="text-sm leading-relaxed">
+						Please check the box below to acknowledge our policies and continue
+						to payment.
+					</p>
+					<div className="flex items-start gap-3">
+						<Checkbox
+							id={policiesId}
+							checked={acceptedPolicies}
+							onCheckedChange={(checked) =>
+								setAcceptedPolicies(checked === true)
+							}
+							aria-invalid={!!errors.acceptedPolicies}
+						/>
+						<label
+							htmlFor={policiesId}
+							className="text-sm leading-relaxed cursor-pointer"
+						>
+							I have read and accept the{' '}
+							<Link
+								to="/cancellation-refund-policy"
+								target="_blank"
+								className="text-primary hover:underline font-medium"
+							>
+								Cancellation & Refund Policy
+							</Link>
+							,{' '}
+							<Link
+								to="/terms-of-service"
+								target="_blank"
+								className="text-primary hover:underline font-medium"
+							>
+								Terms of Service
+							</Link>
+							, and{' '}
+							<Link
+								to="/privacy-policy"
+								target="_blank"
+								className="text-primary hover:underline font-medium"
+							>
+								Privacy Policy
+							</Link>
+							.
+						</label>
+					</div>
+					{errors.acceptedPolicies && (
+						<p className="text-sm text-destructive ml-7">
+							{errors.acceptedPolicies}
+						</p>
+					)}
+				</div>
+
+				{/* Action Buttons */}
 				<div className="flex gap-3">
 					<Button
 						variant="outline"
-						onClick={() => booking.actions.setStep('auth')}
+						onClick={() => {
+							// Navigate back to the room page
+							window.location.href =
+								booking.roomSlug === 'rose-room'
+									? '/rooms/rose-room'
+									: '/rooms/texas-room';
+						}}
 						className="flex-1"
 						disabled={isSubmitting}
 					>
@@ -828,7 +944,7 @@ function BookingDetailsStep() {
 					<Button
 						onClick={handleContinue}
 						className="flex-1"
-						disabled={isSubmitting}
+						disabled={isSubmitting || !acceptedPolicies}
 					>
 						{isSubmitting ? (
 							<>

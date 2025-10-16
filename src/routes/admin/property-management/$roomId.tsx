@@ -1026,7 +1026,7 @@ function EditRoom() {
 									className="flex items-center gap-1 flex-shrink-0"
 								>
 									<Copy className="h-3 w-3" />
-									Copy
+									Copy iCal URL
 								</Button>
 							</div>
 							<div className="text-xs text-gray-500 pl-5">

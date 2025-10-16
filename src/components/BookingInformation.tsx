@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import type { DateRange } from 'react-day-picker';
 import { Button } from '@/components/ui/button';
@@ -117,6 +118,16 @@ export default function BookingInformation({
 					</CardContent>
 				</Card>
 			)}
+			<p className="text-xs text-muted-foreground text-center">
+				Be sure to review our{' '}
+				<Link
+					to="/cancellation-refund-policy"
+					className="text-primary hover:text-accent underline"
+				>
+					Cancellation & Refund Policy
+				</Link>{' '}
+				before completing any bookings.
+			</p>
 		</div>
 	);
 }
