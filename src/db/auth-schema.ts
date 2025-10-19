@@ -19,6 +19,8 @@ export const user = sqliteTable('user', {
 	banReason: text('ban_reason'),
 	banExpires: integer('ban_expires', { mode: 'timestamp' }),
 	stripeCustomerId: text('stripe_customer_id'),
+	phoneNumber: text('phone_number'),
+	phoneNumberVerified: integer('phone_number_verified', { mode: 'boolean' }),
 });
 
 export const session = sqliteTable('session', {

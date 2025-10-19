@@ -102,7 +102,7 @@ function PastBookings() {
 		today.setHours(0, 0, 0, 0); // Reset time to start of day for accurate comparison
 
 		return bookingsData.filter((booking) => {
-			const checkOutDate = new Date(booking.booking.checkOutDate + 'T00:00:00');
+			const checkOutDate = new Date(`${booking.booking.checkOutDate}T00:00:00`);
 			// Include only bookings where checkout date is in the past
 			return checkOutDate < today && booking.booking.status === 'confirmed';
 		});
@@ -123,6 +123,31 @@ function PastBookings() {
 					>
 						{info.getValue()}
 					</Link>
+				),
+			}),
+			columnHelper.accessor('booking.checkInDate', {
+				header: ({ column }) => (
+					<Button
+						variant="ghost"
+						onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+						className="h-8 px-2"
+					>
+						Stay Dates
+						<ArrowUpDown className="ml-2 h-4 w-4" />
+					</Button>
+				),
+				cell: (info) => (
+					<div>
+						<div>
+							{new Date(`${info.getValue()}T00:00:00`).toLocaleDateString()}
+						</div>
+						<div className="text-sm text-muted-foreground">
+							to{' '}
+							{new Date(
+								`${info.row.original.booking.checkOutDate}T00:00:00`,
+							).toLocaleDateString()}
+						</div>
+					</div>
 				),
 			}),
 			columnHelper.accessor('booking.guestName', {
@@ -152,31 +177,6 @@ function PastBookings() {
 					<Badge variant="outline" className="capitalize">
 						{info.getValue().replace('-', ' ')}
 					</Badge>
-				),
-			}),
-			columnHelper.accessor('booking.checkInDate', {
-				header: ({ column }) => (
-					<Button
-						variant="ghost"
-						onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-						className="h-8 px-2"
-					>
-						Dates
-						<ArrowUpDown className="ml-2 h-4 w-4" />
-					</Button>
-				),
-				cell: (info) => (
-					<div>
-						<div>
-							{new Date(info.getValue() + 'T00:00:00').toLocaleDateString()}
-						</div>
-						<div className="text-sm text-muted-foreground">
-							to{' '}
-							{new Date(
-								info.row.original.booking.checkOutDate + 'T00:00:00',
-							).toLocaleDateString()}
-						</div>
-					</div>
 				),
 			}),
 			columnHelper.accessor('booking.numberOfGuests', {

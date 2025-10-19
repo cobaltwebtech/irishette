@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server';
-import { count, eq, sql } from 'drizzle-orm';
+import { count, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { createDrizzle } from '@/db/drizzle-init';
 import { bookings, user } from '@/db/schema-export';
@@ -20,7 +20,7 @@ export const usersRouter = createTRPCRouter({
 			const db = createDrizzle(ctx.db);
 
 			try {
-				// Get all users with role 'user' with their booking count and latest phone
+				// Get all users with role 'user' with their booking count
 				const guests = await db
 					.select({
 						user: {
@@ -29,17 +29,9 @@ export const usersRouter = createTRPCRouter({
 							email: user.email,
 							createdAt: user.createdAt,
 							stripeCustomerId: user.stripeCustomerId,
+							phoneNumber: user.phoneNumber, // Use phone from user table
 						},
 						bookingCount: count(bookings.id),
-						// Get the most recent phone number from bookings
-						latestPhone: sql<string | null>`(
-							SELECT ${bookings.guestPhone}
-							FROM ${bookings}
-							WHERE ${bookings.userId} = ${user.id}
-							AND ${bookings.guestPhone} IS NOT NULL
-							ORDER BY ${bookings.createdAt} DESC
-							LIMIT 1
-						)`,
 					})
 					.from(user)
 					.leftJoin(bookings, eq(user.id, bookings.userId))
@@ -116,6 +108,103 @@ export const usersRouter = createTRPCRouter({
 						error instanceof Error
 							? error.message
 							: 'Failed to get guest details',
+				});
+			}
+		}),
+
+	/**
+	 * Update user's phone number (for logged-in users)
+	 */
+	updatePhoneNumber: publicProcedure
+		.input(
+			z.object({
+				userId: z.string(),
+				phoneNumber: z
+					.string()
+					.min(10, 'Phone number must be at least 10 digits'),
+			}),
+		)
+		.mutation(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			try {
+				// Update the user's phone number
+				await db
+					.update(user)
+					.set({
+						phoneNumber: input.phoneNumber,
+						updatedAt: new Date(),
+					})
+					.where(eq(user.id, input.userId));
+
+				return {
+					success: true,
+					message: 'Phone number updated successfully',
+				};
+			} catch (error) {
+				console.error('Failed to update phone number:', error);
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message:
+						error instanceof Error
+							? error.message
+							: 'Failed to update phone number',
+				});
+			}
+		}),
+
+	/**
+	 * Update user profile (name, email, phone number)
+	 */
+	updateProfile: publicProcedure
+		.input(
+			z.object({
+				userId: z.string(),
+				name: z.string().min(1, 'Name is required').optional(),
+				email: z.string().email('Invalid email address').optional(),
+				phoneNumber: z
+					.string()
+					.min(10, 'Phone number must be at least 10 digits')
+					.optional(),
+			}),
+		)
+		.mutation(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			try {
+				// Build the update object dynamically
+				const updateData: {
+					name?: string;
+					email?: string;
+					phoneNumber?: string;
+					updatedAt: Date;
+				} = {
+					updatedAt: new Date(),
+				};
+
+				if (input.name !== undefined) {
+					updateData.name = input.name;
+				}
+				if (input.email !== undefined) {
+					updateData.email = input.email;
+				}
+				if (input.phoneNumber !== undefined) {
+					updateData.phoneNumber = input.phoneNumber;
+				}
+
+				// Update the user's profile
+				await db.update(user).set(updateData).where(eq(user.id, input.userId));
+
+				return {
+					success: true,
+					message: 'Profile updated successfully',
+				};
+			} catch (error) {
+				console.error('Failed to update profile:', error);
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message:
+						error instanceof Error ? error.message : 'Failed to update profile',
 				});
 			}
 		}),

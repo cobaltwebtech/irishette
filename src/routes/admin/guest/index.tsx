@@ -11,7 +11,7 @@ import {
 	type SortingState,
 	useReactTable,
 } from '@tanstack/react-table';
-import { ArrowUpDown, Search, UserCircle } from 'lucide-react';
+import { ArrowUpDown, Search, Sparkle, UserCircle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Badge } from '@/components/ui/badge';
@@ -49,9 +49,9 @@ type GuestData = {
 		email: string;
 		createdAt: Date;
 		stripeCustomerId: string | null;
+		phoneNumber: string | null;
 	};
 	bookingCount: number;
-	latestPhone: string | null;
 };
 
 function AdminGuests() {
@@ -135,7 +135,7 @@ function AdminGuests() {
 					</a>
 				),
 			}),
-			columnHelper.accessor('latestPhone', {
+			columnHelper.accessor('user.phoneNumber', {
 				header: 'Phone',
 				cell: (info) => {
 					const phone = info.getValue();
@@ -168,6 +168,7 @@ function AdminGuests() {
 							</Badge>
 							{count > 1 && (
 								<Badge variant="outline" className="text-xs">
+									<Sparkle className="size-4 text-accent" />
 									Repeat Guest
 								</Badge>
 							)}

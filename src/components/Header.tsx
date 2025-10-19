@@ -1,5 +1,5 @@
 import { Link, useRouter } from '@tanstack/react-router';
-import { Calendar, LogOut, Luggage, ShieldUser } from 'lucide-react';
+import { BedDouble, LogOut, Luggage, ShieldUser } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { signOut, useSession } from '@/lib/auth-client';
 
@@ -62,7 +62,7 @@ export default function Header() {
 								{session.user?.role !== 'admin' && (
 									<Button variant="accent" asChild>
 										<Link to="/account">
-											<Calendar className="size-5" />
+											<BedDouble className="size-5" />
 											<span className="hidden sm:inline">View Bookings</span>
 										</Link>
 									</Button>

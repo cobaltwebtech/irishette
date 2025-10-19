@@ -357,17 +357,17 @@ function AdminGuestDetail() {
 								{user.email}
 							</a>
 						</div>
-						{bookings[0]?.guestPhone && (
+						{(user as { phoneNumber?: string })?.phoneNumber && (
 							<div>
 								<p className="text-sm font-medium text-muted-foreground">
 									Phone
 								</p>
 								<a
-									href={`tel:${bookings[0].guestPhone}`}
+									href={`tel:${(user as { phoneNumber?: string })?.phoneNumber}`}
 									className="font-semibold text-primary hover:underline"
 								>
 									<Phone className="w-4 h-4 inline mr-1" />
-									{bookings[0].guestPhone}
+									{(user as { phoneNumber?: string })?.phoneNumber}
 								</a>
 							</div>
 						)}

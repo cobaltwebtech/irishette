@@ -11,8 +11,19 @@ import {
 	type SortingState,
 	useReactTable,
 } from '@tanstack/react-table';
-import { ArrowUpDown, Calendar, Search, Settings, User } from 'lucide-react';
+import {
+	ArrowUpDown,
+	Calendar,
+	Mail,
+	MessageCircle,
+	Pencil,
+	Phone,
+	Search,
+	Settings,
+	User,
+} from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { EditProfileModal } from '@/components/EditProfileModal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -88,10 +99,11 @@ function AccountPage() {
 	const { data: session, isPending } = useSession();
 	const router = useRouter();
 	const [sorting, setSorting] = useState<SortingState>([
-		{ id: 'booking.checkInDate', desc: false }, // Default sort by check-in date (ascending)
+		{ id: 'booking.checkInDate', desc: true },
 	]);
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 	const [globalFilter, setGlobalFilter] = useState('');
+	const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
 	// Redirect if not logged in
 	useEffect(() => {
@@ -144,14 +156,6 @@ function AccountPage() {
 					</Link>
 				),
 			}),
-			columnHelper.accessor('room.name', {
-				header: 'Room',
-				cell: (info) => (
-					<Badge variant="outline" className="capitalize">
-						{info.getValue()}
-					</Badge>
-				),
-			}),
 			columnHelper.accessor('booking.checkInDate', {
 				header: ({ column }) => (
 					<Button
@@ -159,22 +163,30 @@ function AccountPage() {
 						onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
 						className="h-8 px-2"
 					>
-						Check-in Date
+						Stay Dates
 						<ArrowUpDown className="ml-2 h-4 w-4" />
 					</Button>
 				),
 				cell: (info) => (
 					<div>
 						<div className="font-medium">
-							{new Date(info.getValue() + 'T00:00:00').toLocaleDateString()}
+							{new Date(`${info.getValue()}T00:00:00`).toLocaleDateString()}
 						</div>
 						<div className="text-sm text-muted-foreground">
 							to{' '}
 							{new Date(
-								info.row.original.booking.checkOutDate + 'T00:00:00',
+								`${info.row.original.booking.checkOutDate}T00:00:00`,
 							).toLocaleDateString()}
 						</div>
 					</div>
+				),
+			}),
+			columnHelper.accessor('room.name', {
+				header: 'Room',
+				cell: (info) => (
+					<Badge variant="outline" className="capitalize">
+						{info.getValue()}
+					</Badge>
 				),
 			}),
 			columnHelper.accessor('booking.numberOfGuests', {
@@ -474,24 +486,28 @@ function AccountPage() {
 						<CardContent>
 							<div className="space-y-2">
 								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										Email
+									<p className="text-sm text-muted-foreground">Name</p>
+									<p className="text-foreground font-semibold">
+										{session.user.name}
 									</p>
-									<p className="text-foreground">{session.user.email}</p>
 								</div>
-								{session.user.name && (
-									<div>
-										<p className="text-sm font-medium text-muted-foreground">
-											Name
-										</p>
-										<p className="text-foreground">{session.user.name}</p>
-									</div>
-								)}
 								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										Member Since
+									<p className="text-sm text-muted-foreground">Email</p>
+									<p className="text-foreground font-semibold">
+										<Mail className="size-4 inline mr-1" />
+										{session.user.email}
 									</p>
-									<p className="text-foreground">
+								</div>
+								<div>
+									<p className="text-sm text-muted-foreground">Phone Number</p>
+									<p className="text-foreground font-semibold">
+										<Phone className="size-4 inline mr-1" />
+										{session.user.phoneNumber || 'Not provided'}
+									</p>
+								</div>
+								<div>
+									<p className="text-sm text-muted-foreground">Member Since</p>
+									<p className="text-foreground font-semibold">
 										{new Date(session.user.createdAt).toLocaleDateString()}
 									</p>
 								</div>
@@ -510,15 +526,38 @@ function AccountPage() {
 						<CardContent className="space-y-4">
 							<div>
 								<p>Update Profile</p>
-								<Button>Edit your information</Button>
+								<Button onClick={() => setIsEditModalOpen(true)}>
+									<Pencil className="size-4 inline mr-1" />
+									Edit Your Information
+								</Button>
 							</div>
 							<div>
 								<p>Have questions or need assistance?</p>
-								<Button variant="secondary">Contact Us</Button>
+								<Button asChild variant="secondary">
+									<Link to="/contact">
+										<MessageCircle className="size-4" />
+										Contact Us
+									</Link>
+								</Button>
 							</div>
 						</CardContent>
 					</Card>
 				</div>
+
+				{/* Edit Profile Modal */}
+				{session && (
+					<EditProfileModal
+						open={isEditModalOpen}
+						onOpenChange={setIsEditModalOpen}
+						user={{
+							id: session.user.id,
+							name: session.user.name || '',
+							email: session.user.email,
+							phoneNumber:
+								(session.user as { phoneNumber?: string })?.phoneNumber || null,
+						}}
+					/>
+				)}
 			</div>
 		</div>
 	);

@@ -161,15 +161,14 @@ function RoseRoomPage() {
 			return;
 		}
 
-		// Check if booking store validation passes
-		if (!booking.canProceed()) {
-			// Could show validation errors
-			const errors = booking.getValidationErrors();
-			console.warn('Booking validation failed:', errors);
+		// Validate that we have the minimum required booking data (room, dates)
+		// We check this directly rather than using canProceed() which validates based on currentStep
+		if (!booking.roomId || !booking.checkInDate || !booking.checkOutDate) {
+			console.warn('Booking validation failed: Missing room or dates');
 			return;
 		}
 
-		// Proceed to next step (authentication)
+		// Ensure we're starting from the auth step
 		booking.actions.setStep('auth');
 
 		// Navigate to booking flow route

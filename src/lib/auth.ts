@@ -2,7 +2,7 @@ import { env } from 'cloudflare:workers';
 import { stripe } from '@better-auth/stripe';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { admin, magicLink } from 'better-auth/plugins';
+import { admin, magicLink, phoneNumber } from 'better-auth/plugins';
 import { reactStartCookies } from 'better-auth/react-start';
 import { drizzle } from 'drizzle-orm/d1';
 import { Resend } from 'resend';
@@ -87,6 +87,7 @@ export const auth = async () => {
 					}
 				},
 			}),
+			phoneNumber(),
 			stripe({
 				stripeClient,
 				stripeWebhookSecret: env.STRIPE_BETTER_AUTH_WEBHOOK_SECRET,

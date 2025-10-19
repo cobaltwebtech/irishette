@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { Mail, MapPin, Phone } from 'lucide-react';
-import { useId } from 'react';
+import { useEffect, useId } from 'react';
 import { Button } from '@/components/ui/button';
 import {
 	Card,
@@ -29,6 +29,11 @@ export const Route = createFileRoute('/contact')({
 });
 
 function ContactPage() {
+	// Scroll to top when component mounts
+	useEffect(() => {
+		window.scrollTo({ top: 0, behavior: 'smooth' });
+	}, []);
+
 	const firstNameId = useId();
 	const lastNameId = useId();
 	const emailId = useId();
