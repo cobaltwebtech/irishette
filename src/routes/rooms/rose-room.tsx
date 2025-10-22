@@ -205,9 +205,9 @@ function RoseRoomPage() {
 							<g
 								fill="none"
 								stroke="currentColor"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth="2"
 							>
 								<path d="M17 10h-1a4 4 0 1 1 4-4v.534" />
 								<path d="M17 6h1a4 4 0 0 1 1.42 7.74l-2.29.87a6 6 0 0 1-5.339-10.68l2.069-1.31M4.5 17c2.8-.5 4.4 0 5.5.8s1.8 2.2 2.3 3.7c-2 .4-3.5.4-4.8-.3c-1.2-.6-2.3-1.9-3-4.2" />
@@ -260,10 +260,10 @@ function RoseRoomPage() {
 
 			{/* Availability Calendar */}
 			<section
-				className="py-16 px-4 scroll-mt-20 bg-gradient-to-b from-rose-200 to-background"
+				className="py-16 px-4 scroll-mt-20 bg-linear-to-b from-rose-200 to-background"
 				data-calendar-section
 			>
-				<div className="container mx-auto max-w-screen-lg">
+				<div className="container mx-auto max-w-5xl">
 					<div className="text-center mb-12">
 						<h2 className="text-3xl font-bold mb-4 flex items-center justify-center gap-2">
 							<CalendarIcon className="w-8 h-8 text-accent" />

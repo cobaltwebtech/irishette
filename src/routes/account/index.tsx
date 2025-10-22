@@ -110,6 +110,7 @@ function AccountPage() {
 		if (!isPending && !session) {
 			router.navigate({ to: '/auth/login' });
 		}
+		window.scrollTo({ top: 0, behavior: 'smooth' });
 	}, [session, isPending, router]);
 
 	// Use tRPC query to fetch user's bookings

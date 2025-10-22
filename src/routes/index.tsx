@@ -1,12 +1,28 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { Image } from '@unpic/react';
-import { Bed, BedDouble, Luggage, MapPinHouse } from 'lucide-react';
+import {
+	Bath,
+	Bed,
+	BedDouble,
+	Car,
+	Coffee,
+	Luggage,
+	MapPinHouse,
+	Microwave,
+	ShowerHead,
+	Star,
+	Tv,
+	Wifi,
+	Wind,
+	Zap,
+} from 'lucide-react';
 import { HeroSlider } from '@/components/HeroSlider';
 import { Button } from '@/components/ui/button';
 import {
 	Card,
 	CardContent,
 	CardDescription,
+	CardFooter,
 	CardHeader,
 	CardTitle,
 } from '@/components/ui/card';
@@ -52,7 +68,7 @@ function HomePage() {
 
 				{/* Content */}
 				<div className="relative z-20 container mx-auto max-w-4xl text-center px-4">
-					<h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold mb-6 bg-gradient-to-r from-orange-500 via-green-200 to-green-500 bg-clip-text text-transparent">
+					<h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold mb-6 bg-linear-to-r from-orange-500 via-green-200 to-green-500 bg-clip-text text-transparent">
 						Welcome to Irishette
 					</h1>
 					<p className="text-xl md:text-2xl text-popover mb-8 italic drop-shadow-md max-w-3xl mx-auto">
@@ -88,7 +104,7 @@ function HomePage() {
 			{/* Welcome Text */}
 			<section className="py-16 px-4">
 				<div className="container mx-auto max-w-4xl">
-					<h2 className="text-3xl md:text-4xl font-bold text-center text-fuchsia-900 mb-12">
+					<h2 className="text-3xl md:text-4xl font-bold italic text-center text-fuchsia-900 mb-12">
 						Victorian Charm Meets Modern Comfort
 					</h2>
 					<div className="grid md:grid-cols-2 gap-8 items-center">
@@ -136,7 +152,7 @@ function HomePage() {
 				data-rooms-section
 			>
 				<div className="container mx-auto max-w-6xl">
-					<h2 className="text-3xl md:text-4xl font-bold text-center mb-12">
+					<h2 className="text-3xl md:text-4xl font-bold italic text-center mb-12">
 						Our Rooms
 					</h2>
 
@@ -163,9 +179,9 @@ function HomePage() {
 										<g
 											fill="none"
 											stroke="currentColor"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											strokeWidth="2"
 										>
 											<path d="M17 10h-1a4 4 0 1 1 4-4v.534" />
 											<path d="M17 6h1a4 4 0 0 1 1.42 7.74l-2.29.87a6 6 0 0 1-5.339-10.68l2.069-1.31M4.5 17c2.8-.5 4.4 0 5.5.8s1.8 2.2 2.3 3.7c-2 .4-3.5.4-4.8-.3c-1.2-.6-2.3-1.9-3-4.2" />
@@ -175,16 +191,46 @@ function HomePage() {
 									</svg>
 									<span>Rose Room</span>
 								</CardTitle>
-								<CardDescription className="text-base">
+								<CardDescription className="text-base text-center">
 									Leave your worries behind in this spacious and tranquil
 									retreat.
 								</CardDescription>
 							</CardHeader>
-							<CardContent>
-								<p className="text-sm text-muted-foreground mb-4 leading-relaxed">
-									Private Entrance • Enclosed Sun Porch • Kitchenette • Queen
-									Bed • Walk-in Shower • Work Space • Modern Amenities
-								</p>
+							<CardContent className="flex flex-wrap justify-center gap-x-6">
+								<div>
+									<Coffee className="size-6 mx-auto text-primary" />
+									<p className="font-semibold mb-2">Kitchenette</p>
+								</div>
+								<div>
+									<ShowerHead className="size-6 mx-auto text-primary" />
+									<p className="font-semibold mb-2">Walk-In Shower</p>
+								</div>
+								<div>
+									<Tv className="size-6 mx-auto text-primary" />
+									<p className="font-semibold mb-2">Smart TV</p>
+								</div>
+								<div>
+									<Wind className="size-6 mx-auto text-primary" />
+									<p className="font-semibold mb-2">Climate Control</p>
+								</div>
+								<div>
+									<Wifi className="size-6 mx-auto text-primary" />
+									<p className="font-semibold mb-2">Wifi</p>
+								</div>
+								<div>
+									<Car className="size-6 mx-auto text-primary" />
+									<p className="font-semibold mb-2">Private Entrance</p>
+								</div>
+								<div>
+									<Bed className="size-6 mx-auto text-primary" />
+									<p className="font-semibold mb-2">Queen Bed</p>
+								</div>
+								<div>
+									<Zap className="size-6 mx-auto text-primary" />
+									<p className="font-semibold mb-2">Modern Comforts</p>
+								</div>
+							</CardContent>
+							<CardFooter className="flex justify-center mb-2">
 								<Button
 									size="lg"
 									asChild
@@ -194,7 +240,7 @@ function HomePage() {
 								>
 									<Link to="/rooms/rose-room">View & Book Rose Room</Link>
 								</Button>
-							</CardContent>
+							</CardFooter>
 						</Card>
 
 						{/* Texas Room Card */}
@@ -222,16 +268,46 @@ function HomePage() {
 									</svg>
 									<span>Texas Room</span>
 								</CardTitle>
-								<CardDescription className="text-base">
+								<CardDescription className="text-base text-center">
 									Experience true Texas charm in this spacious and inviting
 									retreat.
 								</CardDescription>
 							</CardHeader>
-							<CardContent>
-								<p className="text-sm text-muted-foreground mb-4 leading-relaxed">
-									Private Entrance • Kitchenette • King Bed • Antique Clawfoot
-									Tub • Work Space • Texas-Themed Décor
-								</p>
+							<CardContent className="flex flex-wrap justify-center gap-x-6">
+								<div>
+									<Microwave className="size-6 mx-auto text-primary" />
+									<p className="font-semibold mb-2">Kitchenette</p>
+								</div>
+								<div>
+									<Bath className="size-6 mx-auto text-primary" />
+									<p className="font-semibold mb-2">Clawfoot Tub</p>
+								</div>
+								<div>
+									<Tv className="size-6 mx-auto text-primary" />
+									<p className="font-semibold mb-2">Smart TV</p>
+								</div>
+								<div>
+									<Wind className="size-6 mx-auto text-primary" />
+									<p className="font-semibold mb-2">Climate Control</p>
+								</div>
+								<div>
+									<Wifi className="size-6 mx-auto text-primary" />
+									<p className="font-semibold mb-2">Wifi</p>
+								</div>
+								<div>
+									<Car className="size-6 mx-auto text-primary" />
+									<p className="font-semibold mb-2">Private Entrance</p>
+								</div>
+								<div>
+									<BedDouble className="size-6 mx-auto text-primary" />
+									<p className="font-semibold mb-2">King Bed</p>
+								</div>
+								<div>
+									<Star className="size-6 mx-auto text-primary" />
+									<p className="font-semibold mb-2">Texas Charm</p>
+								</div>
+							</CardContent>
+							<CardFooter className="flex justify-center mb-2">
 								<Button
 									size="lg"
 									asChild
@@ -239,9 +315,9 @@ function HomePage() {
 										window.scrollTo({ top: 0, behavior: 'smooth' })
 									}
 								>
-									<Link to="/rooms/texas-room">View & Book Texas Room</Link>
+									<Link to="/rooms/rose-room">View & Book Rose Room</Link>
 								</Button>
-							</CardContent>
+							</CardFooter>
 						</Card>
 					</div>
 				</div>
@@ -250,7 +326,7 @@ function HomePage() {
 			{/* Location Section */}
 			<section className="py-16 px-4">
 				<div className="container mx-auto max-w-4xl text-center">
-					<h2 className="text-3xl font-bold mb-6">Perfect Location</h2>
+					<h2 className="text-3xl font-bold italic mb-6">Perfect Location</h2>
 					<p className="text-lg text-muted-foreground">
 						Located in the heart of Dublin, Texas, just minutes from Tarleton
 						State University. Ideal for visiting family, attending events, or
