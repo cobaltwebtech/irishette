@@ -1,19 +1,19 @@
+import { Icon } from '@iconify/react';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
-import {
-	Calendar,
-	CreditCard,
-	ExternalLink,
-	Mail,
-	Settings,
-	User,
-} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { AdminLayout } from '@/components/admin/AdminLayout';
+import { BookingInternalNotes } from '@/components/admin/BookingInternalNotes';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from '@/components/ui/card';
 import { trpc, trpcClient } from '@/integrations/tanstack-query/root-provider';
 import { useSession } from '@/lib/auth-client';
 
@@ -186,10 +186,7 @@ function AdminBookingDetailPage() {
 					{/* Customer Information */}
 					<Card>
 						<CardHeader>
-							<CardTitle className="flex items-center gap-2">
-								<User className="w-5 h-5" />
-								Customer Information
-							</CardTitle>
+							<CardTitle>Customer Information</CardTitle>
 						</CardHeader>
 						<CardContent className="space-y-4">
 							<div className="grid sm:grid-cols-2 gap-4">
@@ -240,13 +237,10 @@ function AdminBookingDetailPage() {
 						</CardContent>
 					</Card>
 
-					{/* Reservation Details */}
+					{/* Booking Details */}
 					<Card>
 						<CardHeader>
-							<CardTitle className="flex items-center gap-2">
-								<Calendar className="w-5 h-5" />
-								Reservation Details
-							</CardTitle>
+							<CardTitle>Booking Details</CardTitle>
 						</CardHeader>
 						<CardContent className="space-y-4">
 							<div className="grid sm:grid-cols-2 gap-4">
@@ -276,7 +270,7 @@ function AdminBookingDetailPage() {
 									</p>
 									<p className="font-semibold">
 										{new Date(
-											booking.booking.checkInDate + 'T00:00:00',
+											`${booking.booking.checkInDate}T00:00:00`,
 										).toLocaleDateString('en-US', {
 											weekday: 'long',
 											year: 'numeric',
@@ -292,7 +286,7 @@ function AdminBookingDetailPage() {
 									</p>
 									<p className="font-semibold">
 										{new Date(
-											booking.booking.checkOutDate + 'T00:00:00',
+											`${booking.booking.checkOutDate}T00:00:00`,
 										).toLocaleDateString('en-US', {
 											weekday: 'long',
 											year: 'numeric',
@@ -329,19 +323,33 @@ function AdminBookingDetailPage() {
 						</CardContent>
 					</Card>
 
+					{/* Internal Notes  */}
+					<Card>
+						<CardHeader>
+							<CardTitle>Internal Notes</CardTitle>
+							<CardDescription>
+								Add or edit internal notes for this booking. These notes are
+								only visible to admin users and not shown to the guest.
+							</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<BookingInternalNotes
+								bookingId={booking.booking.id}
+								currentNotes={booking.booking.internalNotes || ''}
+							/>
+						</CardContent>
+					</Card>
+
 					{/* Admin Information */}
 					<Card>
 						<CardHeader>
-							<CardTitle className="flex items-center gap-2">
-								<Settings className="w-5 h-5" />
-								Admin Information
-							</CardTitle>
+							<CardTitle>Admin Information</CardTitle>
 						</CardHeader>
 						<CardContent className="space-y-4">
 							<div className="grid sm:grid-cols-2 gap-4">
 								<div>
 									<p className="text-sm font-medium text-muted-foreground">
-										Booking ID
+										Internal Booking ID
 									</p>
 									<p className="font-mono text-sm">{booking.booking.id}</p>
 								</div>
@@ -370,50 +378,34 @@ function AdminBookingDetailPage() {
 									</p>
 								</div>
 							</div>
-							{booking.booking.stripeCustomerId && (
-								<div className="grid sm:grid-cols-2 gap-4">
-									<div>
-										<p className="text-sm font-medium text-muted-foreground">
-											Stripe Customer ID
-										</p>
-										<p className="font-mono text-sm">
-											{booking.booking.stripeCustomerId}
-										</p>
-									</div>
-									{booking.booking.stripePaymentIntentId && (
-										<div>
-											<p className="text-sm font-medium text-muted-foreground">
-												Stripe Payment Intent ID
-											</p>
-											<p className="font-mono text-sm">
-												{booking.booking.stripePaymentIntentId}
-											</p>
-										</div>
-									)}
-								</div>
-							)}
-							{booking.booking.internalNotes && (
+							<div className="grid sm:grid-cols-2 gap-4">
 								<div>
 									<p className="text-sm font-medium text-muted-foreground">
-										Internal Notes
+										Stripe Customer ID
 									</p>
-									<p className="text-sm bg-yellow-50 border border-yellow-200 p-3 rounded-md">
-										{booking.booking.internalNotes}
+									<p className="font-mono text-sm">
+										{booking.booking.stripeCustomerId}
 									</p>
 								</div>
-							)}
+								{booking.booking.stripePaymentIntentId && (
+									<div>
+										<p className="text-sm font-medium text-muted-foreground">
+											Stripe Payment Intent ID
+										</p>
+										<p className="font-mono text-sm">
+											{booking.booking.stripePaymentIntentId}
+										</p>
+									</div>
+								)}
+							</div>
 						</CardContent>
 					</Card>
-				</div>
-
+				</div>{' '}
 				{/* Right Column - Pricing Summary & Actions */}
 				<div className="lg:col-span-1">
 					<Card className="sticky top-4">
 						<CardHeader>
-							<CardTitle className="flex items-center gap-2">
-								<CreditCard className="w-5 h-5" />
-								Pricing Summary
-							</CardTitle>
+							<CardTitle>Pricing Summary</CardTitle>
 						</CardHeader>
 						<CardContent className="space-y-4">
 							<div className="space-y-3">
@@ -450,16 +442,6 @@ function AdminBookingDetailPage() {
 										</span>
 									</div>
 								)}
-
-								{booking.booking.discountAmount &&
-									booking.booking.discountAmount > 0 && (
-										<div className="flex justify-between items-center">
-											<span className="text-sm">Discount</span>
-											<span className="font-medium text-green-600">
-												-${booking.booking.discountAmount.toFixed(2)}
-											</span>
-										</div>
-									)}
 							</div>
 
 							<div className="border-t pt-3">
@@ -490,37 +472,39 @@ function AdminBookingDetailPage() {
 							</div>
 
 							{/* Admin Action Buttons */}
-							<div className="border-t pt-4 space-y-2">
+							<div className="border-t pt-4 space-y-3">
 								{booking.booking.stripePaymentIntentId && (
-									<Button variant="outline" className="w-full" asChild>
+									<Button className="w-full" asChild>
 										<a
-											href={`https://dashboard.stripe.com/payments/${booking.booking.stripePaymentIntentId}`}
+											href={`https://dashboard.stripe.com/acct_1RwOD0B1s28979kR/payments/${booking.booking.stripePaymentIntentId}`}
 											target="_blank"
 											rel="noopener noreferrer"
 											className="inline-flex items-center"
 										>
-											<ExternalLink className="w-4 h-4 mr-2" />
+											<Icon icon="tabler:external-link" />
 											View Payment at Stripe
 										</a>
 									</Button>
 								)}
-
 								<Button
 									onClick={handleResendEmail}
 									disabled={isResendingEmail}
-									variant="outline"
+									variant="secondary"
 									className="w-full"
 								>
-									<Mail className="w-4 h-4 mr-2" />
+									<Icon icon="tabler:mail" />
 									{isResendingEmail
 										? 'Sending...'
 										: 'Resend Confirmation Email'}
 								</Button>
-
-								<Button variant="outline" className="w-full">
-									<Settings className="w-4 h-4 mr-2" />
-									Cancel Booking (NEED TO IMPLEMENT)
+								<Button variant="destructive" className="w-full">
+									<Icon icon="tabler:circle-x" />
+									Cancel Booking
 								</Button>
+								<p className="bg-destructive uppercase">
+									The cancellation policy and process needs to be implemented.
+									Button does not work yet.
+								</p>
 							</div>
 						</CardContent>
 					</Card>

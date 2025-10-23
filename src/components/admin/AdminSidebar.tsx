@@ -1,16 +1,9 @@
+import { Icon } from '@iconify/react';
 import { useQuery } from '@tanstack/react-query';
-import {
-	BrickWallShield,
-	Calendar,
-	Home,
-	LayoutDashboard,
-	Settings,
-	Users,
-} from 'lucide-react';
 import { type ComponentProps, useMemo } from 'react';
 
-import { NavMain } from '@/components/admin/nav-main';
-import { NavUser } from '@/components/admin/nav-user';
+import { AdminNavigation } from '@/components/admin/AdminNavigation';
+import { AdminUser } from '@/components/admin/AdminUser';
 import {
 	Sidebar,
 	SidebarContent,
@@ -23,7 +16,7 @@ import {
 } from '@/components/ui/sidebar';
 import { trpc } from '@/integrations/tanstack-query/root-provider';
 
-export function AppSidebar({
+export function AdminSidebar({
 	user,
 	...props
 }: ComponentProps<typeof Sidebar> & {
@@ -47,7 +40,7 @@ export function AppSidebar({
 			{
 				title: 'Dashboard',
 				url: '/admin',
-				icon: LayoutDashboard,
+				icon: 'tabler:table-dashed',
 				items: [
 					{
 						title: 'Overview',
@@ -58,7 +51,7 @@ export function AppSidebar({
 			{
 				title: 'Bookings',
 				url: '/admin/bookings',
-				icon: Calendar,
+				icon: 'tabler:calendar-week',
 				items: [
 					{
 						title: 'Current Bookings',
@@ -73,7 +66,7 @@ export function AppSidebar({
 			{
 				title: 'Guests',
 				url: '/admin/guest',
-				icon: Users,
+				icon: 'tabler:users-group',
 				items: [
 					{
 						title: 'All Guests',
@@ -84,7 +77,7 @@ export function AppSidebar({
 			{
 				title: 'Property',
 				url: '/admin/property-management',
-				icon: Home,
+				icon: 'tabler:home-edit',
 				items: [
 					...rooms.map((room) => ({
 						title: room.name,
@@ -93,17 +86,6 @@ export function AppSidebar({
 					{
 						title: 'All Rooms',
 						url: '/admin/property-management',
-					},
-				],
-			},
-			{
-				title: 'Settings',
-				url: '/admin/settings',
-				icon: Settings,
-				items: [
-					{
-						title: 'General',
-						url: '/admin/settings',
 					},
 				],
 			},
@@ -119,7 +101,7 @@ export function AppSidebar({
 						<SidebarMenuButton size="lg" asChild>
 							<a href="/admin">
 								<div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-									<BrickWallShield className="size-4" />
+									<Icon icon="tabler:layout-dashboard" className="size-5" />
 								</div>
 								<div className="grid flex-1 text-left text-sm leading-tight">
 									<span className="truncate font-semibold">Irishette</span>
@@ -131,10 +113,10 @@ export function AppSidebar({
 				</SidebarMenu>
 			</SidebarHeader>
 			<SidebarContent>
-				<NavMain items={navMainData} />
+				<AdminNavigation items={navMainData} />
 			</SidebarContent>
 			<SidebarFooter>
-				<NavUser user={user} />
+				<AdminUser user={user} />
 			</SidebarFooter>
 			<SidebarRail />
 		</Sidebar>

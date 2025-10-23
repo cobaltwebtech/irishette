@@ -1,3 +1,4 @@
+import { Icon } from '@iconify/react';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import {
@@ -11,7 +12,6 @@ import {
 	type SortingState,
 	useReactTable,
 } from '@tanstack/react-table';
-import { ArrowUpDown, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Badge } from '@/components/ui/badge';
@@ -133,7 +133,7 @@ function PastBookings() {
 						className="h-8 px-2"
 					>
 						Stay Dates
-						<ArrowUpDown className="ml-2 h-4 w-4" />
+						<Icon icon="tabler:arrows-up-down" />
 					</Button>
 				),
 				cell: (info) => (
@@ -158,7 +158,7 @@ function PastBookings() {
 						className="h-8 px-2"
 					>
 						Guest
-						<ArrowUpDown className="ml-2 h-4 w-4" />
+						<Icon icon="tabler:arrows-up-down" />
 					</Button>
 				),
 				cell: (info) => (
@@ -227,7 +227,7 @@ function PastBookings() {
 						className="h-8 px-2"
 					>
 						Amount
-						<ArrowUpDown className="ml-2 h-4 w-4" />
+						<Icon icon="tabler:arrows-up-down" />
 					</Button>
 				),
 				cell: (info) => (
@@ -327,7 +327,10 @@ function PastBookings() {
 						</CardTitle>
 						<div className="flex items-center gap-2">
 							<div className="relative">
-								<Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+								<Icon
+									icon="tabler:search"
+									className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4"
+								/>
 								<Input
 									placeholder="Search past bookings..."
 									value={globalFilter ?? ''}

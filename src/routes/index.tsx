@@ -1,21 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { Image } from '@unpic/react';
-import {
-	Bath,
-	Bed,
-	BedDouble,
-	Car,
-	Coffee,
-	Luggage,
-	MapPinHouse,
-	Microwave,
-	ShowerHead,
-	Star,
-	Tv,
-	Wifi,
-	Wind,
-	Zap,
-} from 'lucide-react';
 import { HeroSlider } from '@/components/HeroSlider';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,6 +11,7 @@ import {
 	CardTitle,
 } from '@/components/ui/card';
 import '@/styles/custom-swiper.css';
+import { Icon } from '@iconify/react';
 
 export const Route = createFileRoute('/')({
 	component: HomePage,
@@ -88,12 +73,15 @@ function HomePage() {
 								}
 							}}
 						>
-							<BedDouble className="size-6" />
+							<Icon
+								icon="material-symbols:bed-outline-rounded"
+								className="size-6"
+							/>
 							View Our Rooms
 						</Button>
 						<Button size="lg" className="text-background" asChild>
 							<Link to="/account">
-								<Luggage className="size-6" />
+								<Icon icon="tabler:luggage" className="size-6" />
 								View Bookings
 							</Link>
 						</Button>
@@ -116,7 +104,10 @@ function HomePage() {
 							className="mx-auto rounded-lg shadow-lg shadow-foreground/50"
 						/>
 						<div>
-							<Bed className="size-16 text-orange-300 mx-auto bg-primary rounded-lg p-3 mb-2 shadow-md shadow-foreground/50" />
+							<Icon
+								icon="tabler:bed"
+								className="size-16 text-orange-300 mx-auto bg-primary rounded-lg p-3 mb-2 shadow-md shadow-foreground/50"
+							/>
 							<p className="text-foreground leading-relaxed text-justify">
 								Built in 1893, Irishette preserves its Victorian charm while
 								offering the comforts of a modern stay. Tucked away in the heart
@@ -126,7 +117,10 @@ function HomePage() {
 							</p>
 						</div>
 						<div>
-							<MapPinHouse className="size-16 text-orange-300 mx-auto bg-primary rounded-lg p-3 mb-2 shadow-md shadow-foreground/50" />
+							<Icon
+								icon="tabler:map-pin-heart"
+								className="size-16 text-orange-300 mx-auto bg-primary rounded-lg p-3 mb-2 shadow-md shadow-foreground/50"
+							/>
 							<p className="text-foreground leading-relaxed text-justify">
 								While we don't serve breakfast, there are great dining options
 								right here in town—just a short drive away. And with Tarleton
@@ -198,35 +192,59 @@ function HomePage() {
 							</CardHeader>
 							<CardContent className="flex flex-wrap justify-center gap-x-6">
 								<div>
-									<Coffee className="size-6 mx-auto text-primary" />
+									<Icon
+										icon="tabler:microwave"
+										className="size-6 mx-auto text-primary"
+									/>
 									<p className="font-semibold mb-2">Kitchenette</p>
 								</div>
 								<div>
-									<ShowerHead className="size-6 mx-auto text-primary" />
+									<Icon
+										icon="mingcute:shower-line"
+										className="size-6 mx-auto text-primary"
+									/>
 									<p className="font-semibold mb-2">Walk-In Shower</p>
 								</div>
 								<div>
-									<Tv className="size-6 mx-auto text-primary" />
+									<Icon
+										icon="tabler:device-tv-old"
+										className="size-6 mx-auto text-primary"
+									/>
 									<p className="font-semibold mb-2">Smart TV</p>
 								</div>
 								<div>
-									<Wind className="size-6 mx-auto text-primary" />
+									<Icon
+										icon="tabler:wind"
+										className="size-6 mx-auto text-primary"
+									/>
 									<p className="font-semibold mb-2">Climate Control</p>
 								</div>
 								<div>
-									<Wifi className="size-6 mx-auto text-primary" />
+									<Icon
+										icon="tabler:wifi"
+										className="size-6 mx-auto text-primary"
+									/>
 									<p className="font-semibold mb-2">Wifi</p>
 								</div>
 								<div>
-									<Car className="size-6 mx-auto text-primary" />
+									<Icon
+										icon="tabler:car"
+										className="size-6 mx-auto text-primary"
+									/>
 									<p className="font-semibold mb-2">Private Entrance</p>
 								</div>
 								<div>
-									<Bed className="size-6 mx-auto text-primary" />
+									<Icon
+										icon="tabler:bed"
+										className="size-6 mx-auto text-primary"
+									/>
 									<p className="font-semibold mb-2">Queen Bed</p>
 								</div>
 								<div>
-									<Zap className="size-6 mx-auto text-primary" />
+									<Icon
+										icon="tabler:bolt"
+										className="size-6 mx-auto text-primary"
+									/>
 									<p className="font-semibold mb-2">Modern Comforts</p>
 								</div>
 							</CardContent>
@@ -275,35 +293,59 @@ function HomePage() {
 							</CardHeader>
 							<CardContent className="flex flex-wrap justify-center gap-x-6">
 								<div>
-									<Microwave className="size-6 mx-auto text-primary" />
+									<Icon
+										icon="tabler:coffee"
+										className="size-6 mx-auto text-primary"
+									/>
 									<p className="font-semibold mb-2">Kitchenette</p>
 								</div>
 								<div>
-									<Bath className="size-6 mx-auto text-primary" />
+									<Icon
+										icon="tabler:bath"
+										className="size-6 mx-auto text-primary"
+									/>
 									<p className="font-semibold mb-2">Clawfoot Tub</p>
 								</div>
 								<div>
-									<Tv className="size-6 mx-auto text-primary" />
+									<Icon
+										icon="tabler:device-tv-old"
+										className="size-6 mx-auto text-primary"
+									/>
 									<p className="font-semibold mb-2">Smart TV</p>
 								</div>
 								<div>
-									<Wind className="size-6 mx-auto text-primary" />
+									<Icon
+										icon="tabler:wind"
+										className="size-6 mx-auto text-primary"
+									/>
 									<p className="font-semibold mb-2">Climate Control</p>
 								</div>
 								<div>
-									<Wifi className="size-6 mx-auto text-primary" />
+									<Icon
+										icon="tabler:wifi"
+										className="size-6 mx-auto text-primary"
+									/>
 									<p className="font-semibold mb-2">Wifi</p>
 								</div>
 								<div>
-									<Car className="size-6 mx-auto text-primary" />
+									<Icon
+										icon="tabler:car-suv"
+										className="size-6 mx-auto text-primary"
+									/>
 									<p className="font-semibold mb-2">Private Entrance</p>
 								</div>
 								<div>
-									<BedDouble className="size-6 mx-auto text-primary" />
+									<Icon
+										icon="material-symbols:bed-outline-rounded"
+										className="size-6 mx-auto text-primary"
+									/>
 									<p className="font-semibold mb-2">King Bed</p>
 								</div>
 								<div>
-									<Star className="size-6 mx-auto text-primary" />
+									<Icon
+										icon="game-icons:texas"
+										className="size-6 mx-auto text-primary"
+									/>
 									<p className="font-semibold mb-2">Texas Charm</p>
 								</div>
 							</CardContent>
@@ -315,7 +357,7 @@ function HomePage() {
 										window.scrollTo({ top: 0, behavior: 'smooth' })
 									}
 								>
-									<Link to="/rooms/rose-room">View & Book Rose Room</Link>
+									<Link to="/rooms/texas-room">View & Book Texas Room</Link>
 								</Button>
 							</CardFooter>
 						</Card>

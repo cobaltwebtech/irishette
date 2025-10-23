@@ -1,6 +1,6 @@
+import { Icon } from '@iconify/react';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { CalendarDays, House, Pencil } from 'lucide-react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -94,20 +94,15 @@ function AdminDashboard() {
 
 	return (
 		<AdminLayout title="Property Admin Dashboard">
-			<div className="mb-6">
-				<p className="text-muted-foreground">
-					Welcome back, {session?.user.name || session?.user.email}
-				</p>
-			</div>
-
 			{/* Stats Overview */}
-			<div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+			<div className="grid md:grid-cols-3 gap-6 my-8">
+				{/* Column 1 */}
 				<Card>
 					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-						<CardTitle className="text-sm font-medium">
+						<CardTitle className="flex items-center gap-2 text-sm font-medium">
+							<Icon icon="tabler:calendar-user" className="size-6" />
 							Current & Upcoming Bookings
 						</CardTitle>
-						<CalendarDays className="h-4 w-4 text-muted-foreground" />
 					</CardHeader>
 					<CardContent>
 						<Link to="/admin/bookings/current-bookings">
@@ -117,12 +112,13 @@ function AdminDashboard() {
 						</Link>
 					</CardContent>
 				</Card>
-
-				{/* Placeholder for second column - you can add another metric here */}
+				{/* Column 2 */}
 				<Card>
 					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-						<CardTitle className="text-sm font-medium">Total Rooms</CardTitle>
-						<House className="h-4 w-4 text-muted-foreground" />
+						<CardTitle className="flex items-center gap-2 text-sm font-medium">
+							<Icon icon="tabler:home" className="size-6" />
+							Total Rooms
+						</CardTitle>
 					</CardHeader>
 					<CardContent>
 						<div className="text-2xl font-bold">{rooms.length}</div>
@@ -167,13 +163,13 @@ function AdminDashboard() {
 													<h3 className="font-medium">{booking.guestName}</h3>
 													<p className="text-sm text-muted-foreground">
 														{roomMap[bookingData.booking.roomId] ||
-															'Unknown Room'}{' '}
-														<p className="text-sm text-muted-foreground">
-															Check-in:{' '}
-															{new Date(
-																booking.checkInDate + 'T00:00:00',
-															).toLocaleDateString()}
-														</p>
+															'Unknown Room'}
+													</p>
+													<p className="text-sm text-muted-foreground">
+														Check-in:{' '}
+														{new Date(
+															`${booking.checkInDate}T00:00:00`,
+														).toLocaleDateString()}
 													</p>
 													<p className="text-xs text-muted-foreground">
 														{booking.numberOfGuests} guest
@@ -252,14 +248,6 @@ function AdminDashboard() {
 											>
 												{room.status}
 											</Badge>
-											<Link
-												to="/admin/property-management/$roomId"
-												params={{ roomId: room.id }}
-											>
-												<Button size="sm" variant="outline">
-													<Pencil className="h-4 w-4" />
-												</Button>
-											</Link>
 										</div>
 									</div>
 								))

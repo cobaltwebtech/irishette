@@ -1,20 +1,14 @@
+import { Icon } from '@iconify/react';
 import { Link, useRouter } from '@tanstack/react-router';
-import { BedDouble, LogOut, Luggage, ShieldUser } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { signOut, useSession } from '@/lib/auth-client';
-
-const navigationLinks = [
-	{ to: '/rooms/rose-room', label: 'Rose Room' },
-	{ to: '/rooms/texas-room', label: 'Texas Room' },
-	{ to: '/contact', label: 'Contact Us' },
-];
 
 export default function Header() {
 	const { data: session, isPending } = useSession();
 	const router = useRouter();
 
 	return (
-		<header className="bg-gradient-to-b from-secondary-foreground to-primary sticky top-0 z-50">
+		<header className="bg-linear-to-b from-secondary-foreground to-primary sticky top-0 z-50">
 			<div className="container mx-auto px-4 py-2">
 				<div className="flex items-center justify-between h-16">
 					{/* Logo/Brand */}
@@ -29,16 +23,39 @@ export default function Header() {
 					</Link>
 
 					{/* Navigation */}
-					<nav className="hidden md:flex items-center space-x-8">
-						{navigationLinks.map((link) => (
-							<Link
-								key={link.to}
-								to={link.to}
-								className="text-background hover:text-secondary transition-colors font-semibold [&.active]:text-accent"
-							>
-								{link.label}
-							</Link>
-						))}
+					<nav className="hidden md:block">
+						<ul className="flex items-center gap-x-8">
+							<li>
+								<Link
+									key="rose-room"
+									to="/rooms/rose-room"
+									className="flex items-center gap-2 text-background hover:text-secondary transition-colors font-semibold [&.active]:text-accent"
+								>
+									<Icon icon="lucide:rose" className="size-5" />
+									Rose Room
+								</Link>
+							</li>
+							<li>
+								<Link
+									key="texas-room"
+									to="/rooms/texas-room"
+									className="flex items-center gap-2 text-background hover:text-secondary transition-colors font-semibold [&.active]:text-accent"
+								>
+									<Icon icon="game-icons:texas" className="size-5" />
+									Texas Room
+								</Link>
+							</li>
+							<li>
+								<Link
+									key="contact"
+									to="/contact"
+									className="flex items-center gap-2 text-background hover:text-secondary transition-colors font-semibold [&.active]:text-accent"
+								>
+									<Icon icon="tabler:message" className="size-5" />
+									Contact Us
+								</Link>
+							</li>
+						</ul>
 					</nav>
 
 					{/* Auth Section */}
@@ -53,7 +70,7 @@ export default function Header() {
 								{session.user?.role === 'admin' && (
 									<Button variant="destructive" asChild>
 										<Link to="/admin">
-											<ShieldUser className="size-5" />
+											<Icon icon="tabler:shield-star" className="size-5" />
 											<span className="hidden sm:inline">Admin</span>
 										</Link>
 									</Button>
@@ -62,7 +79,10 @@ export default function Header() {
 								{session.user?.role !== 'admin' && (
 									<Button variant="accent" asChild>
 										<Link to="/account">
-											<BedDouble className="size-5" />
+											<Icon
+												icon="material-symbols:bed-outline-rounded"
+												className="size-5"
+											/>
 											<span className="hidden sm:inline">View Bookings</span>
 										</Link>
 									</Button>
@@ -78,7 +98,7 @@ export default function Header() {
 									}}
 									className="text-background"
 								>
-									<LogOut className="w-4 h-4" />
+									<Icon icon="tabler:logout" className="size-4" />
 									<span className="hidden sm:inline">Logout</span>
 								</Button>
 							</div>
@@ -86,7 +106,7 @@ export default function Header() {
 							// Unauthenticated user - always show this if not pending and no session
 							<Button variant="accent" asChild>
 								<Link to="/auth/login">
-									<Luggage className="size-5" />
+									<Icon icon="tabler:luggage" className="size-5" />
 									View Bookings
 								</Link>
 							</Button>

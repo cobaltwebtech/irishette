@@ -1,18 +1,6 @@
+import { Icon } from '@iconify/react';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { Image } from '@unpic/react';
-import {
-	Bath,
-	Bed,
-	CalendarCheck,
-	Calendar as CalendarIcon,
-	Car,
-	Coffee,
-	Image as ImageIcon,
-	Star,
-	Tv,
-	Wifi,
-	Wind,
-} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import BookingInformation from '@/components/BookingInformation';
@@ -186,20 +174,9 @@ function TexasRoomPage() {
 				{/* Content */}
 				<div className="relative z-10 container mx-auto max-w-4xl text-center px-4">
 					<div className="flex justify-center mb-4 text-blue-500">
-						<svg
-							width="512"
-							height="512"
-							viewBox="0 0 512 512"
-							className="size-24"
-						>
-							<title>Texas Icon</title>
-							<path
-								fill="currentColor"
-								d="M156.3 41.88V222.6l-130.57 3c35.98 40.7 60.88 78.7 123.07 126c36.4-48.2 78.8-54.7 144.7 100.5l66.8 18c.7-49.4-15.2-97.8 126-155.3l-11.3-93l-3-60.7l-211.9-39.8V41.88z"
-							/>
-						</svg>
+						<Icon icon="game-icons:texas" className="size-24" />
 					</div>
-					<h1 className="font-rye text-4xl md:text-6xl lg:text-7xl font-black mb-6 bg-gradient-to-br from-blue-500 from-30% via-white to-red-500 to-70% bg-clip-text text-transparent">
+					<h1 className="font-rye text-4xl md:text-6xl lg:text-7xl font-black mb-6 bg-linear-to-br from-blue-500 from-30% via-white to-red-500 to-70% bg-clip-text text-transparent">
 						Texas Room
 					</h1>
 					<p className="text-xl md:text-2xl italic text-popover mb-8 font-medium drop-shadow-md max-w-3xl mx-auto">
@@ -218,7 +195,7 @@ function TexasRoomPage() {
 								}
 							}}
 						>
-							<CalendarCheck className="size-6" />
+							<Icon icon="tabler:calendar-check" className="size-6" />
 							Book Texas Room
 						</Button>
 						<Button
@@ -234,7 +211,7 @@ function TexasRoomPage() {
 								}
 							}}
 						>
-							<ImageIcon className="size-6" />
+							<Icon icon="tabler:photo-down" className="size-6" />
 							View Room Photos
 						</Button>
 					</div>
@@ -243,14 +220,17 @@ function TexasRoomPage() {
 
 			{/* Availability Calendar */}
 			<section
-				className="py-16 px-4 scroll-mt-20 bg-gradient-to-b from-blue-200 to-background"
+				className="py-16 px-4 scroll-mt-20 bg-linear-to-b from-blue-200 to-background"
 				data-calendar-section
 			>
-				<div className="container mx-auto max-w-screen-lg">
+				<div className="container mx-auto max-w-5xl">
 					<div className="text-center mb-12">
-						<h2 className="text-3xl font-bold mb-4 flex items-center justify-center gap-2">
-							<CalendarIcon className="w-8 h-8 text-accent" />
-							Select Dates to Book Now
+						<h2 className="text-3xl font-bold mb-4 flex flex-col items-center justify-center gap-2">
+							<Icon
+								icon="tabler:calendar-week"
+								className="size-12 text-accent"
+							/>
+							<span>Select Dates to Book Now</span>
 						</h2>
 						<p className="text-muted-foreground text-lg">
 							Select your preferred dates to see availability and pricing
@@ -259,16 +239,13 @@ function TexasRoomPage() {
 
 					<div className="grid lg:grid-cols-2 gap-8 justify-center">
 						{/* Calendar */}
-						<div className="flex justify-center">
-							<RoomAvailabilityCalendar
-								roomSlug="texas-room"
-								selectedDateRange={selectedRange}
-								onDateRangeSelect={handleRangeSelect}
-								className="w-full max-w-2xl"
-								minNights={1}
-								maxNights={30}
-							/>
-						</div>
+						<RoomAvailabilityCalendar
+							roomSlug="texas-room"
+							selectedDateRange={selectedRange}
+							onDateRangeSelect={handleRangeSelect}
+							minNights={1}
+							maxNights={30}
+						/>
 
 						{/* Booking Information */}
 						<BookingInformation
@@ -277,7 +254,6 @@ function TexasRoomPage() {
 							nights={nights}
 							onBookNow={handleBookNow}
 							roomName="Texas Room"
-							className="w-full max-w-2xl"
 						/>
 					</div>
 				</div>
@@ -286,7 +262,10 @@ function TexasRoomPage() {
 						Can't find the dates you need? Check out the Rose Room availability.
 					</p>
 					<Button asChild variant="secondary">
-						<Link to="/rooms/rose-room">View Rose Room</Link>
+						<Link to="/rooms/rose-room">
+							<Icon icon="lucide:rose" className="size-6 text-rose-400" />
+							View Rose Room
+						</Link>
 					</Button>
 					<p>
 						<span className="bg-red-300 font-bold">
@@ -344,35 +323,7 @@ function TexasRoomPage() {
 								</p>
 							</div>
 							<div>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="72"
-									height="72"
-									viewBox="0 0 72 72"
-									className="size-50"
-								>
-									<title>Texas Flag Graphic</title>
-									<path fill="#fff" d="M5 17h62v38H5z" />
-									<path fill="#d22f27" d="M5 36h62v19H5z" />
-									<path fill="#1e50a0" d="M6 17h19.67v38H6z" />
-									<path
-										fill="#fff"
-										fillRule="evenodd"
-										stroke="#fff"
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth="1.629"
-										d="m19.68 41.31l-3.854-2.556l-3.859 2.549l1.24-4.455l-3.617-2.882l4.62-.198l1.624-4.33l1.616 4.333l4.62.206l-3.622 2.876z"
-									/>
-									<path
-										fill="none"
-										stroke="#000"
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth="2"
-										d="M5 17h62v38H5z"
-									/>
-								</svg>
+								<Icon icon="openmoji:texas-flag" className="size-50" />
 							</div>
 						</CardContent>
 					</Card>
@@ -388,7 +339,10 @@ function TexasRoomPage() {
 
 					<div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
 						<Card className="text-center p-6">
-							<Coffee className="w-8 h-8 text-accent mx-auto mb-4" />
+							<Icon
+								icon="tabler:coffee"
+								className="size-8 text-accent mx-auto mb-4"
+							/>
 							<h3 className="font-semibold mb-2">Kitchenette</h3>
 							<p className="text-sm text-muted-foreground">
 								Coffee maker, refrigerator, microwave
@@ -396,15 +350,23 @@ function TexasRoomPage() {
 						</Card>
 
 						<Card className="text-center p-6">
-							<Bath className="w-8 h-8 text-accent mx-auto mb-4" />
+							<Icon
+								icon="tabler:bath"
+								className="size-8 text-accent mx-auto mb-4"
+							/>
 							<h3 className="font-semibold mb-2">Clawfoot Tub</h3>
 							<p className="text-sm text-muted-foreground">
-								Antique bathtub (no walk-in shower)
+								Antique bathtub
+								<br />
+								(no walk-in shower)
 							</p>
 						</Card>
 
 						<Card className="text-center p-6">
-							<Tv className="w-8 h-8 text-accent mx-auto mb-4" />
+							<Icon
+								icon="tabler:device-tv-old"
+								className="size-8 text-accent mx-auto mb-4"
+							/>
 							<h3 className="font-semibold mb-2">Entertainment</h3>
 							<p className="text-sm text-muted-foreground">
 								TV with Prime Video & Netflix
@@ -412,7 +374,10 @@ function TexasRoomPage() {
 						</Card>
 
 						<Card className="text-center p-6">
-							<Wind className="w-8 h-8 text-accent mx-auto mb-4" />
+							<Icon
+								icon="tabler:wind"
+								className="size-8 text-accent mx-auto mb-4"
+							/>
 							<h3 className="font-semibold mb-2">Climate Control</h3>
 							<p className="text-sm text-muted-foreground">
 								Ceiling fan & electric fireplace
@@ -420,7 +385,10 @@ function TexasRoomPage() {
 						</Card>
 
 						<Card className="text-center p-6">
-							<Wifi className="w-8 h-8 text-accent mx-auto mb-4" />
+							<Icon
+								icon="tabler:wifi"
+								className="size-8 text-accent mx-auto mb-4"
+							/>
 							<h3 className="font-semibold mb-2">Work Space</h3>
 							<p className="text-sm text-muted-foreground">
 								Dedicated area with WiFi
@@ -428,15 +396,21 @@ function TexasRoomPage() {
 						</Card>
 
 						<Card className="text-center p-6">
-							<Car className="w-8 h-8 text-accent mx-auto mb-4" />
+							<Icon
+								icon="tabler:car-suv"
+								className="size-8 text-accent mx-auto mb-4"
+							/>
 							<h3 className="font-semibold mb-2">Private Entrance</h3>
 							<p className="text-sm text-muted-foreground">
-								Independent access
+								Independent access from your vehicle to the room
 							</p>
 						</Card>
 
 						<Card className="text-center p-6">
-							<Bed className="w-8 h-8 text-accent mx-auto mb-4" />
+							<Icon
+								icon="material-symbols:bed-outline-rounded"
+								className="size-8 text-accent mx-auto mb-4"
+							/>
 							<h3 className="font-semibold mb-2">King Bed</h3>
 							<p className="text-sm text-muted-foreground">
 								Spacious sleeping for two
@@ -444,10 +418,13 @@ function TexasRoomPage() {
 						</Card>
 
 						<Card className="text-center p-6">
-							<Star className="w-8 h-8 text-accent mx-auto mb-4" />
+							<Icon
+								icon="game-icons:texas"
+								className="size-8 text-accent mx-auto mb-4"
+							/>
 							<h3 className="font-semibold mb-2">Texas Charm</h3>
 							<p className="text-sm text-muted-foreground">
-								Warm décor & distinctive touches
+								Warm décor & distinctive touches with a Texas vibe
 							</p>
 						</Card>
 					</div>
@@ -459,13 +436,14 @@ function TexasRoomPage() {
 				<div className="container mx-auto max-w-4xl">
 					<Card className="bg-accent/10 border-accent/20">
 						<CardHeader>
-							<CardTitle className="text-2xl">
+							<CardTitle className="text-2xl text-center">
 								Texas Room Special Features (need to update these images)
 							</CardTitle>
 						</CardHeader>
 						<CardContent>
 							<div className="grid md:grid-cols-2 gap-6">
 								<div className="space-y-2">
+									4
 									<Image
 										src="https://res.cloudinary.com/cobalt/image/upload/irishette/texas-room/b495460e-218d-4e2b-8b5b-3e87df2a4b43.avif"
 										alt="Texas Room Clawfoot Tub"

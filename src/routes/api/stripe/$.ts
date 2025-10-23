@@ -43,10 +43,8 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
 			return new Response('Missing signature', { status: 400 });
 		}
 
-		// Initialize Stripe with the binding
-		const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
-			apiVersion: '2025-08-27.basil',
-		});
+		// Initialize Stripe for webhook signature verification
+		const stripe = new Stripe(env.STRIPE_SECRET_KEY);
 
 		// Verify the webhook signature
 		let event: Stripe.Event;

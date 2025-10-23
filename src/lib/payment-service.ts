@@ -48,7 +48,7 @@ export class PaymentService {
 	constructor(env: PaymentEnv) {
 		this.db = createDrizzle(env.DB);
 		this.stripe = new Stripe(env.STRIPE_SECRET_KEY, {
-			apiVersion: '2025-08-27.basil',
+			apiVersion: '2025-09-30.clover',
 		});
 	}
 
@@ -422,6 +422,14 @@ export class PaymentService {
 			bookingData.guestCount,
 		);
 
+		// Get user's Stripe customer ID to store with the booking
+		const userResult = await this.db
+			.select()
+			.from(user)
+			.where(eq(user.id, userId));
+
+		const stripeCustomerId = userResult[0]?.stripeCustomerId || null;
+
 		// Create temporary booking
 		await this.db.insert(bookings).values({
 			id: bookingId,
@@ -442,6 +450,7 @@ export class PaymentService {
 			totalAmount: pricing.totalAmount,
 			status: 'pending', // Temporary status until payment confirmed
 			paymentStatus: 'pending',
+			stripeCustomerId: stripeCustomerId,
 		});
 
 		return bookingId;
@@ -668,6 +677,12 @@ export class PaymentService {
 			throw new Error('Payment intent ID not found in session');
 		}
 
+		// Extract customer ID (it could be a string or an object)
+		const stripeCustomerId =
+			typeof session.customer === 'string'
+				? session.customer
+				: session.customer?.id;
+
 		// Update booking status with complete payment information
 		const updateData = {
 			status: 'confirmed' as const,
@@ -677,6 +692,7 @@ export class PaymentService {
 			// Store additional payment metadata for reference
 			stripeSessionId: sessionId,
 			stripePaymentIntentId: paymentIntentId,
+			stripeCustomerId: stripeCustomerId || null,
 		};
 
 		await this.db
@@ -690,6 +706,7 @@ export class PaymentService {
 			.set({
 				status: 'succeeded',
 				stripePaymentIntentId: paymentIntentId,
+				stripeCustomerId: stripeCustomerId || null,
 			})
 			.where(eq(paymentTransactions.bookingId, bookingId));
 
@@ -697,6 +714,7 @@ export class PaymentService {
 			bookingId,
 			sessionId,
 			paymentIntentId: paymentIntentId,
+			stripeCustomerId: stripeCustomerId,
 			amount: booking.totalAmount,
 			guestEmail: booking.guestEmail,
 		});
@@ -717,12 +735,20 @@ export class PaymentService {
 	 * Handle cancelled/failed payments
 	 */
 	async handlePaymentFailure(sessionId: string): Promise<void> {
-		const session = await this.stripe.checkout.sessions.retrieve(sessionId);
+		const session = await this.stripe.checkout.sessions.retrieve(sessionId, {
+			expand: ['customer'],
+		});
 		const bookingId = session.metadata?.booking_id;
 
 		if (!bookingId) {
 			throw new Error('Booking ID not found in session metadata');
 		}
+
+		// Extract customer ID (it could be a string or an object)
+		const stripeCustomerId =
+			typeof session.customer === 'string'
+				? session.customer
+				: session.customer?.id;
 
 		// Update booking status to cancelled
 		await this.db
@@ -731,6 +757,7 @@ export class PaymentService {
 				status: 'cancelled',
 				paymentStatus: 'failed',
 				updatedAt: new Date(),
+				stripeCustomerId: stripeCustomerId || null,
 			})
 			.where(eq(bookings.id, bookingId));
 
@@ -739,6 +766,7 @@ export class PaymentService {
 			.update(paymentTransactions)
 			.set({
 				status: 'failed',
+				stripeCustomerId: stripeCustomerId || null,
 			})
 			.where(eq(paymentTransactions.bookingId, bookingId));
 	}

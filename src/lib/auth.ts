@@ -18,7 +18,7 @@ export const createDrizzle = (db: D1Database) =>
 export const auth = async () => {
 	// Initialize Stripe with environment variables
 	const stripeClient = new Stripe(env.STRIPE_SECRET_KEY, {
-		apiVersion: '2025-08-27.basil',
+		apiVersion: '2025-09-30.clover',
 	});
 
 	// Initialize Resend for email service

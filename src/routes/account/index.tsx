@@ -1,3 +1,4 @@
+import { Icon } from '@iconify/react';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import {
@@ -11,17 +12,6 @@ import {
 	type SortingState,
 	useReactTable,
 } from '@tanstack/react-table';
-import {
-	ArrowUpDown,
-	Calendar,
-	Mail,
-	MessageCircle,
-	Pencil,
-	Phone,
-	Search,
-	Settings,
-	User,
-} from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { EditProfileModal } from '@/components/EditProfileModal';
 import { Badge } from '@/components/ui/badge';
@@ -67,10 +57,6 @@ interface BookingData {
 		guestEmail: string;
 		guestPhone: string | null;
 		specialRequests: string | null;
-		internalNotes: string | null;
-		stripeCustomerId: string | null;
-		stripeSessionId: string | null;
-		stripePaymentIntentId: string | null;
 		createdAt: Date;
 		updatedAt: Date;
 		confirmedAt: Date | null;
@@ -165,7 +151,7 @@ function AccountPage() {
 						className="h-8 px-2"
 					>
 						Stay Dates
-						<ArrowUpDown className="ml-2 h-4 w-4" />
+						<Icon icon="tabler:arrows-up-down" />
 					</Button>
 				),
 				cell: (info) => (
@@ -221,7 +207,7 @@ function AccountPage() {
 						className="h-8 px-2"
 					>
 						Amount
-						<ArrowUpDown className="ml-2 h-4 w-4" />
+						<Icon icon="tabler:arrows-up-down" />
 					</Button>
 				),
 				cell: (info) => (
@@ -360,7 +346,10 @@ function AccountPage() {
 								</div>
 								<div className="flex items-center gap-2">
 									<div className="relative">
-										<Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+										<Icon
+											icon="tabler:search"
+											className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground size-4"
+										/>
 										<Input
 											placeholder="Search bookings..."
 											value={globalFilter ?? ''}
@@ -462,7 +451,10 @@ function AccountPage() {
 				) : (
 					<Card className="mb-8">
 						<CardContent className="flex flex-col items-center justify-center py-12">
-							<Calendar className="h-16 w-16 text-muted-foreground mb-4" />
+							<Icon
+								icon="tabler:calendar-question"
+								className="size-16 text-muted-foreground mb-4"
+							/>
 							<h3 className="text-xl font-semibold mb-2">No Bookings Yet</h3>
 							<p className="text-muted-foreground text-center mb-6 max-w-md">
 								You have no bookings with us. Start exploring our available
@@ -480,7 +472,7 @@ function AccountPage() {
 					<Card>
 						<CardHeader>
 							<CardTitle className="flex items-center">
-								<User className="w-5 h-5 mr-2" />
+								<Icon icon="tabler:user-circle" className="size-5 mr-2" />
 								Account Information
 							</CardTitle>
 						</CardHeader>
@@ -495,14 +487,14 @@ function AccountPage() {
 								<div>
 									<p className="text-sm text-muted-foreground">Email</p>
 									<p className="text-foreground font-semibold">
-										<Mail className="size-4 inline mr-1" />
+										<Icon icon="tabler:mail" className="size-4 inline mr-1" />
 										{session.user.email}
 									</p>
 								</div>
 								<div>
 									<p className="text-sm text-muted-foreground">Phone Number</p>
 									<p className="text-foreground font-semibold">
-										<Phone className="size-4 inline mr-1" />
+										<Icon icon="tabler:phone" className="size-4 inline mr-1" />
 										{session.user.phoneNumber || 'Not provided'}
 									</p>
 								</div>
@@ -520,7 +512,7 @@ function AccountPage() {
 					<Card>
 						<CardHeader>
 							<CardTitle className="flex items-center">
-								<Settings className="w-5 h-5 mr-2" />
+								<Icon icon="tabler:settings" className="size-5 mr-2" />
 								Quick Actions
 							</CardTitle>
 						</CardHeader>
@@ -528,7 +520,7 @@ function AccountPage() {
 							<div>
 								<p>Update Profile</p>
 								<Button onClick={() => setIsEditModalOpen(true)}>
-									<Pencil className="size-4 inline mr-1" />
+									<Icon icon="tabler:pencil" className="size-4 inline mr-1" />
 									Edit Your Information
 								</Button>
 							</div>
@@ -536,7 +528,7 @@ function AccountPage() {
 								<p>Have questions or need assistance?</p>
 								<Button asChild variant="secondary">
 									<Link to="/contact">
-										<MessageCircle className="size-4" />
+										<Icon icon="tabler:message-circle" className="size-4" />
 										Contact Us
 									</Link>
 								</Button>

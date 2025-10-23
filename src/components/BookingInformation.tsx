@@ -1,8 +1,14 @@
+import { Icon } from '@iconify/react';
 import { Link } from '@tanstack/react-router';
-import { Calendar as CalendarIcon } from 'lucide-react';
 import type { DateRange } from 'react-day-picker';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+	Card,
+	CardContent,
+	CardFooter,
+	CardHeader,
+	CardTitle,
+} from '@/components/ui/card';
 
 interface BookingInformationProps {
 	selectedDateRange: DateRange | undefined;
@@ -23,7 +29,7 @@ export default function BookingInformation({
 }: BookingInformationProps) {
 	const formatDate = (date: Date) => {
 		return date.toLocaleDateString('en-US', {
-			weekday: 'long',
+			weekday: 'short',
 			year: 'numeric',
 			month: 'long',
 			day: 'numeric',
@@ -35,11 +41,17 @@ export default function BookingInformation({
 
 		return (
 			<div className="space-y-2">
-				<p className="font-semibold">
-					Check-in: {formatDate(selectedDateRange.from)}
+				<p>
+					<span className="underline">Check In</span> <br />
+					<span className="font-semibold">
+						{formatDate(selectedDateRange.from)}
+					</span>
 				</p>
-				<p className="font-semibold">
-					Check-out: {formatDate(selectedDateRange.to)}
+				<p>
+					<span className="underline">Check Out</span> <br />
+					<span className="font-semibold">
+						{formatDate(selectedDateRange.to)}
+					</span>
 				</p>
 			</div>
 		);
@@ -50,16 +62,17 @@ export default function BookingInformation({
 			<div className="mt-4 p-4 bg-muted/50 rounded-md space-y-2 border">
 				<div className="flex justify-between items-center">
 					<span className="font-semibold">
-						Room Rate for {nights} night{nights !== 1 ? 's' : ''}
+						Room Rate for {nights} night{nights !== 1 ? 's' : ''}*
 					</span>
 					<span className="font-semibold">${totalPrice.toFixed(2)}</span>
 				</div>
 				<p className="text-sm text-muted-foreground">
-					Base rate: ${nights > 0 ? (totalPrice / nights).toFixed(2) : '0'}
+					Base nightly rate: $
+					{nights > 0 ? (totalPrice / nights).toFixed(2) : '0'}
 					/night
 				</p>
 				<p className="text-xs text-muted-foreground">
-					*Room rate only - fees and taxes added at checkout
+					*Room rate only - fees and taxes will be calculated at checkout
 				</p>
 			</div>
 		);
@@ -68,7 +81,10 @@ export default function BookingInformation({
 	const renderEmptyState = () => {
 		return (
 			<div className="text-center py-8">
-				<CalendarIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+				<Icon
+					icon="tabler:calendar-question"
+					className="size-12 text-muted-foreground mx-auto mb-4"
+				/>
 				<p className="text-muted-foreground">
 					Select your check-in and check-out dates to see pricing and
 					availability
@@ -81,53 +97,55 @@ export default function BookingInformation({
 	};
 
 	return (
-		<div className={`space-y-6 ${className}`}>
+		<div className={`space-y-6 scroll-mt-24 ${className}`} data-booking-info>
 			<Card className="border-border">
 				<CardHeader>
-					<CardTitle className="text-foreground">Booking Information</CardTitle>
+					<CardTitle className="text-2xl text-foreground">
+						Booking Summary
+					</CardTitle>
 				</CardHeader>
 				<CardContent className="space-y-4">
 					{selectedDateRange?.from && selectedDateRange?.to ? (
-						<div>
-							<p className="text-sm text-muted-foreground mb-2">
+						<div className="space-y-4">
+							<p>
+								<span className="text-sm text-muted-foreground">
+									Selected Room:
+								</span>{' '}
+								<br />
+								<span className="font-semibold">{roomName}</span>
+							</p>
+							<p className="text-sm text-muted-foreground mb-0">
 								Selected Dates:
 							</p>
 							{renderDateDisplay()}
 							{renderPricingBreakdown()}
+							<p className="text-sm text-muted-foreground text-center">
+								Proceed to payment for your booking of {nights} night
+								{nights !== 1 ? 's' : ''} at the Irishette in the {roomName}.
+							</p>
+							<Button size="lg" className="w-full" onClick={onBookNow}>
+								<Icon icon="tabler:credit-card-pay" className="size-6" />
+								Book {roomName} Now
+							</Button>
 						</div>
 					) : (
 						renderEmptyState()
 					)}
 				</CardContent>
+				<CardFooter>
+					<p className="text-xs text-muted-foreground text-center">
+						Be sure to review our{' '}
+						<Link
+							to="/cancellation-refund-policy"
+							target="_blank"
+							className="text-primary hover:text-accent underline"
+						>
+							Cancellation & Refund Policy
+						</Link>{' '}
+						before completing any bookings.
+					</p>
+				</CardFooter>
 			</Card>
-
-			{selectedDateRange?.from && selectedDateRange?.to && (
-				<Card className="border-border bg-background">
-					<CardContent className="p-6">
-						<h4 className="font-semibold text-foreground mb-2">
-							Ready to book your stay?
-						</h4>
-						<p className="text-sm text-muted-foreground mb-4">
-							Continue with your reservation for {nights} night
-							{nights !== 1 ? 's' : ''} at the {roomName}
-						</p>
-						<Button className="w-full" onClick={onBookNow}>
-							Book Now - ${totalPrice.toFixed(2)} for {nights} night
-							{nights !== 1 ? 's' : ''}
-						</Button>
-					</CardContent>
-				</Card>
-			)}
-			<p className="text-xs text-muted-foreground text-center">
-				Be sure to review our{' '}
-				<Link
-					to="/cancellation-refund-policy"
-					className="text-primary hover:text-accent underline"
-				>
-					Cancellation & Refund Policy
-				</Link>{' '}
-				before completing any bookings.
-			</p>
 		</div>
 	);
 }

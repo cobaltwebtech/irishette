@@ -1,8 +1,6 @@
-'use client';
-
+import { Icon } from '@iconify/react';
 import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { PanelLeftIcon } from 'lucide-react';
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -73,26 +71,34 @@ function SidebarProvider({
 	// We use openProp and setOpenProp for control from outside the component.
 	const [_open, _setOpen] = React.useState(defaultOpen);
 	const open = openProp ?? _open;
+
 	const setOpen = React.useCallback(
 		(value: boolean | ((value: boolean) => boolean)) => {
-			const openState = typeof value === 'function' ? value(open) : value;
 			if (setOpenProp) {
+				// When controlled, use the current openProp value for function-based updates
+				const openState =
+					typeof value === 'function' ? value(openProp ?? false) : value;
 				setOpenProp(openState);
 			} else {
-				_setOpen(openState);
+				// When uncontrolled, use setState's functional update to avoid stale closure
+				_setOpen((prevOpen) => {
+					return typeof value === 'function' ? value(prevOpen) : value;
+				});
 			}
 
-			// This sets the cookie to keep the sidebar state.
+			// This sets the cookie to keep the sidebar state - moved outside to ensure it always runs
+			const openState =
+				typeof value === 'function' ? value(openProp ?? _open) : value;
 			const cookieValue = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
+			//biome-ignore lint/suspicious/noDocumentCookie: setting the cookie for sidebar state
 			document.cookie = cookieValue;
 		},
-		[setOpenProp, open],
+		[setOpenProp, openProp, _open],
 	);
 
 	// Helper to toggle the sidebar.
 	const toggleSidebar = React.useCallback(() => {
 		return isMobile ? setOpenMobile((open) => !open) : setOpen((open) => !open);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [isMobile, setOpen]);
 
 	// Adds a keyboard shortcut to toggle the sidebar.
@@ -142,7 +148,7 @@ function SidebarProvider({
 						} as React.CSSProperties
 					}
 					className={cn(
-						'group/sidebar-wrapper has-data-[variant=inset]:bg-sidebar flex min-h-svh w-full',
+						'group/sidebar-wrapper has-data-[variant=inset]:bg-sidebar flex w-full',
 						className,
 					)}
 					{...props}
@@ -238,7 +244,7 @@ function Sidebar({
 				}
 				className={cn(
 					'fixed z-10 hidden w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex',
-					'top-[var(--header-height)] h-[calc(100vh-var(--header-height))]',
+					'top-(--header-height) h-[calc(100vh-var(--header-height))]',
 					side === 'left'
 						? 'left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]'
 						: 'right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]',
@@ -267,22 +273,26 @@ function SidebarTrigger({
 	onClick,
 	...props
 }: React.ComponentProps<typeof Button>) {
-	const { toggleSidebar } = useSidebar();
+	const { toggleSidebar, state } = useSidebar();
 
 	return (
 		<Button
 			data-sidebar="trigger"
 			data-slot="sidebar-trigger"
-			variant="ghost"
+			variant="secondary"
 			size="icon"
-			className={cn('size-7', className)}
+			className={cn(className)}
 			onClick={(event) => {
 				onClick?.(event);
 				toggleSidebar();
 			}}
 			{...props}
 		>
-			<PanelLeftIcon />
+			{state === 'expanded' ? (
+				<Icon icon="tabler:layout-sidebar-left-collapse" className="size-7" />
+			) : (
+				<Icon icon="tabler:layout-sidebar-left-expand" className="size-7" />
+			)}
 			<span className="sr-only">Toggle Sidebar</span>
 		</Button>
 	);
@@ -483,7 +493,7 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<'li'>) {
 }
 
 const sidebarMenuButtonVariants = cva(
-	'peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-hidden ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0',
+	'peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-hidden ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! [&>span:last-child]:truncate [&>svg]:shrink-0',
 	{
 		variants: {
 			variant: {

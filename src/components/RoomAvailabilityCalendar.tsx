@@ -1,5 +1,5 @@
+import { Icon } from '@iconify/react';
 import { useQuery } from '@tanstack/react-query';
-import { X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { Button } from '@/components/ui/button';
@@ -348,11 +348,30 @@ export default function RoomAvailabilityCalendar({
 						}}
 						variant="outline"
 					>
-						<X className="w-3 h-3" />
+						<Icon icon="tabler:letter-x" className="size-5" />
 						Clear Selection
 					</Button>
 				</div>
 			)}
+			{/* Continue Button (mobile only) */}
+			<div className="block sm:hidden mx-auto w-fit">
+				<Button
+					type="button"
+					size="lg"
+					onClick={() => {
+						const bookingInfo = document.querySelector('[data-booking-info]');
+						if (bookingInfo) {
+							bookingInfo.scrollIntoView({
+								behavior: 'smooth',
+								block: 'start',
+							});
+						}
+					}}
+				>
+					<Icon icon="tabler:circle-arrow-down-filled" className="size-5" />
+					Continue Booking
+				</Button>
+			</div>
 
 			{/* Legend and Info */}
 			<div className="space-y-3">

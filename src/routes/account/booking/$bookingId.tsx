@@ -1,6 +1,6 @@
+import { Icon } from '@iconify/react';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
-import { ArrowLeft, Calendar, CreditCard, Mail, User } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -91,7 +91,7 @@ function BookingDetailPage() {
 	// Early returns for various states
 	if (isPending || bookingQuery.isLoading) {
 		return (
-			<div className="min-h-screen bg-background flex items-center justify-center">
+			<div className="flex items-center justify-center">
 				<div className="text-center">
 					<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
 					<p className="text-muted-foreground">Loading booking details...</p>
@@ -106,7 +106,7 @@ function BookingDetailPage() {
 
 	if (bookingQuery.error || (!bookingQuery.isLoading && !booking)) {
 		return (
-			<div className="min-h-screen bg-background">
+			<div>
 				<div className="bg-primary/5 border-b">
 					<div className="container mx-auto px-4 py-6">
 						<div className="flex items-center gap-4">
@@ -114,7 +114,7 @@ function BookingDetailPage() {
 								to="/account"
 								className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors"
 							>
-								<ArrowLeft className="w-4 h-4 mr-2" />
+								<Icon icon="tabler:arrow-left" className="size-4 mr-2" />
 								Back to Account
 							</Link>
 						</div>
@@ -149,7 +149,7 @@ function BookingDetailPage() {
 
 	if (!booking) {
 		return (
-			<div className="min-h-screen bg-background">
+			<div>
 				<div className="bg-primary/5 border-b">
 					<div className="container mx-auto px-4 py-6">
 						<div className="flex items-center gap-4">
@@ -157,7 +157,7 @@ function BookingDetailPage() {
 								to="/account"
 								className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors"
 							>
-								<ArrowLeft className="w-4 h-4 mr-2" />
+								<Icon icon="tabler:arrow-left" className="size-4 mr-2" />
 								Back to Account
 							</Link>
 						</div>
@@ -185,7 +185,7 @@ function BookingDetailPage() {
 	// Final safety check - should not be needed but prevents runtime errors
 	if (!booking || !booking.booking || !booking.room) {
 		return (
-			<div className="min-h-screen bg-background flex items-center justify-center">
+			<div className="flex items-center justify-center">
 				<div className="text-center">
 					<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
 					<p className="text-muted-foreground">Loading booking details...</p>
@@ -195,23 +195,21 @@ function BookingDetailPage() {
 	}
 
 	return (
-		<div className="min-h-screen bg-background">
+		<section>
 			{/* Header */}
-			<div className="bg-primary/5 border-b">
+			<div className="bg-muted border-b">
 				<div className="container mx-auto px-4 py-6">
 					<div className="flex items-center justify-between">
 						<div className="flex items-center gap-4">
 							<Button asChild>
 								<Link to="/account">
-									<ArrowLeft className="w-4 h-4 mr-2" />
+									<Icon icon="tabler:arrow-left" className="size-4 mr-2" />
 									Back to Account
 								</Link>
 							</Button>
-							<div>
-								<h1 className="text-2xl font-bold text-foreground">
-									Booking Details
-								</h1>
-							</div>
+							<h1 className="text-2xl font-bold text-foreground">
+								Booking Details
+							</h1>
 						</div>
 						<Badge
 							variant={
@@ -234,19 +232,16 @@ function BookingDetailPage() {
 				<div className="grid lg:grid-cols-3 gap-8">
 					{/* Left Column - Booking Details */}
 					<div className="lg:col-span-2 space-y-6">
-						{/* Reservation Details */}
+						{/* Booking Details */}
 						<Card>
 							<CardHeader>
-								<CardTitle className="flex items-center gap-2">
-									<Calendar className="w-5 h-5" />
-									Reservation Details
-								</CardTitle>
+								<CardTitle>Details</CardTitle>
 							</CardHeader>
 							<CardContent className="space-y-4">
 								<div className="grid sm:grid-cols-2 gap-4">
 									<div>
 										<p className="text-sm font-medium text-muted-foreground">
-											Confirmation ID:
+											Confirmation ID
 										</p>
 										<Badge
 											variant="secondary"
@@ -270,7 +265,7 @@ function BookingDetailPage() {
 										</p>
 										<p className="font-semibold">
 											{new Date(
-												booking.booking.checkInDate + 'T00:00:00',
+												`${booking.booking.checkInDate}T00:00:00`,
 											).toLocaleDateString('en-US', {
 												weekday: 'long',
 												year: 'numeric',
@@ -288,7 +283,7 @@ function BookingDetailPage() {
 										</p>
 										<p className="font-semibold">
 											{new Date(
-												booking.booking.checkOutDate + 'T00:00:00',
+												`${booking.booking.checkOutDate}T00:00:00`,
 											).toLocaleDateString('en-US', {
 												weekday: 'long',
 												year: 'numeric',
@@ -329,7 +324,6 @@ function BookingDetailPage() {
 						<Card>
 							<CardHeader>
 								<CardTitle className="flex items-center gap-2">
-									<User className="w-5 h-5" />
 									Guest Information
 								</CardTitle>
 							</CardHeader>
@@ -372,42 +366,6 @@ function BookingDetailPage() {
 								)}
 							</CardContent>
 						</Card>
-
-						{/* Important Information */}
-						<Card>
-							<CardHeader>
-								<CardTitle>Important Information</CardTitle>
-							</CardHeader>
-							<CardContent>
-								<div className="space-y-3 text-sm">
-									<div className="flex items-start gap-2">
-										<div className="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0"></div>
-										<p>
-											Check-in is available from 3:00 PM. Early check-in may be
-											available upon request.
-										</p>
-									</div>
-									<div className="flex items-start gap-2">
-										<div className="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0"></div>
-										<p>
-											Check-out is by 11:00 AM. Late check-out may be available
-											upon request.
-										</p>
-									</div>
-									<div className="flex items-start gap-2">
-										<div className="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0"></div>
-										<p>Please bring a valid photo ID for check-in.</p>
-									</div>
-									<div className="flex items-start gap-2">
-										<div className="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0"></div>
-										<p>
-											If you have any questions or need assistance, please
-											contact us.
-										</p>
-									</div>
-								</div>
-							</CardContent>
-						</Card>
 					</div>
 
 					{/* Right Column - Pricing Summary */}
@@ -415,7 +373,6 @@ function BookingDetailPage() {
 						<Card className="sticky top-4">
 							<CardHeader>
 								<CardTitle className="flex items-center gap-2">
-									<CreditCard className="w-5 h-5" />
 									Pricing Summary
 								</CardTitle>
 							</CardHeader>
@@ -485,30 +442,77 @@ function BookingDetailPage() {
 								</div>
 
 								{/* Action Buttons */}
-								<div className="border-t pt-4 space-y-2">
+								<div className="border-t pt-4 space-y-3">
 									<Button
 										onClick={handleResendEmail}
 										disabled={isResendingEmail}
 										variant="outline"
 										className="w-full"
 									>
-										<Mail className="w-4 h-4 mr-2" />
+										<Icon icon="tabler:mail-forward" className="size-6" />
 										{isResendingEmail
 											? 'Sending...'
 											: 'Resend Confirmation Email'}
 									</Button>
-									<Button className="w-full">Contact Support</Button>
-									<Link to="/" className="block">
-										<Button variant="outline" className="w-full">
-											Book Another Stay
-										</Button>
-									</Link>
+									<Button className="w-full">
+										<Icon icon="tabler:message-circle" className="size-6" />
+										Contact Support
+									</Button>
+									<Button asChild variant="destructive" className="w-full">
+										<Link to="/account">
+											<Icon icon="tabler:circle-x" className="size-6" />
+											IMPLEMENT CANCEL BOOKING
+										</Link>
+									</Button>
+									<p className="bg-destructive uppercase">
+										The cancellation policy and process needs to be implemented.
+										Button does not work yet.
+									</p>
 								</div>
+							</CardContent>
+						</Card>
+					</div>
+
+					{/* Important Information Card */}
+					<div className="lg:col-span-2">
+						<Card>
+							<CardHeader>
+								<CardTitle>Important Information</CardTitle>
+							</CardHeader>
+							<CardContent>
+								<ul className="space-y-2 mx-6 text-sm list-disc">
+									<li>
+										Check-in is available from 3:00 PM. Early check-in may be
+										available upon request.
+									</li>
+									<li>
+										Check-out is by 11:00 AM. Late check-out may be available
+										upon request.
+									</li>
+									<li>Please bring a valid photo ID for check-in.</li>
+									<li>
+										If you need to cancel your booking please review our{' '}
+										<Link
+											to="/cancellation-refund-policy"
+											className="text-accent hover:underline"
+										>
+											Cancellation Policy
+										</Link>
+										.
+									</li>
+									<li>
+										If you have any questions or need assistance{' '}
+										<Link to="/contact" className="text-accent hover:underline">
+											Contact Us
+										</Link>
+										.
+									</li>
+								</ul>
 							</CardContent>
 						</Card>
 					</div>
 				</div>
 			</div>
-		</div>
+		</section>
 	);
 }

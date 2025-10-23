@@ -1,5 +1,5 @@
+import { Icon } from '@iconify/react';
 import { Link } from '@tanstack/react-router';
-import { ChevronRight, type LucideIcon } from 'lucide-react';
 
 import {
 	Collapsible,
@@ -16,13 +16,13 @@ import {
 	SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
 
-export function NavMain({
+export function AdminNavigation({
 	items,
 }: {
 	items: {
 		title: string;
 		url: string;
-		icon?: LucideIcon;
+		icon?: string;
 		isActive?: boolean;
 		items?: {
 			title: string;
@@ -43,9 +43,12 @@ export function NavMain({
 						<SidebarMenuItem>
 							<CollapsibleTrigger asChild>
 								<SidebarMenuButton tooltip={item.title}>
-									{item.icon && <item.icon />}
+									{item.icon && <Icon icon={item.icon} className="size-5" />}
 									<span>{item.title}</span>
-									<ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+									<Icon
+										icon="tabler:chevron-right"
+										className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90"
+									/>
 								</SidebarMenuButton>
 							</CollapsibleTrigger>
 							<CollapsibleContent>

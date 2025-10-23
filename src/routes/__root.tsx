@@ -6,6 +6,7 @@ import {
 	createRootRouteWithContext,
 	HeadContent,
 	Scripts,
+	useRouterState,
 } from '@tanstack/react-router';
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
 import { ReactLenis } from 'lenis/react';
@@ -70,6 +71,9 @@ export const Route = createRootRouteWithContext<{
 });
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+	const routerState = useRouterState();
+	const isAdminRoute = routerState.location.pathname.startsWith('/admin');
+
 	return (
 		<html lang="en">
 			<head>
@@ -80,7 +84,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 					<ReactLenis root>
 						<Header />
 						{children}
-						<Footer />
+						{!isAdminRoute && <Footer />}
 						<Toaster />
 					</ReactLenis>
 				</div>

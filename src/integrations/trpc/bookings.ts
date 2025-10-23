@@ -648,4 +648,56 @@ export const bookingsRouter = createTRPCRouter({
 				});
 			}
 		}),
+
+	/**
+	 * Admin: Update internal notes for a booking
+	 */
+	adminUpdateInternalNotes: publicProcedure
+		.input(
+			z.object({
+				bookingId: z.string(),
+				internalNotes: z.string(),
+			}),
+		)
+		.mutation(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			try {
+				// Verify booking exists
+				const bookingResult = await db
+					.select()
+					.from(bookings)
+					.where(eq(bookings.id, input.bookingId));
+
+				if (!bookingResult[0]) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: 'Booking not found',
+					});
+				}
+
+				// Update internal notes
+				await db
+					.update(bookings)
+					.set({
+						internalNotes: input.internalNotes,
+						updatedAt: new Date(),
+					})
+					.where(eq(bookings.id, input.bookingId));
+
+				return {
+					success: true,
+					message: 'Internal notes updated successfully',
+				};
+			} catch (error) {
+				console.error('Failed to update internal notes:', error);
+				if (error instanceof TRPCError) {
+					throw error;
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: 'Failed to update internal notes',
+				});
+			}
+		}),
 });

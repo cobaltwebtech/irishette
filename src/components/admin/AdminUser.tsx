@@ -1,10 +1,5 @@
+import { Icon } from '@iconify/react';
 import { Link } from '@tanstack/react-router';
-import {
-	BadgeCheck,
-	ChevronsUpDown,
-	LogOut,
-	User as UserIcon,
-} from 'lucide-react';
 
 import {
 	DropdownMenu,
@@ -21,9 +16,8 @@ import {
 	SidebarMenuItem,
 	useSidebar,
 } from '@/components/ui/sidebar';
-import { authClient } from '@/lib/auth-client';
 
-export function NavUser({
+export function AdminUser({
 	user,
 }: {
 	user: {
@@ -32,11 +26,6 @@ export function NavUser({
 	};
 }) {
 	const { isMobile } = useSidebar();
-
-	const handleSignOut = async () => {
-		await authClient.signOut();
-		window.location.href = '/';
-	};
 
 	const initials = user.name
 		? user.name
@@ -65,7 +54,7 @@ export function NavUser({
 								</span>
 								<span className="truncate text-xs">{user.email}</span>
 							</div>
-							<ChevronsUpDown className="ml-auto size-4" />
+							<Icon icon="tabler:arrow-bar-right" className="ml-auto size-5" />
 						</SidebarMenuButton>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
@@ -91,22 +80,18 @@ export function NavUser({
 						<DropdownMenuGroup>
 							<DropdownMenuItem asChild>
 								<Link to="/">
-									<UserIcon className="mr-2 h-4 w-4" />
-									View Site
+									<Icon icon="tabler:home" />
+									Go to Homepage
 								</Link>
 							</DropdownMenuItem>
 							<DropdownMenuItem asChild>
 								<Link to="/admin">
-									<BadgeCheck className="mr-2 h-4 w-4" />
+									<Icon icon="tabler:layout-dashboard" />
 									Admin Dashboard
 								</Link>
 							</DropdownMenuItem>
 						</DropdownMenuGroup>
 						<DropdownMenuSeparator />
-						<DropdownMenuItem onClick={handleSignOut}>
-							<LogOut className="mr-2 h-4 w-4" />
-							Log out
-						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</SidebarMenuItem>
