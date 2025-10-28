@@ -4,7 +4,7 @@ import { Link } from '@tanstack/react-router';
 export default function Footer() {
 	return (
 		<footer className="bg-muted border-t border-border mt-auto">
-			<div className="container mx-auto px-4 py-12">
+			<div className="container mx-auto px-4 py-8">
 				<div className="grid md:grid-cols-[50%_auto_auto] gap-8">
 					{/* Logo & Description */}
 					<div className="space-y-4">
@@ -12,19 +12,19 @@ export default function Footer() {
 							to="/"
 							className="text-2xl font-bold text-primary hover:text-primary/80 transition-colors inline-block"
 						>
-							Irishette
+							Irishette (Logo goes here)
 						</Link>
-						<p className="leading-relaxed">
+						<p className="leading-relaxed text-sm">
 							Experience authentic Irish hospitality in the heart of Dublin,
 							Texas. Our charming bed & breakfast offers uniquely themed rooms
 							for an unforgettable stay.
 						</p>
 					</div>
 
-					{/* Quick Links */}
-					<div className="space-y-4 text-right text-foreground">
-						<h3 className="text-lg font-semibold">Quick Links</h3>
-						<nav className="flex flex-col space-y-3">
+					{/* Footer Menu */}
+					<div className="space-y-2 text-center md:text-right text-foreground">
+						<h3 className="text-lg font-semibold">Menu</h3>
+						<nav className="flex flex-col space-y-2 text-sm text-muted-foreground">
 							<Link to="/" className="hover:text-accent transition-colors">
 								Home
 							</Link>
@@ -44,64 +44,49 @@ export default function Footer() {
 								to="/account"
 								className="hover:text-accent transition-colors"
 							>
-								View Bookings
+								My Account
 							</Link>
 						</nav>
 					</div>
 
 					{/* Contact Information */}
-					<div className="space-y-4">
-						<h3 className="text-lg font-semibold text-foreground text-right">
-							Contact Us
-						</h3>
-						<div className="space-y-3 flex flex-col items-end">
+					<div className="space-y-2 text-center md:text-right text-foreground">
+						<h3 className="text-lg font-semibold">Contact Us</h3>
+						<nav className="flex flex-col items-center md:items-end space-y-2 text-sm text-muted-foreground">
+							<Link
+								to="/contact"
+								className="flex items-start gap-2 hover:text-accent transition-colors"
+							>
+								<Icon icon="tabler:mail" className="size-5" />
+								Send a Message
+							</Link>
+							<a
+								href="tel:+1234567890"
+								className="flex items-start gap-2 hover:text-accent transition-colors"
+							>
+								<Icon icon="tabler:phone" className="size-5" />
+								(123) 456-7890
+							</a>
 							<div className="flex items-start gap-2">
-								<Icon
-									icon="tabler:map-pin"
-									className="size-5 text-primary mt-0.5 shrink-0"
-								/>
-								<div className="text-right">
+								<Icon icon="tabler:map-pin" className="size-5" />
+								<div className="text-center md:text-right">
 									<p>123 Main Street</p>
 									<p>Dublin, TX 76446</p>
 									<p>United States</p>
 								</div>
 							</div>
-							<div className="flex items-center gap-2">
-								<Icon
-									icon="tabler:phone"
-									className="size-5 text-primary shrink-0"
-								/>
-								<a
-									href="tel:+1234567890"
-									className="hover:text-accent transition-colors"
-								>
-									(123) 456-7890
-								</a>
-							</div>
-							<div className="flex items-center gap-2">
-								<Icon
-									icon="tabler:mail"
-									className="size-5 text-primary shrink-0"
-								/>
-								<a
-									href="mailto:info@irishette.com"
-									className="hover:text-accent transition-colors"
-								>
-									info@irishette.com
-								</a>
-							</div>
-						</div>
+						</nav>
 					</div>
 				</div>
 
 				{/* Bottom Bar */}
-				<div className="border-t border-accent mt-8 pt-8">
+				<div className="border-t border-accent mt-4 pt-4">
 					<div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
 						<div className="text-sm text-muted-foreground">
 							© {new Date().getFullYear()} Irishette Bed & Breakfast. All rights
 							reserved.
 						</div>
-						<div className="flex items-center space-x-6 text-sm">
+						<div className="flex items-center space-x-6 text-sm text-muted-foreground">
 							<Link
 								to="/cancellation-refund-policy"
 								className="hover:text-accent transition-colors"

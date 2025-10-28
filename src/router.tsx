@@ -11,7 +11,13 @@ export const getRouter = () => {
 
 	const router = createRouter({
 		routeTree,
-		context: { ...rqContext },
+		context: {
+			...rqContext,
+			// auth will initially be undefined
+			// We'll pass the actual auth state from the App component
+			// biome-ignore lint/style/noNonNullAssertion: Better Auth typed in __root.tsx
+			auth: undefined!,
+		},
 		defaultPreload: 'intent',
 		Wrap: (props: { children: React.ReactNode }) => {
 			return (

@@ -101,7 +101,7 @@ function LogoutPage() {
 							</Link>
 						</Button>
 						<Button asChild variant="outline" className="flex-1">
-							<Link to="/auth/login">
+							<Link to="/auth/login" search={{ redirect: '/account' }}>
 								<Icon icon="tabler:login-2" className="size-5" />
 								Login Again
 							</Link>

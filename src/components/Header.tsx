@@ -105,7 +105,7 @@ export default function Header() {
 						) : (
 							// Unauthenticated user - always show this if not pending and no session
 							<Button variant="accent" asChild>
-								<Link to="/auth/login">
+								<Link to="/auth/login" search={{ redirect: '/account' }}>
 									<Icon icon="tabler:luggage" className="size-5" />
 									View Bookings
 								</Link>

@@ -1,5 +1,5 @@
 import { Icon } from '@iconify/react';
-import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -37,7 +37,6 @@ function ResetPasswordPage() {
 	const [token, setToken] = useState<string | null>(null);
 	const newPasswordId = useId();
 	const confirmPasswordId = useId();
-	const router = useRouter();
 
 	// Get token from URL on mount
 	useEffect(() => {
@@ -130,7 +129,7 @@ function ResetPasswordPage() {
 							You may now log in with your new password.
 						</p>
 						<Button asChild className="w-full">
-							<Link to="/auth/login">
+							<Link to="/auth/login" search={{ redirect: '/account' }}>
 								<Icon icon="tabler:login-2" className="size-5" />
 								Return to Login
 							</Link>
@@ -219,8 +218,9 @@ function ResetPasswordPage() {
 					<div className="text-sm">
 						Remember your password?{' '}
 						<Link
-							href="/auth/login"
+							to="/auth/login"
 							className="text-accent underline-offset-4 hover:underline"
+							search={{ redirect: '/account' }}
 						>
 							Back to Login
 						</Link>

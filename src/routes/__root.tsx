@@ -16,21 +16,17 @@ import Footer from '@/components/Footer';
 import Header from '@/components/Header';
 import { NotFound } from '@/components/not-found';
 import { Toaster } from '@/components/ui/sonner';
-import { authClient } from '@/lib/auth-client';
+import type { useSession } from '@/lib/auth-client';
 import appCss from '@/styles/styles.css?url';
 import { seo } from '@/utils/seo';
 
-export const Route = createRootRouteWithContext<{
+// Define the router context interface
+interface RouterContext {
 	queryClient: QueryClient;
-}>()({
-	beforeLoad: async () => {
-		// Preload session data in root route to avoid flash on protected routes
-		// This will be cached and available to child routes
-		const { data: session } = await authClient.getSession();
-		return {
-			session: session ?? null,
-		};
-	},
+	auth: ReturnType<typeof useSession> | undefined;
+}
+
+export const Route = createRootRouteWithContext<RouterContext>()({
 	head: () => ({
 		meta: [
 			{

@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { trpc, trpcClient } from '@/integrations/tanstack-query/root-provider';
-import { requireAuth } from '@/lib/auth-guard';
+import { requireAuth } from '@/utils/auth-check';
 
 export const Route = createFileRoute('/account/booking/$bookingId')({
 	head: () => ({
@@ -17,9 +17,11 @@ export const Route = createFileRoute('/account/booking/$bookingId')({
 			},
 		],
 	}),
-	beforeLoad: async ({ location, context }) => {
-		// Require authentication - pass context to use preloaded session from __root.tsx
-		const session = await requireAuth(location, context);
+	beforeLoad: async ({ location }) => {
+		// Check the user is authenticated before rendering the page
+		const session = await requireAuth(location);
+
+		// Return session data to be available in component during SSR
 		return { session };
 	},
 	component: BookingDetailPage,

@@ -1,6 +1,6 @@
 import { Icon } from '@iconify/react';
 import { useQuery } from '@tanstack/react-query';
-import { createFileRoute, Link, redirect } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import {
 	type ColumnFiltersState,
 	createColumnHelper,
@@ -33,6 +33,8 @@ import {
 	TableRow,
 } from '@/components/ui/table';
 import { trpc } from '@/integrations/tanstack-query/root-provider';
+import { useSession } from '@/lib/auth-client';
+import { requireAuth } from '@/utils/auth-check';
 
 // Interface for booking data returned from tRPC
 interface BookingData {
@@ -77,31 +79,29 @@ export const Route = createFileRoute('/account/')({
 			},
 		],
 	}),
-	beforeLoad: async ({ location, context }) => {
-		// Session is preloaded in __root.tsx beforeLoad
-		// Access it from context instead of fetching again
-		const session = context.session;
+	beforeLoad: async ({ location }) => {
+		// Check the user is authenticated before rendering the page
+		const session = await requireAuth(location);
 
-		console.log('[/account beforeLoad] Session from context:', !!session);
-
-		if (!session) {
-			// Redirect to login with return URL
-			throw redirect({
-				to: '/terms-of-service',
-				search: {
-					redirect: location.href,
-				},
-			});
-		}
-
+		// Return session data to be available in component during SSR
 		return { session };
 	},
 	component: AccountPage,
 });
 
 function AccountPage() {
-	// Get session from loader data - guaranteed to exist (beforeLoad already checked)
-	const { session } = Route.useRouteContext();
+	// Get session from route context (passed from beforeLoad)
+	// This ensures session is available during SSR
+	const routeContext = Route.useRouteContext();
+	const serverSession = routeContext.session;
+
+	// Also get client-side session for reactive updates
+	const { data: clientSession } = useSession();
+
+	// Use server session during SSR, client session after hydration
+	// biome-ignore lint/style/noNonNullAssertion: Session guaranteed by beforeLoad
+	const session = clientSession ?? serverSession!;
+
 	const [sorting, setSorting] = useState<SortingState>([
 		{ id: 'booking.checkInDate', desc: true },
 	]);
@@ -117,7 +117,7 @@ function AccountPage() {
 	} = useQuery(
 		trpc.bookings.getMyBookings.queryOptions(
 			{
-				userId: session.user.id, // Session guaranteed to exist from beforeLoad
+				userId: session.user.id,
 				limit: 10,
 				offset: 0,
 			},

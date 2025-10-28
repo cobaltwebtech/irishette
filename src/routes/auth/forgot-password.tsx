@@ -14,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { authClient } from '@/lib/auth-client';
+import { requireNoSession } from '@/utils/auth-check';
 
 export const Route = createFileRoute('/auth/forgot-password')({
 	head: () => ({
@@ -23,6 +24,15 @@ export const Route = createFileRoute('/auth/forgot-password')({
 			},
 		],
 	}),
+	beforeLoad: async ({ search }) => {
+		// Prevent logged-in users from accessing this route
+		await requireNoSession(search.redirect);
+	},
+	validateSearch: (search: Record<string, unknown>) => {
+		return {
+			redirect: (search.redirect as string) || '/account',
+		};
+	},
 	component: ForgotPasswordPage,
 });
 
@@ -105,8 +115,9 @@ function ForgotPasswordPage() {
 						<div className="text-sm">
 							Remember your password?{' '}
 							<Link
-								href="/auth/login"
+								to="/auth/login"
 								className="text-accent underline-offset-4 hover:underline"
+								search={{ redirect: '/account' }}
 							>
 								Back to Login
 							</Link>
@@ -185,8 +196,9 @@ function ForgotPasswordPage() {
 					<div className="text-sm">
 						Remember your password?{' '}
 						<Link
-							href="/auth/login"
+							to="/auth/login"
 							className="text-accent underline-offset-4 hover:underline"
+							search={{ redirect: '/account' }}
 						>
 							Back to Login
 						</Link>

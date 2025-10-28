@@ -1,10 +1,5 @@
 import { Icon } from '@iconify/react';
-import {
-	createFileRoute,
-	Link,
-	redirect,
-	useRouter,
-} from '@tanstack/react-router';
+import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -20,7 +15,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password';
-import { authClient, signIn, useSession } from '@/lib/auth-client';
+import { authClient, signIn } from '@/lib/auth-client';
+import { requireNoSession } from '@/utils/auth-check';
 
 export const Route = createFileRoute('/auth/login')({
 	head: () => ({
@@ -30,16 +26,9 @@ export const Route = createFileRoute('/auth/login')({
 			},
 		],
 	}),
-	beforeLoad: async ({ search, context }) => {
-		// If user is already authenticated (session in context), redirect them away
-		if (context.session) {
-			const redirectTo = (search.redirect as string) || '/account';
-			console.log(
-				'[/auth/login beforeLoad] Already authenticated, redirecting to:',
-				redirectTo,
-			);
-			throw redirect({ to: redirectTo });
-		}
+	beforeLoad: async ({ search }) => {
+		// Prevent logged-in users from accessing this route
+		await requireNoSession(search.redirect);
 	},
 	validateSearch: (search: Record<string, unknown>) => {
 		return {
@@ -59,17 +48,8 @@ function LoginPage() {
 	const emailInputId = useId();
 	const passwordInputId = useId();
 
-	const { data: session } = useSession();
 	const router = useRouter();
 	const search = Route.useSearch();
-
-	// Redirect if already logged in
-	useEffect(() => {
-		if (session) {
-			// Use router.history.push to preserve the full URL including search params
-			router.history.push(search.redirect);
-		}
-	}, [session, router, search.redirect]);
 
 	// Check for error query parameter on load
 	useEffect(() => {
@@ -268,6 +248,7 @@ function LoginPage() {
 									<Label htmlFor={passwordInputId}>Password</Label>
 									<Link
 										to="/auth/forgot-password"
+										search={{ redirect: search.redirect }}
 										className="ml-auto inline-block text-sm text-accent underline-offset-4 hover:underline"
 									>
 										Forgot your password?
@@ -316,15 +297,12 @@ function LoginPage() {
 							)}
 						</Button>
 
-						<div className="relative py-2">
-							<div className="absolute inset-0 flex items-center">
-								<span className="w-full border-t" />
-							</div>
-							<div className="relative flex justify-center text-xs uppercase">
-								<Badge variant="outline" className="bg-background">
-									Or login using
-								</Badge>
-							</div>
+						<div className="flex items-center">
+							<hr className="flex-1" />
+							<Badge variant="outline" className="bg-background uppercase">
+								Or login using
+							</Badge>
+							<hr className="flex-1" />
 						</div>
 
 						<Button
@@ -352,6 +330,7 @@ function LoginPage() {
 						Don't have an account?{' '}
 						<Link
 							to="/auth/signup"
+							search={{ redirect: search.redirect }}
 							className="hover:underline underline-offset-4 text-accent"
 						>
 							Sign Up
