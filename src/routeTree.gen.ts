@@ -11,7 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TermsOfServiceRouteImport } from './routes/terms-of-service'
 import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
-import { Route as LogoutRouteImport } from './routes/logout'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as CancellationRefundPolicyRouteImport } from './routes/cancellation-refund-policy'
 import { Route as BookingRouteImport } from './routes/booking'
@@ -20,7 +19,9 @@ import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AccountIndexRouteImport } from './routes/account/index'
 import { Route as RoomsTexasRoomRouteImport } from './routes/rooms/texas-room'
 import { Route as RoomsRoseRoomRouteImport } from './routes/rooms/rose-room'
+import { Route as AuthSignupRouteImport } from './routes/auth/signup'
 import { Route as AuthResetPasswordRouteImport } from './routes/auth/reset-password'
+import { Route as AuthLogoutRouteImport } from './routes/auth/logout'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthForgotPasswordRouteImport } from './routes/auth/forgot-password'
 import { Route as AdminPropertyManagementIndexRouteImport } from './routes/admin/property-management/index'
@@ -45,11 +46,6 @@ const TermsOfServiceRoute = TermsOfServiceRouteImport.update({
 const PrivacyPolicyRoute = PrivacyPolicyRouteImport.update({
   id: '/privacy-policy',
   path: '/privacy-policy',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LogoutRoute = LogoutRouteImport.update({
-  id: '/logout',
-  path: '/logout',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContactRoute = ContactRouteImport.update({
@@ -93,9 +89,19 @@ const RoomsRoseRoomRoute = RoomsRoseRoomRouteImport.update({
   path: '/rooms/rose-room',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthSignupRoute = AuthSignupRouteImport.update({
+  id: '/auth/signup',
+  path: '/auth/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthResetPasswordRoute = AuthResetPasswordRouteImport.update({
   id: '/auth/reset-password',
   path: '/auth/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthLogoutRoute = AuthLogoutRouteImport.update({
+  id: '/auth/logout',
+  path: '/auth/logout',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthLoginRoute = AuthLoginRouteImport.update({
@@ -184,12 +190,13 @@ export interface FileRoutesByFullPath {
   '/booking': typeof BookingRoute
   '/cancellation-refund-policy': typeof CancellationRefundPolicyRoute
   '/contact': typeof ContactRoute
-  '/logout': typeof LogoutRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/terms-of-service': typeof TermsOfServiceRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
+  '/auth/logout': typeof AuthLogoutRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
+  '/auth/signup': typeof AuthSignupRoute
   '/rooms/rose-room': typeof RoomsRoseRoomRoute
   '/rooms/texas-room': typeof RoomsTexasRoomRoute
   '/account': typeof AccountIndexRoute
@@ -213,12 +220,13 @@ export interface FileRoutesByTo {
   '/booking': typeof BookingRoute
   '/cancellation-refund-policy': typeof CancellationRefundPolicyRoute
   '/contact': typeof ContactRoute
-  '/logout': typeof LogoutRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/terms-of-service': typeof TermsOfServiceRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
+  '/auth/logout': typeof AuthLogoutRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
+  '/auth/signup': typeof AuthSignupRoute
   '/rooms/rose-room': typeof RoomsRoseRoomRoute
   '/rooms/texas-room': typeof RoomsTexasRoomRoute
   '/account': typeof AccountIndexRoute
@@ -243,12 +251,13 @@ export interface FileRoutesById {
   '/booking': typeof BookingRoute
   '/cancellation-refund-policy': typeof CancellationRefundPolicyRoute
   '/contact': typeof ContactRoute
-  '/logout': typeof LogoutRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/terms-of-service': typeof TermsOfServiceRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
+  '/auth/logout': typeof AuthLogoutRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
+  '/auth/signup': typeof AuthSignupRoute
   '/rooms/rose-room': typeof RoomsRoseRoomRoute
   '/rooms/texas-room': typeof RoomsTexasRoomRoute
   '/account/': typeof AccountIndexRoute
@@ -274,12 +283,13 @@ export interface FileRouteTypes {
     | '/booking'
     | '/cancellation-refund-policy'
     | '/contact'
-    | '/logout'
     | '/privacy-policy'
     | '/terms-of-service'
     | '/auth/forgot-password'
     | '/auth/login'
+    | '/auth/logout'
     | '/auth/reset-password'
+    | '/auth/signup'
     | '/rooms/rose-room'
     | '/rooms/texas-room'
     | '/account'
@@ -303,12 +313,13 @@ export interface FileRouteTypes {
     | '/booking'
     | '/cancellation-refund-policy'
     | '/contact'
-    | '/logout'
     | '/privacy-policy'
     | '/terms-of-service'
     | '/auth/forgot-password'
     | '/auth/login'
+    | '/auth/logout'
     | '/auth/reset-password'
+    | '/auth/signup'
     | '/rooms/rose-room'
     | '/rooms/texas-room'
     | '/account'
@@ -332,12 +343,13 @@ export interface FileRouteTypes {
     | '/booking'
     | '/cancellation-refund-policy'
     | '/contact'
-    | '/logout'
     | '/privacy-policy'
     | '/terms-of-service'
     | '/auth/forgot-password'
     | '/auth/login'
+    | '/auth/logout'
     | '/auth/reset-password'
+    | '/auth/signup'
     | '/rooms/rose-room'
     | '/rooms/texas-room'
     | '/account/'
@@ -362,12 +374,13 @@ export interface RootRouteChildren {
   BookingRoute: typeof BookingRoute
   CancellationRefundPolicyRoute: typeof CancellationRefundPolicyRoute
   ContactRoute: typeof ContactRoute
-  LogoutRoute: typeof LogoutRoute
   PrivacyPolicyRoute: typeof PrivacyPolicyRoute
   TermsOfServiceRoute: typeof TermsOfServiceRoute
   AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
   AuthLoginRoute: typeof AuthLoginRoute
+  AuthLogoutRoute: typeof AuthLogoutRoute
   AuthResetPasswordRoute: typeof AuthResetPasswordRoute
+  AuthSignupRoute: typeof AuthSignupRoute
   RoomsRoseRoomRoute: typeof RoomsRoseRoomRoute
   RoomsTexasRoomRoute: typeof RoomsTexasRoomRoute
   AccountIndexRoute: typeof AccountIndexRoute
@@ -401,13 +414,6 @@ declare module '@tanstack/react-router' {
       path: '/privacy-policy'
       fullPath: '/privacy-policy'
       preLoaderRoute: typeof PrivacyPolicyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/logout': {
-      id: '/logout'
-      path: '/logout'
-      fullPath: '/logout'
-      preLoaderRoute: typeof LogoutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/contact': {
@@ -466,11 +472,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RoomsRoseRoomRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/signup': {
+      id: '/auth/signup'
+      path: '/auth/signup'
+      fullPath: '/auth/signup'
+      preLoaderRoute: typeof AuthSignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/reset-password': {
       id: '/auth/reset-password'
       path: '/auth/reset-password'
       fullPath: '/auth/reset-password'
       preLoaderRoute: typeof AuthResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/logout': {
+      id: '/auth/logout'
+      path: '/auth/logout'
+      fullPath: '/auth/logout'
+      preLoaderRoute: typeof AuthLogoutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/login': {
@@ -586,12 +606,13 @@ const rootRouteChildren: RootRouteChildren = {
   BookingRoute: BookingRoute,
   CancellationRefundPolicyRoute: CancellationRefundPolicyRoute,
   ContactRoute: ContactRoute,
-  LogoutRoute: LogoutRoute,
   PrivacyPolicyRoute: PrivacyPolicyRoute,
   TermsOfServiceRoute: TermsOfServiceRoute,
   AuthForgotPasswordRoute: AuthForgotPasswordRoute,
   AuthLoginRoute: AuthLoginRoute,
+  AuthLogoutRoute: AuthLogoutRoute,
   AuthResetPasswordRoute: AuthResetPasswordRoute,
+  AuthSignupRoute: AuthSignupRoute,
   RoomsRoseRoomRoute: RoomsRoseRoomRoute,
   RoomsTexasRoomRoute: RoomsTexasRoomRoute,
   AccountIndexRoute: AccountIndexRoute,

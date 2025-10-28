@@ -1,4 +1,4 @@
-import { EyeIcon, EyeOffIcon } from 'lucide-react';
+import { Icon } from '@iconify/react';
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,9 +31,9 @@ const PasswordInput = React.forwardRef<HTMLInputElement, InputProps>(
 					disabled={disabled}
 				>
 					{showPassword && !disabled ? (
-						<EyeIcon className="h-4 w-4" aria-hidden="true" />
+						<Icon icon="tabler:eye" className="size-5" aria-hidden="true" />
 					) : (
-						<EyeOffIcon className="h-4 w-4" aria-hidden="true" />
+						<Icon icon="tabler:eye-off" className="size-5" aria-hidden="true" />
 					)}
 					<span className="sr-only">
 						{showPassword ? 'Hide password' : 'Show password'}

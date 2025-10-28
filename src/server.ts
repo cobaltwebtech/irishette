@@ -17,8 +17,6 @@ export default {
 	/**
 	 * Cloudflare Workers scheduled event handler
 	 * Handles cron triggers for automated tasks:
-	 * - "0 * * * *" (hourly): Sync external calendars from Airbnb and Expedia
-	 * - "0 2 * * 7" (weekly): Clean up old sync logs
 	 */
 	async scheduled(
 		event: ScheduledEvent,

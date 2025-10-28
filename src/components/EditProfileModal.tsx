@@ -1,6 +1,6 @@
+import { Icon } from '@iconify/react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2 } from 'lucide-react';
-import { useEffect, useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -44,14 +44,6 @@ export function EditProfileModal({
 		email?: string;
 		phoneNumber?: string;
 	}>({});
-
-	// Reset form when user data changes
-	useEffect(() => {
-		setName(user.name || '');
-		setEmail(user.email || '');
-		setPhoneNumber(user.phoneNumber || '');
-		setErrors({});
-	}, [user]);
 
 	// tRPC mutation for updating profile in database
 	const updateProfileMutation = useMutation({
@@ -153,8 +145,20 @@ export function EditProfileModal({
 	const isLoading =
 		updateProfileMutation.isPending || updateBetterAuthUser.isPending;
 
+	// Reset form when dialog closes or opens
+	const handleOpenChange = (newOpen: boolean) => {
+		if (newOpen) {
+			// Reset to current user data when opening
+			setName(user.name || '');
+			setEmail(user.email || '');
+			setPhoneNumber(user.phoneNumber || '');
+			setErrors({});
+		}
+		onOpenChange(newOpen);
+	};
+
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
+		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<DialogContent className="sm:max-w-[425px]">
 				<DialogHeader>
 					<DialogTitle>Edit Profile</DialogTitle>
@@ -247,7 +251,9 @@ export function EditProfileModal({
 							Cancel
 						</Button>
 						<Button type="submit" disabled={isLoading}>
-							{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+							{isLoading && (
+								<Icon icon="tabler:loader-2" className="animate-spin" />
+							)}
 							Save Changes
 						</Button>
 					</DialogFooter>

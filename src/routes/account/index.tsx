@@ -1,6 +1,6 @@
 import { Icon } from '@iconify/react';
 import { useQuery } from '@tanstack/react-query';
-import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
+import { createFileRoute, Link, redirect } from '@tanstack/react-router';
 import {
 	type ColumnFiltersState,
 	createColumnHelper,
@@ -12,7 +12,7 @@ import {
 	type SortingState,
 	useReactTable,
 } from '@tanstack/react-table';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { EditProfileModal } from '@/components/EditProfileModal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,7 +33,6 @@ import {
 	TableRow,
 } from '@/components/ui/table';
 import { trpc } from '@/integrations/tanstack-query/root-provider';
-import { useSession } from '@/lib/auth-client';
 
 // Interface for booking data returned from tRPC
 interface BookingData {
@@ -78,26 +77,37 @@ export const Route = createFileRoute('/account/')({
 			},
 		],
 	}),
+	beforeLoad: async ({ location, context }) => {
+		// Session is preloaded in __root.tsx beforeLoad
+		// Access it from context instead of fetching again
+		const session = context.session;
+
+		console.log('[/account beforeLoad] Session from context:', !!session);
+
+		if (!session) {
+			// Redirect to login with return URL
+			throw redirect({
+				to: '/terms-of-service',
+				search: {
+					redirect: location.href,
+				},
+			});
+		}
+
+		return { session };
+	},
 	component: AccountPage,
 });
 
 function AccountPage() {
-	const { data: session, isPending } = useSession();
-	const router = useRouter();
+	// Get session from loader data - guaranteed to exist (beforeLoad already checked)
+	const { session } = Route.useRouteContext();
 	const [sorting, setSorting] = useState<SortingState>([
 		{ id: 'booking.checkInDate', desc: true },
 	]);
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 	const [globalFilter, setGlobalFilter] = useState('');
 	const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-
-	// Redirect if not logged in
-	useEffect(() => {
-		if (!isPending && !session) {
-			router.navigate({ to: '/auth/login' });
-		}
-		window.scrollTo({ top: 0, behavior: 'smooth' });
-	}, [session, isPending, router]);
 
 	// Use tRPC query to fetch user's bookings
 	const {
@@ -107,12 +117,11 @@ function AccountPage() {
 	} = useQuery(
 		trpc.bookings.getMyBookings.queryOptions(
 			{
-				userId: session?.user?.id || '',
+				userId: session.user.id, // Session guaranteed to exist from beforeLoad
 				limit: 10,
 				offset: 0,
 			},
 			{
-				enabled: !isPending && !!session?.user?.id, // Cookie caching should handle SSR now
 				retry: false,
 				staleTime: 5 * 60 * 1000,
 			},
@@ -144,11 +153,11 @@ function AccountPage() {
 				),
 			}),
 			columnHelper.accessor('booking.checkInDate', {
+				id: 'booking.checkInDate',
 				header: ({ column }) => (
 					<Button
 						variant="ghost"
 						onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-						className="h-8 px-2"
 					>
 						Stay Dates
 						<Icon icon="tabler:arrows-up-down" />
@@ -204,7 +213,6 @@ function AccountPage() {
 					<Button
 						variant="ghost"
 						onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-						className="h-8 px-2"
 					>
 						Amount
 						<Icon icon="tabler:arrows-up-down" />
@@ -234,21 +242,6 @@ function AccountPage() {
 			globalFilter,
 		},
 	});
-
-	if (isPending) {
-		return (
-			<div className="min-h-screen bg-background flex items-center justify-center">
-				<div className="text-center">
-					<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-					<p className="text-muted-foreground">Loading your dashboard...</p>
-				</div>
-			</div>
-		);
-	}
-
-	if (!session) {
-		return null; // Will redirect via useEffect
-	}
 
 	// Show loading state while fetching bookings
 	if (isLoading) {
@@ -501,7 +494,14 @@ function AccountPage() {
 								<div>
 									<p className="text-sm text-muted-foreground">Member Since</p>
 									<p className="text-foreground font-semibold">
-										{new Date(session.user.createdAt).toLocaleDateString()}
+										{new Date(session.user.createdAt).toLocaleDateString(
+											'en-US',
+											{
+												year: 'numeric',
+												month: 'long',
+												day: 'numeric',
+											},
+										)}
 									</p>
 								</div>
 							</div>

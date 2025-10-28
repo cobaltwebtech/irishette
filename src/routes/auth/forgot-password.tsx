@@ -1,5 +1,5 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { CheckCircle2, CircleX, KeyRound, Loader2 } from 'lucide-react';
+import { Icon } from '@iconify/react';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { useId, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -67,15 +67,21 @@ function ForgotPasswordPage() {
 
 	if (isSuccess) {
 		return (
-			<div className="min-h-screen bg-background flex items-center justify-center px-4">
+			<div className="flex flex-col flex-auto items-center justify-center bg-background px-4 py-8">
 				<Card className="w-full max-w-md">
 					<CardHeader className="text-center">
-						<div className="mx-auto w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
-							<CheckCircle2 className="w-6 h-6 text-green-600" />
+						<div className="flex items-center justify-center mb-4 mx-auto size-16 bg-primary rounded-full">
+							<Icon
+								icon="tabler:mail-fast"
+								className="size-10 text-primary-foreground"
+							/>
 						</div>
-						<CardTitle>Check Your Email</CardTitle>
+						<CardTitle className="text-2xl font-bold">
+							Check Your Email
+						</CardTitle>
 						<CardDescription>
-							We've sent a password reset link to <strong>{email}</strong>
+							<p>We have emailed a magic link to:</p>
+							<p className="font-semibold">{email}</p>
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="space-y-4">
@@ -84,7 +90,7 @@ function ForgotPasswordPage() {
 							expire in 15 minutes.
 						</p>
 						<Button
-							variant="outline"
+							variant="secondary"
 							onClick={() => {
 								setIsSuccess(false);
 								setEmail('');
@@ -92,18 +98,18 @@ function ForgotPasswordPage() {
 							}}
 							className="w-full"
 						>
-							Try Another Email
+							← Try Another Email
 						</Button>
 					</CardContent>
 					<CardFooter className="flex justify-center">
-						<div className="text-center text-sm">
+						<div className="text-sm">
 							Remember your password?{' '}
-							<a
+							<Link
 								href="/auth/login"
-								className="underline underline-offset-4 hover:text-primary"
+								className="text-accent underline-offset-4 hover:underline"
 							>
 								Back to Login
-							</a>
+							</Link>
 						</div>
 					</CardFooter>
 				</Card>
@@ -112,13 +118,18 @@ function ForgotPasswordPage() {
 	}
 
 	return (
-		<div className="min-h-screen bg-background flex items-center justify-center px-4">
+		<div className="flex flex-col flex-auto items-center justify-center bg-background px-4 py-8">
 			<Card className="w-full max-w-md">
 				<CardHeader className="text-center">
-					<div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-						<KeyRound className="w-6 h-6 text-primary" />
+					<div className="flex items-center justify-center mb-4 mx-auto size-16 bg-primary rounded-full">
+						<Icon
+							icon="tabler:lock-cog"
+							className="size-10 text-primary-foreground"
+						/>
 					</div>
-					<CardTitle>Reset Your Password</CardTitle>
+					<CardTitle className="text-2xl font-bold">
+						Forgot Your Password
+					</CardTitle>
 					<CardDescription>
 						Enter your email address and we'll send you a link to reset your
 						password
@@ -126,7 +137,7 @@ function ForgotPasswordPage() {
 				</CardHeader>
 				<CardContent>
 					<form onSubmit={handleSubmit} className="space-y-4">
-						<div className="grid gap-3">
+						<div className="flex flex-col gap-2">
 							<Label htmlFor={emailInputId}>Email</Label>
 							<Input
 								id={emailInputId}
@@ -143,7 +154,7 @@ function ForgotPasswordPage() {
 
 						{error && (
 							<div className="inline-flex gap-1 text-sm font-bold text-destructive">
-								<CircleX className="size-4" />
+								<Icon icon="tabler:circle-x" className="size-5" />
 								{error}
 							</div>
 						)}
@@ -155,24 +166,30 @@ function ForgotPasswordPage() {
 						>
 							{isLoading ? (
 								<>
-									<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+									<Icon
+										icon="tabler:loader-2"
+										className="size-5 animate-spin"
+									/>
 									Sending Reset Link...
 								</>
 							) : (
-								'Send Reset Link'
+								<>
+									<Icon icon="tabler:mail-share" className="size-5" />
+									Send Reset Link
+								</>
 							)}
 						</Button>
 					</form>
 				</CardContent>
 				<CardFooter className="flex justify-center">
-					<div className="text-center text-sm">
+					<div className="text-sm">
 						Remember your password?{' '}
-						<a
+						<Link
 							href="/auth/login"
-							className="underline underline-offset-4 hover:text-primary"
+							className="text-accent underline-offset-4 hover:underline"
 						>
 							Back to Login
-						</a>
+						</Link>
 					</div>
 				</CardFooter>
 			</Card>

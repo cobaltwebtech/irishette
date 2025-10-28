@@ -1,3 +1,4 @@
+import { Icon } from '@iconify/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import {
@@ -11,7 +12,6 @@ import {
 	type SortingState,
 	useReactTable,
 } from '@tanstack/react-table';
-import { ArrowUpDown, Edit, Home, Plus, Search } from 'lucide-react';
 import { useId, useMemo, useState } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Badge } from '@/components/ui/badge';
@@ -199,7 +199,7 @@ function PropertyManagement() {
 						className="h-8 px-2 font-medium"
 					>
 						Room Name
-						<ArrowUpDown className="ml-2 h-4 w-4" />
+						<Icon icon="tabler:arrows-up-down" />
 					</Button>
 				),
 				cell: (info) => (
@@ -227,7 +227,7 @@ function PropertyManagement() {
 							size="sm"
 							className="flex items-center gap-1 whitespace-nowrap"
 						>
-							<Edit className="h-4 w-4" />
+							<Icon icon="tabler:edit" />
 							Edit
 						</Button>
 					</Link>
@@ -258,7 +258,7 @@ function PropertyManagement() {
 						className="h-8 px-2 font-medium"
 					>
 						Base Price
-						<ArrowUpDown className="ml-2 h-4 w-4" />
+						<Icon icon="tabler:arrows-up-down" />
 					</Button>
 				),
 				cell: (info) => (
@@ -273,7 +273,7 @@ function PropertyManagement() {
 						className="h-8 px-2 font-medium hidden sm:flex"
 					>
 						Last Updated
-						<ArrowUpDown className="ml-2 h-4 w-4" />
+						<Icon icon="tabler:arrows-up-down" />
 					</Button>
 				),
 				cell: (info) => (
@@ -310,21 +310,13 @@ function PropertyManagement() {
 	return (
 		<AdminLayout title="Property Management">
 			<div className="mb-6">
-				<div className="flex items-center justify-between">
-					<div>
-						<p className="text-gray-600 mt-2">Manage rooms for the property</p>
-					</div>
-					<Button onClick={handleAddRoom} className="flex items-center gap-2">
-						<Plus className="h-4 w-4" />
-						Add Room
-					</Button>
-				</div>
+				<p className="text-muted-foreground">Manage rooms for the property</p>
 			</div>
 
 			{loading ? (
 				<div className="text-center py-8">
-					<div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-					<p className="mt-2 text-gray-600">Loading rooms...</p>
+					<div className="inline-block animate-spin rounded-full size-8 border-b-2 border-border"></div>
+					<p className="mt-2">Loading rooms...</p>
 				</div>
 			) : (
 				<>
@@ -333,7 +325,6 @@ function PropertyManagement() {
 						<Card className="mb-6">
 							<CardHeader>
 								<CardTitle className="flex items-center gap-2">
-									<Plus className="h-5 w-5" />
 									Add New Room
 								</CardTitle>
 							</CardHeader>
@@ -456,19 +447,20 @@ function PropertyManagement() {
 					{/* Rooms List */}
 					{rooms.length === 0 ? (
 						<Card>
-							<CardContent className="text-center py-8">
-								<Home className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-								<h3 className="text-lg font-medium text-gray-900 mb-2">
-									No rooms found
-								</h3>
-								<p className="text-gray-500 mb-4">
+							<CardContent className="text-center py-8 space-y-4">
+								<Icon
+									icon="tabler:home"
+									className="size-12 mx-auto text-primary"
+								/>
+								<h3 className="text-lg font-medium">No rooms found</h3>
+								<p className="text-muted-foreground">
 									Get started by adding your first room.
 								</p>
 								<Button
 									onClick={handleAddRoom}
 									className="flex items-center gap-2"
 								>
-									<Plus className="h-4 w-4" />
+									<Icon icon="tabler:circle-plus-filled" />
 									Add Your First Room
 								</Button>
 							</CardContent>
@@ -482,7 +474,10 @@ function PropertyManagement() {
 									</CardTitle>
 									<div className="flex items-center gap-2 w-full sm:w-auto">
 										<div className="relative w-full sm:w-[300px]">
-											<Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+											<Icon
+												icon="tabler:search"
+												className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground size-4"
+											/>
 											<Input
 												placeholder="Search rooms..."
 												value={globalFilter ?? ''}

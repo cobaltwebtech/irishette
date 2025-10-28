@@ -93,7 +93,7 @@ export const auth = async () => {
 				stripeWebhookSecret: env.STRIPE_BETTER_AUTH_WEBHOOK_SECRET,
 				createCustomerOnSignUp: true,
 			}),
-			reactStartCookies(), // Handle cookies for TanStack Start
+			reactStartCookies(), // Handle cookies for TanStack Start. Needs to be last in array.
 		],
 	});
 };

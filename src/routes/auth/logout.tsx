@@ -1,6 +1,7 @@
+import { Icon } from '@iconify/react';
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
-import { CheckCircle2, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import {
 	Card,
 	CardContent,
@@ -10,7 +11,14 @@ import {
 } from '@/components/ui/card';
 import { authClient } from '@/lib/auth-client';
 
-export const Route = createFileRoute('/logout')({
+export const Route = createFileRoute('/auth/logout')({
+	head: () => ({
+		meta: [
+			{
+				title: 'Logout of Account | Irishette.com',
+			},
+		],
+	}),
 	component: LogoutPage,
 });
 
@@ -43,11 +51,14 @@ function LogoutPage() {
 
 	if (status === 'loading') {
 		return (
-			<div className="min-h-screen bg-background flex items-center justify-center px-4">
+			<div className="flex flex-col flex-auto items-center justify-center bg-background px-4 py-8">
 				<Card className="w-full max-w-md">
 					<CardHeader className="text-center">
-						<div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-							<Loader2 className="w-6 h-6 text-primary animate-spin" />
+						<div className="mx-auto size-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+							<Icon
+								icon="tabler:loader-2"
+								className="size-6 text-primary animate-spin"
+							/>
 						</div>
 						<CardTitle>Signing You Out</CardTitle>
 						<CardDescription>
@@ -65,32 +76,36 @@ function LogoutPage() {
 	}
 
 	return (
-		<div className="min-h-screen bg-background flex items-center justify-center px-4">
+		<div className="flex flex-col flex-auto items-center justify-center bg-background px-4 py-8">
 			<Card className="w-full max-w-md">
 				<CardHeader className="text-center">
-					<div className="mx-auto w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
-						<CheckCircle2 className="w-6 h-6 text-green-600" />
+					<div className="flex items-center justify-center mx-auto size-16 bg-primary rounded-full mb-4">
+						<Icon
+							icon="tabler:door-exit"
+							className="size-10 text-primary-foreground"
+						/>
 					</div>
-					<CardTitle>Successfully Signed Out</CardTitle>
-					<CardDescription>Thank you for visiting Irishette!</CardDescription>
+					<CardTitle className="text-2xl font-bold">
+						Successfully Signed Out
+					</CardTitle>
 				</CardHeader>
 				<CardContent className="text-center">
 					<p className="text-muted-foreground mb-6">
 						You have been successfully signed out of your account.
 					</p>
-					<div className="space-y-2">
-						<Link
-							to="/"
-							className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors w-full"
-						>
-							Return to Home
-						</Link>
-						<Link
-							to="/auth/login"
-							className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors w-full"
-						>
-							Sign In Again
-						</Link>
+					<div className="flex flex-wrap gap-4">
+						<Button asChild className="flex-1">
+							<Link to="/">
+								<Icon icon="tabler:home" className="size-5" />
+								Go to Home
+							</Link>
+						</Button>
+						<Button asChild variant="outline" className="flex-1">
+							<Link to="/auth/login">
+								<Icon icon="tabler:login-2" className="size-5" />
+								Login Again
+							</Link>
+						</Button>
 					</div>
 				</CardContent>
 			</Card>

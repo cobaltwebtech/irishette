@@ -95,7 +95,6 @@ UI Refresh
 - `@tanstack/react-query` - For mutations and cache management
 - `better-auth/react` - For session and user updates
 - `sonner` - For toast notifications
-- `lucide-react` - For icons
 - `zod` - For validation schemas
 
 ### Shadcn Components

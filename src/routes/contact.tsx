@@ -1,5 +1,5 @@
+import { Icon } from '@iconify/react';
 import { createFileRoute } from '@tanstack/react-router';
-import { Mail, MapPin, Phone } from 'lucide-react';
 import { useEffect, useId } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -94,7 +94,10 @@ function ContactPage() {
 								<Card className="border-accent/20">
 									<CardContent className="p-6">
 										<div className="flex items-start gap-4">
-											<Mail className="w-6 h-6 text-accent mt-1" />
+											<Icon
+												icon="tabler:mail"
+												className="size-6 text-accent mt-1"
+											/>
 											<div>
 												<h3 className="font-semibold text-lg mb-2">Email Us</h3>
 												<p className="text-muted-foreground mb-2">
@@ -114,7 +117,10 @@ function ContactPage() {
 								<Card className="border-accent/20">
 									<CardContent className="p-6">
 										<div className="flex items-start gap-4">
-											<Phone className="w-6 h-6 text-accent mt-1" />
+											<Icon
+												icon="tabler:phone"
+												className="size-6 text-accent mt-1"
+											/>
 											<div>
 												<h3 className="font-semibold text-lg mb-2">Call Us</h3>
 												<p className="text-muted-foreground mb-2">
@@ -134,7 +140,10 @@ function ContactPage() {
 								<Card className="border-accent/20">
 									<CardContent className="p-6">
 										<div className="flex items-start gap-4">
-											<MapPin className="w-6 h-6 text-accent mt-1" />
+											<Icon
+												icon="tabler:map-pin"
+												className="size-6 text-accent mt-1"
+											/>
 											<div>
 												<h3 className="font-semibold text-lg mb-2">Visit Us</h3>
 												<p className="text-muted-foreground mb-2">
@@ -230,7 +239,7 @@ function ContactPage() {
 
 										<div className="space-y-4">
 											<Button type="submit" className="w-full" size="lg">
-												<Mail className="w-4 h-4 mr-2" />
+												<Icon icon="tabler:send" className="size-5" />
 												Send Message
 											</Button>
 											<p className="text-sm text-muted-foreground text-center">
@@ -246,7 +255,7 @@ function ContactPage() {
 			</section>
 
 			{/* Additional Information */}
-			<section className="py-16 px-4 bg-muted/80">
+			<section className="py-16 px-4 bg-secondary">
 				<div className="container mx-auto max-w-4xl">
 					<Card className="border-accent/20">
 						<CardHeader>

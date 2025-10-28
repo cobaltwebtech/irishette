@@ -1,13 +1,13 @@
 import { Icon } from '@iconify/react';
 import { useQuery } from '@tanstack/react-query';
-import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { createFileRoute, Link } from '@tanstack/react-router';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { trpc, trpcClient } from '@/integrations/tanstack-query/root-provider';
-import { useSession } from '@/lib/auth-client';
+import { requireAuth } from '@/lib/auth-guard';
 
 export const Route = createFileRoute('/account/booking/$bookingId')({
 	head: () => ({
@@ -17,33 +17,29 @@ export const Route = createFileRoute('/account/booking/$bookingId')({
 			},
 		],
 	}),
+	beforeLoad: async ({ location, context }) => {
+		// Require authentication - pass context to use preloaded session from __root.tsx
+		const session = await requireAuth(location, context);
+		return { session };
+	},
 	component: BookingDetailPage,
 });
 
 function BookingDetailPage() {
 	const params = Route.useParams() as { bookingId: string };
 	const bookingId = params.bookingId;
-	const { data: session, isPending } = useSession();
-	const router = useRouter();
-	// useRouteContext not needed since we import trpc directly
+	const { session } = Route.useRouteContext();
 	const [isResendingEmail, setIsResendingEmail] = useState(false);
-
-	// Redirect if not logged in
-	useEffect(() => {
-		if (!isPending && !session) {
-			router.navigate({ to: '/auth/login' });
-		}
-	}, [session, isPending, router]);
 
 	// Use tRPC query to fetch booking details
 	const bookingQuery = useQuery(
 		trpc.bookings.getBooking.queryOptions(
 			{
 				bookingId: bookingId,
-				userId: session?.user?.id || '',
+				userId: session.user.id,
 			},
 			{
-				enabled: !isPending && !!session?.user?.id && !!bookingId,
+				enabled: !!bookingId,
 				retry: false,
 				staleTime: 5 * 60 * 1000,
 			},
@@ -54,7 +50,7 @@ function BookingDetailPage() {
 
 	// Handle resending confirmation email
 	const handleResendEmail = async () => {
-		if (!booking?.booking || !session?.user?.id) return;
+		if (!booking?.booking) return;
 
 		setIsResendingEmail(true);
 
@@ -89,7 +85,7 @@ function BookingDetailPage() {
 	};
 
 	// Early returns for various states
-	if (isPending || bookingQuery.isLoading) {
+	if (bookingQuery.isLoading) {
 		return (
 			<div className="flex items-center justify-center">
 				<div className="text-center">
@@ -98,10 +94,6 @@ function BookingDetailPage() {
 				</div>
 			</div>
 		);
-	}
-
-	if (!session) {
-		return null; // Will redirect via useEffect
 	}
 
 	if (bookingQuery.error || (!bookingQuery.isLoading && !booking)) {

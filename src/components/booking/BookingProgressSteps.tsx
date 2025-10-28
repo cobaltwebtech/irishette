@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react';
+import { Icon } from '@iconify/react';
 import { useSession } from '@/lib/auth-client';
 import { type BookingStep, useBookingStore } from '@/stores';
 import type { BookingStepItem } from '@/utils/booking-utils';
@@ -27,20 +27,23 @@ export function BookingProgressSteps() {
 	];
 
 	return (
-		<div className="bg-muted/20 border-b">
+		<div className="bg-muted border-b">
 			<div className="container mx-auto max-w-4xl px-4 py-6">
-				<div className="flex items-center justify-between">
+				<h2 className="text-center text-2xl font-bold mb-4">
+					Booking Progress
+				</h2>
+				<div className="flex flex-wrap gap-4 items-center justify-between">
 					{steps.map((item, index) => (
 						<div key={item.step} className="flex items-center">
 							<div
-								className={`flex items-center justify-center w-8 h-8 rounded-full border-2 ${
+								className={`flex items-center justify-center size-8 rounded-full ${
 									item.completed || booking.isStep(item.step as BookingStep)
-										? 'bg-primary border-primary text-primary-foreground'
-										: 'bg-background border-muted-foreground text-muted-foreground'
+										? 'bg-primary text-primary-foreground'
+										: 'bg-background text-muted-foreground'
 								}`}
 							>
 								{item.completed ? (
-									<Check className="w-4 h-4" />
+									<Icon icon="tabler:check" className="size-4" />
 								) : (
 									<span className="text-sm font-medium">{index + 1}</span>
 								)}
@@ -54,13 +57,6 @@ export function BookingProgressSteps() {
 							>
 								{item.label}
 							</span>
-							{index < 3 && (
-								<div
-									className={`w-8 h-0.5 ml-4 ${
-										item.completed ? 'bg-primary' : 'bg-muted'
-									}`}
-								/>
-							)}
 						</div>
 					))}
 				</div>

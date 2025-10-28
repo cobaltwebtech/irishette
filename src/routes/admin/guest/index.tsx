@@ -1,3 +1,4 @@
+import { Icon } from '@iconify/react';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import {
@@ -11,7 +12,6 @@ import {
 	type SortingState,
 	useReactTable,
 } from '@tanstack/react-table';
-import { ArrowUpDown, Search, Sparkle, UserCircle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Badge } from '@/components/ui/badge';
@@ -97,12 +97,15 @@ function AdminGuests() {
 						className="h-8 px-2"
 					>
 						Guest Name
-						<ArrowUpDown className="ml-2 h-4 w-4" />
+						<Icon icon="tabler:arrows-up-down" />
 					</Button>
 				),
 				cell: (info) => (
 					<div className="flex items-center gap-2">
-						<UserCircle className="h-5 w-5 text-muted-foreground" />
+						<Icon
+							icon="tabler:user-circle"
+							className="size-5 text-muted-foreground"
+						/>
 						<div>
 							<div className="font-medium">{info.getValue()}</div>
 							<div className="text-xs text-muted-foreground">
@@ -123,7 +126,7 @@ function AdminGuests() {
 						className="h-8 px-2"
 					>
 						Email
-						<ArrowUpDown className="ml-2 h-4 w-4" />
+						<Icon icon="tabler:arrows-up-down" />
 					</Button>
 				),
 				cell: (info) => (
@@ -156,7 +159,7 @@ function AdminGuests() {
 						className="h-8 px-2"
 					>
 						Bookings
-						<ArrowUpDown className="ml-2 h-4 w-4" />
+						<Icon icon="tabler:arrows-up-down" />
 					</Button>
 				),
 				cell: (info) => {
@@ -168,7 +171,7 @@ function AdminGuests() {
 							</Badge>
 							{count > 1 && (
 								<Badge variant="outline" className="text-xs">
-									<Sparkle className="size-4 text-accent" />
+									<Icon icon="tabler:star" className="size-4 text-accent" />
 									Repeat Guest
 								</Badge>
 							)}
@@ -262,7 +265,10 @@ function AdminGuests() {
 						</CardTitle>
 						<div className="flex items-center gap-2">
 							<div className="relative">
-								<Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+								<Icon
+									icon="tabler:search"
+									className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground size-5"
+								/>
 								<Input
 									placeholder="Search guests..."
 									value={globalFilter ?? ''}

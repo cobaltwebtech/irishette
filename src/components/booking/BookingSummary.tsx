@@ -1,3 +1,4 @@
+import { Icon } from '@iconify/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useBookingStore } from '@/stores';
 import { parseISODateString } from '@/utils/booking-utils';
@@ -22,9 +23,12 @@ export function BookingSummary() {
 	}
 
 	return (
-		<Card className="sticky top-4">
+		<Card className="sticky top-24">
 			<CardHeader>
-				<CardTitle>Booking Summary</CardTitle>
+				<CardTitle className="flex items-center gap-2">
+					<Icon icon="tabler:list-details" className="size-6" />
+					Booking Details
+				</CardTitle>
 			</CardHeader>
 			<CardContent className="space-y-4">
 				{/* Room */}
@@ -126,7 +130,7 @@ export function BookingSummary() {
 							)}
 
 							<div className="flex justify-between font-semibold border-t pt-2 mt-2 text-base">
-								<span>Total</span>
+								<span>Total Due (USD)</span>
 								<span>
 									${summary.pricing.totalAmount?.toFixed(2) || '0.00'}
 								</span>

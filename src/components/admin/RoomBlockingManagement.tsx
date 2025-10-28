@@ -1,5 +1,13 @@
-import { Calendar, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useId, useState } from 'react';
+import { Icon } from '@iconify/react';
+import {
+	createColumnHelper,
+	flexRender,
+	getCoreRowModel,
+	getSortedRowModel,
+	type SortingState,
+	useReactTable,
+} from '@tanstack/react-table';
+import { useId, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -91,6 +99,9 @@ export function RoomBlockingManagement({
 	);
 	const [deletingPeriod, setDeletingPeriod] =
 		useState<RoomBlockedPeriod | null>(null);
+	const [sorting, setSorting] = useState<SortingState>([
+		{ id: 'startDate', desc: false },
+	]);
 
 	const handleCreatePeriod = async (period: CreateBlockedPeriod) => {
 		try {
@@ -122,25 +133,141 @@ export function RoomBlockingManagement({
 		}
 	};
 
+	// Filter blocked periods to show only current and future periods
+	const filteredBlockedPeriods = useMemo(() => {
+		return blockedPeriods.filter((period) => {
+			const endDate = new Date(`${period.endDate}T23:59:59`);
+			const today = new Date();
+			today.setHours(0, 0, 0, 0); // Reset time to start of day
+			return endDate >= today;
+		});
+	}, [blockedPeriods]);
+
+	// Helper function to format date range
+	const formatDateRange = (startDate: string, endDate: string) => {
+		const start = formatDateString(startDate);
+		const end = formatDateString(endDate);
+		return `${start} - ${end}`;
+	};
+
+	// Create columns using the column helper
+	const columnHelper = createColumnHelper<RoomBlockedPeriod>();
+
+	const columns = [
+		columnHelper.accessor('startDate', {
+			header: ({ column }) => (
+				<Button
+					variant="ghost"
+					onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+					className="h-8 px-2"
+				>
+					Date Range
+					<Icon icon="tabler:arrows-up-down" />
+				</Button>
+			),
+			cell: (info) => (
+				<span className="text-sm">
+					{formatDateRange(info.getValue(), info.row.original.endDate)}
+				</span>
+			),
+		}),
+		columnHelper.accessor('reason', {
+			header: 'Reason',
+			cell: (info) => <span>{info.getValue()}</span>,
+		}),
+		columnHelper.accessor('notes', {
+			header: 'Notes',
+			cell: (info) => {
+				const notes = info.getValue();
+				return notes ? (
+					<span className="text-sm text-muted-foreground">
+						{notes.length > 50 ? `${notes.substring(0, 50)}...` : notes}
+					</span>
+				) : (
+					<span className="text-sm text-muted-foreground italic">No notes</span>
+				);
+			},
+		}),
+		columnHelper.display({
+			id: 'duration',
+			header: 'Duration',
+			cell: (info) => {
+				const startDate = new Date(info.row.original.startDate);
+				const endDate = new Date(info.row.original.endDate);
+				const duration = Math.ceil(
+					(endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
+				);
+				return (
+					<Badge variant="outline">
+						{duration} {duration === 1 ? 'Day' : 'Days'}
+					</Badge>
+				);
+			},
+		}),
+		columnHelper.display({
+			id: 'actions',
+			header: 'Actions',
+			cell: (info) => (
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button variant="ghost" className="h-8 w-8 p-0">
+							<span className="sr-only">Open menu</span>
+							<Icon icon="tabler:dots" />
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						<DropdownMenuLabel>Actions</DropdownMenuLabel>
+						<DropdownMenuItem
+							onClick={() => setEditingPeriod(info.row.original)}
+						>
+							<Icon icon="tabler:pencil" />
+							Edit
+						</DropdownMenuItem>
+						<DropdownMenuSeparator />
+						<DropdownMenuItem
+							onClick={() => setDeletingPeriod(info.row.original)}
+							className="text-destructive"
+						>
+							<Icon icon="tabler:trash" />
+							Delete
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			),
+		}),
+	];
+
+	const table = useReactTable({
+		data: filteredBlockedPeriods,
+		columns,
+		onSortingChange: setSorting,
+		getCoreRowModel: getCoreRowModel(),
+		getSortedRowModel: getSortedRowModel(),
+		state: {
+			sorting,
+		},
+	});
+
 	return (
 		<Card>
-			<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+			<CardHeader className="flex justify-between gap-12">
 				<div>
-					<CardTitle className="flex items-center gap-2">
-						<Calendar className="h-5 w-5" />
+					<CardTitle className="text-lg flex items-center gap-2">
+						<Icon icon="tabler:calendar-pause" className="size-6" />
 						Blocked Periods
 					</CardTitle>
 					<CardDescription>
-						Manage dates when this room is unavailable for booking
+						Manage dates when this room is unavailable for booking. Only current
+						and future blocked periods are displayed.
 					</CardDescription>
 				</div>
 				<Button
+					variant="secondary"
 					onClick={() => setShowCreateDialog(true)}
 					size="sm"
-					className="flex items-center gap-2"
 				>
-					<Plus className="h-4 w-4" />
-					Add Blocked Period
+					<Icon icon="tabler:calendar-plus" />
+					Add Blocked Dates
 				</Button>
 			</CardHeader>
 			<CardContent>
@@ -150,100 +277,61 @@ export function RoomBlockingManagement({
 							Loading blocked periods...
 						</div>
 					</div>
-				) : blockedPeriods.length === 0 ? (
-					<div className="text-center py-8">
-						<Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-						<h3 className="text-lg font-medium text-muted-foreground">
-							No blocked periods
+				) : filteredBlockedPeriods.length === 0 ? (
+					<div className="text-center py-8 text-muted-foreground">
+						<Icon
+							icon="tabler:calendar-x"
+							className="size-12 text-secondary mx-auto mb-4"
+						/>
+						<h3 className="text-lg font-medium">
+							No current blocked periods for room
 						</h3>
-						<p className="text-sm text-muted-foreground mb-4">
-							This room has no blocked periods set up yet.
+						<p className="text-sm mb-4">
+							Add blocked dates to prevent bookings during specific periods.
 						</p>
-						<Button
-							onClick={() => setShowCreateDialog(true)}
-							variant="outline"
-							size="sm"
-						>
-							<Plus className="h-4 w-4 mr-2" />
-							Add first blocked period
-						</Button>
 					</div>
 				) : (
 					<Table>
 						<TableHeader>
-							<TableRow>
-								<TableHead>Start Date</TableHead>
-								<TableHead>End Date</TableHead>
-								<TableHead>Duration</TableHead>
-								<TableHead>Reason</TableHead>
-								<TableHead>Notes</TableHead>
-								<TableHead className="w-[50px]"></TableHead>
-							</TableRow>
+							{table.getHeaderGroups().map((headerGroup) => (
+								<TableRow key={headerGroup.id}>
+									{headerGroup.headers.map((header) => (
+										<TableHead key={header.id}>
+											{header.isPlaceholder
+												? null
+												: flexRender(
+														header.column.columnDef.header,
+														header.getContext(),
+													)}
+										</TableHead>
+									))}
+								</TableRow>
+							))}
 						</TableHeader>
 						<TableBody>
-							{blockedPeriods.map((period) => {
-								const startDate = new Date(period.startDate);
-								const endDate = new Date(period.endDate);
-								const duration = Math.ceil(
-									(endDate.getTime() - startDate.getTime()) /
-										(1000 * 60 * 60 * 24),
-								);
-
-								return (
-									<TableRow key={period.id}>
-										<TableCell className="font-medium">
-											{formatDateString(period.startDate)}
-										</TableCell>
-										<TableCell>{formatDateString(period.endDate)}</TableCell>
-										<TableCell>
-											<Badge variant="secondary">
-												{duration} {duration === 1 ? 'day' : 'days'}
-											</Badge>
-										</TableCell>
-										<TableCell>{period.reason}</TableCell>
-										<TableCell>
-											{period.notes ? (
-												<span className="text-sm text-muted-foreground">
-													{period.notes.length > 50
-														? `${period.notes.substring(0, 50)}...`
-														: period.notes}
-												</span>
-											) : (
-												<span className="text-sm text-muted-foreground italic">
-													No notes
-												</span>
-											)}
-										</TableCell>
-										<TableCell>
-											<DropdownMenu>
-												<DropdownMenuTrigger asChild>
-													<Button variant="ghost" className="h-8 w-8 p-0">
-														<span className="sr-only">Open menu</span>
-														<MoreHorizontal className="h-4 w-4" />
-													</Button>
-												</DropdownMenuTrigger>
-												<DropdownMenuContent align="end">
-													<DropdownMenuLabel>Actions</DropdownMenuLabel>
-													<DropdownMenuItem
-														onClick={() => setEditingPeriod(period)}
-													>
-														<Pencil className="mr-2 h-4 w-4" />
-														Edit
-													</DropdownMenuItem>
-													<DropdownMenuSeparator />
-													<DropdownMenuItem
-														onClick={() => setDeletingPeriod(period)}
-														className="text-destructive"
-													>
-														<Trash2 className="mr-2 h-4 w-4" />
-														Delete
-													</DropdownMenuItem>
-												</DropdownMenuContent>
-											</DropdownMenu>
-										</TableCell>
+							{table.getRowModel().rows?.length ? (
+								table.getRowModel().rows.map((row) => (
+									<TableRow key={row.id}>
+										{row.getVisibleCells().map((cell) => (
+											<TableCell key={cell.id}>
+												{flexRender(
+													cell.column.columnDef.cell,
+													cell.getContext(),
+												)}
+											</TableCell>
+										))}
 									</TableRow>
-								);
-							})}
+								))
+							) : (
+								<TableRow>
+									<TableCell
+										colSpan={columns.length}
+										className="h-24 text-center"
+									>
+										No blocked periods found.
+									</TableCell>
+								</TableRow>
+							)}
 						</TableBody>
 					</Table>
 				)}
@@ -319,7 +407,7 @@ function CreateBlockedPeriodDialog({
 
 		setIsSubmitting(true);
 		try {
-			await onSubmit({
+			onSubmit({
 				roomId,
 				startDate,
 				endDate,

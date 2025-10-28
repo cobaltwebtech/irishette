@@ -1,7 +1,13 @@
-import { createFileRoute, useRouter } from '@tanstack/react-router';
-import { CheckCircle2, CircleX, Loader2, Mail } from 'lucide-react';
+import { Icon } from '@iconify/react';
+import {
+	createFileRoute,
+	Link,
+	redirect,
+	useRouter,
+} from '@tanstack/react-router';
 import { useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
 	Card,
@@ -20,10 +26,26 @@ export const Route = createFileRoute('/auth/login')({
 	head: () => ({
 		meta: [
 			{
-				title: 'Login | Irishette.com',
+				title: 'Login to Account | Irishette.com',
 			},
 		],
 	}),
+	beforeLoad: async ({ search, context }) => {
+		// If user is already authenticated (session in context), redirect them away
+		if (context.session) {
+			const redirectTo = (search.redirect as string) || '/account';
+			console.log(
+				'[/auth/login beforeLoad] Already authenticated, redirecting to:',
+				redirectTo,
+			);
+			throw redirect({ to: redirectTo });
+		}
+	},
+	validateSearch: (search: Record<string, unknown>) => {
+		return {
+			redirect: (search.redirect as string) || '/account',
+		};
+	},
 	component: LoginPage,
 });
 
@@ -39,13 +61,15 @@ function LoginPage() {
 
 	const { data: session } = useSession();
 	const router = useRouter();
+	const search = Route.useSearch();
 
 	// Redirect if already logged in
 	useEffect(() => {
 		if (session) {
-			router.navigate({ to: '/account' });
+			// Use router.history.push to preserve the full URL including search params
+			router.history.push(search.redirect);
 		}
-	}, [session, router]);
+	}, [session, router, search.redirect]);
 
 	// Check for error query parameter on load
 	useEffect(() => {
@@ -77,7 +101,7 @@ function LoginPage() {
 		try {
 			await authClient.signIn.magicLink({
 				email,
-				callbackURL: '/account',
+				callbackURL: search.redirect,
 			});
 			setEmailSent(true);
 			toast.success('Magic link sent! Check your email.');
@@ -110,13 +134,14 @@ function LoginPage() {
 			const response = await signIn.email({
 				email,
 				password,
-				callbackURL: '/account',
+				callbackURL: search.redirect,
 				rememberMe: true,
 			});
 
 			if (response && !response.error) {
 				toast.success('Login successful!');
-				router.navigate({ to: '/account' });
+				// Use router.history.push to preserve the full URL
+				router.history.push(search.redirect);
 				return;
 			}
 
@@ -142,15 +167,21 @@ function LoginPage() {
 
 	if (emailSent) {
 		return (
-			<div className="min-h-screen bg-background flex items-center justify-center px-4">
+			<div className="flex flex-col flex-auto items-center justify-center bg-background px-4 py-8">
 				<Card className="w-full max-w-md">
 					<CardHeader className="text-center">
-						<div className="mx-auto w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
-							<CheckCircle2 className="w-6 h-6 text-green-600" />
+						<div className="flex items-center justify-center mb-4 mx-auto size-16 bg-primary rounded-full">
+							<Icon
+								icon="tabler:mail-fast"
+								className="size-10 text-primary-foreground"
+							/>
 						</div>
-						<CardTitle>Check Your Email</CardTitle>
+						<CardTitle className="text-2xl font-bold">
+							Check Your Email
+						</CardTitle>
 						<CardDescription>
-							We've sent a magic link to <strong>{email}</strong>
+							<p>We have emailed a magic link to:</p>
+							<p className="font-semibold">{email}</p>
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="space-y-4">
@@ -158,17 +189,33 @@ function LoginPage() {
 							Click the link in your email to sign in to your Irishette account.
 							The link will expire in 15 minutes.
 						</p>
-						<Button
-							variant="outline"
-							onClick={() => {
-								setEmailSent(false);
-								setEmail('');
-								setError('');
-							}}
-							className="w-full"
-						>
-							Send Another Link
-						</Button>
+						<div className="flex flex-auto flex-wrap items-center justify-center gap-4">
+							<Button
+								variant="secondary"
+								onClick={() => {
+									setEmailSent(false);
+									setEmail('');
+									setError('');
+								}}
+								className="flex-1"
+							>
+								<Icon icon="tabler:mail-share" className="size-5" />
+								Send Another Link
+							</Button>
+							<Button
+								className="flex-1"
+								variant="outline"
+								onClick={() => {
+									setEmailSent(false);
+									setEmail('');
+									setPassword('');
+									setError('');
+									setShowPasswordLogin(false);
+								}}
+							>
+								← Go Back to Login
+							</Button>
+						</div>
 					</CardContent>
 				</Card>
 			</div>
@@ -176,13 +223,18 @@ function LoginPage() {
 	}
 
 	return (
-		<div className="min-h-screen bg-background flex items-center justify-center px-4">
+		<div className="flex flex-col flex-auto items-center justify-center bg-background px-4 py-8">
 			<Card className="w-full max-w-md">
 				<CardHeader className="text-center">
-					<div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-						<Mail className="w-6 h-6 text-primary" />
+					<div className="flex items-center justify-center mx-auto mb-4 size-16 bg-primary rounded-full">
+						<Icon
+							icon="tabler:user-circle"
+							className="size-10 text-primary-foreground"
+						/>
 					</div>
-					<CardTitle>Welcome Back</CardTitle>
+					<CardTitle className="text-2xl font-bold">
+						Login to Your Account
+					</CardTitle>
 					<CardDescription>
 						{showPasswordLogin
 							? 'Enter your account email address and password to login. If you would like to login without a password, click the Login with Magic Link button below.'
@@ -196,7 +248,7 @@ function LoginPage() {
 						}
 						className="space-y-4"
 					>
-						<div className="grid gap-3">
+						<div className="flex flex-col gap-2">
 							<Label htmlFor={emailInputId}>Email</Label>
 							<Input
 								id={emailInputId}
@@ -204,7 +256,6 @@ function LoginPage() {
 								value={email}
 								onChange={(e) => setEmail(e.target.value)}
 								placeholder="Enter your email address"
-								className="w-full"
 								required
 								disabled={isLoading}
 								autoComplete="email"
@@ -212,15 +263,15 @@ function LoginPage() {
 						</div>
 
 						{showPasswordLogin && (
-							<div className="grid gap-3">
+							<div className="flex flex-col gap-2">
 								<div className="flex items-center">
 									<Label htmlFor={passwordInputId}>Password</Label>
-									<a
-										href="/auth/forgot-password"
-										className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
+									<Link
+										to="/auth/forgot-password"
+										className="ml-auto inline-block text-sm text-accent underline-offset-4 hover:underline"
 									>
 										Forgot your password?
-									</a>
+									</Link>
 								</div>
 								<PasswordInput
 									id={passwordInputId}
@@ -235,7 +286,7 @@ function LoginPage() {
 
 						{error && (
 							<div className="inline-flex gap-1 text-sm font-bold text-destructive">
-								<CircleX className="size-4" />
+								<Icon icon="tabler:circle-x" className="size-5" />
 								{error}
 							</div>
 						)}
@@ -247,7 +298,10 @@ function LoginPage() {
 						>
 							{isLoading ? (
 								<>
-									<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+									<Icon
+										icon="tabler:loader-2"
+										className="size-5 animate-spin"
+									/>
 									{showPasswordLogin
 										? 'Logging in...'
 										: 'Sending Magic Link...'}
@@ -256,20 +310,20 @@ function LoginPage() {
 								'Login'
 							) : (
 								<>
-									<Mail className="size-4" />
+									<Icon icon="tabler:mail" className="size-5" />
 									<span>Send Magic Link</span>
 								</>
 							)}
 						</Button>
 
-						<div className="relative my-4">
+						<div className="relative py-2">
 							<div className="absolute inset-0 flex items-center">
 								<span className="w-full border-t" />
 							</div>
 							<div className="relative flex justify-center text-xs uppercase">
-								<span className="bg-background text-muted-foreground px-2">
-									Or continue with
-								</span>
+								<Badge variant="outline" className="bg-background">
+									Or login using
+								</Badge>
 							</div>
 						</div>
 
@@ -279,21 +333,29 @@ function LoginPage() {
 							className="w-full"
 							onClick={() => setShowPasswordLogin(!showPasswordLogin)}
 						>
-							{showPasswordLogin
-								? 'Login with Magic Link'
-								: 'Login with Password'}
+							{showPasswordLogin ? (
+								<>
+									<Icon icon="tabler:mail-bolt" className="size-5" />
+									<span>Login with Magic Link</span>
+								</>
+							) : (
+								<>
+									<Icon icon="tabler:lock-password" className="size-5" />
+									<span>Login with Password</span>
+								</>
+							)}
 						</Button>
 					</form>
 				</CardContent>
 				<CardFooter className="flex justify-center">
 					<div className="text-center text-sm">
 						Don't have an account?{' '}
-						<a
-							href="/signup"
-							className="underline underline-offset-4 hover:text-primary"
+						<Link
+							to="/auth/signup"
+							className="hover:underline underline-offset-4 text-accent"
 						>
 							Sign Up
-						</a>
+						</Link>
 					</div>
 				</CardFooter>
 			</Card>

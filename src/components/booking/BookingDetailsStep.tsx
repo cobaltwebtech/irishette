@@ -1,10 +1,12 @@
+import { Icon } from '@iconify/react';
 import { Link } from '@tanstack/react-router';
-import { LoaderCircle, User } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { trpcClient } from '@/integrations/tanstack-query/root-provider';
 import { authClient, useSession } from '@/lib/auth-client';
 import { useBookingStore } from '@/stores';
@@ -317,7 +319,7 @@ export function BookingDetailsStep() {
 		<Card>
 			<CardHeader>
 				<CardTitle className="flex items-center gap-2">
-					<User className="w-5 h-5" />
+					<Icon icon="tabler:user-circle" className="size-6" />
 					Booking Details
 				</CardTitle>
 			</CardHeader>
@@ -329,9 +331,7 @@ export function BookingDetailsStep() {
 					<div className="grid sm:grid-cols-2 gap-4">
 						{/* Guest Name */}
 						<div className="space-y-2">
-							<label htmlFor={nameId} className="text-sm font-medium">
-								Full Name *
-							</label>
+							<Label htmlFor={nameId}>Full Name *</Label>
 							<Input
 								id={nameId}
 								type="text"
@@ -347,9 +347,7 @@ export function BookingDetailsStep() {
 
 						{/* Guest Email */}
 						<div className="space-y-2">
-							<label htmlFor={emailId} className="text-sm font-medium">
-								Email Address *
-							</label>
+							<Label htmlFor={emailId}>Email Address *</Label>
 							<Input
 								id={emailId}
 								type="email"
@@ -367,9 +365,7 @@ export function BookingDetailsStep() {
 					<div className="grid sm:grid-cols-2 gap-4">
 						{/* Guest Phone */}
 						<div className="space-y-2">
-							<label htmlFor={phoneId} className="text-sm font-medium">
-								Phone Number *
-							</label>
+							<Label htmlFor={phoneId}>Phone Number *</Label>
 							<Input
 								id={phoneId}
 								type="tel"
@@ -385,9 +381,7 @@ export function BookingDetailsStep() {
 
 						{/* Number of Guests */}
 						<div className="space-y-2">
-							<label htmlFor={guestsId} className="text-sm font-medium">
-								Number of Guests *
-							</label>
+							<Label htmlFor={guestsId}>Number of Guests *</Label>
 							<Input
 								id={guestsId}
 								type="number"
@@ -408,72 +402,84 @@ export function BookingDetailsStep() {
 
 				{/* Special Requests */}
 				<div className="space-y-2">
-					<label htmlFor={requestsId} className="text-sm font-medium">
-						Special Requests
-					</label>
-					<textarea
+					<Label htmlFor={requestsId}>Special Requests</Label>
+					<Textarea
 						id={requestsId}
 						placeholder="Any special requests or notes for your stay? (optional)"
 						value={specialRequests}
 						onChange={(e) => setSpecialRequests(e.target.value)}
 						rows={3}
-						className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+						maxLength={1000}
 					/>
-					<p className="text-xs text-muted-foreground">
-						Examples: dietary restrictions, accessibility needs, early
-						check-in/late check-out requests, etc.
+					<p
+						className={`text-xs ${
+							specialRequests.length > 900
+								? 'text-destructive font-semibold'
+								: 'text-muted-foreground'
+						}`}
+					>
+						{specialRequests.length} / 1000 characters
 					</p>
 					<p className="text-xs text-muted-foreground">
-						<strong>Note:</strong> While we cannot guarantee all requests will
-						be accommodated, we will make best effort to honor them.
+						Examples: dietary restrictions, accessibility needs, early
+						check-in/late check-out requests, etc. <strong>Note:</strong> While
+						we cannot guarantee all requests will be accommodated, we will make
+						a best effort to honor them.
 					</p>
 				</div>
 
 				{/* Summary */}
-				<div className="bg-muted/50 rounded-lg p-4 space-y-2">
-					<h4 className="font-medium">Booking Summary</h4>
-					<div className="text-sm space-y-1">
-						<p>
-							<span className="font-medium">Room:</span>{' '}
-							{booking.roomName || booking.roomSlug || 'N/A'}
-						</p>
-						<p>
-							<span className="font-medium">Check-in:</span>{' '}
-							{booking.checkInDate
-								? parseISODateString(booking.checkInDate).toLocaleDateString(
-										'en-US',
-										{
-											weekday: 'short',
-											month: 'short',
-											day: 'numeric',
-											year: 'numeric',
-										},
-									)
-								: 'N/A'}
-						</p>
-						<p>
-							<span className="font-medium">Check-out:</span>{' '}
-							{booking.checkOutDate
-								? parseISODateString(booking.checkOutDate).toLocaleDateString(
-										'en-US',
-										{
-											weekday: 'short',
-											month: 'short',
-											day: 'numeric',
-											year: 'numeric',
-										},
-									)
-								: 'N/A'}
-						</p>
-						<p>
-							<span className="font-medium">Guests:</span> {numberOfGuests}
-						</p>
-						<p>
-							<span className="font-medium">Total:</span> $
-							{booking.pricing?.totalAmount?.toFixed(2) || '0.00'}
-						</p>
-					</div>
-				</div>
+				<Card className="bg-muted">
+					<CardHeader>
+						<CardTitle className="flex items-center gap-2">
+							<Icon icon="tabler:checklist" className="size-6" />
+							Booking Summary
+						</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<div className="text-sm space-y-1 font-semibold">
+							<p>
+								<span className="font-light">Room:</span>{' '}
+								{booking.roomName || booking.roomSlug || 'N/A'}
+							</p>
+							<p>
+								<span className="font-light">Check-in:</span>{' '}
+								{booking.checkInDate
+									? parseISODateString(booking.checkInDate).toLocaleDateString(
+											'en-US',
+											{
+												weekday: 'short',
+												month: 'short',
+												day: 'numeric',
+												year: 'numeric',
+											},
+										)
+									: 'N/A'}
+							</p>
+							<p>
+								<span className="font-light">Check-out:</span>{' '}
+								{booking.checkOutDate
+									? parseISODateString(booking.checkOutDate).toLocaleDateString(
+											'en-US',
+											{
+												weekday: 'short',
+												month: 'short',
+												day: 'numeric',
+												year: 'numeric',
+											},
+										)
+									: 'N/A'}
+							</p>
+							<p>
+								<span className="font-light">Guests:</span> {numberOfGuests}
+							</p>
+							<p>
+								<span className="font-light">Total Due (USD):</span> $
+								{booking.pricing?.totalAmount?.toFixed(2) || '0.00'}
+							</p>
+						</div>
+					</CardContent>
+				</Card>
 
 				{/* Error Display */}
 				{booking.error && (
@@ -497,36 +503,34 @@ export function BookingDetailsStep() {
 							}
 							aria-invalid={!!errors.acceptedPolicies}
 						/>
-						<label
+						<Label
 							htmlFor={policiesId}
-							className="text-sm leading-relaxed cursor-pointer"
+							className="flex flex-wrap gap-2 cursor-pointer"
 						>
 							I have read and accept the{' '}
 							<Link
 								to="/cancellation-refund-policy"
 								target="_blank"
-								className="text-primary hover:underline font-medium"
+								className="text-accent hover:underline font-medium"
 							>
-								Cancellation & Refund Policy
+								Cancellation & Refund Policy,
 							</Link>
-							,{' '}
 							<Link
 								to="/terms-of-service"
 								target="_blank"
-								className="text-primary hover:underline font-medium"
+								className="text-accent hover:underline font-medium"
 							>
-								Terms of Service
+								Terms of Service,
 							</Link>
-							, and{' '}
+							and
 							<Link
 								to="/privacy-policy"
 								target="_blank"
-								className="text-primary hover:underline font-medium"
+								className="text-accent hover:underline font-medium"
 							>
-								Privacy Policy
+								Privacy Policy.
 							</Link>
-							.
-						</label>
+						</Label>
 					</div>
 					{errors.acceptedPolicies && (
 						<p className="text-sm text-destructive ml-7">
@@ -558,7 +562,7 @@ export function BookingDetailsStep() {
 					>
 						{isSubmitting ? (
 							<>
-								<LoaderCircle className="w-4 h-4 mr-2 animate-spin" />
+								<Icon icon="tabler:loader-2" className="size-3 animate-spin" />
 								Processing...
 							</>
 						) : (

@@ -1,5 +1,5 @@
+import { Icon } from '@iconify/react';
 import { Link } from '@tanstack/react-router';
-import { Check } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -44,29 +44,29 @@ export function ConfirmationStep() {
 		<Card>
 			<CardHeader>
 				<CardTitle className="flex items-center gap-2">
-					<Check className="w-5 h-5 text-green-600" />
+					<Icon
+						icon="tabler:circle-check-filled"
+						className="size-8 text-primary"
+					/>
 					Booking Confirmed!
 				</CardTitle>
 			</CardHeader>
 			<CardContent className="space-y-6">
-				<div className="bg-green-50 border border-green-200 rounded-lg p-4">
-					<p className="text-green-800 font-medium">
-						🎉 Your reservation has been confirmed!
-					</p>
-					<p className="text-green-700 text-sm mt-1">
-						You'll receive a confirmation email shortly with all the details.
+				<div className="bg-secondary border border-border rounded-lg px-4 py-6 space-y-2 text-center">
+					<p className="animate-bounce text-4xl">🎉</p>
+					<p className="font-bold">Your reservation has been confirmed!</p>
+					<p className="text-sm">
+						You will receive a confirmation email shortly with all the details.
 					</p>
 				</div>
 
+				{/* Booking Details */}
 				{summary && (
-					<div className="space-y-4">
-						{/* Booking Details */}
-						<div>
-							<h3 className="font-semibold text-lg mb-3">
-								Reservation Details
-							</h3>
+					<div className="space-y-8">
+						<div className="border-b pb-4">
+							<h3 className="font-semibold mb-3">Reservation Details</h3>
 
-							<div className="grid gap-3">
+							<div className="flex flex-col gap-3">
 								{confirmationId && (
 									<div className="flex justify-between">
 										<span className="text-muted-foreground">
@@ -84,7 +84,7 @@ export function ConfirmationStep() {
 								<div className="flex justify-between">
 									<span className="text-muted-foreground">Room:</span>
 									<span className="font-medium capitalize">
-										{summary.roomSlug.replace('-', ' ')}
+										{summary.roomName ?? 'Unknown Room'}
 									</span>
 								</div>
 
@@ -94,7 +94,7 @@ export function ConfirmationStep() {
 										{parseISODateString(summary.checkInDate).toLocaleDateString(
 											'en-US',
 											{
-												weekday: 'long',
+												weekday: 'short',
 												year: 'numeric',
 												month: 'long',
 												day: 'numeric',
@@ -109,7 +109,7 @@ export function ConfirmationStep() {
 										{parseISODateString(
 											summary.checkOutDate,
 										).toLocaleDateString('en-US', {
-											weekday: 'long',
+											weekday: 'short',
 											year: 'numeric',
 											month: 'long',
 											day: 'numeric',
@@ -137,9 +137,9 @@ export function ConfirmationStep() {
 
 						{/* Guest Information */}
 						{booking.guestInfo && (
-							<div className="border-t pt-4">
+							<div className="border-b pb-4">
 								<h4 className="font-semibold mb-3">Guest Information</h4>
-								<div className="grid gap-2">
+								<div className="flex flex-col gap-2">
 									<div className="flex justify-between">
 										<span className="text-muted-foreground">Name:</span>
 										<span className="font-medium">
@@ -166,9 +166,9 @@ export function ConfirmationStep() {
 
 						{/* Pricing Summary */}
 						{summary.pricing && (
-							<div className="border-t pt-4">
+							<div className="border-b pb-4">
 								<h4 className="font-semibold mb-3">Payment Summary</h4>
-								<div className="grid gap-2">
+								<div className="flex flex-col gap-2">
 									<div className="flex justify-between">
 										<span className="text-muted-foreground">Base Rate:</span>
 										<span>${summary.pricing.basePrice.toFixed(2)}/night</span>
@@ -189,7 +189,7 @@ export function ConfirmationStep() {
 											<span>${summary.pricing.taxes.toFixed(2)}</span>
 										</div>
 									)}
-									<div className="flex justify-between font-semibold text-lg border-t pt-2">
+									<div className="flex justify-between font-semibold text-lg">
 										<span>Total Paid:</span>
 										<span>${summary.pricing.totalAmount.toFixed(2)}</span>
 									</div>
@@ -200,28 +200,38 @@ export function ConfirmationStep() {
 				)}
 
 				{/* Next Steps */}
-				<div className="border-t pt-4">
+				<div className="border-b pb-4">
 					<h4 className="font-semibold mb-3">What's Next?</h4>
-					<ul className="space-y-2 text-sm text-muted-foreground">
-						<li>• Check your email for the confirmation details</li>
-						<li>• Save this confirmation for your records</li>
-						<li>• Contact us if you have any questions</li>
-						<li>• We look forward to hosting you!</li>
+					<ul className="space-y-2 text-sm text-muted-foreground list-disc ml-4">
+						<li>Check your email for the confirmation details</li>
+						<li>Save this confirmation for your records</li>
+						<li>
+							<Link to="/contact" className="text-accent hover:underline">
+								Contact us
+							</Link>{' '}
+							if you have any questions or need to make changes to your booking
+						</li>
+						<li>We look forward to hosting you!</li>
 					</ul>
 				</div>
 
 				{/* Action Buttons */}
-				<div className="flex gap-4 pt-4">
-					<Button
-						onClick={() => booking.actions.reset()}
-						variant="outline"
-						className="flex-1"
-					>
-						New Booking
+				<div className="flex flex-wrap gap-4 pt-4">
+					<Button asChild variant="secondary" className="flex-1">
+						<Link to="/">
+							<Icon icon="tabler:home" className="size-5" />
+							Back to Home
+						</Link>
 					</Button>
-					<Link to="/" className="flex-1">
-						<Button className="w-full">Back to Home</Button>
-					</Link>
+					<Button asChild className="flex-1">
+						<Link to="/account">
+							<Icon
+								icon="material-symbols:bed-outline-rounded"
+								className="size-5"
+							/>
+							View Bookings
+						</Link>
+					</Button>
 				</div>
 			</CardContent>
 		</Card>

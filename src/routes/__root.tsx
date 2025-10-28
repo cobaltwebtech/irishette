@@ -16,12 +16,21 @@ import Footer from '@/components/Footer';
 import Header from '@/components/Header';
 import { NotFound } from '@/components/not-found';
 import { Toaster } from '@/components/ui/sonner';
+import { authClient } from '@/lib/auth-client';
 import appCss from '@/styles/styles.css?url';
 import { seo } from '@/utils/seo';
 
 export const Route = createRootRouteWithContext<{
 	queryClient: QueryClient;
 }>()({
+	beforeLoad: async () => {
+		// Preload session data in root route to avoid flash on protected routes
+		// This will be cached and available to child routes
+		const { data: session } = await authClient.getSession();
+		return {
+			session: session ?? null,
+		};
+	},
 	head: () => ({
 		meta: [
 			{
@@ -60,11 +69,7 @@ export const Route = createRootRouteWithContext<{
 		],
 	}),
 	errorComponent: (props) => {
-		return (
-			<RootDocument>
-				<DefaultCatchBoundary {...props} />
-			</RootDocument>
-		);
+		return <DefaultCatchBoundary {...props} />;
 	},
 	notFoundComponent: () => <NotFound />,
 	shellComponent: RootDocument,

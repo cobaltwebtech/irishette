@@ -1,3 +1,4 @@
+import { Icon } from '@iconify/react';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import {
@@ -11,16 +12,6 @@ import {
 	type SortingState,
 	useReactTable,
 } from '@tanstack/react-table';
-import {
-	ArrowLeft,
-	ArrowUpDown,
-	Calendar,
-	CreditCard,
-	ExternalLink,
-	Mail,
-	Phone,
-	User,
-} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Badge } from '@/components/ui/badge';
@@ -124,18 +115,18 @@ function AdminGuestDetail() {
 						className="h-8 px-2"
 					>
 						Check-in
-						<ArrowUpDown className="ml-2 h-4 w-4" />
+						<Icon icon="tabler:arrows-up-down" />
 					</Button>
 				),
 				cell: (info) => (
 					<div>
 						<div>
-							{new Date(info.getValue() + 'T00:00:00').toLocaleDateString()}
+							{new Date(`${info.getValue()}T00:00:00`).toLocaleDateString()}
 						</div>
 						<div className="text-sm text-muted-foreground">
 							to{' '}
 							{new Date(
-								info.row.original.checkOutDate + 'T00:00:00',
+								`${info.row.original.checkOutDate}T00:00:00`,
 							).toLocaleDateString()}
 						</div>
 					</div>
@@ -194,7 +185,7 @@ function AdminGuestDetail() {
 						className="h-8 px-2"
 					>
 						Amount
-						<ArrowUpDown className="ml-2 h-4 w-4" />
+						<Icon icon="tabler:arrows-up-down" />
 					</Button>
 				),
 				cell: (info) => (
@@ -237,7 +228,7 @@ function AdminGuestDetail() {
 
 		// A booking is completed if it's confirmed and checkout date is in the past
 		const completedBookings = bookings.filter((b) => {
-			const checkOutDate = new Date(b.checkOutDate + 'T00:00:00');
+			const checkOutDate = new Date(`${b.checkOutDate}T00:00:00`);
 			return b.status === 'confirmed' && checkOutDate < today;
 		}).length;
 
@@ -251,7 +242,7 @@ function AdminGuestDetail() {
 
 		// Current & Upcoming bookings: confirmed with checkout date today or in the future
 		const currentUpcomingBookings = bookings.filter((b) => {
-			const checkOutDate = new Date(b.checkOutDate + 'T00:00:00');
+			const checkOutDate = new Date(`${b.checkOutDate}T00:00:00`);
 			return b.status === 'confirmed' && checkOutDate >= today;
 		}).length;
 
@@ -327,8 +318,7 @@ function AdminGuestDetail() {
 			<div className="mb-6">
 				<Link to="/admin/guest">
 					<Button variant="outline" size="sm">
-						<ArrowLeft className="w-4 h-4 mr-2" />
-						Back to Guests
+						← Back to Guests
 					</Button>
 				</Link>
 			</div>
@@ -338,7 +328,6 @@ function AdminGuestDetail() {
 				<Card className="lg:col-span-1">
 					<CardHeader>
 						<CardTitle className="flex items-center gap-2">
-							<User className="w-5 h-5" />
 							Guest Information
 						</CardTitle>
 					</CardHeader>
@@ -353,7 +342,6 @@ function AdminGuestDetail() {
 								href={`mailto:${user.email}`}
 								className="font-semibold text-primary hover:underline"
 							>
-								<Mail className="w-4 h-4 inline mr-1" />
 								{user.email}
 							</a>
 						</div>
@@ -366,7 +354,6 @@ function AdminGuestDetail() {
 									href={`tel:${(user as { phoneNumber?: string })?.phoneNumber}`}
 									className="font-semibold text-primary hover:underline"
 								>
-									<Phone className="w-4 h-4 inline mr-1" />
 									{(user as { phoneNumber?: string })?.phoneNumber}
 								</a>
 							</div>
@@ -376,7 +363,6 @@ function AdminGuestDetail() {
 								Member Since
 							</p>
 							<p className="font-semibold">
-								<Calendar className="w-4 h-4 inline mr-1" />
 								{new Date(user.createdAt).toLocaleDateString('en-US', {
 									year: 'numeric',
 									month: 'long',
@@ -397,7 +383,7 @@ function AdminGuestDetail() {
 										className="flex gap-2 hover:underline"
 									>
 										{user.stripeCustomerId}
-										<ExternalLink className="size-4" />
+										<Icon icon="tabler:external-link" className="size-5" />
 									</a>
 								</p>
 							</div>
@@ -475,7 +461,6 @@ function AdminGuestDetail() {
 			<Card>
 				<CardHeader>
 					<CardTitle className="flex items-center gap-2">
-						<CreditCard className="w-5 h-5" />
 						Booking History ({bookings.length})
 					</CardTitle>
 					<CardDescription>All bookings made by this guest</CardDescription>

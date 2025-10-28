@@ -1,5 +1,5 @@
-import { createFileRoute, useRouter } from '@tanstack/react-router';
-import { CheckCircle2, CircleX, KeyRound, Loader2 } from 'lucide-react';
+import { Icon } from '@iconify/react';
+import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -109,26 +109,31 @@ function ResetPasswordPage() {
 
 	if (isSuccess) {
 		return (
-			<div className="min-h-screen bg-background flex items-center justify-center px-4">
+			<div className="flex flex-col flex-auto items-center justify-center bg-background px-4 py-8">
 				<Card className="w-full max-w-md">
 					<CardHeader className="text-center">
-						<div className="mx-auto w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
-							<CheckCircle2 className="w-6 h-6 text-green-600" />
+						<div className="flex items-center justify-center mb-4 mx-auto size-16 bg-primary rounded-full">
+							<Icon
+								icon="tabler:lock-check"
+								className="size-10 text-primary-foreground"
+							/>
 						</div>
-						<CardTitle>Password Reset Complete</CardTitle>
+						<CardTitle className="text-2xl font-bold">
+							Password Reset Successful
+						</CardTitle>
 						<CardDescription>
-							Your password has been reset successfully
+							Your password has been reset successfully.
 						</CardDescription>
 					</CardHeader>
-					<CardContent className="space-y-4">
-						<p className="text-muted-foreground text-center">
-							You can now log in with your new password.
+					<CardContent className="flex flex-col items-center justify-center gap-4">
+						<p className="text-muted-foreground">
+							You may now log in with your new password.
 						</p>
-						<Button
-							onClick={() => router.navigate({ to: '/auth/login' })}
-							className="w-full"
-						>
-							Return to Login
+						<Button asChild className="w-full">
+							<Link to="/auth/login">
+								<Icon icon="tabler:login-2" className="size-5" />
+								Return to Login
+							</Link>
 						</Button>
 					</CardContent>
 				</Card>
@@ -137,18 +142,23 @@ function ResetPasswordPage() {
 	}
 
 	return (
-		<div className="min-h-screen bg-background flex items-center justify-center px-4">
+		<div className="flex flex-col flex-auto items-center justify-center bg-background px-4 py-8">
 			<Card className="w-full max-w-md">
 				<CardHeader className="text-center">
-					<div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-						<KeyRound className="w-6 h-6 text-primary" />
+					<div className="flex items-center justify-center mb-4 mx-auto size-16 bg-primary rounded-full">
+						<Icon
+							icon="tabler:lock-cog"
+							className="size-10 text-primary-foreground"
+						/>
 					</div>
-					<CardTitle>Reset Your Password</CardTitle>
+					<CardTitle className="text-2xl font-bold">
+						Reset Your Password
+					</CardTitle>
 					<CardDescription>Enter your new password below</CardDescription>
 				</CardHeader>
 				<CardContent>
 					<form onSubmit={handleSubmit} className="space-y-4">
-						<div className="grid gap-3">
+						<div className="flex flex-col gap-2">
 							<Label htmlFor={newPasswordId}>New Password</Label>
 							<PasswordInput
 								id={newPasswordId}
@@ -178,7 +188,7 @@ function ResetPasswordPage() {
 
 						{error && (
 							<div className="inline-flex gap-1 text-sm font-bold text-destructive">
-								<CircleX className="size-4" />
+								<Icon icon="tabler:circle-x" className="size-5" />
 								{error}
 							</div>
 						)}
@@ -190,24 +200,30 @@ function ResetPasswordPage() {
 						>
 							{isLoading ? (
 								<>
-									<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+									<Icon
+										icon="tabler:loader-2"
+										className="size-5 animate-spin"
+									/>
 									Resetting Password...
 								</>
 							) : (
-								'Reset Password'
+								<>
+									<Icon icon="tabler:lock-password" className="size-5" />
+									Reset Password
+								</>
 							)}
 						</Button>
 					</form>
 				</CardContent>
 				<CardFooter className="flex justify-center">
-					<div className="text-center text-sm">
+					<div className="text-sm">
 						Remember your password?{' '}
-						<a
+						<Link
 							href="/auth/login"
-							className="underline underline-offset-4 hover:text-primary"
+							className="text-accent underline-offset-4 hover:underline"
 						>
 							Back to Login
-						</a>
+						</Link>
 					</div>
 				</CardFooter>
 			</Card>

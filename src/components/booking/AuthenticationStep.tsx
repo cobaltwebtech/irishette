@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react';
+import { Icon } from '@iconify/react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,7 +19,7 @@ export function AuthenticationStep() {
 			<Card>
 				<CardHeader>
 					<CardTitle className="flex items-center gap-2">
-						<Check className="w-5 h-5 text-green-600" />
+						<Icon icon="tabler:check" className="size-5 text-primary" />
 						Welcome back, {session.user.name || session.user.email}!
 					</CardTitle>
 				</CardHeader>

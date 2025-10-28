@@ -1,5 +1,13 @@
-import { Calendar, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useId, useState } from 'react';
+import { Icon } from '@iconify/react';
+import {
+	createColumnHelper,
+	flexRender,
+	getCoreRowModel,
+	getSortedRowModel,
+	type SortingState,
+	useReactTable,
+} from '@tanstack/react-table';
+import { useId, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -110,6 +118,9 @@ export function PricingRulesManagement({
 	const [deletingRule, setDeletingRule] = useState<RoomPricingRule | null>(
 		null,
 	);
+	const [sorting, setSorting] = useState<SortingState>([
+		{ id: 'startDate', desc: false },
+	]);
 
 	const formatRuleValue = (rule: RoomPricingRule) => {
 		switch (rule.ruleType) {
@@ -170,136 +181,193 @@ export function PricingRulesManagement({
 		return `${start} - ${end}`;
 	};
 
-	const formatDaysOfWeek = (daysOfWeek: string | undefined) => {
-		if (!daysOfWeek) return 'All days';
-		try {
-			const days = JSON.parse(daysOfWeek) as string[];
-			return days
-				.map((day) => day.charAt(0).toUpperCase() + day.slice(1))
-				.join(', ');
-		} catch {
-			return 'All days';
-		}
-	};
-
 	// Filter pricing rules to show only current and future rules
-	const filteredRules = pricingRules.filter((rule) => {
-		const endDate = new Date(`${rule.endDate}T00:00:00`);
-		const today = new Date();
-		today.setHours(0, 0, 0, 0); // Reset time to start of day
-		return endDate >= today;
+	const filteredRules = useMemo(() => {
+		return pricingRules.filter((rule) => {
+			const endDate = new Date(`${rule.endDate}T00:00:00`);
+			const today = new Date();
+			today.setHours(0, 0, 0, 0); // Reset time to start of day
+			return endDate >= today;
+		});
+	}, [pricingRules]);
+
+	// Create columns using the column helper
+	const columnHelper = createColumnHelper<RoomPricingRule>();
+
+	const columns = [
+		columnHelper.accessor('startDate', {
+			header: ({ column }) => (
+				<Button
+					variant="ghost"
+					onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+					className="h-8 px-2"
+				>
+					Date Range
+					<Icon icon="tabler:arrows-up-down" />
+				</Button>
+			),
+			cell: (info) => (
+				<span className="text-sm">
+					{formatDateRange(info.getValue(), info.row.original.endDate)}
+				</span>
+			),
+		}),
+		columnHelper.accessor('name', {
+			header: 'Rule Name',
+			cell: (info) => <span className="font-medium">{info.getValue()}</span>,
+		}),
+		columnHelper.accessor('ruleType', {
+			header: 'Type',
+			cell: (info) => (
+				<Badge variant={getRuleBadgeVariant(info.getValue())}>
+					{getRuleTypeLabel(info.getValue())}
+				</Badge>
+			),
+		}),
+		columnHelper.accessor('value', {
+			header: 'Value',
+			cell: (info) => (
+				<span className="font-mono">{formatRuleValue(info.row.original)}</span>
+			),
+		}),
+		columnHelper.display({
+			id: 'effectivePrice',
+			header: 'Effective Price',
+			cell: (info) => (
+				<span className="font-semibold">
+					${calculateEffectivePrice(info.row.original).toFixed(2)}
+				</span>
+			),
+		}),
+		columnHelper.accessor('isActive', {
+			header: 'Status',
+			cell: (info) => (
+				<Badge variant={info.getValue() ? 'default' : 'outline'}>
+					{info.getValue() ? 'Active' : 'Inactive'}
+				</Badge>
+			),
+		}),
+		columnHelper.display({
+			id: 'actions',
+			header: 'Actions',
+			cell: (info) => (
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button variant="ghost" className="h-8 w-8 p-0">
+							<span className="sr-only">Open menu</span>
+							<Icon icon="tabler:dots" />
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						<DropdownMenuLabel>Actions</DropdownMenuLabel>
+						<DropdownMenuItem onClick={() => setEditingRule(info.row.original)}>
+							<Icon icon="tabler:pencil" />
+							Edit
+						</DropdownMenuItem>
+						<DropdownMenuSeparator />
+						<DropdownMenuItem
+							onClick={() => setDeletingRule(info.row.original)}
+							className="text-destructive"
+						>
+							<Icon icon="tabler:trash" />
+							Delete
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			),
+		}),
+	];
+
+	const table = useReactTable({
+		data: filteredRules,
+		columns,
+		onSortingChange: setSorting,
+		getCoreRowModel: getCoreRowModel(),
+		getSortedRowModel: getSortedRowModel(),
+		state: {
+			sorting,
+		},
 	});
 
 	return (
 		<Card>
-			<CardHeader>
-				<div className="flex items-center justify-between">
-					<div>
-						<CardTitle className="flex items-center gap-2">
-							<Calendar className="h-5 w-5" />
-							Pricing Rules - {roomName}
-						</CardTitle>
-						<CardDescription>
-							Base price: ${basePrice.toFixed(2)}/night. Manage dynamic pricing
-							rules for different seasons, events, and conditions. Only current
-							and future rules are displayed.
-						</CardDescription>
-					</div>
-					<Button
-						onClick={() => setIsCreating(true)}
-						size="sm"
-						className="flex items-center gap-2"
-					>
-						<Plus className="h-4 w-4" />
-						Add Rule
-					</Button>
+			<CardHeader className="flex justify-between gap-12">
+				<div>
+					<CardTitle className="text-lg flex items-center gap-2">
+						<Icon icon="tabler:calendar-dollar" className="size-6" />
+						Pricing Rules - {roomName}
+					</CardTitle>
+					<CardDescription>
+						Base price: ${basePrice.toFixed(2)}/night. Manage dynamic pricing
+						rules for different seasons, events, and conditions. Only current
+						and future rules are displayed.
+					</CardDescription>
 				</div>
+				<Button
+					variant="secondary"
+					onClick={() => setIsCreating(true)}
+					size="sm"
+				>
+					<Icon icon="tabler:playlist-add" className="size-5" />
+					Add Rule
+				</Button>
 			</CardHeader>
 			<CardContent>
-				{pricingRules.length === 0 ? (
+				{filteredRules.length === 0 ? (
 					<div className="text-center py-8 text-muted-foreground">
-						<Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-						<p className="text-lg font-medium">No pricing rules configured</p>
+						<Icon
+							icon="tabler:calendar-cancel"
+							className="size-12 mx-auto mb-4 text-secondary"
+						/>
+						<p className="text-lg font-medium">
+							No current pricing rules for room
+						</p>
 						<p className="text-sm">
-							Add your first pricing rule to enable dynamic pricing for this
-							room.
+							Add a pricing rule to enable dynamic pricing for this room.
 						</p>
 					</div>
 				) : (
 					<Table>
 						<TableHeader>
-							<TableRow>
-								<TableHead>Rule Name</TableHead>
-								<TableHead>Type</TableHead>
-								<TableHead>Value</TableHead>
-								<TableHead>Effective Price</TableHead>
-								<TableHead>Date Range</TableHead>
-								<TableHead>Days</TableHead>
-								<TableHead>Status</TableHead>
-								<TableHead className="w-[50px]"></TableHead>
-							</TableRow>
+							{table.getHeaderGroups().map((headerGroup) => (
+								<TableRow key={headerGroup.id}>
+									{headerGroup.headers.map((header) => (
+										<TableHead key={header.id}>
+											{header.isPlaceholder
+												? null
+												: flexRender(
+														header.column.columnDef.header,
+														header.getContext(),
+													)}
+										</TableHead>
+									))}
+								</TableRow>
+							))}
 						</TableHeader>
 						<TableBody>
-							{filteredRules
-								.sort(
-									(a, b) =>
-										new Date(`${a.startDate}T00:00:00`).getTime() -
-										new Date(`${b.startDate}T00:00:00`).getTime(),
-								)
-								.map((rule) => (
-									<TableRow key={rule.id}>
-										<TableCell className="font-medium">{rule.name}</TableCell>
-										<TableCell>
-											<Badge variant={getRuleBadgeVariant(rule.ruleType)}>
-												{getRuleTypeLabel(rule.ruleType)}
-											</Badge>
-										</TableCell>
-										<TableCell className="font-mono">
-											{formatRuleValue(rule)}
-										</TableCell>
-										<TableCell className="font-semibold">
-											${calculateEffectivePrice(rule).toFixed(2)}
-										</TableCell>
-										<TableCell className="text-sm">
-											{formatDateRange(rule.startDate, rule.endDate)}
-										</TableCell>
-										<TableCell className="text-sm">
-											{formatDaysOfWeek(rule.daysOfWeek)}
-										</TableCell>
-										<TableCell>
-											<Badge variant={rule.isActive ? 'default' : 'secondary'}>
-												{rule.isActive ? 'Active' : 'Inactive'}
-											</Badge>
-										</TableCell>
-										<TableCell>
-											<DropdownMenu>
-												<DropdownMenuTrigger asChild>
-													<Button variant="ghost" className="h-8 w-8 p-0">
-														<span className="sr-only">Open menu</span>
-														<MoreHorizontal className="h-4 w-4" />
-													</Button>
-												</DropdownMenuTrigger>
-												<DropdownMenuContent align="end">
-													<DropdownMenuLabel>Actions</DropdownMenuLabel>
-													<DropdownMenuItem
-														onClick={() => setEditingRule(rule)}
-													>
-														<Pencil className="mr-2 h-4 w-4" />
-														Edit
-													</DropdownMenuItem>
-													<DropdownMenuSeparator />
-													<DropdownMenuItem
-														onClick={() => setDeletingRule(rule)}
-														className="text-destructive"
-													>
-														<Trash2 className="mr-2 h-4 w-4" />
-														Delete
-													</DropdownMenuItem>
-												</DropdownMenuContent>
-											</DropdownMenu>
-										</TableCell>
+							{table.getRowModel().rows?.length ? (
+								table.getRowModel().rows.map((row) => (
+									<TableRow key={row.id}>
+										{row.getVisibleCells().map((cell) => (
+											<TableCell key={cell.id}>
+												{flexRender(
+													cell.column.columnDef.cell,
+													cell.getContext(),
+												)}
+											</TableCell>
+										))}
 									</TableRow>
-								))}
+								))
+							) : (
+								<TableRow>
+									<TableCell
+										colSpan={columns.length}
+										className="h-24 text-center"
+									>
+										No pricing rules found.
+									</TableCell>
+								</TableRow>
+							)}
 						</TableBody>
 					</Table>
 				)}
@@ -350,13 +418,15 @@ export function PricingRulesManagement({
 						<DialogContent className="max-w-md">
 							<DialogHeader>
 								<DialogTitle className="flex items-center gap-2">
-									<Trash2 className="h-5 w-5 text-destructive" />
+									<Icon
+										icon="tabler:trash"
+										className="size-5 text-destructive"
+									/>
 									Delete Pricing Rule
 								</DialogTitle>
 								<DialogDescription className="text-left">
 									Are you sure you want to delete the pricing rule{' '}
 									<strong>"{deletingRule.name}"</strong>?
-									<br />
 									<br />
 									This will permanently remove the rule for the date range{' '}
 									<strong>
@@ -366,7 +436,6 @@ export function PricingRulesManagement({
 										)}
 									</strong>
 									.
-									<br />
 									<br />
 									This action cannot be undone.
 								</DialogDescription>

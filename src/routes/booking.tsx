@@ -2,7 +2,6 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { AuthenticationStep } from '@/components/booking/AuthenticationStep';
 import { BookingDetailsStep } from '@/components/booking/BookingDetailsStep';
-import { BookingHeader } from '@/components/booking/BookingHeader';
 import { BookingProgressSteps } from '@/components/booking/BookingProgressSteps';
 import { BookingSummary } from '@/components/booking/BookingSummary';
 import { ConfirmationStep } from '@/components/booking/ConfirmationStep';
@@ -188,25 +187,30 @@ function BookingFlow() {
 
 	return (
 		<div className="min-h-screen bg-background">
-			<BookingHeader />
 			<BookingProgressSteps />
 
 			{/* Main Content */}
 			<div className="container mx-auto max-w-4xl px-4 py-8">
-				<div className="grid lg:grid-cols-3 gap-8">
-					{/* Booking Steps */}
-					<div className="lg:col-span-2">
-						{booking.isStep('dates') && <DatesStep />}
-						{booking.isStep('auth') && <AuthenticationStep />}
-						{booking.isStep('details') && <BookingDetailsStep />}
-						{booking.isStep('confirmation') && <ConfirmationStep />}
-					</div>
+				{/* Render all steps except confirmation */}
+				{!booking.isStep('confirmation') && (
+					<div className="grid lg:grid-cols-3 gap-8">
+						{/* Booking Steps */}
+						<div className="lg:col-span-2 order-2 lg:order-1">
+							{booking.isStep('dates') && <DatesStep />}
+							{booking.isStep('auth') && <AuthenticationStep />}
+							{booking.isStep('details') && <BookingDetailsStep />}
+							{booking.isStep('confirmation') && <ConfirmationStep />}
+						</div>
 
-					{/* Booking Summary Sidebar */}
-					<div className="lg:col-span-1">
-						<BookingSummary />
+						{/* Booking Summary Sidebar */}
+						<div className="lg:col-span-1 order-1 lg:order-2">
+							<BookingSummary />
+						</div>
 					</div>
-				</div>
+				)}
+
+				{/* Render confirmation step without sidebar and use full width container */}
+				{booking.isStep('confirmation') && <ConfirmationStep />}
 			</div>
 		</div>
 	);
