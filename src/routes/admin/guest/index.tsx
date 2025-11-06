@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/table';
 import { trpc } from '@/integrations/tanstack-query/root-provider';
 import { useSession } from '@/lib/auth-client';
+import { requireAdmin } from '@/utils/auth-check';
 
 export const Route = createFileRoute('/admin/guest/')({
 	head: () => ({
@@ -38,6 +39,13 @@ export const Route = createFileRoute('/admin/guest/')({
 			},
 		],
 	}),
+	beforeLoad: async ({ location }) => {
+		// Check user is authenticated and has admin role
+		const session = await requireAdmin(location);
+
+		// Return session data to be available in component during SSR
+		return { session };
+	},
 	component: AdminGuests,
 });
 

@@ -1,7 +1,7 @@
 import { Icon } from '@iconify/react';
 import { useQuery } from '@tanstack/react-query';
-import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { createFileRoute, Link } from '@tanstack/react-router';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { BookingInternalNotes } from '@/components/admin/BookingInternalNotes';
@@ -15,7 +15,7 @@ import {
 	CardTitle,
 } from '@/components/ui/card';
 import { trpc, trpcClient } from '@/integrations/tanstack-query/root-provider';
-import { useSession } from '@/lib/auth-client';
+import { requireAdmin } from '@/utils/auth-check';
 
 export const Route = createFileRoute('/admin/bookings/$bookingId')({
 	head: () => ({
@@ -25,23 +25,20 @@ export const Route = createFileRoute('/admin/bookings/$bookingId')({
 			},
 		],
 	}),
+	beforeLoad: async ({ location }) => {
+		// Check user is authenticated and has admin role
+		const session = await requireAdmin(location);
+
+		// Return session data to be available in component during SSR
+		return { session };
+	},
 	component: AdminBookingDetailPage,
 });
 
 function AdminBookingDetailPage() {
 	const params = Route.useParams() as { bookingId: string };
 	const bookingId = params.bookingId;
-	const { data: session, isPending } = useSession();
-	const router = useRouter();
-	// useRouteContext not needed since we import trpc directly
 	const [isResendingEmail, setIsResendingEmail] = useState(false);
-
-	// Redirect if not admin
-	useEffect(() => {
-		if (!isPending && (!session || session.user.role !== 'admin')) {
-			router.navigate({ to: '/admin' });
-		}
-	}, [session, isPending, router]);
 
 	// Use tRPC query to fetch booking details (admin version)
 	const {
@@ -52,14 +49,9 @@ function AdminBookingDetailPage() {
 		trpc.bookings.getBooking.queryOptions(
 			{
 				bookingId: bookingId,
-				// Don't pass userId for admin access - this ensures we get user data
 			},
 			{
-				enabled:
-					!isPending &&
-					!!session?.user?.id &&
-					session.user.role === 'admin' &&
-					!!bookingId,
+				enabled: !!bookingId,
 				retry: false,
 				staleTime: 5 * 60 * 1000,
 			},
@@ -68,7 +60,7 @@ function AdminBookingDetailPage() {
 
 	// Handle resending confirmation email (admin can resend for any booking)
 	const handleResendEmail = async () => {
-		if (!booking?.booking || !session?.user?.id) return;
+		if (!booking?.booking) return;
 
 		setIsResendingEmail(true);
 
@@ -101,17 +93,9 @@ function AdminBookingDetailPage() {
 		}
 	};
 
-	// Early returns consolidated - AdminLayout will handle auth
-	if (
-		isPending ||
-		isLoading ||
-		!session ||
-		session.user.role !== 'admin' ||
-		!booking ||
-		!booking.booking ||
-		!booking.room
-	) {
-		return null; // AdminLayout will handle loading/auth states
+	// Early return for loading state
+	if (isLoading || !booking || !booking.booking || !booking.room) {
+		return null;
 	}
 
 	if (error) {

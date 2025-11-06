@@ -28,7 +28,6 @@ import { Route as AdminPropertyManagementIndexRouteImport } from './routes/admin
 import { Route as AdminGuestIndexRouteImport } from './routes/admin/guest/index'
 import { Route as ApiTrpcSplatRouteImport } from './routes/api/trpc/$'
 import { Route as ApiStripeSplatRouteImport } from './routes/api/stripe/$'
-import { Route as ApiSendConfirmationEmailSplatRouteImport } from './routes/api/send-confirmation-email/$'
 import { Route as ApiIcalSplatRouteImport } from './routes/api/ical/$'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AdminPropertyManagementRoomIdRouteImport } from './routes/admin/property-management/$roomId'
@@ -135,12 +134,6 @@ const ApiStripeSplatRoute = ApiStripeSplatRouteImport.update({
   path: '/api/stripe/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiSendConfirmationEmailSplatRoute =
-  ApiSendConfirmationEmailSplatRouteImport.update({
-    id: '/api/send-confirmation-email/$',
-    path: '/api/send-confirmation-email/$',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const ApiIcalSplatRoute = ApiIcalSplatRouteImport.update({
   id: '/api/ical/$',
   path: '/api/ical/$',
@@ -209,7 +202,6 @@ export interface FileRoutesByFullPath {
   '/admin/property-management/$roomId': typeof AdminPropertyManagementRoomIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/ical/$': typeof ApiIcalSplatRoute
-  '/api/send-confirmation-email/$': typeof ApiSendConfirmationEmailSplatRoute
   '/api/stripe/$': typeof ApiStripeSplatRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/admin/guest': typeof AdminGuestIndexRoute
@@ -239,7 +231,6 @@ export interface FileRoutesByTo {
   '/admin/property-management/$roomId': typeof AdminPropertyManagementRoomIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/ical/$': typeof ApiIcalSplatRoute
-  '/api/send-confirmation-email/$': typeof ApiSendConfirmationEmailSplatRoute
   '/api/stripe/$': typeof ApiStripeSplatRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/admin/guest': typeof AdminGuestIndexRoute
@@ -270,7 +261,6 @@ export interface FileRoutesById {
   '/admin/property-management/$roomId': typeof AdminPropertyManagementRoomIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/ical/$': typeof ApiIcalSplatRoute
-  '/api/send-confirmation-email/$': typeof ApiSendConfirmationEmailSplatRoute
   '/api/stripe/$': typeof ApiStripeSplatRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/admin/guest/': typeof AdminGuestIndexRoute
@@ -302,7 +292,6 @@ export interface FileRouteTypes {
     | '/admin/property-management/$roomId'
     | '/api/auth/$'
     | '/api/ical/$'
-    | '/api/send-confirmation-email/$'
     | '/api/stripe/$'
     | '/api/trpc/$'
     | '/admin/guest'
@@ -332,7 +321,6 @@ export interface FileRouteTypes {
     | '/admin/property-management/$roomId'
     | '/api/auth/$'
     | '/api/ical/$'
-    | '/api/send-confirmation-email/$'
     | '/api/stripe/$'
     | '/api/trpc/$'
     | '/admin/guest'
@@ -362,7 +350,6 @@ export interface FileRouteTypes {
     | '/admin/property-management/$roomId'
     | '/api/auth/$'
     | '/api/ical/$'
-    | '/api/send-confirmation-email/$'
     | '/api/stripe/$'
     | '/api/trpc/$'
     | '/admin/guest/'
@@ -393,7 +380,6 @@ export interface RootRouteChildren {
   AdminPropertyManagementRoomIdRoute: typeof AdminPropertyManagementRoomIdRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiIcalSplatRoute: typeof ApiIcalSplatRoute
-  ApiSendConfirmationEmailSplatRoute: typeof ApiSendConfirmationEmailSplatRoute
   ApiStripeSplatRoute: typeof ApiStripeSplatRoute
   ApiTrpcSplatRoute: typeof ApiTrpcSplatRoute
   AdminGuestIndexRoute: typeof AdminGuestIndexRoute
@@ -535,13 +521,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiStripeSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/send-confirmation-email/$': {
-      id: '/api/send-confirmation-email/$'
-      path: '/api/send-confirmation-email/$'
-      fullPath: '/api/send-confirmation-email/$'
-      preLoaderRoute: typeof ApiSendConfirmationEmailSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/ical/$': {
       id: '/api/ical/$'
       path: '/api/ical/$'
@@ -625,7 +604,6 @@ const rootRouteChildren: RootRouteChildren = {
   AdminPropertyManagementRoomIdRoute: AdminPropertyManagementRoomIdRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiIcalSplatRoute: ApiIcalSplatRoute,
-  ApiSendConfirmationEmailSplatRoute: ApiSendConfirmationEmailSplatRoute,
   ApiStripeSplatRoute: ApiStripeSplatRoute,
   ApiTrpcSplatRoute: ApiTrpcSplatRoute,
   AdminGuestIndexRoute: AdminGuestIndexRoute,

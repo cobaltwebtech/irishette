@@ -15,7 +15,12 @@ import {
 	createCheckoutSessionSchema,
 	updateBookingSchema,
 } from '@/lib/payment-validation';
-import { createTRPCRouter, publicProcedure } from './init';
+import {
+	adminProcedure,
+	createTRPCRouter,
+	protectedProcedure,
+	publicProcedure,
+} from './init';
 
 export const bookingsRouter = createTRPCRouter({
 	/**
@@ -103,12 +108,8 @@ export const bookingsRouter = createTRPCRouter({
 	/**
 	 * Create a new booking (requires user session)
 	 */
-	createBooking: publicProcedure
-		.input(
-			createBookingSchema.extend({
-				userId: z.string(), // Temporarily require userId in input until we have proper auth context
-			}),
-		)
+	createBooking: protectedProcedure
+		.input(createBookingSchema)
 		.mutation(async ({ ctx, input }) => {
 			const paymentService = new PaymentService({
 				DB: ctx.db,
@@ -118,11 +119,12 @@ export const bookingsRouter = createTRPCRouter({
 			});
 
 			try {
-				const { userId, ...bookingData } = input;
+				// Use authenticated user's ID from session
+				const userId = ctx.user.id;
 
 				// Create temporary booking
 				const bookingId = await paymentService.createTemporaryBooking(
-					bookingData,
+					input,
 					userId,
 				);
 
@@ -140,12 +142,8 @@ export const bookingsRouter = createTRPCRouter({
 	/**
 	 * Create Stripe checkout session for existing booking
 	 */
-	createCheckoutSession: publicProcedure
-		.input(
-			createCheckoutSessionSchema.extend({
-				userId: z.string(), // Temporarily require userId until we have proper auth context
-			}),
-		)
+	createCheckoutSession: protectedProcedure
+		.input(createCheckoutSessionSchema)
 		.mutation(async ({ ctx, input }) => {
 			const db = createDrizzle(ctx.db);
 			const paymentService = new PaymentService({
@@ -156,17 +154,15 @@ export const bookingsRouter = createTRPCRouter({
 			});
 
 			try {
-				const { userId, ...checkoutData } = input;
+				// Use authenticated user's ID from session
+				const userId = ctx.user.id;
 
 				// Verify booking belongs to user
 				const bookingResult = await db
 					.select()
 					.from(bookings)
 					.where(
-						and(
-							eq(bookings.id, checkoutData.bookingId),
-							eq(bookings.userId, userId),
-						),
+						and(eq(bookings.id, input.bookingId), eq(bookings.userId, userId)),
 					);
 
 				if (!bookingResult[0]) {
@@ -186,8 +182,8 @@ export const bookingsRouter = createTRPCRouter({
 				}
 
 				const checkout = await paymentService.createCheckoutSession(
-					checkoutData.bookingId,
-					checkoutData,
+					input.bookingId,
+					input,
 				);
 
 				return checkout;
@@ -206,11 +202,10 @@ export const bookingsRouter = createTRPCRouter({
 	/**
 	 * Get booking details with payment info
 	 */
-	getBooking: publicProcedure
+	getBooking: protectedProcedure
 		.input(
 			z.object({
 				bookingId: z.string(),
-				userId: z.string().optional(), // Optional for admin access
 			}),
 		)
 		.query(async ({ ctx, input }) => {
@@ -223,11 +218,14 @@ export const bookingsRouter = createTRPCRouter({
 			});
 
 			try {
-				const whereConditions = [eq(bookings.id, input.bookingId)];
+				// Use authenticated user's ID from session
+				const userId = ctx.user.id;
+				const isAdmin = ctx.user.role === 'admin';
 
-				// If userId provided, restrict to that user
-				if (input.userId) {
-					whereConditions.push(eq(bookings.userId, input.userId));
+				// Build where conditions - admins can see any booking, users only their own
+				const whereConditions = [eq(bookings.id, input.bookingId)];
+				if (!isAdmin) {
+					whereConditions.push(eq(bookings.userId, userId));
 				}
 
 				const bookingResult = await db
@@ -242,8 +240,8 @@ export const bookingsRouter = createTRPCRouter({
 					});
 				}
 
-				// If no userId provided (admin access), include user data
-				if (!input.userId) {
+				// If admin, include user data
+				if (isAdmin) {
 					const bookingDetails =
 						await paymentService.getBookingWithPaymentAndUser(input.bookingId);
 					return bookingDetails;
@@ -267,10 +265,9 @@ export const bookingsRouter = createTRPCRouter({
 	/**
 	 * Get user's bookings with pagination
 	 */
-	getMyBookings: publicProcedure
+	getMyBookings: protectedProcedure
 		.input(
 			z.object({
-				userId: z.string(),
 				limit: z.number().min(1).max(100).default(10),
 				offset: z.number().min(0).default(0),
 				status: z
@@ -282,7 +279,9 @@ export const bookingsRouter = createTRPCRouter({
 			const db = createDrizzle(ctx.db);
 
 			try {
-				const whereConditions = [eq(bookings.userId, input.userId)];
+				// Use authenticated user's ID from session
+				const userId = ctx.user.id;
+				const whereConditions = [eq(bookings.userId, userId)];
 
 				if (input.status) {
 					whereConditions.push(eq(bookings.status, input.status));
@@ -318,17 +317,14 @@ export const bookingsRouter = createTRPCRouter({
 	/**
 	 * Update booking details (before payment confirmation)
 	 */
-	updateBooking: publicProcedure
-		.input(
-			updateBookingSchema.extend({
-				userId: z.string(), // Temporarily require userId
-			}),
-		)
+	updateBooking: protectedProcedure
+		.input(updateBookingSchema)
 		.mutation(async ({ ctx, input }) => {
 			const db = createDrizzle(ctx.db);
 
 			try {
-				const { userId, ...updateData } = input;
+				// Use authenticated user's ID from session
+				const userId = ctx.user.id;
 
 				// Verify booking belongs to user and is still pending
 				const bookingResult = await db
@@ -336,7 +332,7 @@ export const bookingsRouter = createTRPCRouter({
 					.from(bookings)
 					.where(
 						and(
-							eq(bookings.id, updateData.bookingId),
+							eq(bookings.id, input.bookingId),
 							eq(bookings.userId, userId),
 							eq(bookings.status, 'pending'),
 						),
@@ -349,22 +345,22 @@ export const bookingsRouter = createTRPCRouter({
 					});
 				}
 
-				const updateFields: Record<string, any> = {
+				const updateFields: Partial<typeof bookings.$inferInsert> = {
 					updatedAt: new Date(),
 				};
 
-				if (updateData.specialRequests !== undefined) {
-					updateFields.specialRequests = updateData.specialRequests;
+				if (input.specialRequests !== undefined) {
+					updateFields.specialRequests = input.specialRequests;
 				}
 
-				if (updateData.status) {
-					updateFields.status = updateData.status;
+				if (input.status) {
+					updateFields.status = input.status;
 				}
 
 				await db
 					.update(bookings)
 					.set(updateFields)
-					.where(eq(bookings.id, updateData.bookingId));
+					.where(eq(bookings.id, input.bookingId));
 
 				return { success: true };
 			} catch (error) {
@@ -380,27 +376,21 @@ export const bookingsRouter = createTRPCRouter({
 	/**
 	 * Cancel booking
 	 */
-	cancelBooking: publicProcedure
-		.input(
-			cancelBookingSchema.extend({
-				userId: z.string(), // Temporarily require userId
-			}),
-		)
+	cancelBooking: protectedProcedure
+		.input(cancelBookingSchema)
 		.mutation(async ({ ctx, input }) => {
 			const db = createDrizzle(ctx.db);
 
 			try {
-				const { userId, ...cancelData } = input;
+				// Use authenticated user's ID from session
+				const userId = ctx.user.id;
 
 				// Verify booking belongs to user
 				const bookingResult = await db
 					.select()
 					.from(bookings)
 					.where(
-						and(
-							eq(bookings.id, cancelData.bookingId),
-							eq(bookings.userId, userId),
-						),
+						and(eq(bookings.id, input.bookingId), eq(bookings.userId, userId)),
 					);
 
 				if (!bookingResult[0]) {
@@ -429,11 +419,7 @@ export const bookingsRouter = createTRPCRouter({
 						cancelledAt: new Date(),
 						updatedAt: new Date(),
 					})
-					.where(eq(bookings.id, cancelData.bookingId));
-
-				// TODO: Handle Stripe refund if payment was completed
-				// TODO: Send cancellation email
-				// TODO: Free up room availability dates
+					.where(eq(bookings.id, input.bookingId));
 
 				return { success: true };
 			} catch (error) {
@@ -449,7 +435,7 @@ export const bookingsRouter = createTRPCRouter({
 	/**
 	 * Admin: Get all bookings with pagination and filtering
 	 */
-	adminListBookings: publicProcedure
+	adminListBookings: adminProcedure
 		.input(
 			z.object({
 				limit: z.number().min(1).max(100).default(10),
@@ -521,7 +507,7 @@ export const bookingsRouter = createTRPCRouter({
 	/**
 	 * Admin: Get booking statistics
 	 */
-	adminGetStats: publicProcedure.query(async ({ ctx }) => {
+	adminGetStats: adminProcedure.query(async ({ ctx }) => {
 		const db = createDrizzle(ctx.db);
 
 		try {
@@ -529,17 +515,15 @@ export const bookingsRouter = createTRPCRouter({
 
 			const stats = {
 				total: allBookings.length,
-				pending: allBookings.filter((b: any) => b.status === 'pending').length,
-				confirmed: allBookings.filter((b: any) => b.status === 'confirmed')
-					.length,
-				cancelled: allBookings.filter((b: any) => b.status === 'cancelled')
-					.length,
+				pending: allBookings.filter((b) => b.status === 'pending').length,
+				confirmed: allBookings.filter((b) => b.status === 'confirmed').length,
+				cancelled: allBookings.filter((b) => b.status === 'cancelled').length,
 				totalRevenue: allBookings
-					.filter((b: any) => b.paymentStatus === 'paid')
-					.reduce((sum: number, b: any) => sum + b.totalAmount, 0),
+					.filter((b) => b.paymentStatus === 'paid')
+					.reduce((sum, b) => sum + b.totalAmount, 0),
 				pendingPayments: allBookings
-					.filter((b: any) => b.paymentStatus === 'pending')
-					.reduce((sum: number, b: any) => sum + b.totalAmount, 0),
+					.filter((b) => b.paymentStatus === 'pending')
+					.reduce((sum, b) => sum + b.totalAmount, 0),
 			};
 
 			return stats;
@@ -555,11 +539,10 @@ export const bookingsRouter = createTRPCRouter({
 	/**
 	 * Resend booking confirmation email
 	 */
-	resendConfirmationEmail: publicProcedure
+	resendConfirmationEmail: protectedProcedure
 		.input(
 			z.object({
 				bookingId: z.string(),
-				userId: z.string().optional(), // Optional for admin access
 			}),
 		)
 		.mutation(async ({ ctx, input }) => {
@@ -572,10 +555,15 @@ export const bookingsRouter = createTRPCRouter({
 			});
 
 			try {
+				// Use authenticated user's ID from session
+				const userId = ctx.user.id;
+				const isAdmin = ctx.user.role === 'admin';
+
 				// Verify the booking exists and user has access
 				const whereConditions = [eq(bookings.id, input.bookingId)];
-				if (input.userId) {
-					whereConditions.push(eq(bookings.userId, input.userId));
+				// Regular users can only resend their own booking emails, admins can resend any
+				if (!isAdmin) {
+					whereConditions.push(eq(bookings.userId, userId));
 				}
 
 				const bookingResult = await db
@@ -652,7 +640,7 @@ export const bookingsRouter = createTRPCRouter({
 	/**
 	 * Admin: Update internal notes for a booking
 	 */
-	adminUpdateInternalNotes: publicProcedure
+	adminUpdateInternalNotes: adminProcedure
 		.input(
 			z.object({
 				bookingId: z.string(),

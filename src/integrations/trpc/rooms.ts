@@ -22,7 +22,7 @@ import {
 	updatePricingRuleSchema,
 	updateRoomSchema,
 } from '@/lib/room-validation';
-import { createTRPCRouter, publicProcedure } from './init';
+import { adminProcedure, createTRPCRouter, publicProcedure } from './init';
 
 export const roomsRouter = createTRPCRouter({
 	// Simple test procedure without input
@@ -88,8 +88,8 @@ export const roomsRouter = createTRPCRouter({
 		return result[0];
 	}),
 
-	// Create new room (admin only - we'll add auth middleware later)
-	create: publicProcedure
+	// Create new room (admin only)
+	create: adminProcedure
 		.input(createRoomSchema)
 		.mutation(async ({ ctx, input }) => {
 			const db = createDrizzle(ctx.db);
@@ -119,7 +119,7 @@ export const roomsRouter = createTRPCRouter({
 		}),
 
 	// Update existing room (admin only)
-	update: publicProcedure
+	update: adminProcedure
 		.input(updateRoomSchema)
 		.mutation(async ({ ctx, input }) => {
 			const db = createDrizzle(ctx.db);
@@ -142,8 +142,8 @@ export const roomsRouter = createTRPCRouter({
 			return result[0];
 		}),
 
-	// Archive room (replaces delete - preserves data for historical bookings)
-	archive: publicProcedure
+	// Archive room (admin only - replaces delete - preserves data for historical bookings)
+	archive: adminProcedure
 		.input(getRoomSchema)
 		.mutation(async ({ ctx, input }) => {
 			const db = createDrizzle(ctx.db);
@@ -165,8 +165,8 @@ export const roomsRouter = createTRPCRouter({
 			return { success: true, id: input.id, status: 'archived' };
 		}),
 
-	// Activate room
-	activate: publicProcedure
+	// Activate room (admin only)
+	activate: adminProcedure
 		.input(getRoomSchema)
 		.mutation(async ({ ctx, input }) => {
 			const db = createDrizzle(ctx.db);
@@ -188,8 +188,8 @@ export const roomsRouter = createTRPCRouter({
 			return { success: true, id: input.id, status: 'active' };
 		}),
 
-	// Deactivate room (temporarily unavailable)
-	deactivate: publicProcedure
+	// Deactivate room (admin only - temporarily unavailable)
+	deactivate: adminProcedure
 		.input(getRoomSchema)
 		.mutation(async ({ ctx, input }) => {
 			const db = createDrizzle(ctx.db);
@@ -215,8 +215,6 @@ export const roomsRouter = createTRPCRouter({
 	checkAvailability: publicProcedure
 		.input(checkAvailabilitySchema)
 		.query(async ({ input }) => {
-			// TODO: Implement availability checking logic
-			// This will check against bookings and external calendars
 			return {
 				roomId: input.roomId,
 				available: true, // Placeholder
@@ -243,7 +241,6 @@ export const roomsRouter = createTRPCRouter({
 				.from(room)
 				.where(and(...conditions));
 
-			// TODO: Check availability for each room
 			const availability = roomsToCheck.map((roomData) => ({
 				roomId: roomData.id,
 				roomSlug: roomData.slug,
@@ -261,8 +258,8 @@ export const roomsRouter = createTRPCRouter({
 			};
 		}),
 
-	// Sync external calendar
-	syncCalendar: publicProcedure
+	// Sync external calendar (admin only)
+	syncCalendar: adminProcedure
 		.input(syncCalendarSchema)
 		.mutation(async ({ ctx, input }) => {
 			const db = createDrizzle(ctx.db);
@@ -309,8 +306,8 @@ export const roomsRouter = createTRPCRouter({
 			};
 		}),
 
-	// Update room iCal URLs
-	updateIcalUrls: publicProcedure
+	// Update room iCal URLs (admin only)
+	updateIcalUrls: adminProcedure
 		.input(
 			z.object({
 				roomId: z.string(),
@@ -408,8 +405,8 @@ export const roomsRouter = createTRPCRouter({
 			};
 		}),
 
-	// Test iCal URL (validate it works)
-	testIcalUrl: publicProcedure
+	// Test iCal URL (admin only - validate it works)
+	testIcalUrl: adminProcedure
 		.input(
 			z.object({
 				url: z.string().url(),
@@ -458,8 +455,8 @@ export const roomsRouter = createTRPCRouter({
 		}),
 
 	// Pricing Rules Management
-	// Get pricing rules for a room
-	getPricingRules: publicProcedure
+	// Get pricing rules for a room (admin only)
+	getPricingRules: adminProcedure
 		.input(getPricingRulesSchema)
 		.query(async ({ ctx, input }) => {
 			const db = createDrizzle(ctx.db);
@@ -492,8 +489,8 @@ export const roomsRouter = createTRPCRouter({
 			return result;
 		}),
 
-	// Create a new pricing rule
-	createPricingRule: publicProcedure
+	// Create a new pricing rule (admin only)
+	createPricingRule: adminProcedure
 		.input(createPricingRuleSchema)
 		.mutation(async ({ ctx, input }) => {
 			const db = createDrizzle(ctx.db);
@@ -555,8 +552,8 @@ export const roomsRouter = createTRPCRouter({
 			return newRule;
 		}),
 
-	// Update existing pricing rule
-	updatePricingRule: publicProcedure
+	// Update an existing pricing rule (admin only)
+	updatePricingRule: adminProcedure
 		.input(updatePricingRuleSchema)
 		.mutation(async ({ ctx, input }) => {
 			const db = createDrizzle(ctx.db);
@@ -639,8 +636,8 @@ export const roomsRouter = createTRPCRouter({
 			return result[0];
 		}),
 
-	// Delete pricing rule
-	deletePricingRule: publicProcedure
+	// Delete a pricing rule (admin only)
+	deletePricingRule: adminProcedure
 		.input(deletePricingRuleSchema)
 		.mutation(async ({ ctx, input }) => {
 			const db = createDrizzle(ctx.db);
@@ -780,8 +777,8 @@ export const roomsRouter = createTRPCRouter({
 			};
 		}),
 
-	// Room blocking procedures
-	getBlockedPeriods: publicProcedure
+	// Room blocking procedures (admin only)
+	getBlockedPeriods: adminProcedure
 		.input(getBlockedPeriodsSchema)
 		.query(async ({ ctx, input }) => {
 			const db = createDrizzle(ctx.db);
@@ -816,7 +813,7 @@ export const roomsRouter = createTRPCRouter({
 			return result;
 		}),
 
-	getBlockedPeriod: publicProcedure
+	getBlockedPeriod: adminProcedure
 		.input(getBlockedPeriodSchema)
 		.query(async ({ ctx, input }) => {
 			const db = createDrizzle(ctx.db);
@@ -834,7 +831,7 @@ export const roomsRouter = createTRPCRouter({
 			return result[0];
 		}),
 
-	createBlockedPeriod: publicProcedure
+	createBlockedPeriod: adminProcedure
 		.input(createBlockedPeriodSchema)
 		.mutation(async ({ ctx, input }) => {
 			const db = createDrizzle(ctx.db);
@@ -884,7 +881,7 @@ export const roomsRouter = createTRPCRouter({
 			return newPeriod;
 		}),
 
-	updateBlockedPeriod: publicProcedure
+	updateBlockedPeriod: adminProcedure
 		.input(updateBlockedPeriodSchema)
 		.mutation(async ({ ctx, input }) => {
 			const db = createDrizzle(ctx.db);
@@ -950,7 +947,7 @@ export const roomsRouter = createTRPCRouter({
 			return updated[0];
 		}),
 
-	deleteBlockedPeriod: publicProcedure
+	deleteBlockedPeriod: adminProcedure
 		.input(deleteBlockedPeriodSchema)
 		.mutation(async ({ ctx, input }) => {
 			const db = createDrizzle(ctx.db);

@@ -34,19 +34,30 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
 	console.log('Stripe webhook received');
 
 	try {
-		// Get the raw body and signature
+		// Security: Verify Content-Type
+		const contentType = request.headers.get('content-type');
+		if (!contentType?.includes('application/json')) {
+			console.error('Invalid content type:', contentType);
+			return new Response('Invalid content type', { status: 400 });
+		}
+
+		// Security: Verify webhook signature (PRIMARY SECURITY MEASURE)
+		// This cryptographically verifies the request is from Stripe
 		const body = await request.text();
 		const signature = request.headers.get('stripe-signature');
 
 		if (!signature) {
-			console.error('Missing Stripe signature');
+			console.error(
+				'Missing Stripe signature - possible unauthorized access attempt',
+			);
 			return new Response('Missing signature', { status: 400 });
 		}
 
 		// Initialize Stripe for webhook signature verification
 		const stripe = new Stripe(env.STRIPE_SECRET_KEY);
 
-		// Verify the webhook signature
+		// Verify the webhook signature (CRITICAL: Prevents spoofing and replay attacks)
+		// Stripe's signature includes timestamp to prevent replay attacks
 		let event: Stripe.Event;
 		try {
 			event = await stripe.webhooks.constructEventAsync(
@@ -55,7 +66,11 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
 				env.STRIPE_TRPC_WEBHOOK_SECRET,
 			);
 		} catch (err) {
-			console.error('Webhook signature verification failed:', err);
+			// Log signature verification failures - could indicate attack attempts
+			console.error(
+				'Webhook signature verification failed - possible spoofing attempt:',
+				err,
+			);
 			return new Response(
 				`Webhook signature verification failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
 				{ status: 400 },
@@ -102,11 +117,9 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
 
 		return new Response('Webhook handled successfully', { status: 200 });
 	} catch (error) {
+		// Log detailed error for debugging, but don't expose details to caller
 		console.error('Webhook processing error:', error);
-		return new Response(
-			`Webhook error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-			{ status: 500 },
-		);
+		return new Response('Webhook processing error', { status: 500 });
 	}
 }
 

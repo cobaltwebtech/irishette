@@ -65,9 +65,9 @@ export async function requireAdmin(location: {
 
 	if (!isAdmin) {
 		throw redirect({
-			to: '/',
+			to: '/auth/login',
 			search: {
-				error: 'unauthorized',
+				redirect: location.href || location.pathname,
 			},
 		});
 	}

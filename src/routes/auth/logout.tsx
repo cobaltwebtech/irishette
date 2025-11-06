@@ -35,14 +35,14 @@ function LogoutPage() {
 				// Redirect to home page after a brief delay
 				setTimeout(() => {
 					router.navigate({ to: '/' });
-				}, 4000);
+				}, 5000);
 			} catch (error) {
 				console.error('Sign out error:', error);
 				// Even if there's an error, consider it successful for UX
 				setStatus('success');
 				setTimeout(() => {
 					router.navigate({ to: '/' });
-				}, 4000);
+				}, 5000);
 			}
 		};
 

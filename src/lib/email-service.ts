@@ -58,7 +58,7 @@ export async function sendBookingConfirmationEmail(
 
 		// Send email using React component
 		const { data, error } = await resend.emails.send({
-			from: 'Irishette <bookings@contact.cobaltweb.tech>',
+			from: 'Irishette Dev <bookings@contact.cobaltweb.tech>',
 			to: [emailData.guestEmail],
 			subject: `Booking Confirmed - ${emailData.confirmationId} | Irishette Bed & Breakfast`,
 			react: React.createElement(BookingConfirmationEmail, {

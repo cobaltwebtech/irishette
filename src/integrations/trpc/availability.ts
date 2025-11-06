@@ -9,7 +9,7 @@ import {
 	roomBlockedPeriods,
 } from '@/db/schema-export';
 import { iCalService } from '@/lib/ical-service';
-import { createTRPCRouter, publicProcedure } from './init';
+import { adminProcedure, createTRPCRouter, publicProcedure } from './init';
 
 const checkAvailabilitySchema = z.object({
 	roomId: z.string(),
@@ -199,8 +199,8 @@ export const availabilityRouter = createTRPCRouter({
 			};
 		}),
 
-	// Sync external calendar for a specific room
-	syncCalendar: publicProcedure
+	// Sync external calendar for a specific room (admin only)
+	syncCalendar: adminProcedure
 		.input(syncCalendarSchema)
 		.mutation(async ({ ctx, input }) => {
 			const icalService = new iCalService(ctx.db);
@@ -223,8 +223,8 @@ export const availabilityRouter = createTRPCRouter({
 			};
 		}),
 
-	// Sync all external calendars
-	syncAllCalendars: publicProcedure
+	// Sync all external calendars (admin only)
+	syncAllCalendars: adminProcedure
 		.input(syncAllCalendarsSchema)
 		.mutation(async ({ ctx, input }) => {
 			const db = createDrizzle(ctx.db);
@@ -286,8 +286,8 @@ export const availabilityRouter = createTRPCRouter({
 			};
 		}),
 
-	// Get availability calendar for a room (for admin dashboard)
-	getCalendar: publicProcedure
+	// Get availability calendar for a room (admin only - for admin dashboard)
+	getCalendar: adminProcedure
 		.input(
 			z.object({
 				roomId: z.string(),
@@ -390,8 +390,8 @@ export const availabilityRouter = createTRPCRouter({
 			};
 		}),
 
-	// Get sync logs for monitoring
-	getSyncLogs: publicProcedure
+	// Get sync logs for monitoring (admin only)
+	getSyncLogs: adminProcedure
 		.input(
 			z.object({
 				roomId: z.string().optional(),

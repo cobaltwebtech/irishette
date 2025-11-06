@@ -19,6 +19,7 @@ import type {
 	UpdateBlockedPeriod,
 	UpdatePricingRule,
 } from '@/lib/room-validation';
+import { requireAdmin } from '@/utils/auth-check';
 
 export const Route = createFileRoute('/admin/property-management/$roomId')({
 	head: () => ({
@@ -28,6 +29,13 @@ export const Route = createFileRoute('/admin/property-management/$roomId')({
 			},
 		],
 	}),
+	beforeLoad: async ({ location }) => {
+		// Check user is authenticated and has admin role
+		const session = await requireAdmin(location);
+
+		// Return session data to be available in component during SSR
+		return { session };
+	},
 	component: EditRoom,
 });
 

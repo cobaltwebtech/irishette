@@ -726,7 +726,7 @@ export class PaymentService {
 			booking.checkOutDate,
 		);
 
-		// Note: Confirmation email is sent by the webhook handler after payment confirmation
+		// Note: Confirmation email is sent by the webhook handler after payment confirmation. See the Stripe webhook endpoint at /api/stripe/$.ts
 
 		console.log('Post-booking workflows completed for:', bookingId);
 	}

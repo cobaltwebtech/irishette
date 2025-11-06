@@ -1,3 +1,4 @@
+/* biome-ignore-all lint/complexity/noImportantStyles: !important required to be highest specificty for accessibility */
 @layer utilities {
 	/* default duration (can be overridden by setting --kb-duration on the Swiper container) */
 	:root {

@@ -117,7 +117,6 @@ function AccountPage() {
 	} = useQuery(
 		trpc.bookings.getMyBookings.queryOptions(
 			{
-				userId: session.user.id,
 				limit: 10,
 				offset: 0,
 			},

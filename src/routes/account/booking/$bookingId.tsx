@@ -30,7 +30,6 @@ export const Route = createFileRoute('/account/booking/$bookingId')({
 function BookingDetailPage() {
 	const params = Route.useParams() as { bookingId: string };
 	const bookingId = params.bookingId;
-	const { session } = Route.useRouteContext();
 	const [isResendingEmail, setIsResendingEmail] = useState(false);
 
 	// Use tRPC query to fetch booking details
@@ -38,7 +37,6 @@ function BookingDetailPage() {
 		trpc.bookings.getBooking.queryOptions(
 			{
 				bookingId: bookingId,
-				userId: session.user.id,
 			},
 			{
 				enabled: !!bookingId,
@@ -65,7 +63,6 @@ function BookingDetailPage() {
 			// Use tRPC endpoint to resend confirmation email
 			const result = await trpcClient.bookings.resendConfirmationEmail.mutate({
 				bookingId: booking.booking.id,
-				userId: session.user.id, // Pass userId for user access
 			});
 
 			toast.success('Email sent successfully!', {

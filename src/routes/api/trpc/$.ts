@@ -3,6 +3,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import type { TRPCContext } from '@/integrations/trpc/init';
 import { trpcRouter } from '@/integrations/trpc/router';
+import { auth } from '@/lib/auth';
 
 // Server route for tRPC API
 export const Route = createFileRoute('/api/trpc/$')({
@@ -19,7 +20,14 @@ export const Route = createFileRoute('/api/trpc/$')({
 });
 
 async function handleTRPCRequest(request: Request): Promise<Response> {
-	// Create tRPC context
+	// Fetch session from request headers (server-side)
+	// This runs on every tRPC call and leverages Better Auth's built-in caching
+	const authInstance = await auth();
+	const session = await authInstance.api.getSession({
+		headers: request.headers,
+	});
+
+	// Create tRPC context with session
 	const context: TRPCContext = {
 		db: env.DB,
 		env: {
@@ -28,6 +36,8 @@ async function handleTRPCRequest(request: Request): Promise<Response> {
 			BETTER_AUTH_URL: env.BETTER_AUTH_URL,
 			RESEND_API_KEY: env.RESEND_API_KEY,
 		},
+		session,
+		headers: request.headers,
 	};
 
 	return fetchRequestHandler({

@@ -8,7 +8,9 @@ export const Route = createFileRoute('/api/ical/$')({
 		handlers: {
 			GET: async ({ request }) => {
 				try {
-					// Extract roomId from URL pathname
+					// Security: Extract and validate roomId from URL pathname
+					// Note: This endpoint is intentionally public for third-party calendar apps
+					// (AirBnB, Expedia, etc.)
 					const url = new URL(request.url);
 
 					// Type guard for pathname
@@ -51,8 +53,23 @@ export const Route = createFileRoute('/api/ical/$')({
 						});
 					}
 
-					// Get Cloudflare bindings for database access
-					// const bindings = getBindings();
+					// Security: Validate room ID format (prevent injection attacks)
+					// Room IDs should be alphanumeric with hyphens and underscores
+					if (!/^[a-zA-Z0-9_-]+$/.test(roomId)) {
+						console.warn('Invalid room ID format attempted:', roomId);
+						return new Response('Invalid room ID format', {
+							status: 400,
+							headers: { 'Content-Type': 'text/plain' },
+						});
+					}
+
+					// Security: Prevent excessive length
+					if (roomId.length > 100) {
+						return new Response('Room ID too long', {
+							status: 400,
+							headers: { 'Content-Type': 'text/plain' },
+						});
+					}
 
 					// Create iCal service instance
 					const icalService = new iCalService(env.DB);

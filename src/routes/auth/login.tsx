@@ -32,7 +32,7 @@ export const Route = createFileRoute('/auth/login')({
 	},
 	validateSearch: (search: Record<string, unknown>) => {
 		return {
-			redirect: (search.redirect as string) || '/account',
+			redirect: (search.redirect as string) || undefined,
 		};
 	},
 	component: LoginPage,
@@ -121,7 +121,7 @@ function LoginPage() {
 			if (response && !response.error) {
 				toast.success('Login successful!');
 				// Use router.history.push to preserve the full URL
-				router.history.push(search.redirect);
+				router.history.push(search.redirect || '/account');
 				return;
 			}
 

@@ -3,13 +3,13 @@ import { count, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { createDrizzle } from '@/db/drizzle-init';
 import { bookings, user } from '@/db/schema-export';
-import { createTRPCRouter, publicProcedure } from './init';
+import { adminProcedure, createTRPCRouter, protectedProcedure } from './init';
 
 export const usersRouter = createTRPCRouter({
 	/**
 	 * Admin: Get all users with role 'user' (customers/guests) with booking count
 	 */
-	adminListGuests: publicProcedure
+	adminListGuests: adminProcedure
 		.input(
 			z.object({
 				limit: z.number().min(1).max(100).default(50),
@@ -66,7 +66,7 @@ export const usersRouter = createTRPCRouter({
 	/**
 	 * Admin: Get detailed guest information including all their bookings
 	 */
-	adminGetGuestDetails: publicProcedure
+	adminGetGuestDetails: adminProcedure
 		.input(
 			z.object({
 				userId: z.string(),
@@ -115,10 +115,9 @@ export const usersRouter = createTRPCRouter({
 	/**
 	 * Update user's phone number (for logged-in users)
 	 */
-	updatePhoneNumber: publicProcedure
+	updatePhoneNumber: protectedProcedure
 		.input(
 			z.object({
-				userId: z.string(),
 				phoneNumber: z
 					.string()
 					.min(10, 'Phone number must be at least 10 digits'),
@@ -128,6 +127,9 @@ export const usersRouter = createTRPCRouter({
 			const db = createDrizzle(ctx.db);
 
 			try {
+				// Use authenticated user's ID from session
+				const userId = ctx.user.id;
+
 				// Update the user's phone number
 				await db
 					.update(user)
@@ -135,7 +137,7 @@ export const usersRouter = createTRPCRouter({
 						phoneNumber: input.phoneNumber,
 						updatedAt: new Date(),
 					})
-					.where(eq(user.id, input.userId));
+					.where(eq(user.id, userId));
 
 				return {
 					success: true,
@@ -156,12 +158,11 @@ export const usersRouter = createTRPCRouter({
 	/**
 	 * Update user profile (name, email, phone number)
 	 */
-	updateProfile: publicProcedure
+	updateProfile: protectedProcedure
 		.input(
 			z.object({
-				userId: z.string(),
 				name: z.string().min(1, 'Name is required').optional(),
-				email: z.string().email('Invalid email address').optional(),
+				email: z.email('Invalid email address').optional(),
 				phoneNumber: z
 					.string()
 					.min(10, 'Phone number must be at least 10 digits')
@@ -172,6 +173,9 @@ export const usersRouter = createTRPCRouter({
 			const db = createDrizzle(ctx.db);
 
 			try {
+				// Use authenticated user's ID from session
+				const userId = ctx.user.id;
+
 				// Build the update object dynamically
 				const updateData: {
 					name?: string;
@@ -193,7 +197,7 @@ export const usersRouter = createTRPCRouter({
 				}
 
 				// Update the user's profile
-				await db.update(user).set(updateData).where(eq(user.id, input.userId));
+				await db.update(user).set(updateData).where(eq(user.id, userId));
 
 				return {
 					success: true,

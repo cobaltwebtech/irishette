@@ -119,7 +119,6 @@ export function BookingDetailsStep() {
 		) {
 			try {
 				await trpcClient.users.updatePhoneNumber.mutate({
-					userId: session.user.id,
 					phoneNumber: guestPhone.trim(),
 				});
 				console.log('User phone number updated via tRPC:', guestPhone.trim());
@@ -264,7 +263,6 @@ export function BookingDetailsStep() {
 				serviceFee: booking.pricing.fees || 0,
 				taxAmount: booking.pricing.taxes || 0,
 				totalAmount: booking.pricing.totalAmount,
-				userId: session.user.id,
 			};
 
 			// Step 1: Create booking via tRPC
@@ -284,7 +282,6 @@ export function BookingDetailsStep() {
 			console.log('Creating checkout session...');
 			const checkoutData = {
 				bookingId: bookingId,
-				userId: session.user.id,
 				successUrl: `${window.location.origin}/booking?step=confirmation`,
 				cancelUrl: `${window.location.origin}/booking?step=details`,
 			};

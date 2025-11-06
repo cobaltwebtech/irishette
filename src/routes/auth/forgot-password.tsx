@@ -30,7 +30,7 @@ export const Route = createFileRoute('/auth/forgot-password')({
 	},
 	validateSearch: (search: Record<string, unknown>) => {
 		return {
-			redirect: (search.redirect as string) || '/account',
+			redirect: (search.redirect as string) || undefined,
 		};
 	},
 	component: ForgotPasswordPage,

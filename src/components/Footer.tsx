@@ -5,7 +5,7 @@ export default function Footer() {
 	return (
 		<footer className="bg-muted border-t border-border mt-auto">
 			<div className="container mx-auto px-4 py-8">
-				<div className="grid md:grid-cols-[50%_auto_auto] gap-8">
+				<div className="grid md:grid-cols-[2fr_1fr_1fr] gap-8">
 					{/* Logo & Description */}
 					<div className="space-y-4">
 						<Link

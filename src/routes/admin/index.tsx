@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { trpc } from '@/integrations/tanstack-query/root-provider';
 import { useSession } from '@/lib/auth-client';
+import { requireAdmin } from '@/utils/auth-check';
 
 export const Route = createFileRoute('/admin/')({
 	head: () => ({
@@ -16,6 +17,13 @@ export const Route = createFileRoute('/admin/')({
 			},
 		],
 	}),
+	beforeLoad: async ({ location }) => {
+		// Check user is authenticated and has admin role
+		const session = await requireAdmin(location);
+
+		// Return session data to be available in component during SSR
+		return { session };
+	},
 	component: AdminDashboard,
 });
 
