@@ -1,6 +1,6 @@
 import { Icon } from '@iconify/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { AdminLayout } from '@/components/admin/AdminLayout';
@@ -36,6 +36,22 @@ export const Route = createFileRoute('/admin/property-management/$roomId')({
 		// Return session data to be available in component during SSR
 		return { session };
 	},
+	loader: async ({ params }) => {
+		try {
+			// Pre-fetch all data in parallel before component renders
+			const [room, pricingRules, blockedPeriods] = await Promise.all([
+				trpcClient.rooms.get.query({ id: params.roomId }),
+				trpcClient.rooms.getPricingRules.query({ roomId: params.roomId }),
+				trpcClient.rooms.getBlockedPeriods.query({ roomId: params.roomId }),
+			]);
+
+			return { room, pricingRules, blockedPeriods };
+		} catch (error) {
+			// Let router handle the error via error boundary
+			console.error('Failed to load room data:', error);
+			throw error;
+		}
+	},
 	component: EditRoom,
 });
 
@@ -59,29 +75,32 @@ function EditRoom() {
 	const { data: session } = useSession();
 	const params = Route.useParams() as { roomId: string };
 	const roomId = params.roomId;
-	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 
-	// Use tRPC query to fetch room data
-	const roomQuery = useQuery(
-		trpc.rooms.get.queryOptions({ id: roomId }, { enabled: !!roomId }),
-	);
+	// Get pre-loaded data from loader
+	const loaderData = Route.useLoaderData();
+
+	// Use queries with initialData from loader for live updates
+	const roomQuery = useQuery({
+		...trpc.rooms.get.queryOptions({ id: roomId }),
+		initialData: loaderData.room,
+		retry: 1, // Only retry once on refetch failures
+	});
+
+	const pricingRulesQuery = useQuery({
+		...trpc.rooms.getPricingRules.queryOptions({ roomId }),
+		initialData: loaderData.pricingRules,
+		retry: 1,
+	});
+
+	const blockedPeriodsQuery = useQuery({
+		...trpc.rooms.getBlockedPeriods.queryOptions({ roomId }),
+		initialData: loaderData.blockedPeriods,
+		retry: 1,
+	});
 
 	const room = roomQuery.data;
 	const loading = roomQuery.isLoading;
-
-	// Use tRPC query to fetch pricing rules - remove enabled dependency on room
-	const pricingRulesQuery = useQuery(
-		trpc.rooms.getPricingRules.queryOptions({ roomId }, { enabled: !!roomId }),
-	);
-
-	// Use tRPC query to fetch blocked periods - remove enabled dependency on room
-	const blockedPeriodsQuery = useQuery(
-		trpc.rooms.getBlockedPeriods.queryOptions(
-			{ roomId },
-			{ enabled: !!roomId },
-		),
-	);
 
 	// Transform data directly from queries - no need for state duplication
 	const pricingRules =
@@ -126,13 +145,16 @@ function EditRoom() {
 		}
 	}, [room]);
 
-	// Handle room query error by redirecting
+	// Show error toast on refetch failures (don't redirect - user might be editing)
 	useEffect(() => {
 		if (roomQuery.error) {
-			console.error('Failed to load room:', roomQuery.error);
-			navigate({ to: '/admin/property-management' });
+			console.error('Failed to refresh room data:', roomQuery.error);
+			toast.error('Failed to refresh room data', {
+				description: 'Using cached data. Changes can still be saved.',
+				duration: 5000,
+			});
 		}
-	}, [roomQuery.error, navigate]);
+	}, [roomQuery.error]);
 
 	// Convert room update to mutation
 	const updateRoomMutation = useMutation({
@@ -303,7 +325,7 @@ function EditRoom() {
 	};
 
 	if (!session || loading || !room) {
-		return null; // AdminLayout will handle auth and redirect
+		return null;
 	}
 
 	return (

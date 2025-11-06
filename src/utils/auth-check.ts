@@ -32,6 +32,7 @@ export async function requireAuth(location: {
 			to: '/auth/login',
 			search: {
 				redirect: location.href || location.pathname,
+				error: undefined,
 			},
 		});
 	}
@@ -68,6 +69,7 @@ export async function requireAdmin(location: {
 			to: '/auth/login',
 			search: {
 				redirect: location.href || location.pathname,
+				error: undefined,
 			},
 		});
 	}

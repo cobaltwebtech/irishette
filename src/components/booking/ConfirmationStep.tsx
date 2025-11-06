@@ -1,44 +1,30 @@
 import { Icon } from '@iconify/react';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { trpcClient } from '@/integrations/tanstack-query/root-provider';
+import { trpc } from '@/integrations/tanstack-query/root-provider';
 import { useBookingStore } from '@/stores';
 import { parseISODateString } from '@/utils/booking-utils';
 
 export function ConfirmationStep() {
 	const booking = useBookingStore();
 	const summary = booking.summary;
-	const [confirmationId, setConfirmationId] = useState<string | null>(null);
-	const [isLoading, setIsLoading] = useState(true);
 
-	// Fetch booking details to get confirmation ID
-	useEffect(() => {
-		const fetchBookingDetails = async () => {
-			if (!booking.bookingId) {
-				setIsLoading(false);
-				return;
-			}
+	// Fetch booking details to get confirmation ID using useQuery
+	const { data: bookingData, isLoading } = useQuery(
+		trpc.bookings.getBooking.queryOptions(
+			{ bookingId: booking.bookingId || '' },
+			{
+				enabled: !!booking.bookingId,
+				staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+				refetchOnWindowFocus: false,
+			},
+		),
+	);
 
-			try {
-				const result = await trpcClient.bookings.getBooking.query({
-					bookingId: booking.bookingId,
-				});
-
-				if (result?.booking?.confirmationId) {
-					setConfirmationId(result.booking.confirmationId);
-				}
-			} catch (error) {
-				console.error('Failed to fetch booking details:', error);
-			} finally {
-				setIsLoading(false);
-			}
-		};
-
-		fetchBookingDetails();
-	}, [booking.bookingId]);
+	const confirmationId = bookingData?.booking?.confirmationId;
 
 	return (
 		<Card>

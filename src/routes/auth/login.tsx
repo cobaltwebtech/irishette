@@ -1,6 +1,6 @@
 import { Icon } from '@iconify/react';
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useEffectEvent, useId, useState } from 'react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,6 +33,7 @@ export const Route = createFileRoute('/auth/login')({
 	validateSearch: (search: Record<string, unknown>) => {
 		return {
 			redirect: (search.redirect as string) || undefined,
+			error: (search.error as string) || undefined,
 		};
 	},
 	component: LoginPage,
@@ -51,20 +52,64 @@ function LoginPage() {
 	const router = useRouter();
 	const search = Route.useSearch();
 
-	// Check for error query parameter on load
-	useEffect(() => {
-		const urlParams = new URLSearchParams(window.location.search);
-		const errorParam = urlParams.get('error');
-		if (errorParam) {
-			const decodedError = decodeURIComponent(errorParam);
-			setError(decodedError);
-			toast.error(decodedError);
+	// Error message mapping for Better Auth errors
+	const getErrorMessage = (errorCode: string): string => {
+		const errorMessages: Record<string, string> = {
+			INVALID_TOKEN:
+				'This magic link has expired or is invalid. Please request a new one.',
+			EXPIRED_TOKEN: 'This magic link has expired. Please request a new one.',
+		};
+		return errorMessages[errorCode] || `Authentication error: ${errorCode}`;
+	};
 
-			// Clean up the URL
-			const newUrl = window.location.pathname;
-			window.history.replaceState({}, document.title, newUrl);
+	// Stable callback for showing error toast (doesn't trigger effect re-runs)
+	const showErrorToast = useEffectEvent((errorCode: string) => {
+		const message = getErrorMessage(errorCode);
+		setError(message);
+		toast.error(message, {
+			duration: 6000,
+			description: 'Please try logging in again.',
+		});
+	});
+
+	// Check for error in query parameters (top-level or nested in redirect)
+	useEffect(() => {
+		// Check top-level error param first
+		if (search.error) {
+			showErrorToast(search.error);
+			return;
 		}
-	}, []);
+
+		// Check if error is nested in the redirect URL
+		// Example: redirect=/account?error=INVALID_TOKEN
+		if (search.redirect?.includes('?error=')) {
+			try {
+				// Parse the redirect URL to extract error param
+				const redirectUrl = new URL(search.redirect, window.location.origin);
+				const errorParam = redirectUrl.searchParams.get('error');
+
+				if (errorParam) {
+					showErrorToast(errorParam);
+
+					// Clean up the redirect URL by removing the error param
+					redirectUrl.searchParams.delete('error');
+					const cleanRedirect =
+						redirectUrl.pathname +
+						(redirectUrl.search ? redirectUrl.search : '');
+
+					// Update the URL to remove error and clean redirect
+					router.navigate({
+						to: '/auth/login',
+						search: { redirect: cleanRedirect, error: undefined },
+						replace: true,
+					});
+				}
+			} catch (err) {
+				console.error('Failed to parse redirect URL for error:', err);
+			}
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [search.error, search.redirect, router]);
 
 	const handleMagicLinkSignIn = async (e: React.FormEvent) => {
 		e.preventDefault();

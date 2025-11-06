@@ -1,6 +1,6 @@
 import { Icon } from '@iconify/react';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { useEffect, useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { Badge } from '@/components/ui/badge';
@@ -54,23 +54,7 @@ function SignupPage() {
 	const emailInputId = useId();
 	const passwordInputId = useId();
 	const confirmPasswordInputId = useId();
-
 	const search = Route.useSearch();
-
-	// Check for error query parameter on load
-	useEffect(() => {
-		const urlParams = new URLSearchParams(window.location.search);
-		const errorParam = urlParams.get('error');
-		if (errorParam) {
-			const decodedError = decodeURIComponent(errorParam);
-			setError(decodedError);
-			toast.error(decodedError);
-
-			// Clean up the URL
-			const newUrl = window.location.pathname;
-			window.history.replaceState({}, document.title, newUrl);
-		}
-	}, []);
 
 	const handleMagicLinkSignUp = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -389,7 +373,7 @@ function SignupPage() {
 						Already have an account?{' '}
 						<Link
 							to="/auth/login"
-							search={{ redirect: search.redirect }}
+							search={{ redirect: search.redirect, error: undefined }}
 							className="hover:underline underline-offset-4 text-accent"
 						>
 							Login Here

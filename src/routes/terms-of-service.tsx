@@ -1,5 +1,4 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 
 export const Route = createFileRoute('/terms-of-service')({
@@ -14,11 +13,6 @@ export const Route = createFileRoute('/terms-of-service')({
 });
 
 function TermsOfServicePage() {
-	// Scroll to top when component mounts
-	useEffect(() => {
-		window.scrollTo({ top: 0, behavior: 'smooth' });
-	}, []);
-
 	return (
 		<div className="min-h-screen">
 			{/* Hero Section */}

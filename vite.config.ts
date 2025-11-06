@@ -17,7 +17,11 @@ const config = defineConfig({
       start: { entry: "./start.tsx" },
       server: { entry: "./server.ts" },
     }),
-    viteReact(),
+    viteReact({
+      babel: {
+        plugins: ['babel-plugin-react-compiler'],
+      },
+    }),
     cloudflare({
       viteEnvironment: {
         name: "ssr",

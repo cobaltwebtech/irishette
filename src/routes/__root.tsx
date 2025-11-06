@@ -15,6 +15,7 @@ import { DefaultCatchBoundary } from '@/components/default-catch-boundary';
 import Footer from '@/components/Footer';
 import Header from '@/components/Header';
 import { NotFound } from '@/components/not-found';
+import { ScrollRestoration } from '@/components/scroll-restoration';
 import { Toaster } from '@/components/ui/sonner';
 import type { useSession } from '@/lib/auth-client';
 import appCss from '@/styles/styles.css?url';
@@ -83,6 +84,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 			<body>
 				<div className="min-h-screen flex flex-col">
 					<ReactLenis root>
+						<ScrollRestoration />
 						<Header />
 						{children}
 						{!isAdminRoute && <Footer />}

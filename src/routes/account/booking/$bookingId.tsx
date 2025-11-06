@@ -24,6 +24,14 @@ export const Route = createFileRoute('/account/booking/$bookingId')({
 		// Return session data to be available in component during SSR
 		return { session };
 	},
+	loader: async ({ params }) => {
+		// Pre-fetch booking details before component renders
+		const booking = await trpcClient.bookings.getBooking.query({
+			bookingId: params.bookingId,
+		});
+
+		return { booking };
+	},
 	component: BookingDetailPage,
 });
 
@@ -32,19 +40,18 @@ function BookingDetailPage() {
 	const bookingId = params.bookingId;
 	const [isResendingEmail, setIsResendingEmail] = useState(false);
 
-	// Use tRPC query to fetch booking details
-	const bookingQuery = useQuery(
-		trpc.bookings.getBooking.queryOptions(
-			{
-				bookingId: bookingId,
-			},
-			{
-				enabled: !!bookingId,
-				retry: false,
-				staleTime: 5 * 60 * 1000,
-			},
-		),
-	);
+	// Get pre-loaded data from loader
+	const loaderData = Route.useLoaderData();
+
+	// Use query with initialData from loader for live updates
+	const bookingQuery = useQuery({
+		...trpc.bookings.getBooking.queryOptions({
+			bookingId: bookingId,
+		}),
+		initialData: loaderData.booking,
+		retry: false,
+		staleTime: 5 * 60 * 1000,
+	});
 
 	const booking = bookingQuery.data;
 

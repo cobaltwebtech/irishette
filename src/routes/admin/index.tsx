@@ -5,8 +5,7 @@ import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { trpc } from '@/integrations/tanstack-query/root-provider';
-import { useSession } from '@/lib/auth-client';
+import { trpc, trpcClient } from '@/integrations/tanstack-query/root-provider';
 import { requireAdmin } from '@/utils/auth-check';
 
 export const Route = createFileRoute('/admin/')({
@@ -23,6 +22,15 @@ export const Route = createFileRoute('/admin/')({
 
 		// Return session data to be available in component during SSR
 		return { session };
+	},
+	loader: async () => {
+		// Pre-fetch rooms and bookings in parallel before component renders
+		const [roomsData, bookingsData] = await Promise.all([
+			trpcClient.rooms.list.query({ limit: 10, status: 'active' }),
+			trpcClient.bookings.adminListBookings.query({ limit: 50, offset: 0 }),
+		]);
+
+		return { rooms: roomsData, bookings: bookingsData };
 	},
 	component: AdminDashboard,
 });
@@ -41,39 +49,24 @@ type Room = {
 };
 
 function AdminDashboard() {
-	const { data: session, isPending } = useSession();
+	// Get pre-loaded data from loader
+	const loaderData = Route.useLoaderData();
 
-	// Use TanStack Query for rooms
-	const { data: roomsData, isLoading: loadingRooms } = useQuery(
-		trpc.rooms.list.queryOptions(
-			{
-				limit: 10,
-				status: 'active',
-			},
-			{
-				enabled: !isPending && !!session?.user && session.user.role === 'admin',
-				retry: false,
-				staleTime: 5 * 60 * 1000,
-			},
-		),
-	);
+	// Use queries with initialData from loader for live updates
+	const { data: roomsData, isLoading: loadingRooms } = useQuery({
+		...trpc.rooms.list.queryOptions({ limit: 10, status: 'active' }),
+		initialData: loaderData.rooms,
+		staleTime: 5 * 60 * 1000,
+	});
 
 	const rooms = roomsData?.rooms || [];
 
-	// Replace manual loadBookings with useQuery - using direct trpc import
-	const { data: bookings = [], isLoading: loadingBookings } = useQuery(
-		trpc.bookings.adminListBookings.queryOptions(
-			{
-				limit: 50,
-				offset: 0,
-			},
-			{
-				enabled: !isPending && !!session?.user && session.user.role === 'admin',
-				retry: false,
-				staleTime: 5 * 60 * 1000,
-			},
-		),
-	);
+	// Use query with initialData from loader
+	const { data: bookings = [], isLoading: loadingBookings } = useQuery({
+		...trpc.bookings.adminListBookings.queryOptions({ limit: 50, offset: 0 }),
+		initialData: loaderData.bookings,
+		staleTime: 5 * 60 * 1000,
+	});
 
 	// Filter bookings to get confirmed ones with check-in date today or in the future
 	const today = new Date();

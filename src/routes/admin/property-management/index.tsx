@@ -34,7 +34,7 @@ import {
 	TableRow,
 } from '@/components/ui/table';
 import { trpc, trpcClient } from '@/integrations/tanstack-query/root-provider';
-import { useSession } from '@/lib/auth-client';
+
 import { requireAdmin } from '@/utils/auth-check';
 
 export const Route = createFileRoute('/admin/property-management/')({
@@ -51,6 +51,11 @@ export const Route = createFileRoute('/admin/property-management/')({
 
 		// Return session data to be available in component during SSR
 		return { session };
+	},
+	loader: async () => {
+		// Pre-fetch rooms list before component renders
+		const roomsData = await trpcClient.rooms.list.query({ limit: 100 });
+		return { rooms: roomsData };
 	},
 	component: PropertyManagement,
 });
@@ -87,7 +92,6 @@ type RoomFormData = {
 type EditMode = 'none' | 'add';
 
 function PropertyManagement() {
-	const { data: session, isPending } = useSession();
 	const roomNameId = useId();
 	const roomSlugId = useId();
 	const roomDescriptionId = useId();
@@ -106,7 +110,10 @@ function PropertyManagement() {
 	});
 	const queryClient = useQueryClient();
 
-	// Use tRPC query to fetch rooms - using direct trpc import
+	// Get pre-loaded data from loader
+	const loaderData = Route.useLoaderData();
+
+	// Use query with initialData from loader for live updates
 	const {
 		data: roomsData,
 		isLoading: loading,
@@ -114,18 +121,12 @@ function PropertyManagement() {
 		isError,
 		status,
 		isSuccess,
-	} = useQuery(
-		trpc.rooms.list.queryOptions(
-			{
-				limit: 100,
-			},
-			{
-				enabled: !isPending && !!session?.user && session.user.role === 'admin',
-				retry: false, // Avoid retries during SSR issues
-				staleTime: 5 * 60 * 1000, // 5 minutes
-			},
-		),
-	);
+	} = useQuery({
+		...trpc.rooms.list.queryOptions({ limit: 100 }),
+		initialData: loaderData.rooms,
+		retry: false,
+		staleTime: 5 * 60 * 1000,
+	});
 
 	console.log('Property Management - useQuery state:', {
 		roomsData,
@@ -134,8 +135,6 @@ function PropertyManagement() {
 		isError,
 		isSuccess,
 		status,
-		hasSession: !!session?.user,
-		sessionData: session,
 	});
 
 	const rooms = roomsData?.rooms || [];
@@ -310,6 +309,9 @@ function PropertyManagement() {
 			globalFilter,
 		},
 	});
+
+	// Session is guaranteed by beforeLoad, but we'll keep the check for safety
+	const { session } = Route.useRouteContext();
 
 	if (!session) {
 		return null; // AdminLayout will handle auth and redirect

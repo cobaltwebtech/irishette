@@ -1,5 +1,4 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -15,11 +14,6 @@ export const Route = createFileRoute('/privacy-policy')({
 });
 
 function PrivacyPolicyPage() {
-	// Scroll to top when component mounts
-	useEffect(() => {
-		window.scrollTo({ top: 0, behavior: 'smooth' });
-	}, []);
-
 	return (
 		<div className="min-h-screen">
 			{/* Hero Section */}

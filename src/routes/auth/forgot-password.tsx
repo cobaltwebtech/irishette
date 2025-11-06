@@ -42,6 +42,7 @@ function ForgotPasswordPage() {
 	const [isSuccess, setIsSuccess] = useState(false);
 	const [error, setError] = useState('');
 	const emailInputId = useId();
+	const search = Route.useSearch();
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -117,7 +118,7 @@ function ForgotPasswordPage() {
 							<Link
 								to="/auth/login"
 								className="text-accent underline-offset-4 hover:underline"
-								search={{ redirect: '/account' }}
+								search={{ redirect: search.redirect, error: undefined }}
 							>
 								Back to Login
 							</Link>
@@ -198,7 +199,7 @@ function ForgotPasswordPage() {
 						<Link
 							to="/auth/login"
 							className="text-accent underline-offset-4 hover:underline"
-							search={{ redirect: '/account' }}
+							search={{ redirect: search.redirect, error: undefined }}
 						>
 							Back to Login
 						</Link>

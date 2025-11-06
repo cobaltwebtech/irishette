@@ -58,7 +58,7 @@ export function BookingDetailsStep() {
 			}
 			setSpecialRequests(booking.guestInfo.specialRequests || '');
 		}
-	}, [session, booking.guestInfo]);
+	}, [session?.user, booking.guestInfo]);
 
 	const validateForm = () => {
 		const newErrors: Record<string, string> = {};

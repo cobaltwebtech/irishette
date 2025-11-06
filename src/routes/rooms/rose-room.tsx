@@ -35,11 +35,6 @@ function RoseRoomPage() {
 	const booking = useBookingStore();
 	const navigate = useNavigate();
 
-	// Scroll to top when component mounts
-	useEffect(() => {
-		window.scrollTo({ top: 0, behavior: 'smooth' });
-	}, []);
-
 	// Room information
 	const roomSlug = 'rose-room';
 
