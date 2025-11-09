@@ -48,7 +48,7 @@ export class PaymentService {
 	constructor(env: PaymentEnv) {
 		this.db = createDrizzle(env.DB);
 		this.stripe = new Stripe(env.STRIPE_SECRET_KEY, {
-			apiVersion: '2025-09-30.clover',
+			apiVersion: '2025-10-29.clover',
 		});
 	}
 
