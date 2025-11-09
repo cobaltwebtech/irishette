@@ -95,20 +95,44 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
 		// Handle different event types
 		switch (event.type) {
 			case 'checkout.session.completed':
+				// Handle legacy hosted checkout sessions
+				console.log('Handling checkout.session.completed event');
 				await handleCheckoutCompleted(event, paymentService);
 				break;
 
 			case 'checkout.session.expired':
+				console.log('Handling checkout.session.expired event');
 				await handleCheckoutExpired(event, paymentService);
 				break;
 
 			case 'payment_intent.succeeded':
-				console.log('Payment intent succeeded:', event.data.object.id);
-				// Additional payment processing if needed
+				// Handle in-app checkout payment intents (PRIMARY EVENT)
+				console.log(
+					'Handling payment_intent.succeeded event (primary confirmation)',
+				);
+				await handlePaymentIntentSucceeded(event, paymentService);
 				break;
 
 			case 'payment_intent.payment_failed':
-				await handlePaymentFailed(event, paymentService);
+				console.log('Handling payment_intent.payment_failed event');
+				await handlePaymentIntentFailed(event, paymentService);
+				break;
+
+			// Informational events - we don't need to process these
+			case 'charge.succeeded':
+			case 'charge.updated':
+			case 'charge.failed':
+				console.log(
+					`Informational event received (no action needed): ${event.type}`,
+				);
+				// These are child events of payment_intent - already handled above
+				break;
+
+			case 'mandate.updated':
+				console.log(
+					'Mandate updated (saved payment method) - no action needed',
+				);
+				// Only relevant for subscriptions or saved payment methods
 				break;
 
 			default:
@@ -199,9 +223,12 @@ async function handleCheckoutCompleted(
 					);
 				}
 
-				// Send admin notification email
+				// Send admin notification email with 2-second delay
 				console.log('Starting admin notification email process...');
 				try {
+					// Wait 2 seconds to avoid Resend rate limit (2 requests/second)
+					await new Promise((resolve) => setTimeout(resolve, 2000));
+
 					// Get admin users
 					const adminEmails = await getAdminUsers(env.DB);
 
@@ -286,24 +313,189 @@ async function handleCheckoutExpired(
 }
 
 /**
- * Handle failed payment intents
+ * Handle successful payment intent (in-app checkout)
+ * This serves as a backup in case the frontend confirmPayment call fails
  */
-async function handlePaymentFailed(
+async function handlePaymentIntentSucceeded(
 	event: Stripe.Event,
-	_paymentService: PaymentService,
+	paymentService: PaymentService,
 ): Promise<void> {
 	const paymentIntent = event.data.object as Stripe.PaymentIntent;
 
 	try {
-		console.log('Processing payment failure:', paymentIntent.id);
+		console.log('Processing payment intent succeeded:', paymentIntent.id);
 
-		// Find the checkout session associated with this payment intent
-		// This requires storing the payment intent ID when creating the checkout session
-		// The PaymentService.handlePaymentFailure method handles this
+		// Get booking by payment intent ID
+		const bookingDetails = await paymentService.getBookingByPaymentIntent(
+			paymentIntent.id,
+		);
 
-		console.log('Payment failure processed for intent:', paymentIntent.id);
+		if (!bookingDetails?.booking) {
+			console.log('No booking found for payment intent:', paymentIntent.id);
+			return;
+		}
+
+		const booking = bookingDetails.booking;
+
+		// Check if booking is already confirmed (frontend call succeeded)
+		if (booking.status === 'confirmed' && booking.paymentStatus === 'paid') {
+			console.log(
+				'Booking already confirmed by frontend for payment intent:',
+				paymentIntent.id,
+				'- Skipping duplicate email sends',
+			);
+			// Booking already processed by frontend, no need to send emails again
+			return;
+		}
+
+		// Booking not confirmed yet - webhook is acting as backup
+		console.log(
+			'Frontend confirmation may have failed, confirming via webhook for booking:',
+			booking.id,
+		);
+
+		// Confirm the payment via PaymentService
+		await paymentService.confirmPaymentIntent(booking.id, paymentIntent.id);
+
+		console.log(
+			'Booking confirmed via webhook for payment intent:',
+			paymentIntent.id,
+		);
+
+		// Send confirmation emails (as backup)
+		if (bookingDetails.room) {
+			const emailData: BookingEmailData = {
+				confirmationId: booking.confirmationId,
+				guestName: booking.guestName,
+				guestEmail: booking.guestEmail,
+				guestPhone: booking.guestPhone || undefined,
+				roomName: bookingDetails.room.name,
+				checkInDate: booking.checkInDate,
+				checkOutDate: booking.checkOutDate,
+				numberOfNights: booking.numberOfNights,
+				numberOfGuests: booking.numberOfGuests,
+				specialRequests: booking.specialRequests || undefined,
+				baseAmount: booking.baseAmount,
+				taxAmount: booking.taxAmount || 0,
+				feesAmount: booking.feesAmount || 0,
+				totalAmount: booking.totalAmount,
+				baseUrl: env.BETTER_AUTH_URL,
+			};
+
+			const emailResult = await sendBookingConfirmationEmail(emailData, {
+				RESEND_API_KEY: env.RESEND_API_KEY,
+			});
+
+			if (emailResult.success) {
+				console.log(
+					'Backup confirmation email sent successfully for:',
+					booking.confirmationId,
+				);
+			} else {
+				console.error(
+					'Failed to send backup confirmation email:',
+					emailResult.error,
+				);
+			}
+
+			// Send admin notification with 2-second delay to avoid rate limit
+			try {
+				// Wait 2 seconds to avoid Resend rate limit (2 requests/second)
+				await new Promise((resolve) => setTimeout(resolve, 2000));
+
+				const adminEmails = await getAdminUsers(env.DB);
+
+				if (adminEmails.length > 0) {
+					const adminEmailData: AdminNotificationEmailData = {
+						confirmationId: booking.confirmationId,
+						guestName: booking.guestName,
+						guestEmail: booking.guestEmail,
+						guestPhone: booking.guestPhone || undefined,
+						roomName: bookingDetails.room.name,
+						checkInDate: booking.checkInDate,
+						checkOutDate: booking.checkOutDate,
+						numberOfNights: booking.numberOfNights,
+						numberOfGuests: booking.numberOfGuests,
+						specialRequests: booking.specialRequests || undefined,
+						totalAmount: booking.totalAmount,
+						baseUrl: env.BETTER_AUTH_URL,
+					};
+
+					const adminEmailResult = await sendAdminBookingNotification(
+						adminEmailData,
+						adminEmails,
+						{
+							RESEND_API_KEY: env.RESEND_API_KEY,
+						},
+					);
+
+					if (adminEmailResult.success) {
+						console.log(
+							'Backup admin notification email sent successfully to:',
+							adminEmails,
+						);
+					} else {
+						console.error(
+							'Failed to send backup admin notification email:',
+							adminEmailResult.error,
+						);
+					}
+				}
+			} catch (adminEmailError) {
+				console.error('Error in admin email sending process:', adminEmailError);
+			}
+		}
 	} catch (error) {
-		console.error('Failed to handle payment failure:', error);
+		console.error('Failed to handle payment intent succeeded:', error);
+		throw error;
+	}
+}
+
+/**
+ * Handle failed payment intents (in-app checkout)
+ */
+async function handlePaymentIntentFailed(
+	event: Stripe.Event,
+	paymentService: PaymentService,
+): Promise<void> {
+	const paymentIntent = event.data.object as Stripe.PaymentIntent;
+
+	try {
+		console.log('Processing payment intent failure:', paymentIntent.id);
+
+		// Get booking by payment intent ID
+		const bookingDetails = await paymentService.getBookingByPaymentIntent(
+			paymentIntent.id,
+		);
+
+		if (!bookingDetails?.booking) {
+			console.log(
+				'No booking found for failed payment intent:',
+				paymentIntent.id,
+			);
+			return;
+		}
+
+		const booking = bookingDetails.booking;
+
+		// Only update if booking is still pending
+		if (booking.status === 'pending') {
+			console.log(
+				'Marking booking as cancelled due to payment failure:',
+				booking.id,
+			);
+
+			// Note: You may want to add a method to PaymentService to handle this
+			// For now, we just log it - the booking will remain pending and can be retried
+			console.log(
+				'Payment failed for booking:',
+				booking.confirmationId,
+				'Intent:',
+				paymentIntent.id,
+			);
+		}
+	} catch (error) {
+		console.error('Failed to handle payment intent failure:', error);
 		throw error;
 	}
 }

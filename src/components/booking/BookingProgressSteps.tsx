@@ -20,6 +20,11 @@ export function BookingProgressSteps() {
 			completed: booking.isValid.details,
 		},
 		{
+			step: 'payment',
+			label: 'Payment',
+			completed: booking.isStep('confirmation'),
+		},
+		{
 			step: 'confirmation',
 			label: 'Confirmed',
 			completed: booking.isStep('confirmation'),

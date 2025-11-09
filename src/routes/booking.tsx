@@ -12,6 +12,7 @@ import { BookingProgressSteps } from '@/components/booking/BookingProgressSteps'
 import { BookingSummary } from '@/components/booking/BookingSummary';
 import { ConfirmationStep } from '@/components/booking/ConfirmationStep';
 import { DatesStep } from '@/components/booking/DatesStep';
+import { PaymentStep } from '@/components/booking/PaymentStep';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { trpc, trpcClient } from '@/integrations/tanstack-query/root-provider';
@@ -187,7 +188,9 @@ function BookingFlow() {
 
 		if (
 			stepParam &&
-			['dates', 'auth', 'details', 'confirmation'].includes(stepParam)
+			['dates', 'auth', 'details', 'payment', 'confirmation'].includes(
+				stepParam,
+			)
 		) {
 			booking.actions.setStep(stepParam as BookingStep);
 		}
@@ -244,6 +247,7 @@ function BookingFlow() {
 							{booking.isStep('dates') && <DatesStep />}
 							{booking.isStep('auth') && <AuthenticationStep />}
 							{booking.isStep('details') && <BookingDetailsStep />}
+							{booking.isStep('payment') && <PaymentStep />}
 							{booking.isStep('confirmation') && <ConfirmationStep />}
 						</div>
 

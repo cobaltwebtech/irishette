@@ -914,4 +914,161 @@ export class PaymentService {
 			// Don't throw here - booking is already confirmed, this is just cleanup
 		}
 	}
+
+	/**
+	 * Create a Payment Intent for in-app checkout
+	 */
+	async createPaymentIntent(
+		bookingId: string,
+		userId: string,
+	): Promise<{ clientSecret: string }> {
+		const bookingResult = await this.db
+			.select()
+			.from(bookings)
+			.where(eq(bookings.id, bookingId));
+
+		if (!bookingResult[0]) {
+			throw new Error('Booking not found');
+		}
+
+		const booking = bookingResult[0];
+
+		if (booking.status !== 'pending') {
+			throw new Error('Booking is not pending payment');
+		}
+
+		// Get or create Stripe customer
+		const userResult = await this.db
+			.select()
+			.from(user)
+			.where(eq(user.id, userId));
+
+		const customer = userResult[0];
+		let stripeCustomerId = customer?.stripeCustomerId || undefined;
+
+		if (!stripeCustomerId) {
+			const stripeCustomer = await this.stripe.customers.create({
+				email: booking.guestEmail,
+				name: booking.guestName,
+				metadata: {
+					userId: userId,
+					bookingId: bookingId,
+				},
+			});
+			stripeCustomerId = stripeCustomer.id;
+
+			// Update user with Stripe customer ID
+			await this.db
+				.update(user)
+				.set({ stripeCustomerId })
+				.where(eq(user.id, userId));
+		}
+
+		// Create Payment Intent
+		const paymentIntent = await this.stripe.paymentIntents.create({
+			amount: Math.round(booking.totalAmount * 100), // Convert to cents
+			currency: 'usd',
+			customer: stripeCustomerId,
+			metadata: {
+				bookingId: booking.id,
+				userId: userId,
+				roomId: booking.roomId,
+				type: 'booking',
+			},
+			automatic_payment_methods: {
+				enabled: true,
+			},
+		});
+
+		// Store payment intent ID in booking
+		await this.db
+			.update(bookings)
+			.set({
+				stripePaymentIntentId: paymentIntent.id,
+				updatedAt: new Date(),
+			})
+			.where(eq(bookings.id, bookingId));
+
+		if (!paymentIntent.client_secret) {
+			throw new Error('Payment intent created without client secret');
+		}
+
+		return {
+			clientSecret: paymentIntent.client_secret,
+		};
+	}
+
+	/**
+	 * Confirm payment after it's been processed by Stripe
+	 */
+	async confirmPaymentIntent(
+		bookingId: string,
+		paymentIntentId: string,
+	): Promise<void> {
+		// Verify payment intent status with Stripe
+		const paymentIntent =
+			await this.stripe.paymentIntents.retrieve(paymentIntentId);
+
+		if (paymentIntent.status !== 'succeeded') {
+			throw new Error('Payment has not succeeded');
+		}
+
+		// Update booking status
+		await this.db
+			.update(bookings)
+			.set({
+				status: 'confirmed',
+				paymentStatus: 'paid',
+				confirmedAt: new Date(),
+				updatedAt: new Date(),
+				stripePaymentIntentId: paymentIntentId,
+			})
+			.where(eq(bookings.id, bookingId));
+
+		// Block room dates
+		const bookingResult = await this.db
+			.select()
+			.from(bookings)
+			.where(eq(bookings.id, bookingId));
+
+		if (bookingResult[0]) {
+			await this.blockRoomDates(
+				bookingResult[0].roomId,
+				bookingResult[0].checkInDate,
+				bookingResult[0].checkOutDate,
+			);
+		}
+	}
+
+	/**
+	 * Get booking details by payment intent ID
+	 */
+	async getBookingByPaymentIntent(paymentIntentId: string): Promise<{
+		booking: typeof bookings.$inferSelect;
+		room: typeof room.$inferSelect;
+	} | null> {
+		const bookingResult = await this.db
+			.select({
+				booking: bookings,
+				room: room,
+			})
+			.from(bookings)
+			.leftJoin(room, eq(bookings.roomId, room.id))
+			.where(eq(bookings.stripePaymentIntentId, paymentIntentId));
+
+		if (!bookingResult[0]) {
+			return null;
+		}
+
+		const { booking: bookingData, room: roomData } = bookingResult[0];
+
+		if (!bookingData || !roomData) {
+			return null;
+		}
+
+		return {
+			booking: bookingData,
+			room: roomData,
+		};
+	}
 }

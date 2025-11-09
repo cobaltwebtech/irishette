@@ -321,15 +321,10 @@ export default function RoomAvailabilityCalendar({
 					checkoutOnly: checkoutOnlyDates,
 				}}
 				modifiersClassNames={{
-					unavailable:
-						'bg-destructive/20 text-destructive line-through opacity-75',
-					available:
-						'bg-secondary hover:bg-secondary/80 border-primary/20 hover:rounded-none',
-					checkoutOnly:
-						'bg-secondary/50 border-orange-300 hover:bg-secondary/80 font-medium',
-					selected:
-						'bg-primary text-primary-foreground hover:bg-primary/0 rounded-none',
-					disabled: 'opacity-100 rounded-none',
+					unavailable: 'bg-destructive/40 line-through opacity-75',
+					available: 'hover:bg-secondary/80 border-primary/20',
+					checkoutOnly: 'bg-amber-200 border-orange-300 hover:bg-secondary/80',
+					selected: 'bg-primary text-primary-foreground hover:bg-primary/0',
 				}}
 				numberOfMonths={2}
 				min={minNights}
@@ -377,15 +372,15 @@ export default function RoomAvailabilityCalendar({
 			<div className="space-y-3">
 				<div className="flex flex-wrap justify-center gap-4 text-sm">
 					<div className="flex items-center gap-2">
-						<div className="size-6 bg-secondary border border-primary/20 rounded"></div>
+						<div className="size-6 bg-white border border-primary/20 rounded"></div>
 						<span>Available</span>
 					</div>
 					<div className="flex items-center gap-2">
-						<div className="size-6 bg-secondary/50 border border-secondary rounded"></div>
+						<div className="size-6 bg-amber-200 border border-accent rounded"></div>
 						<span>Checkout Only</span>
 					</div>
 					<div className="flex items-center gap-2">
-						<div className="size-6 bg-destructive/20 border rounded"></div>
+						<div className="size-6 bg-destructive/40 border border-destructive rounded"></div>
 						<span>Unavailable</span>
 					</div>
 					<div className="flex items-center gap-2">

@@ -265,7 +265,7 @@ export function BookingDetailsStep() {
 				totalAmount: booking.pricing.totalAmount,
 			};
 
-			// Step 1: Create booking via tRPC
+			// Create booking via tRPC
 			console.log('Creating booking...', bookingData);
 			const createBookingResult =
 				await trpcClient.bookings.createBooking.mutate(bookingData);
@@ -278,34 +278,14 @@ export function BookingDetailsStep() {
 			const bookingId = createBookingResult.bookingId;
 			booking.actions.setBookingId(bookingId);
 
-			// Step 2: Create Stripe checkout session
-			console.log('Creating checkout session...');
-			const checkoutData = {
-				bookingId: bookingId,
-				successUrl: `${window.location.origin}/booking?step=confirmation`,
-				cancelUrl: `${window.location.origin}/booking?step=details`,
-			};
-
-			const checkoutResult =
-				await trpcClient.bookings.createCheckoutSession.mutate(checkoutData);
-			console.log('Checkout session created:', checkoutResult);
-
-			// Step 3: Redirect to Stripe checkout
-			if (checkoutResult?.checkoutUrl) {
-				console.log(
-					'Redirecting to Stripe checkout:',
-					checkoutResult.checkoutUrl,
-				);
-				window.location.href = checkoutResult.checkoutUrl;
-			} else {
-				throw new Error('No checkout URL returned from server');
-			}
+			// Move to payment step for in-app checkout
+			booking.actions.setStep('payment');
 		} catch (error) {
 			console.error('Payment processing error:', error);
 			booking.actions.setError(
 				error instanceof Error
 					? error.message
-					: 'An error occurred while processing your payment',
+					: 'An error occurred while processing your booking',
 			);
 		} finally {
 			setIsSubmitting(false);

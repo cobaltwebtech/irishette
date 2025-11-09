@@ -11,6 +11,7 @@ export type TRPCContext = {
 	db: D1Database;
 	env: {
 		STRIPE_SECRET_KEY: string;
+		STRIPE_PUBLISHABLE_KEY: string;
 		STRIPE_TRPC_WEBHOOK_SECRET: string;
 		BETTER_AUTH_URL: string;
 		RESEND_API_KEY: string;

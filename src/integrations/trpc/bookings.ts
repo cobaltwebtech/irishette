@@ -3,8 +3,11 @@ import { and, between, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { createDrizzle } from '@/db/drizzle-init';
 import { bookings, room, user } from '@/db/schema-export';
+import { getAdminUsers } from '@/lib/admin-query';
 import {
+	type AdminNotificationEmailData,
 	type BookingEmailData,
+	sendAdminBookingNotification,
 	sendBookingConfirmationEmail,
 } from '@/lib/email-service';
 import { PaymentService } from '@/lib/payment-service';
@@ -195,6 +198,193 @@ export const bookingsRouter = createTRPCRouter({
 						error instanceof Error
 							? error.message
 							: 'Failed to create checkout session',
+				});
+			}
+		}),
+
+	/**
+	 * Create Payment Intent for in-app checkout
+	 */
+	createPaymentIntent: protectedProcedure
+		.input(
+			z.object({
+				bookingId: z.string(),
+			}),
+		)
+		.mutation(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+			const paymentService = new PaymentService({
+				DB: ctx.db,
+				STRIPE_SECRET_KEY: ctx.env.STRIPE_SECRET_KEY,
+				STRIPE_TRPC_WEBHOOK_SECRET: ctx.env.STRIPE_TRPC_WEBHOOK_SECRET,
+				BETTER_AUTH_URL: ctx.env.BETTER_AUTH_URL,
+			});
+
+			try {
+				const userId = ctx.user.id;
+
+				// Verify booking belongs to user
+				const bookingResult = await db
+					.select()
+					.from(bookings)
+					.where(
+						and(eq(bookings.id, input.bookingId), eq(bookings.userId, userId)),
+					);
+
+				if (!bookingResult[0]) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: 'Booking not found',
+					});
+				}
+
+				const booking = bookingResult[0];
+
+				if (booking.status !== 'pending') {
+					throw new TRPCError({
+						code: 'BAD_REQUEST',
+						message: 'Booking is not pending payment',
+					});
+				}
+
+				const paymentIntent = await paymentService.createPaymentIntent(
+					input.bookingId,
+					userId,
+				);
+
+				return {
+					clientSecret: paymentIntent.clientSecret,
+					publishableKey: ctx.env.STRIPE_PUBLISHABLE_KEY,
+				};
+			} catch (error) {
+				console.error('Failed to create payment intent:', error);
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message:
+						error instanceof Error
+							? error.message
+							: 'Failed to create payment intent',
+				});
+			}
+		}),
+
+	/**
+	 * Confirm payment after Stripe processes it
+	 */
+	confirmPayment: protectedProcedure
+		.input(
+			z.object({
+				bookingId: z.string(),
+				paymentIntentId: z.string(),
+			}),
+		)
+		.mutation(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+			const paymentService = new PaymentService({
+				DB: ctx.db,
+				STRIPE_SECRET_KEY: ctx.env.STRIPE_SECRET_KEY,
+				STRIPE_TRPC_WEBHOOK_SECRET: ctx.env.STRIPE_TRPC_WEBHOOK_SECRET,
+				BETTER_AUTH_URL: ctx.env.BETTER_AUTH_URL,
+			});
+
+			try {
+				const userId = ctx.user.id;
+
+				// Verify booking belongs to user
+				const bookingResult = await db
+					.select()
+					.from(bookings)
+					.where(
+						and(eq(bookings.id, input.bookingId), eq(bookings.userId, userId)),
+					);
+
+				if (!bookingResult[0]) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: 'Booking not found',
+					});
+				}
+
+				await paymentService.confirmPaymentIntent(
+					input.bookingId,
+					input.paymentIntentId,
+				);
+
+				// Send confirmation email
+				const bookingDetails = await paymentService.getBookingByPaymentIntent(
+					input.paymentIntentId,
+				);
+
+				if (bookingDetails?.booking && bookingDetails?.room) {
+					const emailData: BookingEmailData = {
+						confirmationId: bookingDetails.booking.confirmationId,
+						guestName: bookingDetails.booking.guestName,
+						guestEmail: bookingDetails.booking.guestEmail,
+						guestPhone: bookingDetails.booking.guestPhone || undefined,
+						roomName: bookingDetails.room.name,
+						checkInDate: bookingDetails.booking.checkInDate,
+						checkOutDate: bookingDetails.booking.checkOutDate,
+						numberOfNights: bookingDetails.booking.numberOfNights,
+						numberOfGuests: bookingDetails.booking.numberOfGuests,
+						specialRequests:
+							bookingDetails.booking.specialRequests || undefined,
+						baseAmount: bookingDetails.booking.baseAmount,
+						taxAmount: bookingDetails.booking.taxAmount || 0,
+						feesAmount: bookingDetails.booking.feesAmount || 0,
+						totalAmount: bookingDetails.booking.totalAmount,
+						baseUrl: ctx.env.BETTER_AUTH_URL,
+					};
+
+					await sendBookingConfirmationEmail(emailData, {
+						RESEND_API_KEY: ctx.env.RESEND_API_KEY,
+					});
+
+					// Send admin notification email after 2-second delay to avoid rate limit
+					try {
+						// Wait 2 seconds to avoid Resend rate limit (2 requests/second)
+						await new Promise((resolve) => setTimeout(resolve, 2000));
+
+						const adminEmails = await getAdminUsers(ctx.db);
+
+						if (adminEmails.length > 0) {
+							const adminEmailData: AdminNotificationEmailData = {
+								confirmationId: bookingDetails.booking.confirmationId,
+								guestName: bookingDetails.booking.guestName,
+								guestEmail: bookingDetails.booking.guestEmail,
+								guestPhone: bookingDetails.booking.guestPhone || undefined,
+								roomName: bookingDetails.room.name,
+								checkInDate: bookingDetails.booking.checkInDate,
+								checkOutDate: bookingDetails.booking.checkOutDate,
+								numberOfNights: bookingDetails.booking.numberOfNights,
+								numberOfGuests: bookingDetails.booking.numberOfGuests,
+								specialRequests:
+									bookingDetails.booking.specialRequests || undefined,
+								totalAmount: bookingDetails.booking.totalAmount,
+								baseUrl: ctx.env.BETTER_AUTH_URL,
+							};
+
+							await sendAdminBookingNotification(adminEmailData, adminEmails, {
+								RESEND_API_KEY: ctx.env.RESEND_API_KEY,
+							});
+						}
+					} catch (adminEmailError) {
+						console.error(
+							'Failed to send admin notification email:',
+							adminEmailError,
+						);
+						// Don't throw - admin email failure shouldn't fail the payment confirmation
+					}
+				}
+
+				return { success: true };
+			} catch (error) {
+				console.error('Failed to confirm payment:', error);
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message:
+						error instanceof Error
+							? error.message
+							: 'Failed to confirm payment',
 				});
 			}
 		}),
