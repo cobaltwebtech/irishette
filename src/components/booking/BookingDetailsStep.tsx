@@ -22,43 +22,45 @@ export function BookingDetailsStep() {
 	const requestsId = useId();
 	const policiesId = useId();
 
-	// Form state
-	const [guestName, setGuestName] = useState(session?.user?.name || '');
-	const [guestEmail, setGuestEmail] = useState(session?.user?.email || '');
-	const [guestPhone, setGuestPhone] = useState(
-		(session?.user as { phoneNumber?: string })?.phoneNumber || '',
+	// Form state - use lazy initialization to avoid unnecessary useEffect
+	const [guestName, setGuestName] = useState(
+		() => session?.user?.name || booking.guestInfo?.name || '',
 	);
+	const [guestEmail, setGuestEmail] = useState(
+		() => session?.user?.email || booking.guestInfo?.email || '',
+	);
+	const [guestPhone, setGuestPhone] = useState(() => {
+		// Prioritize session phone, then booking phone
+		const sessionPhone = (session?.user as { phoneNumber?: string })
+			?.phoneNumber;
+		return sessionPhone || booking.guestInfo?.phone || '';
+	});
 	const [numberOfGuests, setNumberOfGuests] = useState(booking.guestCount || 1);
-	const [specialRequests, setSpecialRequests] = useState('');
+	const [specialRequests, setSpecialRequests] = useState(
+		() => booking.guestInfo?.specialRequests || '',
+	);
 	const [acceptedPolicies, setAcceptedPolicies] = useState(false);
 	const [errors, setErrors] = useState<Record<string, string>>({});
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
-	// Pre-populate form with session data or existing booking data
+	// Validate essential booking data on mount only
+	// biome-ignore lint/correctness/useExhaustiveDependencies: This effect should only run once on mount to validate initial booking data
 	useEffect(() => {
-		if (session?.user) {
-			setGuestName(session.user.name || '');
-			setGuestEmail(session.user.email || '');
-			// Pre-populate phone from user table if available
-			setGuestPhone(
-				(session.user as { phoneNumber?: string })?.phoneNumber || '',
+		// Check if essential booking data is present on mount
+		if (!booking.roomId || !booking.checkInDate || !booking.checkOutDate) {
+			console.error(
+				'Missing essential booking data on BookingDetailsStep mount:',
+				{
+					roomId: booking.roomId,
+					checkInDate: booking.checkInDate,
+					checkOutDate: booking.checkOutDate,
+				},
+			);
+			booking.actions.setError(
+				'Missing booking information. Please start from the beginning.',
 			);
 		}
-
-		// Pre-populate with existing guest info if available (fallback)
-		if (booking.guestInfo) {
-			setGuestName(booking.guestInfo.name || '');
-			setGuestEmail(booking.guestInfo.email || '');
-			// Only use booking.guestInfo.phone if user doesn't have a phone number in their profile
-			if (
-				!(session?.user as { phoneNumber?: string })?.phoneNumber &&
-				booking.guestInfo.phone
-			) {
-				setGuestPhone(booking.guestInfo.phone || '');
-			}
-			setSpecialRequests(booking.guestInfo.specialRequests || '');
-		}
-	}, [session?.user, booking.guestInfo]);
+	}, []);
 
 	const validateForm = () => {
 		const newErrors: Record<string, string> = {};
@@ -141,6 +143,9 @@ export function BookingDetailsStep() {
 			booking.actions.setGuestCount(numberOfGuests);
 		}
 
+		setIsSubmitting(true);
+		booking.actions.clearError();
+
 		// Calculate real pricing with fees and taxes before proceeding to payment
 		try {
 			if (!booking.roomId || !booking.checkInDate || !booking.checkOutDate) {
@@ -180,6 +185,10 @@ export function BookingDetailsStep() {
 					'Invalid pricing data structure in handleContinue:',
 					pricingData,
 				);
+				booking.actions.setError(
+					'Failed to calculate pricing. Please try again.',
+				);
+				setIsSubmitting(false);
 				return;
 			}
 
@@ -204,24 +213,35 @@ export function BookingDetailsStep() {
 			console.error('Failed to calculate detailed pricing:', error);
 			console.log('Current booking pricing fallback:', booking.pricing);
 
-			// If we have no pricing at all, show an error
+			// If we have no pricing at all, show an error and stop
 			if (!booking.pricing || !booking.pricing.totalAmount) {
-				console.warn(
-					'No pricing data available, this may cause display issues',
+				console.error('No valid pricing data available');
+				booking.actions.setError(
+					'Failed to calculate pricing. Please try again or refresh the page.',
 				);
-				// Optionally set a basic pricing structure to prevent UI errors
-				booking.actions.setPricing({
-					basePrice: 0,
-					nights: 0,
-					subtotal: 0,
-					taxes: 0,
-					fees: 0,
-					totalAmount: 0,
-					currency: 'USD',
-					appliedRules: [],
-					taxBreakdown: undefined,
-				});
+				setIsSubmitting(false);
+				return;
 			}
+			// If we have existing pricing, warn but allow to continue
+			console.warn('Using existing pricing data due to calculation error');
+		}
+
+		// Final validation before proceeding to payment
+		if (
+			!booking.guestInfo ||
+			!booking.pricing ||
+			booking.pricing.totalAmount <= 0
+		) {
+			console.error('Invalid booking state before payment:', {
+				hasGuestInfo: !!booking.guestInfo,
+				hasPricing: !!booking.pricing,
+				totalAmount: booking.pricing?.totalAmount,
+			});
+			booking.actions.setError(
+				'Booking information is incomplete. Please try again.',
+			);
+			setIsSubmitting(false);
+			return;
 		}
 
 		// Proceed to payment step
@@ -236,17 +256,31 @@ export function BookingDetailsStep() {
 		}
 
 		if (!booking.guestInfo || !booking.pricing) {
-			booking.actions.setError('Missing booking information');
+			console.error('Missing booking information in initiatePayment:', {
+				hasGuestInfo: !!booking.guestInfo,
+				hasPricing: !!booking.pricing,
+			});
+			booking.actions.setError(
+				'Missing booking information. Please refresh and try again.',
+			);
+			setIsSubmitting(false);
 			return;
 		}
 
 		if (!booking.roomId || !booking.checkInDate || !booking.checkOutDate) {
 			booking.actions.setError('Missing booking dates or room information');
+			setIsSubmitting(false);
 			return;
 		}
 
-		setIsSubmitting(true);
-		booking.actions.clearError();
+		if (booking.pricing.totalAmount <= 0) {
+			console.error('Invalid total amount:', booking.pricing.totalAmount);
+			booking.actions.setError(
+				'Invalid booking total. Please refresh and try again.',
+			);
+			setIsSubmitting(false);
+			return;
+		}
 
 		try {
 			// Prepare booking data for creation

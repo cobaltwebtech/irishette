@@ -132,8 +132,17 @@ function RoseRoomPage() {
 				});
 			}
 		} else {
-			// Clear dates if no range selected
+			// Clear dates and pricing if no range selected
 			booking.actions.setDates('', '');
+			booking.actions.setPricing({
+				basePrice: 0,
+				nights: 0,
+				subtotal: 0,
+				taxes: 0,
+				fees: 0,
+				totalAmount: 0,
+				currency: 'USD',
+			});
 		}
 	};
 

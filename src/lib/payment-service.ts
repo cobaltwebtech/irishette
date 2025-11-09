@@ -17,7 +17,7 @@ import type {
 
 // Create a custom nanoid generator for confirmation IDs using only uppercase alphanumeric characters
 const generateConfirmationId = customAlphabet(
-	'ABCDEFGHJKMNPQRSTUVWXYZ0123456789',
+	'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789',
 	6,
 );
 

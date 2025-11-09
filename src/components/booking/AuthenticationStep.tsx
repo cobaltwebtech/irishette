@@ -96,7 +96,8 @@ export function AuthenticationStep() {
 			<CardContent>
 				<p className="text-muted-foreground mb-4">
 					We'll send you a magic link to continue with your booking. No password
-					required!
+					required! Don't worry, if you don't have an account yet we will create
+					one for you automatically.
 				</p>
 				<form onSubmit={handleSendMagicLink} className="space-y-4">
 					<div>

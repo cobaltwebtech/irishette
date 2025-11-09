@@ -96,12 +96,13 @@ export function useBookingStore() {
 	};
 
 	// Helper to check if booking is in progress
+	// An active booking requires either:
+	// 1. A room AND valid dates (user is in the process of booking)
+	// 2. A confirmed bookingId (booking has been created)
 	const hasActiveBooking = () => {
 		return !!(
-			state.roomId ||
-			state.checkInDate ||
-			state.checkOutDate ||
-			state.bookingId
+			state.bookingId ||
+			(state.roomId && state.checkInDate && state.checkOutDate)
 		);
 	};
 

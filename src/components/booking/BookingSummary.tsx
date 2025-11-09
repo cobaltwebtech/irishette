@@ -1,4 +1,6 @@
 import { Icon } from '@iconify/react';
+import { useNavigate } from '@tanstack/react-router';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useBookingStore } from '@/stores';
 import { parseISODateString } from '@/utils/booking-utils';
@@ -6,6 +8,19 @@ import { parseISODateString } from '@/utils/booking-utils';
 export function BookingSummary() {
 	const booking = useBookingStore();
 	const summary = booking.summary;
+	const navigate = useNavigate();
+
+	const handleNavigateToRooms = () => {
+		navigate({ to: '/' }).then(() => {
+			// Wait a brief moment for the page to render
+			setTimeout(() => {
+				const roomsSection = document.querySelector('[data-rooms-section]');
+				if (roomsSection) {
+					roomsSection.scrollIntoView({ behavior: 'smooth' });
+				}
+			}, 100);
+		});
+	};
 
 	if (!summary) {
 		return (
@@ -13,10 +28,17 @@ export function BookingSummary() {
 				<CardHeader>
 					<CardTitle>Booking Summary</CardTitle>
 				</CardHeader>
-				<CardContent>
+				<CardContent className="space-y-4">
 					<p className="text-muted-foreground">
-						No booking information available.
+						You have no active booking started yet.
 					</p>
+					<p className="text-muted-foreground">
+						You can start a new booking by viewing our available rooms.
+					</p>
+					<Button onClick={handleNavigateToRooms}>
+						<Icon icon="tabler:home-search" />
+						Book a Stay
+					</Button>
 				</CardContent>
 			</Card>
 		);
@@ -78,7 +100,7 @@ export function BookingSummary() {
 								<span>${summary.pricing.subtotal?.toFixed(2) || '0.00'}</span>
 							</div>
 
-							{summary.pricing.fees && summary.pricing.fees > 0 && (
+							{(summary.pricing.fees ?? 0) > 0 && (
 								<div className="flex justify-between text-muted-foreground">
 									<span>Service Fee</span>
 									<span>${summary.pricing.fees.toFixed(2)}</span>
@@ -86,7 +108,7 @@ export function BookingSummary() {
 							)}
 
 							{/* Enhanced tax display */}
-							{summary.pricing.taxes && summary.pricing.taxes > 0 && (
+							{(summary.pricing.taxes ?? 0) > 0 && (
 								<div className="space-y-1">
 									<div className="flex justify-between text-muted-foreground">
 										<span>Hotel Occupancy Tax</span>

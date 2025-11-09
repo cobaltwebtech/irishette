@@ -10,6 +10,7 @@ import Stripe from 'stripe';
 import { MagicLinkEmail } from '@/components/email/MagicLinkEmail';
 import { PasswordReset } from '@/components/email/PasswordReset';
 import * as authSchema from '@/db/auth-schema';
+
 // Initialize Drizzle with the Cloudflare D1 database
 export const createDrizzle = (db: D1Database) =>
 	drizzle(db, { schema: authSchema });

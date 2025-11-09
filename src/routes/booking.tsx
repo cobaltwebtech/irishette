@@ -1,5 +1,6 @@
+import { Icon } from '@iconify/react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import {
 	useCallback,
 	useEffect,
@@ -43,6 +44,7 @@ function BookingFlow() {
 	const { data: session } = useSession();
 	const booking = useBookingStore();
 	const isClient = useIsClient();
+	const navigate = useNavigate();
 
 	// Fetch room data when we have a roomId but no room name
 	const { data: roomData } = useQuery(
@@ -212,21 +214,39 @@ function BookingFlow() {
 		);
 	}
 
-	// If no active booking, redirect to home
+	// Show button if no active booking
 	if (!booking.hasActiveBooking()) {
+		const handleNavigateToRooms = () => {
+			navigate({ to: '/' }).then(() => {
+				// Wait a brief moment for the page to render
+				setTimeout(() => {
+					const roomsSection = document.querySelector('[data-rooms-section]');
+					if (roomsSection) {
+						roomsSection.scrollIntoView({ behavior: 'smooth' });
+					}
+				}, 100);
+			});
+		};
+
 		return (
-			<div className="min-h-screen bg-background flex items-center justify-center">
-				<Card className="max-w-md mx-auto">
+			<div className="max-w-5xl mx-auto flex flex-auto flex-col justify-center">
+				<Card>
 					<CardHeader>
-						<CardTitle className="text-center">No Active Booking</CardTitle>
+						<CardTitle className="text-center text-2xl font-bold">
+							No Active Booking
+						</CardTitle>
 					</CardHeader>
 					<CardContent className="text-center space-y-4">
 						<p className="text-muted-foreground">
-							It looks like you don't have an active booking session.
+							You have no active booking started yet.
 						</p>
-						<Link to="/">
-							<Button>Browse Rooms</Button>
-						</Link>
+						<p className="text-muted-foreground">
+							You can start a new booking by viewing our available rooms.
+						</p>
+						<Button onClick={handleNavigateToRooms}>
+							<Icon icon="tabler:home-search" />
+							Book a Stay
+						</Button>
 					</CardContent>
 				</Card>
 			</div>
@@ -234,11 +254,11 @@ function BookingFlow() {
 	}
 
 	return (
-		<div className="min-h-screen bg-background">
+		<div className="bg-background">
 			<BookingProgressSteps />
 
 			{/* Main Content */}
-			<div className="container mx-auto max-w-4xl px-4 py-8">
+			<div className="container mx-auto max-w-4xl px-4 py-12">
 				{/* Render all steps except confirmation */}
 				{!booking.isStep('confirmation') && (
 					<div className="grid lg:grid-cols-3 gap-8">

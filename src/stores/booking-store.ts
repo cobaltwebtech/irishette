@@ -157,8 +157,8 @@ export const bookingActions = {
 	setDates: (checkInDate: string, checkOutDate: string) => {
 		bookingStore.setState((state) => ({
 			...state,
-			checkInDate,
-			checkOutDate,
+			checkInDate: checkInDate || null,
+			checkOutDate: checkOutDate || null,
 			updatedAt: new Date().toISOString(),
 		}));
 	},
