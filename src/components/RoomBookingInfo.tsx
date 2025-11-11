@@ -10,7 +10,7 @@ import {
 	CardTitle,
 } from '@/components/ui/card';
 
-interface BookingInformationProps {
+interface BookingInfoProps {
 	selectedDateRange: DateRange | undefined;
 	totalPrice: number;
 	nights: number;
@@ -19,19 +19,19 @@ interface BookingInformationProps {
 	className?: string;
 }
 
-export default function BookingInformation({
+export default function BookingInfo({
 	selectedDateRange,
 	totalPrice,
 	nights,
 	onBookNow,
 	roomName,
 	className = '',
-}: BookingInformationProps) {
+}: BookingInfoProps) {
 	const formatDate = (date: Date) => {
 		return date.toLocaleDateString('en-US', {
 			weekday: 'short',
 			year: 'numeric',
-			month: 'long',
+			month: 'short',
 			day: 'numeric',
 		});
 	};
@@ -42,13 +42,21 @@ export default function BookingInformation({
 		return (
 			<div className="space-y-2">
 				<p>
-					<span className="underline">Check In</span> <br />
+					<Icon
+						icon="tabler:door-enter"
+						className="size-6 inline text-primary"
+					/>
+					<span className="italic">Check In</span> -{' '}
 					<span className="font-semibold">
 						{formatDate(selectedDateRange.from)}
 					</span>
 				</p>
 				<p>
-					<span className="underline">Check Out</span> <br />
+					<Icon
+						icon="tabler:door-exit"
+						className="size-6 inline text-accent-4"
+					/>
+					<span className="italic">Check Out</span> -{' '}
 					<span className="font-semibold">
 						{formatDate(selectedDateRange.to)}
 					</span>
@@ -80,17 +88,17 @@ export default function BookingInformation({
 
 	const renderEmptyState = () => {
 		return (
-			<div className="text-center py-8">
+			<div className="text-center py-8 space-y-2">
 				<Icon
 					icon="tabler:calendar-question"
-					className="size-12 text-muted-foreground mx-auto mb-4"
+					className="size-12 text-muted-foreground mx-auto"
 				/>
 				<p className="text-muted-foreground">
 					Select your check-in and check-out dates to see pricing and
 					availability
 				</p>
-				<p className="text-sm text-muted-foreground mt-2">
-					Minimum stay: 1 night • Maximum stay: 30 nights
+				<p className="text-sm text-muted-foreground">
+					Maximum stay is 30 nights.
 				</p>
 			</div>
 		);
@@ -98,15 +106,15 @@ export default function BookingInformation({
 
 	return (
 		<div className={`space-y-6 scroll-mt-24 ${className}`} data-booking-info>
-			<Card className="border-border">
+			<Card>
 				<CardHeader>
-					<CardTitle className="text-2xl text-foreground">
+					<CardTitle className="text-2xl text-foreground text-center">
 						Booking Summary
 					</CardTitle>
 				</CardHeader>
-				<CardContent className="space-y-4">
+				<CardContent>
 					{selectedDateRange?.from && selectedDateRange?.to ? (
-						<div className="space-y-4">
+						<div className="space-y-2">
 							<p>
 								<span className="text-sm text-muted-foreground">
 									Selected Room:
@@ -114,9 +122,7 @@ export default function BookingInformation({
 								<br />
 								<span className="font-semibold">{roomName}</span>
 							</p>
-							<p className="text-sm text-muted-foreground mb-0">
-								Selected Dates:
-							</p>
+							<p className="text-sm text-muted-foreground">Selected Dates:</p>
 							{renderDateDisplay()}
 							{renderPricingBreakdown()}
 							<p className="text-sm text-muted-foreground text-center">

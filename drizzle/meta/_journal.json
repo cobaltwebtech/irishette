@@ -71,6 +71,13 @@
       "when": 1760903478295,
       "tag": "0009_irishette-migration",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1762835494614,
+      "tag": "0010_irishette-migration",
+      "breakpoints": true
     }
   ]
 }

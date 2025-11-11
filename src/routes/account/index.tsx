@@ -117,7 +117,7 @@ function AccountPage() {
 	} = useQuery(
 		trpc.bookings.getMyBookings.queryOptions(
 			{
-				limit: 10,
+				limit: 50,
 				offset: 0,
 			},
 			{

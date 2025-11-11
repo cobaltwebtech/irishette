@@ -1,15 +1,14 @@
 import { Icon } from '@iconify/react';
-import { Link } from '@tanstack/react-router';
 import { useEffect, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { trpcClient } from '@/integrations/tanstack-query/root-provider';
 import { authClient, useSession } from '@/lib/auth-client';
 import { useBookingStore } from '@/stores';
+import { bookingActions, bookingStore } from '@/stores/booking-store';
 import { parseISODateString } from '@/utils/booking-utils';
 
 export function BookingDetailsStep() {
@@ -20,7 +19,6 @@ export function BookingDetailsStep() {
 	const phoneId = useId();
 	const guestsId = useId();
 	const requestsId = useId();
-	const policiesId = useId();
 
 	// Form state - use lazy initialization to avoid unnecessary useEffect
 	const [guestName, setGuestName] = useState(
@@ -39,7 +37,7 @@ export function BookingDetailsStep() {
 	const [specialRequests, setSpecialRequests] = useState(
 		() => booking.guestInfo?.specialRequests || '',
 	);
-	const [acceptedPolicies, setAcceptedPolicies] = useState(false);
+
 	const [errors, setErrors] = useState<Record<string, string>>({});
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -84,10 +82,6 @@ export function BookingDetailsStep() {
 		} else if (guestPhone.length < 10) {
 			newErrors.guestPhone =
 				'Please enter a valid phone number (at least 10 digits)';
-		}
-
-		if (!acceptedPolicies) {
-			newErrors.acceptedPolicies = 'You must accept the policies to continue';
 		}
 
 		setErrors(newErrors);
@@ -227,15 +221,15 @@ export function BookingDetailsStep() {
 		}
 
 		// Final validation before proceeding to payment
-		if (
-			!booking.guestInfo ||
-			!booking.pricing ||
-			booking.pricing.totalAmount <= 0
-		) {
+		// Use canProceedToPayment() which reads directly from bookingStore.state
+		// instead of the reactive booking object to avoid stale state issues
+		if (!bookingActions.canProceedToPayment()) {
+			const currentState = bookingStore.state;
 			console.error('Invalid booking state before payment:', {
-				hasGuestInfo: !!booking.guestInfo,
-				hasPricing: !!booking.pricing,
-				totalAmount: booking.pricing?.totalAmount,
+				hasGuestInfo: !!currentState.guestInfo,
+				hasPricing: !!currentState.pricing,
+				totalAmount: currentState.pricing?.totalAmount,
+				guestInfoDetails: currentState.guestInfo,
 			});
 			booking.actions.setError(
 				'Booking information is incomplete. Please try again.',
@@ -255,10 +249,13 @@ export function BookingDetailsStep() {
 			return;
 		}
 
-		if (!booking.guestInfo || !booking.pricing) {
+		// Read from direct store state to ensure we have the latest values
+		const currentState = bookingStore.state;
+
+		if (!currentState.guestInfo || !currentState.pricing) {
 			console.error('Missing booking information in initiatePayment:', {
-				hasGuestInfo: !!booking.guestInfo,
-				hasPricing: !!booking.pricing,
+				hasGuestInfo: !!currentState.guestInfo,
+				hasPricing: !!currentState.pricing,
 			});
 			booking.actions.setError(
 				'Missing booking information. Please refresh and try again.',
@@ -267,14 +264,18 @@ export function BookingDetailsStep() {
 			return;
 		}
 
-		if (!booking.roomId || !booking.checkInDate || !booking.checkOutDate) {
+		if (
+			!currentState.roomId ||
+			!currentState.checkInDate ||
+			!currentState.checkOutDate
+		) {
 			booking.actions.setError('Missing booking dates or room information');
 			setIsSubmitting(false);
 			return;
 		}
 
-		if (booking.pricing.totalAmount <= 0) {
-			console.error('Invalid total amount:', booking.pricing.totalAmount);
+		if (currentState.pricing.totalAmount <= 0) {
+			console.error('Invalid total amount:', currentState.pricing.totalAmount);
 			booking.actions.setError(
 				'Invalid booking total. Please refresh and try again.',
 			);
@@ -283,20 +284,20 @@ export function BookingDetailsStep() {
 		}
 
 		try {
-			// Prepare booking data for creation
+			// Prepare booking data for creation using direct store state
 			const bookingData = {
-				roomId: booking.roomId,
-				checkInDate: booking.checkInDate,
-				checkOutDate: booking.checkOutDate,
-				guestCount: booking.guestCount,
-				guestName: booking.guestInfo.name,
-				guestEmail: booking.guestInfo.email,
-				guestPhone: booking.guestInfo.phone,
-				specialRequests: booking.guestInfo.specialRequests || '',
-				basePrice: booking.pricing.basePrice,
-				serviceFee: booking.pricing.fees || 0,
-				taxAmount: booking.pricing.taxes || 0,
-				totalAmount: booking.pricing.totalAmount,
+				roomId: currentState.roomId,
+				checkInDate: currentState.checkInDate,
+				checkOutDate: currentState.checkOutDate,
+				guestCount: currentState.guestCount,
+				guestName: currentState.guestInfo.name,
+				guestEmail: currentState.guestInfo.email,
+				guestPhone: currentState.guestInfo.phone,
+				specialRequests: currentState.guestInfo.specialRequests || '',
+				basePrice: currentState.pricing.basePrice,
+				serviceFee: currentState.pricing.fees || 0,
+				taxAmount: currentState.pricing.taxes || 0,
+				totalAmount: currentState.pricing.totalAmount,
 			};
 
 			// Create booking via tRPC
@@ -331,7 +332,7 @@ export function BookingDetailsStep() {
 			<CardHeader>
 				<CardTitle className="flex items-center gap-2">
 					<Icon icon="tabler:user-circle" className="size-6" />
-					Booking Details
+					Booking Details Step
 				</CardTitle>
 			</CardHeader>
 			<CardContent className="space-y-6">
@@ -499,57 +500,6 @@ export function BookingDetailsStep() {
 					</div>
 				)}
 
-				{/* Policy Acceptance Checkbox */}
-				<div className="space-y-2">
-					<p className="text-sm leading-relaxed">
-						Please check the box below to acknowledge our policies and continue
-						to payment.
-					</p>
-					<div className="flex items-start gap-3">
-						<Checkbox
-							id={policiesId}
-							checked={acceptedPolicies}
-							onCheckedChange={(checked) =>
-								setAcceptedPolicies(checked === true)
-							}
-							aria-invalid={!!errors.acceptedPolicies}
-						/>
-						<Label
-							htmlFor={policiesId}
-							className="flex flex-wrap gap-2 cursor-pointer"
-						>
-							I have read and accept the{' '}
-							<Link
-								to="/cancellation-refund-policy"
-								target="_blank"
-								className="text-accent hover:underline font-medium"
-							>
-								Cancellation & Refund Policy,
-							</Link>
-							<Link
-								to="/terms-of-service"
-								target="_blank"
-								className="text-accent hover:underline font-medium"
-							>
-								Terms of Service,
-							</Link>
-							and
-							<Link
-								to="/privacy-policy"
-								target="_blank"
-								className="text-accent hover:underline font-medium"
-							>
-								Privacy Policy.
-							</Link>
-						</Label>
-					</div>
-					{errors.acceptedPolicies && (
-						<p className="text-sm text-destructive ml-7">
-							{errors.acceptedPolicies}
-						</p>
-					)}
-				</div>
-
 				{/* Action Buttons */}
 				<div className="flex gap-3">
 					<Button
@@ -569,7 +519,7 @@ export function BookingDetailsStep() {
 					<Button
 						onClick={handleContinue}
 						className="flex-1"
-						disabled={isSubmitting || !acceptedPolicies}
+						disabled={isSubmitting}
 					>
 						{isSubmitting ? (
 							<>

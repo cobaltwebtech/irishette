@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { createDrizzle } from '@/db/drizzle-init';
 import { room } from '@/db/schema-export';
 import { iCalService } from '@/lib/ical-service';
+import { PaymentService } from '@/lib/payment-service';
 
 interface ScheduledEnv {
 	DB: D1Database;
@@ -243,6 +244,37 @@ export async function scheduledCleanup(_env: ScheduledEnv) {
 }
 
 /**
+ * Cleanup expired pending bookings (runs hourly)
+ * Removes pending bookings that have passed their expiration time (30 minutes)
+ */
+export async function scheduledBookingCleanup(env: ScheduledEnv) {
+	console.log(
+		'🧹 Starting expired pending bookings cleanup...',
+		new Date().toISOString(),
+	);
+
+	try {
+		const paymentService = new PaymentService({
+			DB: env.DB,
+			STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY,
+			STRIPE_TRPC_WEBHOOK_SECRET: env.STRIPE_TRPC_WEBHOOK_SECRET,
+			BETTER_AUTH_URL: env.BETTER_AUTH_URL,
+		});
+
+		const result = await paymentService.cleanupExpiredPendingBookings();
+
+		console.log(
+			`✅ Booking cleanup completed: ${result.deletedCount} expired pending bookings removed`,
+		);
+
+		return result;
+	} catch (error) {
+		console.error('💥 Scheduled booking cleanup failed:', error);
+		throw error;
+	}
+}
+
+/**
  * Main scheduled event handler for Cloudflare Workers
  * This function will be called by the cron triggers
  */
@@ -260,6 +292,10 @@ export async function handleScheduledEvent(
 		switch (cron) {
 			case '*/30 * * * *': // Every 30 minutes run calendar sync
 				await scheduledCalendarSync(env);
+				break;
+
+			case '5 * * * *': // Every hour at 5 mins past - cleanup expired pending bookings
+				await scheduledBookingCleanup(env);
 				break;
 
 			case '0 2 * * SUN': // Weekly on Sunday at 2 AM - cleanup

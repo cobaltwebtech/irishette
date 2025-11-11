@@ -143,7 +143,11 @@ export const bookingsRouter = createTRPCRouter({
 		}),
 
 	/**
-	 * Create Stripe checkout session for existing booking
+	 * Create Stripe checkout session for booking
+	 * This was the first implementation of the payment process where we used the
+	 * hostedStripe Checkout session. Now, we use a custom checkout form which
+	 * that procedure is below this. Leaving it here in case we want to use the
+	 * hosted version later on.
 	 */
 	createCheckoutSession: protectedProcedure
 		.input(createCheckoutSessionSchema)
@@ -203,7 +207,7 @@ export const bookingsRouter = createTRPCRouter({
 		}),
 
 	/**
-	 * Create Payment Intent for in-app checkout
+	 * Create Payment Intent for in-app checkout (New Version)
 	 */
 	createPaymentIntent: protectedProcedure
 		.input(
@@ -264,6 +268,60 @@ export const bookingsRouter = createTRPCRouter({
 						error instanceof Error
 							? error.message
 							: 'Failed to create payment intent',
+				});
+			}
+		}),
+
+	/**
+	 * Refresh an expired booking if room is still available
+	 * Validates availability and extends expiration by 30 minutes
+	 */
+	refreshBooking: protectedProcedure
+		.input(
+			z.object({
+				bookingId: z.string(),
+			}),
+		)
+		.mutation(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+			const paymentService = new PaymentService({
+				DB: ctx.db,
+				STRIPE_SECRET_KEY: ctx.env.STRIPE_SECRET_KEY,
+				STRIPE_TRPC_WEBHOOK_SECRET: ctx.env.STRIPE_TRPC_WEBHOOK_SECRET,
+				BETTER_AUTH_URL: ctx.env.BETTER_AUTH_URL,
+			});
+
+			try {
+				const userId = ctx.user.id;
+
+				// Verify booking belongs to user
+				const bookingResult = await db
+					.select()
+					.from(bookings)
+					.where(
+						and(eq(bookings.id, input.bookingId), eq(bookings.userId, userId)),
+					);
+
+				if (!bookingResult[0]) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: 'Booking not found',
+					});
+				}
+
+				const result = await paymentService.refreshExpiredBooking(
+					input.bookingId,
+				);
+
+				return result;
+			} catch (error) {
+				console.error('Failed to refresh booking:', error);
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message:
+						error instanceof Error
+							? error.message
+							: 'Failed to refresh booking',
 				});
 			}
 		}),

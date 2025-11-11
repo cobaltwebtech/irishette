@@ -2,8 +2,8 @@ import { Icon } from '@iconify/react';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
-import BookingInformation from '@/components/BookingInformation';
 import RoomAvailabilityCalendar from '@/components/RoomAvailabilityCalendar';
+import BookingInfo from '@/components/RoomBookingInfo';
 import { RoomGallery } from '@/components/RoomGallery';
 import { Button } from '@/components/ui/button';
 import {
@@ -249,6 +249,7 @@ function RoseRoomPage() {
 						</p>
 					</div>
 
+					{/* Container for Calendar and Booking Info */}
 					<div className="grid lg:grid-cols-2 gap-8 justify-center">
 						{/* Calendar */}
 						<div className="flex justify-center">
@@ -264,7 +265,7 @@ function RoseRoomPage() {
 						</div>
 
 						{/* Booking Information */}
-						<BookingInformation
+						<BookingInfo
 							selectedDateRange={selectedDateRange}
 							totalPrice={totalPrice}
 							nights={nights}

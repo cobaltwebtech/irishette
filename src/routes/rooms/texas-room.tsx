@@ -3,8 +3,8 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { Image } from '@unpic/react';
 import { useEffect, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
-import BookingInformation from '@/components/BookingInformation';
 import RoomAvailabilityCalendar from '@/components/RoomAvailabilityCalendar';
+import BookingInfo from '@/components/RoomBookingInfo';
 import { RoomGallery } from '@/components/RoomGallery';
 import { Button } from '@/components/ui/button';
 import {
@@ -252,7 +252,7 @@ function TexasRoomPage() {
 						/>
 
 						{/* Booking Information */}
-						<BookingInformation
+						<BookingInfo
 							selectedDateRange={selectedRange}
 							totalPrice={totalPrice}
 							nights={nights}

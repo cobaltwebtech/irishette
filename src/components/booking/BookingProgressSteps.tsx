@@ -8,11 +8,6 @@ export function BookingProgressSteps() {
 	const { data: session } = useSession();
 
 	const steps: BookingStepItem[] = [
-		{
-			step: 'dates',
-			label: 'Dates',
-			completed: booking.isValid.dates,
-		},
 		{ step: 'auth', label: 'Sign In', completed: !!session?.user },
 		{
 			step: 'details',

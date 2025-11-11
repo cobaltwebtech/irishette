@@ -430,7 +430,9 @@ export class PaymentService {
 
 		const stripeCustomerId = userResult[0]?.stripeCustomerId || null;
 
-		// Create temporary booking
+		// Create temporary booking with 30-minute expiration (matches Stripe session)
+		const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes from now
+
 		await this.db.insert(bookings).values({
 			id: bookingId,
 			userId,
@@ -451,6 +453,7 @@ export class PaymentService {
 			status: 'pending', // Temporary status until payment confirmed
 			paymentStatus: 'pending',
 			stripeCustomerId: stripeCustomerId,
+			expiresAt: expiresAt,
 		});
 
 		return bookingId;
@@ -458,6 +461,11 @@ export class PaymentService {
 
 	/**
 	 * Create Stripe checkout session for booking payment
+	 * Inititally we used the hosted Stripe checkout session payment
+	 * form. We have since implemented a custom payment form using the
+	 * Stripe React library.
+	 * Leaving this method here in case we want to use hosted Stripe
+	 * checkout later on
 	 */
 	async createCheckoutSession(
 		bookingId: string,
@@ -729,6 +737,9 @@ export class PaymentService {
 		// Note: Confirmation email is sent by the webhook handler after payment confirmation. See the Stripe webhook endpoint at /api/stripe/$.ts
 
 		console.log('Post-booking workflows completed for:', bookingId);
+
+		// Clean up any pending bookings for this user
+		await this.cleanupPendingBookings(booking.userId);
 	}
 
 	/**
@@ -916,7 +927,155 @@ export class PaymentService {
 	}
 
 	/**
-	 * Create a Payment Intent for in-app checkout
+	 * Clean up pending bookings for a user after successful payment
+	 * This prevents database bloat by removing abandoned pending bookings
+	 */
+	private async cleanupPendingBookings(userId: string): Promise<void> {
+		try {
+			console.log('Cleaning up pending bookings for user:', userId);
+
+			await this.db
+				.delete(bookings)
+				.where(
+					and(eq(bookings.userId, userId), eq(bookings.status, 'pending')),
+				);
+
+			console.log('Pending bookings cleaned up successfully for user:', userId);
+		} catch (error) {
+			console.error('Failed to cleanup pending bookings:', error);
+			// Don't throw here - booking is already confirmed, this is just cleanup
+		}
+	}
+
+	/**
+	 * Clean up expired pending bookings across all users
+	 * Removes pending bookings that have passed their expiration time
+	 * This should be called from a scheduled task (cron job)
+	 */
+	async cleanupExpiredPendingBookings(): Promise<{
+		deletedCount: number;
+		timestamp: string;
+	}> {
+		try {
+			console.log('Starting cleanup of expired pending bookings...');
+
+			const now = new Date();
+
+			// Delete pending bookings where expiresAt is in the past
+			const result = await this.db
+				.delete(bookings)
+				.where(
+					and(eq(bookings.status, 'pending'), lte(bookings.expiresAt, now)),
+				)
+				.returning({ id: bookings.id });
+
+			const deletedCount = result.length;
+
+			console.log(
+				`Cleanup completed: ${deletedCount} expired pending bookings deleted`,
+			);
+
+			return {
+				deletedCount,
+				timestamp: now.toISOString(),
+			};
+		} catch (error) {
+			console.error('Failed to cleanup expired pending bookings:', error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Refresh an expired booking if room is still available
+	 * Returns the bookingId (same if refreshed, or throws if unavailable)
+	 * This allows graceful recovery when users return after 30+ minutes
+	 */
+	async refreshExpiredBooking(bookingId: string): Promise<{
+		bookingId: string;
+		refreshed: boolean;
+		expiresAt: Date;
+	}> {
+		try {
+			console.log('Checking if booking needs refresh:', bookingId);
+
+			// Get the existing booking
+			const bookingResult = await this.db
+				.select()
+				.from(bookings)
+				.where(eq(bookings.id, bookingId));
+
+			if (!bookingResult[0]) {
+				throw new Error('Booking not found');
+			}
+
+			const booking = bookingResult[0];
+
+			// If booking is already confirmed, no refresh needed
+			if (booking.status === 'confirmed') {
+				return {
+					bookingId,
+					refreshed: false,
+					expiresAt: booking.expiresAt || new Date(),
+				};
+			}
+
+			const now = new Date();
+			const isExpired = booking.expiresAt && booking.expiresAt <= now;
+
+			// If not expired yet, return as-is
+			if (!isExpired) {
+				console.log('Booking is still valid, no refresh needed');
+				return {
+					bookingId,
+					refreshed: false,
+					expiresAt: booking.expiresAt || now,
+				};
+			}
+
+			console.log('Booking has expired, checking availability...');
+
+			// Check if room is still available for these dates
+			const availabilityCheck = await this.checkRoomAvailability(
+				booking.roomId,
+				booking.checkInDate,
+				booking.checkOutDate,
+			);
+
+			if (!availabilityCheck.available) {
+				throw new Error(
+					'Room is no longer available for the selected dates. Please start a new booking.',
+				);
+			}
+
+			// Room is available - refresh the expiration
+			const newExpiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes from now
+
+			await this.db
+				.update(bookings)
+				.set({
+					expiresAt: newExpiresAt,
+					updatedAt: new Date(),
+				})
+				.where(eq(bookings.id, bookingId));
+
+			console.log('Booking refreshed successfully with new expiration:', {
+				bookingId,
+				newExpiresAt: newExpiresAt.toISOString(),
+			});
+
+			return {
+				bookingId,
+				refreshed: true,
+				expiresAt: newExpiresAt,
+			};
+		} catch (error) {
+			console.error('Failed to refresh booking:', error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Create a Payment Intent for in-app checkout (New Version)
 	 */
 	async createPaymentIntent(
 		bookingId: string,
@@ -978,6 +1137,8 @@ export class PaymentService {
 			automatic_payment_methods: {
 				enabled: true,
 			},
+			// Save the payment method for future off-session use
+			setup_future_usage: 'off_session',
 		});
 
 		// Store payment intent ID in booking
@@ -1037,6 +1198,9 @@ export class PaymentService {
 				bookingResult[0].checkInDate,
 				bookingResult[0].checkOutDate,
 			);
+
+			// Clean up any pending bookings for this user
+			await this.cleanupPendingBookings(bookingResult[0].userId);
 		}
 	}
 

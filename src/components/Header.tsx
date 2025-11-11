@@ -73,7 +73,7 @@ export default function Header() {
 								{/* Continue Booking Button - Shows if there's an active booking in progress */}
 								{booking.hasActiveBooking() && (
 									<Button variant="secondary" asChild>
-										<Link to="/booking">
+										<Link to="/booking" search={{ step: undefined }}>
 											<Icon icon="tabler:clock-check" className="size-5" />
 											<span className="hidden lg:inline">Continue Booking</span>
 										</Link>
@@ -121,7 +121,7 @@ export default function Header() {
 								{/* Continue Booking Button - Shows if there's an active booking in progress */}
 								{booking.hasActiveBooking() && (
 									<Button variant="secondary" asChild>
-										<Link to="/booking">
+										<Link to="/booking" search={{ step: undefined }}>
 											<Icon icon="tabler:clock-check" className="size-5" />
 											<span className="hidden lg:inline">Continue Booking</span>
 										</Link>

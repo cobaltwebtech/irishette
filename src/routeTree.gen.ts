@@ -13,8 +13,8 @@ import { Route as TermsOfServiceRouteImport } from './routes/terms-of-service'
 import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as CancellationRefundPolicyRouteImport } from './routes/cancellation-refund-policy'
-import { Route as BookingRouteImport } from './routes/booking'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BookingIndexRouteImport } from './routes/booking/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AccountIndexRouteImport } from './routes/account/index'
 import { Route as RoomsTexasRoomRouteImport } from './routes/rooms/texas-room'
@@ -26,16 +26,17 @@ import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthForgotPasswordRouteImport } from './routes/auth/forgot-password'
 import { Route as AdminPropertyManagementIndexRouteImport } from './routes/admin/property-management/index'
 import { Route as AdminGuestIndexRouteImport } from './routes/admin/guest/index'
-import { Route as ApiTrpcSplatRouteImport } from './routes/api/trpc/$'
-import { Route as ApiStripeSplatRouteImport } from './routes/api/stripe/$'
-import { Route as ApiIcalSplatRouteImport } from './routes/api/ical/$'
-import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as BookingConfirmationBookingIdRouteImport } from './routes/booking/confirmation.$bookingId'
+import { Route as ApiTrpcSplatRouteImport } from './routes/api/trpc.$'
+import { Route as ApiStripeSplatRouteImport } from './routes/api/stripe.$'
+import { Route as ApiIcalSplatRouteImport } from './routes/api/ical.$'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth.$'
 import { Route as AdminPropertyManagementRoomIdRouteImport } from './routes/admin/property-management/$roomId'
 import { Route as AdminGuestUserIdRouteImport } from './routes/admin/guest/$userId'
 import { Route as AdminBookingsPastBookingsRouteImport } from './routes/admin/bookings/past-bookings'
 import { Route as AdminBookingsCurrentBookingsRouteImport } from './routes/admin/bookings/current-bookings'
 import { Route as AdminBookingsBookingIdRouteImport } from './routes/admin/bookings/$bookingId'
-import { Route as AccountBookingBookingIdRouteImport } from './routes/account/booking/$bookingId'
+import { Route as AccountBookingBookingIdRouteImport } from './routes/account/booking.$bookingId'
 
 const TermsOfServiceRoute = TermsOfServiceRouteImport.update({
   id: '/terms-of-service',
@@ -58,14 +59,14 @@ const CancellationRefundPolicyRoute =
     path: '/cancellation-refund-policy',
     getParentRoute: () => rootRouteImport,
   } as any)
-const BookingRoute = BookingRouteImport.update({
-  id: '/booking',
-  path: '/booking',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BookingIndexRoute = BookingIndexRouteImport.update({
+  id: '/booking/',
+  path: '/booking/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
@@ -124,6 +125,12 @@ const AdminGuestIndexRoute = AdminGuestIndexRouteImport.update({
   path: '/admin/guest/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BookingConfirmationBookingIdRoute =
+  BookingConfirmationBookingIdRouteImport.update({
+    id: '/booking/confirmation/$bookingId',
+    path: '/booking/confirmation/$bookingId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiTrpcSplatRoute = ApiTrpcSplatRouteImport.update({
   id: '/api/trpc/$',
   path: '/api/trpc/$',
@@ -180,7 +187,6 @@ const AccountBookingBookingIdRoute = AccountBookingBookingIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/booking': typeof BookingRoute
   '/cancellation-refund-policy': typeof CancellationRefundPolicyRoute
   '/contact': typeof ContactRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
@@ -194,6 +200,7 @@ export interface FileRoutesByFullPath {
   '/rooms/texas-room': typeof RoomsTexasRoomRoute
   '/account': typeof AccountIndexRoute
   '/admin': typeof AdminIndexRoute
+  '/booking': typeof BookingIndexRoute
   '/account/booking/$bookingId': typeof AccountBookingBookingIdRoute
   '/admin/bookings/$bookingId': typeof AdminBookingsBookingIdRoute
   '/admin/bookings/current-bookings': typeof AdminBookingsCurrentBookingsRoute
@@ -204,12 +211,12 @@ export interface FileRoutesByFullPath {
   '/api/ical/$': typeof ApiIcalSplatRoute
   '/api/stripe/$': typeof ApiStripeSplatRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
+  '/booking/confirmation/$bookingId': typeof BookingConfirmationBookingIdRoute
   '/admin/guest': typeof AdminGuestIndexRoute
   '/admin/property-management': typeof AdminPropertyManagementIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/booking': typeof BookingRoute
   '/cancellation-refund-policy': typeof CancellationRefundPolicyRoute
   '/contact': typeof ContactRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
@@ -223,6 +230,7 @@ export interface FileRoutesByTo {
   '/rooms/texas-room': typeof RoomsTexasRoomRoute
   '/account': typeof AccountIndexRoute
   '/admin': typeof AdminIndexRoute
+  '/booking': typeof BookingIndexRoute
   '/account/booking/$bookingId': typeof AccountBookingBookingIdRoute
   '/admin/bookings/$bookingId': typeof AdminBookingsBookingIdRoute
   '/admin/bookings/current-bookings': typeof AdminBookingsCurrentBookingsRoute
@@ -233,13 +241,13 @@ export interface FileRoutesByTo {
   '/api/ical/$': typeof ApiIcalSplatRoute
   '/api/stripe/$': typeof ApiStripeSplatRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
+  '/booking/confirmation/$bookingId': typeof BookingConfirmationBookingIdRoute
   '/admin/guest': typeof AdminGuestIndexRoute
   '/admin/property-management': typeof AdminPropertyManagementIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/booking': typeof BookingRoute
   '/cancellation-refund-policy': typeof CancellationRefundPolicyRoute
   '/contact': typeof ContactRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
@@ -253,6 +261,7 @@ export interface FileRoutesById {
   '/rooms/texas-room': typeof RoomsTexasRoomRoute
   '/account/': typeof AccountIndexRoute
   '/admin/': typeof AdminIndexRoute
+  '/booking/': typeof BookingIndexRoute
   '/account/booking/$bookingId': typeof AccountBookingBookingIdRoute
   '/admin/bookings/$bookingId': typeof AdminBookingsBookingIdRoute
   '/admin/bookings/current-bookings': typeof AdminBookingsCurrentBookingsRoute
@@ -263,6 +272,7 @@ export interface FileRoutesById {
   '/api/ical/$': typeof ApiIcalSplatRoute
   '/api/stripe/$': typeof ApiStripeSplatRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
+  '/booking/confirmation/$bookingId': typeof BookingConfirmationBookingIdRoute
   '/admin/guest/': typeof AdminGuestIndexRoute
   '/admin/property-management/': typeof AdminPropertyManagementIndexRoute
 }
@@ -270,7 +280,6 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/booking'
     | '/cancellation-refund-policy'
     | '/contact'
     | '/privacy-policy'
@@ -284,6 +293,7 @@ export interface FileRouteTypes {
     | '/rooms/texas-room'
     | '/account'
     | '/admin'
+    | '/booking'
     | '/account/booking/$bookingId'
     | '/admin/bookings/$bookingId'
     | '/admin/bookings/current-bookings'
@@ -294,12 +304,12 @@ export interface FileRouteTypes {
     | '/api/ical/$'
     | '/api/stripe/$'
     | '/api/trpc/$'
+    | '/booking/confirmation/$bookingId'
     | '/admin/guest'
     | '/admin/property-management'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/booking'
     | '/cancellation-refund-policy'
     | '/contact'
     | '/privacy-policy'
@@ -313,6 +323,7 @@ export interface FileRouteTypes {
     | '/rooms/texas-room'
     | '/account'
     | '/admin'
+    | '/booking'
     | '/account/booking/$bookingId'
     | '/admin/bookings/$bookingId'
     | '/admin/bookings/current-bookings'
@@ -323,12 +334,12 @@ export interface FileRouteTypes {
     | '/api/ical/$'
     | '/api/stripe/$'
     | '/api/trpc/$'
+    | '/booking/confirmation/$bookingId'
     | '/admin/guest'
     | '/admin/property-management'
   id:
     | '__root__'
     | '/'
-    | '/booking'
     | '/cancellation-refund-policy'
     | '/contact'
     | '/privacy-policy'
@@ -342,6 +353,7 @@ export interface FileRouteTypes {
     | '/rooms/texas-room'
     | '/account/'
     | '/admin/'
+    | '/booking/'
     | '/account/booking/$bookingId'
     | '/admin/bookings/$bookingId'
     | '/admin/bookings/current-bookings'
@@ -352,13 +364,13 @@ export interface FileRouteTypes {
     | '/api/ical/$'
     | '/api/stripe/$'
     | '/api/trpc/$'
+    | '/booking/confirmation/$bookingId'
     | '/admin/guest/'
     | '/admin/property-management/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  BookingRoute: typeof BookingRoute
   CancellationRefundPolicyRoute: typeof CancellationRefundPolicyRoute
   ContactRoute: typeof ContactRoute
   PrivacyPolicyRoute: typeof PrivacyPolicyRoute
@@ -372,6 +384,7 @@ export interface RootRouteChildren {
   RoomsTexasRoomRoute: typeof RoomsTexasRoomRoute
   AccountIndexRoute: typeof AccountIndexRoute
   AdminIndexRoute: typeof AdminIndexRoute
+  BookingIndexRoute: typeof BookingIndexRoute
   AccountBookingBookingIdRoute: typeof AccountBookingBookingIdRoute
   AdminBookingsBookingIdRoute: typeof AdminBookingsBookingIdRoute
   AdminBookingsCurrentBookingsRoute: typeof AdminBookingsCurrentBookingsRoute
@@ -382,6 +395,7 @@ export interface RootRouteChildren {
   ApiIcalSplatRoute: typeof ApiIcalSplatRoute
   ApiStripeSplatRoute: typeof ApiStripeSplatRoute
   ApiTrpcSplatRoute: typeof ApiTrpcSplatRoute
+  BookingConfirmationBookingIdRoute: typeof BookingConfirmationBookingIdRoute
   AdminGuestIndexRoute: typeof AdminGuestIndexRoute
   AdminPropertyManagementIndexRoute: typeof AdminPropertyManagementIndexRoute
 }
@@ -416,18 +430,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CancellationRefundPolicyRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/booking': {
-      id: '/booking'
-      path: '/booking'
-      fullPath: '/booking'
-      preLoaderRoute: typeof BookingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/booking/': {
+      id: '/booking/'
+      path: '/booking'
+      fullPath: '/booking'
+      preLoaderRoute: typeof BookingIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/': {
@@ -507,6 +521,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminGuestIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/booking/confirmation/$bookingId': {
+      id: '/booking/confirmation/$bookingId'
+      path: '/booking/confirmation/$bookingId'
+      fullPath: '/booking/confirmation/$bookingId'
+      preLoaderRoute: typeof BookingConfirmationBookingIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/trpc/$': {
       id: '/api/trpc/$'
       path: '/api/trpc/$'
@@ -582,7 +603,6 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  BookingRoute: BookingRoute,
   CancellationRefundPolicyRoute: CancellationRefundPolicyRoute,
   ContactRoute: ContactRoute,
   PrivacyPolicyRoute: PrivacyPolicyRoute,
@@ -596,6 +616,7 @@ const rootRouteChildren: RootRouteChildren = {
   RoomsTexasRoomRoute: RoomsTexasRoomRoute,
   AccountIndexRoute: AccountIndexRoute,
   AdminIndexRoute: AdminIndexRoute,
+  BookingIndexRoute: BookingIndexRoute,
   AccountBookingBookingIdRoute: AccountBookingBookingIdRoute,
   AdminBookingsBookingIdRoute: AdminBookingsBookingIdRoute,
   AdminBookingsCurrentBookingsRoute: AdminBookingsCurrentBookingsRoute,
@@ -606,6 +627,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiIcalSplatRoute: ApiIcalSplatRoute,
   ApiStripeSplatRoute: ApiStripeSplatRoute,
   ApiTrpcSplatRoute: ApiTrpcSplatRoute,
+  BookingConfirmationBookingIdRoute: BookingConfirmationBookingIdRoute,
   AdminGuestIndexRoute: AdminGuestIndexRoute,
   AdminPropertyManagementIndexRoute: AdminPropertyManagementIndexRoute,
 }

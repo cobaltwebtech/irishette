@@ -1,18 +1,11 @@
 import { Icon } from '@iconify/react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import {
-	useCallback,
-	useEffect,
-	useEffectEvent,
-	useSyncExternalStore,
-} from 'react';
+import { useEffect, useEffectEvent, useSyncExternalStore } from 'react';
 import { AuthenticationStep } from '@/components/booking/AuthenticationStep';
 import { BookingDetailsStep } from '@/components/booking/BookingDetailsStep';
 import { BookingProgressSteps } from '@/components/booking/BookingProgressSteps';
-import { BookingSummary } from '@/components/booking/BookingSummary';
-import { ConfirmationStep } from '@/components/booking/ConfirmationStep';
-import { DatesStep } from '@/components/booking/DatesStep';
+import { BookingSummaryCard } from '@/components/booking/BookingSummaryCard';
 import { PaymentStep } from '@/components/booking/PaymentStep';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,7 +13,7 @@ import { trpc, trpcClient } from '@/integrations/tanstack-query/root-provider';
 import { useSession } from '@/lib/auth-client';
 import { type BookingStep, useBookingStore } from '@/stores';
 
-export const Route = createFileRoute('/booking')({
+export const Route = createFileRoute('/booking/')({
 	head: () => ({
 		meta: [
 			{
@@ -28,6 +21,11 @@ export const Route = createFileRoute('/booking')({
 			},
 		],
 	}),
+	validateSearch: (search: Record<string, unknown>) => {
+		return {
+			step: search.step as BookingStep | undefined,
+		};
+	},
 	component: BookingFlow,
 });
 
@@ -45,6 +43,7 @@ function BookingFlow() {
 	const booking = useBookingStore();
 	const isClient = useIsClient();
 	const navigate = useNavigate();
+	const { step: stepFromUrl } = Route.useSearch();
 
 	// Fetch room data when we have a roomId but no room name
 	const { data: roomData } = useQuery(
@@ -57,19 +56,35 @@ function BookingFlow() {
 		),
 	);
 
-	// Use TanStack Query mutation for pricing calculation
-	const pricingMutation = useMutation({
-		mutationFn: async (input: {
-			roomId: string;
-			checkInDate: string;
-			checkOutDate: string;
-			guestCount: number;
-		}) => {
-			return await trpcClient.bookings.calculateBooking.mutate(input);
+	// Use TanStack Query to fetch pricing (instead of mutation + useEffect)
+	const { data: pricingData } = useQuery({
+		queryKey: [
+			'booking-pricing',
+			booking.roomId,
+			booking.checkInDate,
+			booking.checkOutDate,
+			booking.guestCount,
+		],
+		queryFn: async () => {
+			if (!booking.roomId || !booking.checkInDate || !booking.checkOutDate) {
+				return null;
+			}
+
+			console.log('Calculating precise pricing for booking summary...');
+
+			return await trpcClient.bookings.calculateBooking.mutate({
+				roomId: booking.roomId,
+				checkInDate: booking.checkInDate,
+				checkOutDate: booking.checkOutDate,
+				guestCount: booking.guestCount || 1,
+			});
 		},
-		onError: (error) => {
-			console.error('Error calculating precise pricing:', error);
-		},
+		enabled:
+			isClient &&
+			!!booking.roomId &&
+			!!booking.checkInDate &&
+			!!booking.checkOutDate,
+		staleTime: 1000, // 1 second - recalculate if data changes
 	});
 
 	// Event handler for updating pricing in store (non-reactive)
@@ -141,62 +156,29 @@ function BookingFlow() {
 		}
 	}, [roomData, booking.roomSlug, booking.roomId, booking.actions]);
 
-	// Calculate pricing when booking data changes
-	const calculatePricing = useCallback(() => {
-		if (
-			!isClient ||
-			!booking.roomId ||
-			!booking.checkInDate ||
-			!booking.checkOutDate
-		) {
-			return;
-		}
-
-		console.log('Calculating precise pricing for booking summary...');
-
-		pricingMutation.mutate(
-			{
-				roomId: booking.roomId,
-				checkInDate: booking.checkInDate,
-				checkOutDate: booking.checkOutDate,
-				guestCount: booking.guestCount || 1,
-			},
-			{
-				onSuccess: (pricingData) => {
-					onPricingDataFetched(pricingData);
-				},
-			},
-		);
-	}, [
-		isClient,
-		booking.roomId,
-		booking.checkInDate,
-		booking.checkOutDate,
-		booking.guestCount,
-		pricingMutation.mutate,
-		// onPricingDataFetched is a useEffectEvent and doesn't need to be a dependency
-	]);
-
+	// Sync pricing data to store when fetched
 	useEffect(() => {
-		calculatePricing();
-	}, [calculatePricing]);
-
-	// Handle URL parameters for step navigation
-	useEffect(() => {
-		if (!isClient) return;
-
-		const urlParams = new URLSearchParams(window.location.search);
-		const stepParam = urlParams.get('step');
-
-		if (
-			stepParam &&
-			['dates', 'auth', 'details', 'payment', 'confirmation'].includes(
-				stepParam,
-			)
-		) {
-			booking.actions.setStep(stepParam as BookingStep);
+		if (pricingData) {
+			onPricingDataFetched(pricingData);
 		}
-	}, [isClient, booking.actions]);
+	}, [pricingData]);
+
+	// Handle URL search params for step navigation
+	useEffect(() => {
+		if (!isClient || !stepFromUrl) return;
+
+		const validSteps: BookingStep[] = [
+			'dates',
+			'auth',
+			'details',
+			'payment',
+			'confirmation',
+		];
+
+		if (validSteps.includes(stepFromUrl)) {
+			booking.actions.setStep(stepFromUrl);
+		}
+	}, [isClient, stepFromUrl, booking.actions]);
 
 	// Handle authentication callback - advance to details step when authenticated
 	useEffect(() => {
@@ -259,27 +241,19 @@ function BookingFlow() {
 
 			{/* Main Content */}
 			<div className="container mx-auto max-w-4xl px-4 py-12">
-				{/* Render all steps except confirmation */}
-				{!booking.isStep('confirmation') && (
-					<div className="grid lg:grid-cols-3 gap-8">
-						{/* Booking Steps */}
-						<div className="lg:col-span-2 order-2 lg:order-1">
-							{booking.isStep('dates') && <DatesStep />}
-							{booking.isStep('auth') && <AuthenticationStep />}
-							{booking.isStep('details') && <BookingDetailsStep />}
-							{booking.isStep('payment') && <PaymentStep />}
-							{booking.isStep('confirmation') && <ConfirmationStep />}
-						</div>
-
-						{/* Booking Summary Sidebar */}
-						<div className="lg:col-span-1 order-1 lg:order-2">
-							<BookingSummary />
-						</div>
+				<div className="grid lg:grid-cols-3 gap-8">
+					{/* Booking Steps */}
+					<div className="lg:col-span-2 order-2 lg:order-1">
+						{booking.isStep('auth') && <AuthenticationStep />}
+						{booking.isStep('details') && <BookingDetailsStep />}
+						{booking.isStep('payment') && <PaymentStep />}
 					</div>
-				)}
 
-				{/* Render confirmation step without sidebar and use full width container */}
-				{booking.isStep('confirmation') && <ConfirmationStep />}
+					{/* Booking Summary Sidebar */}
+					<div className="lg:col-span-1 order-1 lg:order-2">
+						<BookingSummaryCard />
+					</div>
+				</div>
 			</div>
 		</div>
 	);

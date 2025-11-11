@@ -63,12 +63,14 @@ export const bookings = sqliteTable(
 			.notNull(),
 		confirmedAt: integer('confirmed_at', { mode: 'timestamp' }),
 		cancelledAt: integer('cancelled_at', { mode: 'timestamp' }),
+		expiresAt: integer('expires_at', { mode: 'timestamp' }), // For pending bookings - matches Stripe session expiration (30 minutes)
 	},
 	(table) => [
 		index('bookings_room_id_idx').on(table.roomId),
 		index('bookings_status_idx').on(table.status),
 		index('bookings_check_in_date_idx').on(table.checkInDate),
 		index('bookings_created_at_idx').on(table.createdAt),
+		index('bookings_expires_at_idx').on(table.expiresAt), // Index for efficient cleanup queries
 	],
 );
 

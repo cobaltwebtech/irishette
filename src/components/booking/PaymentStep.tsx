@@ -7,11 +7,14 @@ import {
 } from '@stripe/react-stripe-js';
 import { loadStripe, type Stripe } from '@stripe/stripe-js';
 import { useMutation } from '@tanstack/react-query';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useLenis } from 'lenis/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { trpcClient } from '@/integrations/tanstack-query/root-provider';
 import { useBookingStore } from '@/stores';
 
@@ -29,8 +32,12 @@ function PaymentForm() {
 	const stripe = useStripe();
 	const elements = useElements();
 	const booking = useBookingStore();
+	const navigate = useNavigate();
+	const policiesId = useId();
 	const [isProcessing, setIsProcessing] = useState(false);
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
+	const [acceptedPolicies, setAcceptedPolicies] = useState(false);
+	const [policyError, setPolicyError] = useState<string | null>(null);
 
 	const confirmPaymentMutation = useMutation({
 		mutationFn: async (paymentIntentId: string) => {
@@ -46,6 +53,14 @@ function PaymentForm() {
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
+
+		// Validate policy acceptance first
+		if (!acceptedPolicies) {
+			setPolicyError('You must accept the policies to continue');
+			return;
+		}
+
+		setPolicyError(null);
 
 		if (!stripe || !elements) {
 			return;
@@ -68,9 +83,15 @@ function PaymentForm() {
 				// Payment succeeded, confirm with backend
 				await confirmPaymentMutation.mutateAsync(paymentIntent.id);
 
-				// Move to confirmation step
-				booking.actions.setStep('confirmation');
+				// Navigate to confirmation page with bookingId
 				toast.success('Payment successful!');
+				if (booking.bookingId) {
+					navigate({
+						to: '/booking/confirmation/$bookingId',
+						params: { bookingId: booking.bookingId },
+						search: { step: undefined },
+					});
+				}
 			}
 		} catch (error) {
 			console.error('Payment error:', error);
@@ -86,6 +107,54 @@ function PaymentForm() {
 	return (
 		<form onSubmit={handleSubmit} className="space-y-6">
 			<PaymentElement />
+
+			{/* Policy Acceptance Checkbox */}
+			<div className="space-y-2">
+				<p className="text-sm leading-relaxed">
+					Please check the box below to acknowledge our policies and complete
+					your payment.
+				</p>
+				<div className="flex items-start gap-3">
+					<Checkbox
+						id={policiesId}
+						className="size-6"
+						checked={acceptedPolicies}
+						onCheckedChange={(checked) => setAcceptedPolicies(checked === true)}
+						aria-invalid={!!policyError}
+					/>
+					<Label
+						htmlFor={policiesId}
+						className="flex flex-wrap gap-2 cursor-pointer"
+					>
+						I have read and accept the{' '}
+						<Link
+							to="/cancellation-refund-policy"
+							target="_blank"
+							className="text-accent hover:underline font-medium"
+						>
+							Cancellation & Refund Policy,
+						</Link>
+						<Link
+							to="/terms-of-service"
+							target="_blank"
+							className="text-accent hover:underline font-medium"
+						>
+							Terms of Service,
+						</Link>
+						and
+						<Link
+							to="/privacy-policy"
+							target="_blank"
+							className="text-accent hover:underline font-medium"
+						>
+							Privacy Policy.
+						</Link>
+					</Label>
+				</div>
+				{policyError && (
+					<p className="text-sm text-destructive ml-7">{policyError}</p>
+				)}
+			</div>
 
 			{errorMessage && (
 				<div className="bg-destructive/10 border border-destructive text-destructive px-4 py-3 rounded-md">
@@ -113,7 +182,7 @@ function PaymentForm() {
 
 				<Button
 					type="submit"
-					disabled={!stripe || isProcessing}
+					disabled={!stripe || isProcessing || !acceptedPolicies}
 					className="flex-1"
 				>
 					{isProcessing ? (
@@ -158,6 +227,35 @@ export function PaymentStep() {
 					throw new Error('No booking ID found');
 				}
 
+				// First, check if booking needs refresh (handles expired sessions gracefully)
+				try {
+					const refreshResult = await trpcClient.bookings.refreshBooking.mutate(
+						{
+							bookingId: booking.bookingId,
+						},
+					);
+
+					if (refreshResult.refreshed) {
+						toast.success(
+							'Your booking session has been refreshed. Room is still available!',
+							{ duration: 4000 },
+						);
+						console.log('Booking refreshed successfully:', refreshResult);
+					}
+				} catch (refreshError) {
+					// If refresh fails (room no longer available), show error and go back
+					const errorMessage =
+						refreshError instanceof Error
+							? refreshError.message
+							: 'Unable to proceed with this booking';
+					console.error('Failed to refresh booking:', refreshError);
+					toast.error(errorMessage, { duration: 6000 });
+					booking.actions.setStep('details');
+					setIsLoading(false);
+					return;
+				}
+
+				// Proceed with payment intent creation
 				const result = await trpcClient.bookings.createPaymentIntent.mutate({
 					bookingId: booking.bookingId,
 				});
