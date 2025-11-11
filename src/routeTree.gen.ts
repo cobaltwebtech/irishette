@@ -24,6 +24,7 @@ import { Route as AuthResetPasswordRouteImport } from './routes/auth/reset-passw
 import { Route as AuthLogoutRouteImport } from './routes/auth/logout'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthForgotPasswordRouteImport } from './routes/auth/forgot-password'
+import { Route as AccountPastBookingsRouteImport } from './routes/account/past-bookings'
 import { Route as AdminPropertyManagementIndexRouteImport } from './routes/admin/property-management/index'
 import { Route as AdminGuestIndexRouteImport } from './routes/admin/guest/index'
 import { Route as BookingConfirmationBookingIdRouteImport } from './routes/booking/confirmation.$bookingId'
@@ -114,6 +115,11 @@ const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
   path: '/auth/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AccountPastBookingsRoute = AccountPastBookingsRouteImport.update({
+  id: '/account/past-bookings',
+  path: '/account/past-bookings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminPropertyManagementIndexRoute =
   AdminPropertyManagementIndexRouteImport.update({
     id: '/admin/property-management/',
@@ -191,6 +197,7 @@ export interface FileRoutesByFullPath {
   '/contact': typeof ContactRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/terms-of-service': typeof TermsOfServiceRoute
+  '/account/past-bookings': typeof AccountPastBookingsRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/logout': typeof AuthLogoutRoute
@@ -221,6 +228,7 @@ export interface FileRoutesByTo {
   '/contact': typeof ContactRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/terms-of-service': typeof TermsOfServiceRoute
+  '/account/past-bookings': typeof AccountPastBookingsRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/logout': typeof AuthLogoutRoute
@@ -252,6 +260,7 @@ export interface FileRoutesById {
   '/contact': typeof ContactRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/terms-of-service': typeof TermsOfServiceRoute
+  '/account/past-bookings': typeof AccountPastBookingsRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/logout': typeof AuthLogoutRoute
@@ -284,6 +293,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/privacy-policy'
     | '/terms-of-service'
+    | '/account/past-bookings'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/logout'
@@ -314,6 +324,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/privacy-policy'
     | '/terms-of-service'
+    | '/account/past-bookings'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/logout'
@@ -344,6 +355,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/privacy-policy'
     | '/terms-of-service'
+    | '/account/past-bookings'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/logout'
@@ -375,6 +387,7 @@ export interface RootRouteChildren {
   ContactRoute: typeof ContactRoute
   PrivacyPolicyRoute: typeof PrivacyPolicyRoute
   TermsOfServiceRoute: typeof TermsOfServiceRoute
+  AccountPastBookingsRoute: typeof AccountPastBookingsRoute
   AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthLogoutRoute: typeof AuthLogoutRoute
@@ -507,6 +520,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/account/past-bookings': {
+      id: '/account/past-bookings'
+      path: '/account/past-bookings'
+      fullPath: '/account/past-bookings'
+      preLoaderRoute: typeof AccountPastBookingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/property-management/': {
       id: '/admin/property-management/'
       path: '/admin/property-management'
@@ -607,6 +627,7 @@ const rootRouteChildren: RootRouteChildren = {
   ContactRoute: ContactRoute,
   PrivacyPolicyRoute: PrivacyPolicyRoute,
   TermsOfServiceRoute: TermsOfServiceRoute,
+  AccountPastBookingsRoute: AccountPastBookingsRoute,
   AuthForgotPasswordRoute: AuthForgotPasswordRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthLogoutRoute: AuthLogoutRoute,

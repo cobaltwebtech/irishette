@@ -19,7 +19,6 @@ export default function Header() {
 					<Link
 						to="/"
 						className="text-2xl font-extrabold text-background hover:text-background/80 transition-colors"
-						onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
 					>
 						Irishette
 						<span className="sr-only">Home</span>

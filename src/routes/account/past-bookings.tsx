@@ -13,14 +13,12 @@ import {
 	useReactTable,
 } from '@tanstack/react-table';
 import { useMemo, useState } from 'react';
-import { EditProfileModal } from '@/components/EditProfileModal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
 	Card,
 	CardContent,
 	CardDescription,
-	CardFooter,
 	CardHeader,
 	CardTitle,
 } from '@/components/ui/card';
@@ -34,7 +32,6 @@ import {
 	TableRow,
 } from '@/components/ui/table';
 import { trpc } from '@/integrations/tanstack-query/root-provider';
-import { useSession } from '@/lib/auth-client';
 import { requireAuth } from '@/utils/auth-check';
 
 // Interface for booking data returned from tRPC
@@ -72,11 +69,11 @@ interface BookingData {
 	};
 }
 
-export const Route = createFileRoute('/account/')({
+export const Route = createFileRoute('/account/past-bookings')({
 	head: () => ({
 		meta: [
 			{
-				title: 'My Account | Irishette.com',
+				title: 'Past Bookings | Irishette.com',
 			},
 		],
 	}),
@@ -87,28 +84,15 @@ export const Route = createFileRoute('/account/')({
 		// Return session data to be available in component during SSR
 		return { session };
 	},
-	component: AccountPage,
+	component: PastBookingsPage,
 });
 
-function AccountPage() {
-	// Get session from route context (passed from beforeLoad)
-	// This ensures session is available during SSR
-	const routeContext = Route.useRouteContext();
-	const serverSession = routeContext.session;
-
-	// Also get client-side session for reactive updates
-	const { data: clientSession } = useSession();
-
-	// Use server session during SSR, client session after hydration
-	// biome-ignore lint/style/noNonNullAssertion: Session guaranteed by beforeLoad
-	const session = clientSession ?? serverSession!;
-
+function PastBookingsPage() {
 	const [sorting, setSorting] = useState<SortingState>([
-		{ id: 'booking.checkInDate', desc: false },
+		{ id: 'booking.checkInDate', desc: true },
 	]);
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 	const [globalFilter, setGlobalFilter] = useState('');
-	const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
 	// Use tRPC query to fetch user's bookings
 	const {
@@ -128,15 +112,15 @@ function AccountPage() {
 		),
 	);
 
-	// Filter to only show current and upcoming confirmed bookings (checkout date is today or future)
+	// Filter to only show past bookings (checkout date is before today)
 	const bookings = useMemo(() => {
 		const today = new Date();
 		today.setHours(0, 0, 0, 0); // Reset time to start of day for accurate comparison
 
 		return allBookings.filter((booking) => {
 			const checkOutDate = new Date(`${booking.booking.checkOutDate}T00:00:00`);
-			// Include bookings where checkout date is today or in the future AND status is confirmed
-			return checkOutDate >= today && booking.booking.status === 'confirmed';
+			// Include bookings where checkout date is before today AND status is confirmed
+			return checkOutDate < today && booking.booking.status === 'confirmed';
 		});
 	}, [allBookings]);
 
@@ -257,20 +241,23 @@ function AccountPage() {
 						<div className="flex items-center justify-between">
 							<div>
 								<h1 className="text-2xl font-bold text-foreground">
-									Welcome back, {session.user.name || session.user.email}
+									Past Bookings
 								</h1>
 								<p className="text-muted-foreground">
-									Loading your bookings...
+									Loading your past bookings...
 								</p>
 							</div>
+							<Button asChild variant="outline">
+								<Link to="/account">← Back to Account</Link>
+							</Button>
 						</div>
 					</div>
 				</div>
 				<div className="container mx-auto px-4 py-8">
 					<div className="flex items-center justify-center">
-						<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+						<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
 						<p className="text-muted-foreground ml-2">
-							Loading your bookings...
+							Loading your past bookings...
 						</p>
 					</div>
 				</div>
@@ -287,19 +274,22 @@ function AccountPage() {
 						<div className="flex items-center justify-between">
 							<div>
 								<h1 className="text-2xl font-bold text-foreground">
-									Welcome back, {session.user.name || session.user.email}
+									Past Bookings
 								</h1>
 								<p className="text-muted-foreground">
-									Error loading your bookings
+									Error loading your past bookings
 								</p>
 							</div>
+							<Button asChild variant="outline">
+								<Link to="/account">← Back to Account</Link>
+							</Button>
 						</div>
 					</div>
 				</div>
 				<div className="container mx-auto px-4 py-8">
 					<div className="text-center">
 						<p className="text-red-600 mb-4">
-							There was an error loading your bookings.
+							There was an error loading your past bookings.
 						</p>
 						<Button onClick={() => window.location.reload()}>Try Again</Button>
 					</div>
@@ -316,12 +306,15 @@ function AccountPage() {
 					<div className="flex items-center justify-between">
 						<div>
 							<h1 className="text-2xl font-bold text-foreground">
-								Welcome back, {session.user.name || session.user.email}
+								Past Bookings
 							</h1>
 							<p className="text-muted-foreground">
-								Manage your bookings and account settings
+								View your previous booking history
 							</p>
 						</div>
+						<Button asChild variant="outline">
+							<Link to="/account">← Back to Account</Link>
+						</Button>
 					</div>
 				</div>
 			</div>
@@ -330,32 +323,33 @@ function AccountPage() {
 			<div className="container mx-auto px-4 py-8">
 				{/* Conditional Rendering: Show table if bookings exist, otherwise show empty state */}
 				{bookings.length > 0 ? (
-					<Card className="mb-8">
+					<Card>
 						<CardHeader>
-							<div className="flex flex-wrap items-center justify-between gap-2">
+							<div className="flex items-center justify-between">
 								<div>
 									<CardTitle>
-										Current & Upcoming Bookings (
-										{table.getFilteredRowModel().rows.length})
+										Past Bookings ({table.getFilteredRowModel().rows.length})
 									</CardTitle>
 									<CardDescription>
-										Your current and upcoming confirmed bookings. Click on the
-										confirmation ID to view more details.
+										Your previous confirmed bookings. Click on the confirmation
+										ID to view more details.
 									</CardDescription>
 								</div>
-								<div className="relative">
-									<Icon
-										icon="tabler:search"
-										className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground size-4"
-									/>
-									<Input
-										placeholder="Search bookings..."
-										value={globalFilter ?? ''}
-										onChange={(event) =>
-											setGlobalFilter(String(event.target.value))
-										}
-										className="pl-8 w-[250px]"
-									/>
+								<div className="flex items-center gap-2">
+									<div className="relative">
+										<Icon
+											icon="tabler:search"
+											className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground size-4"
+										/>
+										<Input
+											placeholder="Search bookings..."
+											value={globalFilter ?? ''}
+											onChange={(event) =>
+												setGlobalFilter(String(event.target.value))
+											}
+											className="pl-8 w-[250px]"
+										/>
+									</div>
 								</div>
 							</div>
 						</CardHeader>
@@ -400,7 +394,7 @@ function AccountPage() {
 												colSpan={columns.length}
 												className="h-24 text-center"
 											>
-												No bookings found.
+												No past bookings found.
 											</TableCell>
 										</TableRow>
 									)}
@@ -444,134 +438,24 @@ function AccountPage() {
 								</div>
 							)}
 						</CardContent>
-						<CardFooter>
-							<Button asChild variant="outline">
-								<Link to="/account/past-bookings">
-									<Icon icon="tabler:calendar-repeat" className="size-5" />
-									View Past Bookings
-								</Link>
-							</Button>
-						</CardFooter>
 					</Card>
 				) : (
-					<Card className="mb-8">
+					<Card>
 						<CardContent className="flex flex-col items-center justify-center py-12">
 							<Icon
-								icon="tabler:calendar-question"
+								icon="tabler:calendar-check"
 								className="size-16 text-muted-foreground mb-4"
 							/>
-							<h3 className="text-xl font-semibold mb-2">
-								No Current Bookings
-							</h3>
+							<h3 className="text-xl font-semibold mb-2">No Past Bookings</h3>
 							<p className="text-muted-foreground text-center mb-6 max-w-md">
-								You have no current or upcoming bookings. Start exploring our
-								available rooms and make your next reservation!
+								You don't have any past bookings yet. Once your stay is
+								complete, it will appear here.
 							</p>
-							<div className="flex gap-2">
-								<Button asChild>
-									<Link to="/">Browse Rooms</Link>
-								</Button>
-								<Button asChild variant="outline">
-									<Link to="/account/past-bookings">
-										<Icon icon="tabler:calendar-repeat" className="size-5" />
-										View Past Bookings
-									</Link>
-								</Button>{' '}
-							</div>
+							<Button asChild>
+								<Link to="/account">← Back to Account</Link>
+							</Button>
 						</CardContent>
 					</Card>
-				)}
-
-				<div className="grid gap-6 md:grid-cols-2">
-					{/* Account Info Card */}
-					<Card>
-						<CardHeader>
-							<CardTitle className="flex items-center">
-								<Icon icon="tabler:user-circle" className="size-5 mr-2" />
-								Account Information
-							</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className="space-y-2">
-								<div>
-									<p className="text-sm text-muted-foreground">Name</p>
-									<p className="text-foreground font-semibold">
-										{session.user.name}
-									</p>
-								</div>
-								<div>
-									<p className="text-sm text-muted-foreground">Email</p>
-									<p className="text-foreground font-semibold">
-										<Icon icon="tabler:mail" className="size-4 inline mr-1" />
-										{session.user.email}
-									</p>
-								</div>
-								<div>
-									<p className="text-sm text-muted-foreground">Phone Number</p>
-									<p className="text-foreground font-semibold">
-										<Icon icon="tabler:phone" className="size-4 inline mr-1" />
-										{session.user.phoneNumber || 'Not provided'}
-									</p>
-								</div>
-								<div>
-									<p className="text-sm text-muted-foreground">Member Since</p>
-									<p className="text-foreground font-semibold">
-										{new Date(session.user.createdAt).toLocaleDateString(
-											'en-US',
-											{
-												year: 'numeric',
-												month: 'long',
-												day: 'numeric',
-											},
-										)}
-									</p>
-								</div>
-							</div>
-						</CardContent>
-					</Card>
-
-					{/* Quick Actions Card */}
-					<Card>
-						<CardHeader>
-							<CardTitle className="flex items-center">
-								<Icon icon="tabler:settings" className="size-5 mr-2" />
-								Quick Actions
-							</CardTitle>
-						</CardHeader>
-						<CardContent className="space-y-4">
-							<div>
-								<p>Update Profile</p>
-								<Button onClick={() => setIsEditModalOpen(true)}>
-									<Icon icon="tabler:pencil" className="size-4 inline mr-1" />
-									Edit Your Information
-								</Button>
-							</div>
-							<div>
-								<p>Have questions or need assistance?</p>
-								<Button asChild variant="secondary">
-									<Link to="/contact">
-										<Icon icon="tabler:message-circle" className="size-4" />
-										Contact Us
-									</Link>
-								</Button>
-							</div>
-						</CardContent>
-					</Card>
-				</div>
-
-				{/* Edit Profile Modal */}
-				{session && (
-					<EditProfileModal
-						open={isEditModalOpen}
-						onOpenChange={setIsEditModalOpen}
-						user={{
-							id: session.user.id,
-							name: session.user.name || '',
-							email: session.user.email,
-							phoneNumber:
-								(session.user as { phoneNumber?: string })?.phoneNumber || null,
-						}}
-					/>
 				)}
 			</div>
 		</div>

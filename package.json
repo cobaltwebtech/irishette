@@ -2,7 +2,7 @@
   "name": "irishette",
   "private": true,
   "type": "module",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "scripts": {
     "dev": "vite dev --port 3000",
     "dev:cf": "vite build && pnpx wrangler dev",
@@ -29,14 +29,14 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@react-email/components": "^0.5.7",
     "@stripe/react-stripe-js": "^5.3.0",
-    "@stripe/stripe-js": "^8.3.0",
+    "@stripe/stripe-js": "^8.4.0",
     "@tailwindcss/vite": "^4.1.17",
     "@tanstack/react-query": "^5.90.7",
     "@tanstack/react-query-devtools": "^5.90.2",
-    "@tanstack/react-router": "^1.134.18",
-    "@tanstack/react-router-devtools": "^1.134.18",
-    "@tanstack/react-router-ssr-query": "^1.134.18",
-    "@tanstack/react-start": "^1.134.18",
+    "@tanstack/react-router": "^1.135.2",
+    "@tanstack/react-router-devtools": "^1.135.2",
+    "@tanstack/react-router-ssr-query": "^1.135.2",
+    "@tanstack/react-start": "^1.135.2",
     "@tanstack/react-store": "^0.8.0",
     "@tanstack/react-table": "^8.21.3",
     "@trpc/client": "^11.7.1",
@@ -48,7 +48,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "drizzle-orm": "^0.44.7",
-    "lenis": "^1.3.14",
+    "lenis": "^1.3.15",
     "nanoid": "^5.1.6",
     "react": "^19.2.0",
     "react-day-picker": "^9.11.1",
@@ -65,13 +65,13 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.3.4",
-    "@cloudflare/vite-plugin": "^1.14.0",
+    "@biomejs/biome": "2.3.5",
+    "@cloudflare/vite-plugin": "^1.14.1",
     "@iconify/react": "^6.0.2",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.0",
     "@types/node": "^24.10.0",
-    "@types/react": "^19.2.2",
+    "@types/react": "^19.2.3",
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^5.1.0",
     "babel-plugin-react-compiler": "^1.0.0",
@@ -81,6 +81,6 @@
     "vite": "7.2.2",
     "vitest": "^4.0.8",
     "web-vitals": "^5.1.0",
-    "wrangler": "^4.46.0"
+    "wrangler": "^4.47.0"
   }
 }

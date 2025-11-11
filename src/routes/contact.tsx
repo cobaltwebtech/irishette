@@ -43,7 +43,7 @@ function ContactPage() {
 	};
 
 	return (
-		<div className="min-h-screen bg-background">
+		<div className="bg-background">
 			{/* Hero Section */}
 			<section className="relative h-[40vh] min-h-[400px] flex items-center justify-center overflow-hidden shadow-lg shadow-foreground/50">
 				{/* Background Image - using one of the existing room images as placeholder */}

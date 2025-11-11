@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server';
-import { count, eq } from 'drizzle-orm';
+import { and, count, eq, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import { createDrizzle } from '@/db/drizzle-init';
 import { bookings, user } from '@/db/schema-export';
@@ -20,7 +20,7 @@ export const usersRouter = createTRPCRouter({
 			const db = createDrizzle(ctx.db);
 
 			try {
-				// Get all users with role 'user' with their booking count
+				// Get all users with role 'user' with their booking count (excluding pending bookings)
 				const guests = await db
 					.select({
 						user: {
@@ -34,7 +34,10 @@ export const usersRouter = createTRPCRouter({
 						bookingCount: count(bookings.id),
 					})
 					.from(user)
-					.leftJoin(bookings, eq(user.id, bookings.userId))
+					.leftJoin(
+						bookings,
+						and(eq(user.id, bookings.userId), ne(bookings.status, 'pending')),
+					)
 					.where(eq(user.role, 'user'))
 					.groupBy(user.id)
 					.orderBy(user.name)
@@ -89,11 +92,16 @@ export const usersRouter = createTRPCRouter({
 					});
 				}
 
-				// Get all bookings for this user
+				// Get all bookings for this user (excluding pending bookings)
 				const userBookings = await db
 					.select()
 					.from(bookings)
-					.where(eq(bookings.userId, input.userId))
+					.where(
+						and(
+							eq(bookings.userId, input.userId),
+							ne(bookings.status, 'pending'),
+						),
+					)
 					.orderBy(bookings.createdAt);
 
 				return {

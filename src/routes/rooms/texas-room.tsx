@@ -161,7 +161,7 @@ function TexasRoomPage() {
 		console.log('Starting booking process with data:', booking.summary);
 	};
 	return (
-		<div className="min-h-screen bg-background">
+		<div className="bg-background">
 			{/* Hero Section */}
 			<section className="relative h-[50vh] min-h-[500px] flex items-center justify-center overflow-hidden shadow-lg shadow-foreground/50">
 				{/* Background Image */}

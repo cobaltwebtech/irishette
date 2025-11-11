@@ -176,8 +176,7 @@ function PaymentForm() {
 					disabled={isProcessing}
 					className="flex-1"
 				>
-					<Icon icon="tabler:arrow-left" className="size-5" />
-					Back
+					← Back
 				</Button>
 
 				<Button
@@ -309,8 +308,7 @@ export function PaymentStep() {
 							onClick={() => booking.actions.setStep('details')}
 							variant="outline"
 						>
-							<Icon icon="tabler:arrow-left" className="size-4" />
-							Go Back
+							← Go Back
 						</Button>
 					</div>
 				</CardContent>

@@ -110,242 +110,278 @@ function BookingConfirmation() {
 	);
 
 	return (
-		<div className="container mx-auto max-w-2xl px-4 py-12">
-			<Card>
-				<CardHeader>
-					<CardTitle className="flex items-center gap-2">
+		<section>
+			<div className="bg-muted border-b">
+				<div className="container mx-auto px-4 py-6 text-center space-y-1">
+					<p className="animate-bounce text-4xl">🎉</p>
+					<div className="flex items-center justify-center gap-2">
 						<Icon
 							icon="tabler:circle-check-filled"
 							className="size-8 text-primary"
 						/>
-						Booking Confirmed!
-					</CardTitle>
-				</CardHeader>
-				<CardContent className="space-y-6">
-					<div className="bg-secondary border border-border rounded-lg px-4 py-6 space-y-2 text-center">
-						<p className="animate-bounce text-4xl">🎉</p>
-						<p className="font-bold">Your booking has been confirmed!</p>
-						<p className="text-sm">
-							You will receive a confirmation email shortly with all the
-							details.
-						</p>
+						<h1 className="text-2xl font-bold text-foreground">
+							Your Booking is Confirmed!
+						</h1>
 					</div>
+					<p>
+						You will receive a confirmation email shortly with all the details.
+					</p>
+					<p>
+						We look forward to seeing you on{' '}
+						{new Date(`${booking.checkInDate}T00:00:00`).toLocaleDateString(
+							'en-US',
+							{
+								weekday: 'long',
+								year: 'numeric',
+								month: 'long',
+								day: 'numeric',
+							},
+						)}
+						.
+					</p>
+				</div>
+			</div>
 
-					{/* Booking Details */}
-					<div className="space-y-8">
-						<div className="border-b pb-4">
-							<h3 className="font-semibold mb-3">Booking Details</h3>
-
-							<div className="flex flex-col gap-3">
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">
-										Confirmation ID:
-									</span>
+			{/* Main Content */}
+			<div className="container mx-auto px-4 py-8">
+				<div className="grid lg:grid-cols-6 gap-8">
+					{/* Left Column - Booking Details */}
+					<Card className="lg:col-span-4">
+						<CardHeader>
+							<CardTitle>Booking Details</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className="grid sm:grid-cols-2 gap-4">
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										Confirmation ID
+									</p>
 									<Badge
-										variant="outline"
-										className="font-bold font-mono text-sm tracking-wider"
+										variant="secondary"
+										className="font-semibold font-mono tracking-wider text-lg"
 									>
 										{booking.confirmationId}
 									</Badge>
 								</div>
-
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">Room:</span>
-									<span className="font-medium capitalize">
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										Room
+									</p>
+									<p className="font-semibold">
 										{roomData?.name ?? 'Unknown Room'}
-									</span>
+									</p>
 								</div>
-
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">Check-in:</span>
-									<span className="font-medium">
-										{checkIn.toLocaleDateString('en-US', {
-											weekday: 'short',
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										Check-in
+									</p>
+									<p className="font-semibold">
+										{new Date(
+											`${booking.checkInDate}T00:00:00`,
+										).toLocaleDateString('en-US', {
+											weekday: 'long',
 											year: 'numeric',
 											month: 'long',
 											day: 'numeric',
 										})}
-									</span>
+									</p>
+									<p className="text-sm text-muted-foreground">After 3:00 PM</p>
 								</div>
-
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">Check-out:</span>
-									<span className="font-medium">
-										{checkOut.toLocaleDateString('en-US', {
-											weekday: 'short',
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										Check-out
+									</p>
+									<p className="font-semibold">
+										{new Date(
+											`${booking.checkOutDate}T00:00:00`,
+										).toLocaleDateString('en-US', {
+											weekday: 'long',
 											year: 'numeric',
 											month: 'long',
 											day: 'numeric',
 										})}
-									</span>
+									</p>
+									<p className="text-sm text-muted-foreground">
+										Before 11:00 AM
+									</p>
 								</div>
-
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">Duration:</span>
-									<span className="font-medium">
-										{nights} night{nights !== 1 ? 's' : ''}
-									</span>
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										Duration
+									</p>
+									<p className="font-semibold">
+										{booking.numberOfNights} night
+										{booking.numberOfNights !== 1 ? 's' : ''}
+									</p>
 								</div>
-
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">Guests:</span>
-									<span className="font-medium">
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										Guests
+									</p>
+									<p className="font-semibold">
 										{booking.numberOfGuests} guest
 										{booking.numberOfGuests !== 1 ? 's' : ''}
-									</span>
-								</div>
-
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">Status:</span>
-									<Badge variant="default" className="capitalize">
-										{booking.status}
-									</Badge>
+									</p>
 								</div>
 							</div>
-						</div>
-
-						{/* Guest Information */}
-						<div className="border-b pb-4">
-							<h4 className="font-semibold mb-3">Guest Information</h4>
-							<div className="flex flex-col gap-2">
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">Name:</span>
-									<span className="font-medium">{booking.guestName}</span>
-								</div>
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">Email:</span>
-									<span className="font-medium">{booking.guestEmail}</span>
-								</div>
-								{booking.guestPhone && (
-									<div className="flex justify-between">
-										<span className="text-muted-foreground">Phone:</span>
-										<span className="font-medium">{booking.guestPhone}</span>
-									</div>
-								)}
-								{booking.specialRequests && (
-									<div className="flex flex-col gap-1">
-										<span className="text-muted-foreground">
-											Special Requests:
-										</span>
-										<span className="font-medium text-sm">
-											{booking.specialRequests}
-										</span>
-									</div>
-								)}
-							</div>
-						</div>
-
-						{/* Pricing Summary */}
-						<div className="border-b pb-4">
-							<h4 className="font-semibold mb-3">Payment Summary</h4>
-							<div className="flex flex-col gap-2">
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">Base Rate:</span>
-									<span>${(booking.baseAmount / nights).toFixed(2)}/night</span>
-								</div>
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">Subtotal:</span>
-									<span>${booking.baseAmount.toFixed(2)}</span>
-								</div>
+						</CardContent>
+					</Card>
+					{/* Right Column - Payment Summary */}
+					<Card className="lg:col-span-2">
+						<CardHeader>
+							<CardTitle>Payment Summary</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className="grid grid-cols-2 gap-x-4 gap-y-2">
+								<p className="text-sm font-medium text-muted-foreground">
+									Base Rate
+								</p>
+								<p className="text-right">
+									${(booking.baseAmount / nights).toFixed(2)}/night
+								</p>
+								<p className="text-sm font-medium text-muted-foreground">
+									Subtotal
+								</p>
+								<p className="text-right">${booking.baseAmount.toFixed(2)}</p>
 								{booking.feesAmount !== null && booking.feesAmount > 0 && (
-									<div className="flex justify-between">
-										<span className="text-muted-foreground">Fees:</span>
-										<span>${booking.feesAmount.toFixed(2)}</span>
-									</div>
+									<>
+										<p className="text-sm font-medium text-muted-foreground">
+											Fees
+										</p>
+										<p className="text-right">
+											${booking.feesAmount.toFixed(2)}
+										</p>
+									</>
 								)}
 								{booking.taxAmount !== null && booking.taxAmount > 0 && (
-									<div className="flex justify-between">
-										<span className="text-muted-foreground">Taxes:</span>
-										<span>${booking.taxAmount.toFixed(2)}</span>
+									<>
+										<p className="text-sm font-medium text-muted-foreground">
+											Taxes
+										</p>
+										<p className="text-right">
+											${booking.taxAmount.toFixed(2)}
+										</p>
+									</>
+								)}
+								<p className="text-lg font-semibold">Total Paid</p>
+								<p className="text-lg font-semibold text-right">
+									${booking.totalAmount.toFixed(2)}
+								</p>
+							</div>
+						</CardContent>
+					</Card>
+					{/* Left Column - Guest Info */}
+					<Card className="lg:col-span-3">
+						<CardHeader>
+							<CardTitle>Guest Information</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className="grid sm:grid-cols-2 gap-4">
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										Name
+									</p>
+									<p className="font-semibold">{booking.guestName}</p>
+								</div>
+								<div>
+									<p className="text-sm font-medium text-muted-foreground">
+										Email
+									</p>
+									<p className="font-semibold">{booking.guestEmail}</p>
+								</div>
+								{booking.guestPhone && (
+									<div className="sm:col-span-2">
+										<p className="text-sm font-medium text-muted-foreground">
+											Phone
+										</p>
+										<p className="font-semibold">{booking.guestPhone}</p>
 									</div>
 								)}
-								<div className="flex justify-between font-semibold text-lg">
-									<span>Total Paid:</span>
-									<span>${booking.totalAmount.toFixed(2)}</span>
-								</div>
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">Payment Status:</span>
-									<Badge
-										variant={
-											booking.paymentStatus === 'paid' ? 'default' : 'secondary'
-										}
-										className="capitalize"
+							</div>
+						</CardContent>
+					</Card>
+					{/* Right Column - Special Requests */}
+					<Card className="lg:col-span-3">
+						<CardHeader>
+							<CardTitle>Special Requests</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className="bg-muted p-4 rounded-md text-sm text-muted-foreground">
+								{booking.specialRequests || 'No special requests provided'}
+							</div>
+						</CardContent>
+					</Card>
+					{/* Left Column - Important Info */}
+					<Card className="lg:col-span-3">
+						<CardHeader>
+							<CardTitle>Important Information</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<ul className="mx-4 list-disc text-sm text-muted-foreground space-y-2">
+								<li>Check your email for the booking confirmation details</li>
+								<li>
+									Check-in is available from 3:00 PM. Early check-in may be
+									available upon request.
+								</li>
+								<li>
+									Check-out is by 11:00 AM. Late check-out may be available upon
+									request.
+								</li>
+								<li>
+									If you need to cancel your booking please review our{' '}
+									<Link
+										to="/cancellation-refund-policy"
+										className="text-accent hover:underline"
+										target="_blank"
 									>
-										{booking.paymentStatus}
-									</Badge>
-								</div>
-							</div>
-						</div>
-
-						{/* Booking Timeline */}
-						{booking.confirmedAt && (
-							<div className="border-b pb-4">
-								<h4 className="font-semibold mb-3">Booking Timeline</h4>
-								<div className="flex flex-col gap-2 text-sm">
-									<div className="flex justify-between">
-										<span className="text-muted-foreground">
-											Booking Created:
-										</span>
-										<span>
-											{new Date(booking.createdAt).toLocaleString('en-US', {
-												dateStyle: 'medium',
-												timeStyle: 'short',
-											})}
-										</span>
-									</div>
-									<div className="flex justify-between">
-										<span className="text-muted-foreground">
-											Payment Confirmed:
-										</span>
-										<span>
-											{new Date(booking.confirmedAt).toLocaleString('en-US', {
-												dateStyle: 'medium',
-												timeStyle: 'short',
-											})}
-										</span>
-									</div>
-								</div>
-							</div>
-						)}
-					</div>
-
-					{/* Next Steps */}
-					<div className="border-b pb-4">
-						<h4 className="font-semibold mb-3">What's Next?</h4>
-						<ul className="space-y-2 text-sm text-muted-foreground list-disc ml-4">
-							<li>Check your email for the confirmation details</li>
-							<li>Save this confirmation for your records</li>
-							<li>
-								<Link to="/contact" className="text-accent hover:underline">
-									Contact us
-								</Link>{' '}
-								if you have any questions or need to make changes to your
-								booking
-							</li>
-							<li>We look forward to hosting you!</li>
-						</ul>
-					</div>
-
-					{/* Action Buttons */}
-					<div className="flex flex-wrap gap-4 pt-4">
-						<Button asChild variant="secondary" className="flex-1">
-							<Link to="/">
-								<Icon icon="tabler:home" className="size-5" />
-								Back to Home
-							</Link>
-						</Button>
-						<Button asChild className="flex-1">
-							<Link to="/account">
-								<Icon
-									icon="material-symbols:bed-outline-rounded"
-									className="size-5"
-								/>
-								View All Bookings
-							</Link>
-						</Button>
-					</div>
-				</CardContent>
-			</Card>
-		</div>
+										Cancellation & Refund Policy
+									</Link>
+									.
+								</li>
+								<li>
+									If you have any questions or need assistance{' '}
+									<Link
+										to="/contact"
+										className="text-accent hover:underline"
+										target="_blank"
+									>
+										Contact Us
+									</Link>
+									.
+								</li>
+								<li className="font-bold text-lg bg-red-200">
+									DO WE NEED ADDITIONAL INSTRUCTIONS FOR THE CUSTOMER?
+								</li>
+							</ul>
+						</CardContent>
+					</Card>
+					{/* Right Column - Address and Directions */}
+					<Card className="lg:col-span-3">
+						<CardHeader>
+							<CardTitle>Our Address and Directions</CardTitle>
+						</CardHeader>
+						<CardContent>ADD ADDRESS AND DIRECTIONS HERE</CardContent>
+					</Card>
+				</div>
+				{/* Action Buttons */}
+				<div className="mx-auto max-w-lg flex flex-wrap gap-4 pt-8">
+					<Button asChild variant="secondary" className="flex-1">
+						<Link to="/">
+							<Icon icon="tabler:home" className="size-5" />
+							Go to Home
+						</Link>
+					</Button>
+					<Button asChild className="flex-1">
+						<Link to="/account">
+							<Icon
+								icon="material-symbols:bed-outline-rounded"
+								className="size-5"
+							/>
+							View All Bookings
+						</Link>
+					</Button>
+				</div>
+			</div>
+		</section>
 	);
 }
