@@ -394,17 +394,46 @@ export function BookingDetailsStep() {
 						{/* Number of Guests */}
 						<div className="space-y-2">
 							<Label htmlFor={guestsId}>Number of Guests *</Label>
-							<Input
-								id={guestsId}
-								type="number"
-								min="1"
-								max="4"
-								value={numberOfGuests}
-								onChange={(e) =>
-									setNumberOfGuests(parseInt(e.target.value, 10) || 1)
-								}
-								className={errors.numberOfGuests ? 'border-red-500' : ''}
-							/>
+							<div className="flex items-center gap-6">
+								<Button
+									type="button"
+									variant="outline"
+									size="icon"
+									onClick={() =>
+										setNumberOfGuests(Math.max(1, numberOfGuests - 1))
+									}
+									disabled={numberOfGuests <= 1}
+									className="size-8 rounded-full border-2 transition-all hover:scale-105 active:scale-95 disabled:opacity-40 disabled:hover:scale-100"
+									aria-label="Decrease guest count"
+								>
+									<Icon icon="tabler:minus" className="size-5" />
+								</Button>
+
+								<div className="px-4 py-2 border border-border rounded-sm">
+									<div
+										key={numberOfGuests}
+										className="animate-in fade-in zoom-in-50 duration-200"
+									>
+										<span className="text-xl font-semibold tabular-nums">
+											{numberOfGuests}
+										</span>
+									</div>
+								</div>
+
+								<Button
+									type="button"
+									variant="outline"
+									size="icon"
+									onClick={() =>
+										setNumberOfGuests(Math.min(4, numberOfGuests + 1))
+									}
+									disabled={numberOfGuests >= 4}
+									className="size-8 rounded-full border-2 transition-all hover:scale-105 active:scale-95 disabled:opacity-40 disabled:hover:scale-100"
+									aria-label="Increase guest count"
+								>
+									<Icon icon="tabler:plus" className="size-5" />
+								</Button>
+							</div>
 							{errors.numberOfGuests && (
 								<p className="text-sm text-red-600">{errors.numberOfGuests}</p>
 							)}

@@ -140,8 +140,10 @@ export function useBookingStore() {
 			details: bookingActions.canProceedToPayment(),
 		},
 
-		// Current booking summary (null if not ready)
-		summary: bookingActions.getBookingSummary(),
+		// Current booking summary (null if not ready) - computed reactively
+		get summary() {
+			return bookingActions.getBookingSummary();
+		},
 
 		// Helper functions
 		isStep,
