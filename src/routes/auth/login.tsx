@@ -1,6 +1,7 @@
 import { Icon } from '@iconify/react';
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
-import { useEffect, useEffectEvent, useId, useState } from 'react';
+import { useEffect, useEffectEvent, useId, useRef, useState } from 'react';
+import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,8 @@ function LoginPage() {
 	const [emailSent, setEmailSent] = useState(false);
 	const [error, setError] = useState('');
 	const [showPasswordLogin, setShowPasswordLogin] = useState(false);
+	const [turnstileToken, setTurnstileToken] = useState('');
+	const turnstileRef = useRef<TurnstileInstance>(null);
 	const emailInputId = useId();
 	const passwordInputId = useId();
 
@@ -127,6 +130,11 @@ function LoginPage() {
 			await authClient.signIn.magicLink({
 				email,
 				callbackURL: search.redirect,
+				fetchOptions: {
+					headers: {
+						'x-captcha-response': turnstileToken,
+					},
+				},
 			});
 			setEmailSent(true);
 			toast.success('Magic link sent! Check your email.');
@@ -138,6 +146,9 @@ function LoginPage() {
 					: 'Failed to send magic link. Please try again.';
 			setError(message);
 			toast.error(message);
+			// Reset turnstile on error
+			turnstileRef.current?.reset();
+			setTurnstileToken('');
 		} finally {
 			setIsLoading(false);
 		}
@@ -160,7 +171,11 @@ function LoginPage() {
 				email,
 				password,
 				callbackURL: search.redirect,
-				rememberMe: true,
+				fetchOptions: {
+					headers: {
+						'x-captcha-response': turnstileToken,
+					},
+				},
 			});
 
 			if (response && !response.error) {
@@ -185,6 +200,9 @@ function LoginPage() {
 					: 'Login failed. Please check your credentials and try again.';
 			setError(errorMsg);
 			toast.error(errorMsg);
+			// Reset turnstile on error
+			turnstileRef.current?.reset();
+			setTurnstileToken('');
 		} finally {
 			setIsLoading(false);
 		}
@@ -317,10 +335,25 @@ function LoginPage() {
 							</div>
 						)}
 
+						<Turnstile
+							ref={turnstileRef}
+							siteKey={import.meta.env.VITE_TURNSTILE_PUBLIC_KEY}
+							onSuccess={(token: string) => setTurnstileToken(token)}
+							onError={() => {
+								setTurnstileToken('');
+								toast.error('Captcha verification failed. Please try again.');
+							}}
+							onExpire={() => setTurnstileToken('')}
+							options={{
+								theme: 'light',
+								size: 'flexible',
+							}}
+						/>
+
 						<Button
 							type="submit"
 							className="w-full"
-							disabled={isLoading || !email}
+							disabled={isLoading || !email || !turnstileToken}
 						>
 							{isLoading ? (
 								<>

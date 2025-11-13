@@ -1,17 +1,11 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, lte } from 'drizzle-orm';
 import { createDrizzle } from '@/db/drizzle-init';
-import { room } from '@/db/schema-export';
+import { bookings, room } from '@/db/schema-export';
 import { iCalService } from '@/lib/ical-service';
-import { PaymentService } from '@/lib/payment-service';
 
 interface ScheduledEnv {
 	DB: D1Database;
 	KV_ICAL_SYNC_LOG: KVNamespace;
-	BETTER_AUTH_SECRET: string;
-	RESEND_API_KEY: string;
-	STRIPE_SECRET_KEY: string;
-	STRIPE_TRPC_WEBHOOK_SECRET: string;
-	BETTER_AUTH_URL: string;
 }
 
 /**
@@ -219,7 +213,7 @@ export async function scheduledCalendarSync(env: ScheduledEnv) {
  * Cleanup old sync logs (runs weekly)
  * Removes sync logs older than 30 days to prevent database bloat
  */
-export async function scheduledCleanup(_env: ScheduledEnv) {
+export async function scheduledIcalLogCleanup(_env: ScheduledEnv) {
 	console.log('🧹 Starting scheduled cleanup...', new Date().toISOString());
 
 	try {
@@ -254,20 +248,25 @@ export async function scheduledBookingCleanup(env: ScheduledEnv) {
 	);
 
 	try {
-		const paymentService = new PaymentService({
-			DB: env.DB,
-			STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY,
-			STRIPE_TRPC_WEBHOOK_SECRET: env.STRIPE_TRPC_WEBHOOK_SECRET,
-			BETTER_AUTH_URL: env.BETTER_AUTH_URL,
-		});
+		const db = createDrizzle(env.DB);
+		const now = new Date();
 
-		const result = await paymentService.cleanupExpiredPendingBookings();
+		// Delete pending bookings where expiresAt is in the past
+		const result = await db
+			.delete(bookings)
+			.where(and(eq(bookings.status, 'pending'), lte(bookings.expiresAt, now)))
+			.returning({ id: bookings.id });
+
+		const deletedCount = result.length;
 
 		console.log(
-			`✅ Booking cleanup completed: ${result.deletedCount} expired pending bookings removed`,
+			`✅ Booking cleanup completed: ${deletedCount} expired pending bookings removed`,
 		);
 
-		return result;
+		return {
+			deletedCount,
+			timestamp: now.toISOString(),
+		};
 	} catch (error) {
 		console.error('💥 Scheduled booking cleanup failed:', error);
 		throw error;
@@ -298,8 +297,8 @@ export async function handleScheduledEvent(
 				await scheduledBookingCleanup(env);
 				break;
 
-			case '0 2 * * SUN': // Weekly on Sunday at 2 AM - cleanup
-				await scheduledCleanup(env);
+			case '0 2 * * SUN': // Weekly on Sunday at 2 AM - cleanup iCal sync logs
+				await scheduledIcalLogCleanup(env);
 				break;
 
 			default:

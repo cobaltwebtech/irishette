@@ -948,44 +948,6 @@ export class PaymentService {
 	}
 
 	/**
-	 * Clean up expired pending bookings across all users
-	 * Removes pending bookings that have passed their expiration time
-	 * This should be called from a scheduled task (cron job)
-	 */
-	async cleanupExpiredPendingBookings(): Promise<{
-		deletedCount: number;
-		timestamp: string;
-	}> {
-		try {
-			console.log('Starting cleanup of expired pending bookings...');
-
-			const now = new Date();
-
-			// Delete pending bookings where expiresAt is in the past
-			const result = await this.db
-				.delete(bookings)
-				.where(
-					and(eq(bookings.status, 'pending'), lte(bookings.expiresAt, now)),
-				)
-				.returning({ id: bookings.id });
-
-			const deletedCount = result.length;
-
-			console.log(
-				`Cleanup completed: ${deletedCount} expired pending bookings deleted`,
-			);
-
-			return {
-				deletedCount,
-				timestamp: now.toISOString(),
-			};
-		} catch (error) {
-			console.error('Failed to cleanup expired pending bookings:', error);
-			throw error;
-		}
-	}
-
-	/**
 	 * Refresh an expired booking if room is still available
 	 * Returns the bookingId (same if refreshed, or throws if unavailable)
 	 * This allows graceful recovery when users return after 30+ minutes

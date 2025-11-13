@@ -1,6 +1,7 @@
 import { Icon } from '@iconify/react';
+import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { Badge } from '@/components/ui/badge';
@@ -50,6 +51,8 @@ function SignupPage() {
 	const [emailSent, setEmailSent] = useState(false);
 	const [error, setError] = useState('');
 	const [showPasswordSignup, setShowPasswordSignup] = useState(false);
+	const [turnstileToken, setTurnstileToken] = useState('');
+	const turnstileRef = useRef<TurnstileInstance>(null);
 	const nameInputId = useId();
 	const emailInputId = useId();
 	const passwordInputId = useId();
@@ -84,6 +87,11 @@ function SignupPage() {
 			await authClient.signIn.magicLink({
 				email,
 				callbackURL: search.redirect,
+				fetchOptions: {
+					headers: {
+						'x-captcha-response': turnstileToken,
+					},
+				},
 			});
 			setEmailSent(true);
 			toast.success('Magic link sent! Check your email to complete signup.');
@@ -95,6 +103,9 @@ function SignupPage() {
 					: 'Failed to send magic link. Please try again.';
 			setError(message);
 			toast.error(message);
+			// Reset turnstile on error
+			turnstileRef.current?.reset();
+			setTurnstileToken('');
 		} finally {
 			setIsLoading(false);
 		}
@@ -130,6 +141,11 @@ function SignupPage() {
 				email,
 				password,
 				callbackURL: search.redirect,
+				fetchOptions: {
+					headers: {
+						'x-captcha-response': turnstileToken,
+					},
+				},
 			});
 
 			if (response && !response.error) {
@@ -155,6 +171,9 @@ function SignupPage() {
 					: 'Sign up failed. Please try again.';
 			setError(errorMsg);
 			toast.error(errorMsg);
+			// Reset turnstile on error
+			turnstileRef.current?.reset();
+			setTurnstileToken('');
 		} finally {
 			setIsLoading(false);
 		}
@@ -315,10 +334,25 @@ function SignupPage() {
 							</div>
 						)}
 
+						<Turnstile
+							ref={turnstileRef}
+							siteKey={import.meta.env.VITE_TURNSTILE_PUBLIC_KEY}
+							onSuccess={(token: string) => setTurnstileToken(token)}
+							onError={() => {
+								setTurnstileToken('');
+								toast.error('Captcha verification failed. Please try again.');
+							}}
+							onExpire={() => setTurnstileToken('')}
+							options={{
+								theme: 'light',
+								size: 'flexible',
+							}}
+						/>
+
 						<Button
 							type="submit"
 							className="w-full"
-							disabled={isLoading || !email}
+							disabled={isLoading || !email || !turnstileToken}
 						>
 							{isLoading ? (
 								<>

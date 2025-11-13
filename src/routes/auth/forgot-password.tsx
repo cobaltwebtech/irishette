@@ -1,6 +1,7 @@
 import { Icon } from '@iconify/react';
+import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -41,6 +42,8 @@ function ForgotPasswordPage() {
 	const [isLoading, setIsLoading] = useState(false);
 	const [isSuccess, setIsSuccess] = useState(false);
 	const [error, setError] = useState('');
+	const [turnstileToken, setTurnstileToken] = useState('');
+	const turnstileRef = useRef<TurnstileInstance>(null);
 	const emailInputId = useId();
 	const search = Route.useSearch();
 
@@ -60,6 +63,11 @@ function ForgotPasswordPage() {
 			await authClient.forgetPassword({
 				email,
 				redirectTo: '/auth/reset-password',
+				fetchOptions: {
+					headers: {
+						'x-captcha-response': turnstileToken,
+					},
+				},
 			});
 			setIsSuccess(true);
 			toast.success('Password reset link sent to your email!');
@@ -71,6 +79,9 @@ function ForgotPasswordPage() {
 					: 'Failed to process password reset request. Please try again.';
 			setError(message);
 			toast.error(message);
+			// Reset turnstile on error
+			turnstileRef.current?.reset();
+			setTurnstileToken('');
 		} finally {
 			setIsLoading(false);
 		}
@@ -171,10 +182,25 @@ function ForgotPasswordPage() {
 							</div>
 						)}
 
+						<Turnstile
+							ref={turnstileRef}
+							siteKey={import.meta.env.VITE_TURNSTILE_PUBLIC_KEY}
+							onSuccess={(token: string) => setTurnstileToken(token)}
+							onError={() => {
+								setTurnstileToken('');
+								toast.error('Captcha verification failed. Please try again.');
+							}}
+							onExpire={() => setTurnstileToken('')}
+							options={{
+								theme: 'light',
+								size: 'flexible',
+							}}
+						/>
+
 						<Button
 							type="submit"
 							className="w-full"
-							disabled={isLoading || !email}
+							disabled={isLoading || !email || !turnstileToken}
 						>
 							{isLoading ? (
 								<>

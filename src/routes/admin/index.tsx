@@ -1,4 +1,3 @@
-import { Icon } from '@iconify/react';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { AdminLayout } from '@/components/admin/AdminLayout';
@@ -95,38 +94,6 @@ function AdminDashboard() {
 
 	return (
 		<AdminLayout title="Property Admin Dashboard">
-			{/* Stats Overview */}
-			<div className="grid md:grid-cols-3 gap-6 my-8">
-				{/* Column 1 */}
-				<Card>
-					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-						<CardTitle className="flex items-center gap-2 text-sm font-medium">
-							<Icon icon="tabler:calendar-user" className="size-6" />
-							Current & Upcoming Bookings
-						</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<Link to="/admin/bookings/current-bookings">
-							<div className="text-2xl font-bold">
-								{upcomingBookings.length}
-							</div>
-						</Link>
-					</CardContent>
-				</Card>
-				{/* Column 2 */}
-				<Card>
-					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-						<CardTitle className="flex items-center gap-2 text-sm font-medium">
-							<Icon icon="tabler:home" className="size-6" />
-							Total Rooms
-						</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className="text-2xl font-bold">{rooms.length}</div>
-					</CardContent>
-				</Card>
-			</div>
-
 			{/* Rooms and Recent Bookings */}
 			<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 				{/* Upcoming Bookings Details */}
@@ -138,6 +105,9 @@ function AdminDashboard() {
 								<Button size="sm">View Current Bookings</Button>
 							</Link>
 						</div>
+						<p className="text-sm text-muted-foreground">
+							Shows 3 current bookings
+						</p>
 					</CardHeader>
 					<CardContent>
 						<div className="space-y-4">
@@ -159,18 +129,21 @@ function AdminDashboard() {
 											params={{ bookingId: booking.id }}
 											className="block"
 										>
-											<div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+											<div className="flex items-center justify-between p-4 border rounded-lg bg-muted/50 hover:bg-muted transition-colors">
 												<div>
-													<h3 className="font-medium">{booking.guestName}</h3>
+													<h3 className="font-medium">
+														{' '}
+														Check-in:{' '}
+														{new Date(
+															`${booking.checkInDate}T00:00:00`,
+														).toLocaleDateString()}
+													</h3>
 													<p className="text-sm text-muted-foreground">
 														{roomMap[bookingData.booking.roomId] ||
 															'Unknown Room'}
 													</p>
 													<p className="text-sm text-muted-foreground">
-														Check-in:{' '}
-														{new Date(
-															`${booking.checkInDate}T00:00:00`,
-														).toLocaleDateString()}
+														{booking.guestName}
 													</p>
 													<p className="text-xs text-muted-foreground">
 														{booking.numberOfGuests} guest
@@ -182,22 +155,14 @@ function AdminDashboard() {
 													<Badge
 														variant={
 															booking.status === 'confirmed'
-																? 'default'
+																? 'secondary'
 																: booking.status === 'cancelled'
 																	? 'destructive'
-																	: 'secondary'
+																	: 'outline'
 														}
+														className="uppercase"
 													>
 														{booking.status}
-													</Badge>
-													<Badge
-														variant={
-															booking.paymentStatus === 'paid'
-																? 'default'
-																: 'secondary'
-														}
-													>
-														{booking.paymentStatus}
 													</Badge>
 												</div>
 											</div>
@@ -231,26 +196,31 @@ function AdminDashboard() {
 								</div>
 							) : (
 								rooms.slice(0, 3).map((room: Room) => (
-									<div
+									<Link
 										key={room.id}
-										className="flex items-center justify-between p-4 border rounded-lg"
+										to="/admin/property-management/$roomId"
+										params={{ roomId: room.id }}
+										className="block"
 									>
-										<div>
-											<h3 className="font-medium">{room.name}</h3>
-											<p className="text-sm text-muted-foreground">
-												Base Price: ${room.basePrice}/night
-											</p>
+										<div className="flex items-center justify-between p-4 bg-muted hover:bg-muted/50 border rounded-lg">
+											<div>
+												<h3 className="font-medium">{room.name}</h3>
+												<p className="text-sm text-muted-foreground">
+													Base Price: ${room.basePrice}/night
+												</p>
+											</div>
+											<div className="flex items-center gap-2">
+												<Badge
+													variant={
+														room.status === 'active' ? 'secondary' : 'outline'
+													}
+													className="uppercase"
+												>
+													{room.status}
+												</Badge>
+											</div>
 										</div>
-										<div className="flex items-center gap-2">
-											<Badge
-												variant={
-													room.status === 'active' ? 'default' : 'secondary'
-												}
-											>
-												{room.status}
-											</Badge>
-										</div>
-									</div>
+									</Link>
 								))
 							)}
 						</div>

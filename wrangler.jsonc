@@ -8,7 +8,7 @@
 	],
   "workers_dev": true, // Set to false when going to production with a custom domain
 	"vars": {
-		"BETTER_AUTH_URL": "https://irishette.cobaltdev.workers.dev"
+		"VITE_TURNSTILE_PUBLIC_KEY": "0x4AAAAAABh02QiHKVIJ7j6b"
 	},
 	"d1_databases": [
 		{

@@ -21,7 +21,7 @@ export const Route = createFileRoute('/booking/')({
 			},
 		],
 	}),
-	validateSearch: (search: Record<string, unknown>) => {
+	validateSearch: (search: Record<string, unknown>): { step?: BookingStep } => {
 		return {
 			step: search.step as BookingStep | undefined,
 		};

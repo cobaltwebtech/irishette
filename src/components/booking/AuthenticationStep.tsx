@@ -1,5 +1,6 @@
 import { Icon } from '@iconify/react';
-import { useState } from 'react';
+import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
+import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,6 +13,8 @@ export function AuthenticationStep() {
 	const [email, setEmail] = useState('');
 	const [emailSent, setEmailSent] = useState(false);
 	const [loading, setLoading] = useState(false);
+	const [turnstileToken, setTurnstileToken] = useState('');
+	const turnstileRef = useRef<TurnstileInstance>(null);
 
 	if (session?.user) {
 		// User is already authenticated, advance to next step
@@ -47,6 +50,11 @@ export function AuthenticationStep() {
 				callbackURL: '/booking', // Redirect back to booking after authentication
 				newUserCallbackURL: '/booking', // Also redirect new users to booking
 				errorCallbackURL: '/booking?error=auth', // Handle errors gracefully
+				fetchOptions: {
+					headers: {
+						'x-captcha-response': turnstileToken,
+					},
+				},
 			});
 
 			if (error) {
@@ -57,6 +65,9 @@ export function AuthenticationStep() {
 		} catch (error) {
 			console.error('Error sending magic link:', error);
 			alert('Failed to send magic link. Please try again.');
+			// Reset turnstile on error
+			turnstileRef.current?.reset();
+			setTurnstileToken('');
 		} finally {
 			setLoading(false);
 		}
@@ -110,7 +121,26 @@ export function AuthenticationStep() {
 							disabled={loading}
 						/>
 					</div>
-					<Button type="submit" disabled={loading || !email} className="w-full">
+					<Turnstile
+						ref={turnstileRef}
+						siteKey={import.meta.env.VITE_TURNSTILE_PUBLIC_KEY}
+						onSuccess={(token: string) => setTurnstileToken(token)}
+						onError={() => {
+							setTurnstileToken('');
+							alert('Captcha verification failed. Please try again.');
+						}}
+						onExpire={() => setTurnstileToken('')}
+						options={{
+							appearance: 'interaction-only',
+							theme: 'light',
+							size: 'flexible',
+						}}
+					/>
+					<Button
+						type="submit"
+						disabled={loading || !email || !turnstileToken}
+						className="w-full"
+					>
 						{loading ? 'Sending...' : 'Send Magic Link'}
 					</Button>
 				</form>

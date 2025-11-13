@@ -10,6 +10,7 @@ import Stripe from 'stripe';
 import { MagicLinkEmail } from '@/components/email/MagicLinkEmail';
 import { PasswordReset } from '@/components/email/PasswordReset';
 import * as authSchema from '@/db/auth-schema';
+import { captcha } from 'better-auth/plugins';
 
 // Initialize Drizzle with the Cloudflare D1 database
 export const createDrizzle = (db: D1Database) =>
@@ -93,6 +94,16 @@ export const auth = async () => {
 				stripeClient,
 				stripeWebhookSecret: env.STRIPE_BETTER_AUTH_WEBHOOK_SECRET,
 				createCustomerOnSignUp: true,
+			}),
+			captcha({
+				provider: 'cloudflare-turnstile',
+				secretKey: env.TURNSTILE_SECRET_KEY,
+				endpoints: [
+					'/sign-in/magic-link',
+					'/sign-up/email',
+					'/sign-in/email',
+					'/forget-password',
+				],
 			}),
 			reactStartCookies(), // Handle cookies for TanStack Start. Needs to be last in array.
 		],

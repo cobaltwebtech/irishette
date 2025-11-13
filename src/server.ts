@@ -18,11 +18,7 @@ export default {
 	 * Cloudflare Workers scheduled event handler
 	 * Handles cron triggers for automated tasks:
 	 */
-	async scheduled(
-		event: ScheduledEvent,
-		env: Env,
-		ctx: ExecutionContext,
-	): Promise<void> {
+	scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): void {
 		console.log('🔔 Scheduled event received in server.ts');
 		ctx.waitUntil(handleScheduledEvent(event, env, ctx));
 	},

@@ -117,7 +117,7 @@ function PaymentForm() {
 				<div className="flex items-start gap-3">
 					<Checkbox
 						id={policiesId}
-						className="size-6"
+						className="size-6 cursor-pointer"
 						checked={acceptedPolicies}
 						onCheckedChange={(checked) => setAcceptedPolicies(checked === true)}
 						aria-invalid={!!policyError}
@@ -320,16 +320,28 @@ export function PaymentStep() {
 		clientSecret,
 		appearance: {
 			theme: 'stripe' as const,
+			labels: 'floating' as const,
 			variables: {
-				colorPrimary: '#0ea5e9',
-				colorBackground: '#ffffff',
-				colorText: '#1e293b',
-				colorDanger: '#ef4444',
-				fontFamily: 'system-ui, sans-serif',
+				colorPrimary: '#072a00',
+				colorBackground: '#dceacf',
+				colorText: '#31632c',
+				colorDanger: '#e85854',
+				fontFamily: 'Schibsted Grotesk, ui-sans-serif, system-ui, sans-serif',
 				spacingUnit: '4px',
-				borderRadius: '8px',
+				borderRadius: '10px',
+			},
+			rules: {
+				'.Input': {
+					backgroundColor: '#ffffff',
+				},
 			},
 		},
+		fonts: [
+			{
+				cssSrc:
+					'https://fonts.bunny.net/css?family=schibsted-grotesk:400,600,700',
+			},
+		],
 	};
 
 	return (
