@@ -7,9 +7,6 @@
 		"nodejs_compat"
 	],
   "workers_dev": true, // Set to false when going to production with a custom domain
-	"vars": {
-		"VITE_TURNSTILE_PUBLIC_KEY": "0x4AAAAAABh02QiHKVIJ7j6b"
-	},
 	"d1_databases": [
 		{
 			"binding": "DB",

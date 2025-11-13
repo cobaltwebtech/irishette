@@ -1,7 +1,7 @@
 import { Icon } from '@iconify/react';
+import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { useEffect, useEffectEvent, useId, useRef, useState } from 'react';
-import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -336,6 +336,7 @@ function LoginPage() {
 						)}
 
 						<Turnstile
+							className="w-full"
 							ref={turnstileRef}
 							siteKey={import.meta.env.VITE_TURNSTILE_PUBLIC_KEY}
 							onSuccess={(token: string) => setTurnstileToken(token)}
@@ -345,8 +346,15 @@ function LoginPage() {
 							}}
 							onExpire={() => setTurnstileToken('')}
 							options={{
+								appearance: 'interaction-only',
 								theme: 'light',
 								size: 'flexible',
+							}}
+							style={{ 
+								display: 'block',
+								width: '100%',
+								minWidth: '300px',
+								height: '65px',
 							}}
 						/>
 

@@ -12,7 +12,7 @@ export function AuthenticationStep() {
 	const { data: session } = useSession();
 	const [email, setEmail] = useState('');
 	const [emailSent, setEmailSent] = useState(false);
-	const [loading, setLoading] = useState(false);
+	const [isLoading, setIsLoading] = useState(false);
 	const [turnstileToken, setTurnstileToken] = useState('');
 	const turnstileRef = useRef<TurnstileInstance>(null);
 
@@ -40,9 +40,9 @@ export function AuthenticationStep() {
 
 	const handleSendMagicLink = async (e: React.FormEvent) => {
 		e.preventDefault();
-		if (!email || loading) return;
+		if (!email || isLoading) return;
 
-		setLoading(true);
+		setIsLoading(true);
 		try {
 			// Send magic link using Better Auth client-side API
 			const { error } = await authClient.signIn.magicLink({
@@ -69,7 +69,7 @@ export function AuthenticationStep() {
 			turnstileRef.current?.reset();
 			setTurnstileToken('');
 		} finally {
-			setLoading(false);
+			setIsLoading(false);
 		}
 	};
 
@@ -102,12 +102,16 @@ export function AuthenticationStep() {
 	return (
 		<Card>
 			<CardHeader>
-				<CardTitle>Sign In to Continue</CardTitle>
+				<CardTitle className="text-lg flex items-center gap-2">
+					<Icon icon="tabler:user-circle" className="size-6" />
+					Sign In to Continue
+					</CardTitle>
 			</CardHeader>
-			<CardContent>
-				<p className="text-muted-foreground mb-4">
+			<CardContent className="space-y-2">
+				<p className="text-muted-foreground">
 					We'll send you a magic link to continue with your booking. No password
-					required! Don't worry, if you don't have an account yet we will create
+					required!</p> 
+					<p className="text-muted-foreground">Don't worry, if you don't have an account yet we will create
 					one for you automatically.
 				</p>
 				<form onSubmit={handleSendMagicLink} className="space-y-4">
@@ -118,7 +122,7 @@ export function AuthenticationStep() {
 							value={email}
 							onChange={(e) => setEmail(e.target.value)}
 							required
-							disabled={loading}
+							disabled={isLoading}
 						/>
 					</div>
 					<Turnstile
@@ -134,14 +138,33 @@ export function AuthenticationStep() {
 							appearance: 'interaction-only',
 							theme: 'light',
 							size: 'flexible',
+							}}
+						style={{ 
+							display: 'block',
+							width: '100%',
+							minWidth: '300px',
+							height: '65px',
 						}}
 					/>
 					<Button
 						type="submit"
-						disabled={loading || !email || !turnstileToken}
+						disabled={isLoading || !email || !turnstileToken}
 						className="w-full"
 					>
-						{loading ? 'Sending...' : 'Send Magic Link'}
+						{isLoading ? (
+							<>
+								<Icon
+									icon="tabler:loader-2"
+									className="size-5 animate-spin"
+								/>
+								Sending Magic Link...
+							</>
+						) : (
+							<>
+							<Icon icon="tabler:mail" className="size-5" />
+							Send Magic Link
+							</>
+						)}
 					</Button>
 				</form>
 			</CardContent>
