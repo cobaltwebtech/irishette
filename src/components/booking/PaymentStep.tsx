@@ -109,47 +109,52 @@ function PaymentForm() {
 			<PaymentElement />
 
 			{/* Policy Acceptance Checkbox */}
-			<div className="space-y-2">
-				<p className="text-sm leading-relaxed">
-					Please check the box below to acknowledge our policies and complete
-					your payment.
-				</p>
-				<div className="flex items-start gap-3">
-					<Checkbox
-						id={policiesId}
-						className="size-6 cursor-pointer"
-						checked={acceptedPolicies}
-						onCheckedChange={(checked) => setAcceptedPolicies(checked === true)}
-						aria-invalid={!!policyError}
-					/>
+			<div className="flex items-start gap-3">
+				<Checkbox
+					id={policiesId}
+					className="size-6 cursor-pointer"
+					checked={acceptedPolicies}
+					onCheckedChange={(checked) => setAcceptedPolicies(checked === true)}
+					aria-invalid={!!policyError}
+				/>
+				<div className="space-y-1 text-sm">
 					<Label
 						htmlFor={policiesId}
 						className="flex flex-wrap gap-2 cursor-pointer"
 					>
+						Policies Acknowledgement
+					</Label>
+					<p className="">
+						Please check the box to acknowledge our policies and complete
+						your payment.
+					</p>
+					<p className="text-balance">
 						I have read and accept the{' '}
 						<Link
 							to="/cancellation-refund-policy"
 							target="_blank"
-							className="text-accent hover:underline font-medium"
+							className="text-accent hover:underline font-medium text-nowrap"
 						>
-							Cancellation & Refund Policy,
+							Cancellation & Refund Policy
 						</Link>
+						,{' '}
 						<Link
 							to="/terms-of-service"
 							target="_blank"
-							className="text-accent hover:underline font-medium"
+							className="text-accent hover:underline font-medium text-nowrap"
 						>
-							Terms of Service,
+							Terms of Service
 						</Link>
-						and
+						, and{' '}
 						<Link
 							to="/privacy-policy"
 							target="_blank"
-							className="text-accent hover:underline font-medium"
+							className="text-accent hover:underline font-medium text-nowrap"
 						>
-							Privacy Policy.
+							Privacy Policy
 						</Link>
-					</Label>
+						.
+					</p>
 				</div>
 				{policyError && (
 					<p className="text-sm text-destructive ml-7">{policyError}</p>

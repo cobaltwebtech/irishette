@@ -936,4 +936,77 @@ export const bookingsRouter = createTRPCRouter({
 				});
 			}
 		}),
+
+	/**
+	 * Get monthly booking statistics for admin dashboard
+	 * Returns aggregated booking counts and revenue by month
+	 */
+	adminGetMonthlyStats: adminProcedure
+		.input(
+			z.object({
+				months: z.number().min(1).max(24).default(12),
+				status: z.enum(['confirmed', 'all']).default('confirmed'),
+			}),
+		)
+		.query(async ({ ctx, input }) => {
+			const db = createDrizzle(ctx.db);
+
+			try {
+				// Calculate start date (X months ago) and end date (today)
+				const startDate = new Date();
+				startDate.setMonth(startDate.getMonth() - input.months);
+				const startDateStr = startDate.toISOString().split('T')[0]; // YYYY-MM-DD
+
+				const endDate = new Date();
+				const endDateStr = endDate.toISOString().split('T')[0]; // YYYY-MM-DD (today)
+
+				// Fetch bookings from the date range (only past and current, not future)
+				const query = db
+					.select()
+					.from(bookings)
+					.where(between(bookings.checkInDate, startDateStr, endDateStr));
+
+				const allBookings = await query;
+
+				// Filter by status if needed
+				const filteredBookings =
+					input.status === 'confirmed'
+						? allBookings.filter((b) => b.status === 'confirmed')
+						: allBookings;
+
+				// Group by month and aggregate
+				const monthlyMap = new Map<
+					string,
+					{ bookings: number; revenue: number }
+				>();
+
+				for (const booking of filteredBookings) {
+					// Extract YYYY-MM from check-in date
+					const month = booking.checkInDate.slice(0, 7); // 'YYYY-MM'
+
+					const existing = monthlyMap.get(month) || { bookings: 0, revenue: 0 };
+					monthlyMap.set(month, {
+						bookings: existing.bookings + 1,
+						revenue: existing.revenue + booking.totalAmount,
+					});
+				}
+
+				// Convert map to array and sort by month
+				const monthlyData = Array.from(monthlyMap.entries())
+					.map(([month, data]) => ({
+						month,
+						bookings: data.bookings,
+						revenue: data.revenue,
+					}))
+					.sort((a, b) => a.month.localeCompare(b.month));
+
+				return monthlyData;
+			} catch (error) {
+				console.error('Failed to get monthly booking stats:', error);
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: 'Failed to get monthly booking statistics',
+				});
+			}
+		}),
 });

@@ -350,7 +350,7 @@ function LoginPage() {
 								theme: 'light',
 								size: 'flexible',
 							}}
-							style={{ 
+							style={{
 								display: 'block',
 								width: '100%',
 								minWidth: '300px',

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { AdminLayout } from '@/components/admin/AdminLayout';
+import { BookingsChart } from '@/components/admin/BookingsChart';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,13 +24,21 @@ export const Route = createFileRoute('/admin/')({
 		return { session };
 	},
 	loader: async () => {
-		// Pre-fetch rooms and bookings in parallel before component renders
-		const [roomsData, bookingsData] = await Promise.all([
+		// Pre-fetch rooms, bookings, and monthly stats in parallel before component renders
+		const [roomsData, bookingsData, monthlyStatsData] = await Promise.all([
 			trpcClient.rooms.list.query({ limit: 10, status: 'active' }),
 			trpcClient.bookings.adminListBookings.query({ limit: 50, offset: 0 }),
+			trpcClient.bookings.adminGetMonthlyStats.query({
+				months: 12,
+				status: 'confirmed',
+			}),
 		]);
 
-		return { rooms: roomsData, bookings: bookingsData };
+		return {
+			rooms: roomsData,
+			bookings: bookingsData,
+			monthlyStats: monthlyStatsData,
+		};
 	},
 	component: AdminDashboard,
 });
@@ -67,6 +76,16 @@ function AdminDashboard() {
 		staleTime: 5 * 60 * 1000,
 	});
 
+	// Use query with initialData from loader for monthly stats
+	const { data: monthlyStats, isLoading: loadingMonthlyStats } = useQuery({
+		...trpc.bookings.adminGetMonthlyStats.queryOptions({
+			months: 12,
+			status: 'confirmed',
+		}),
+		initialData: loaderData.monthlyStats,
+		staleTime: 5 * 60 * 1000,
+	});
+
 	// Filter bookings to get confirmed ones with check-in date today or in the future
 	const today = new Date();
 	const todayDateString = today.toISOString().slice(0, 10); // 'YYYY-MM-DD'
@@ -94,6 +113,11 @@ function AdminDashboard() {
 
 	return (
 		<AdminLayout title="Property Admin Dashboard">
+			{/* Monthly Bookings Chart */}
+			<div className="mb-8">
+				<BookingsChart data={monthlyStats} isLoading={loadingMonthlyStats} />
+			</div>
+
 			{/* Rooms and Recent Bookings */}
 			<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 				{/* Upcoming Bookings Details */}

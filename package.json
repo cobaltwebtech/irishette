@@ -2,7 +2,7 @@
   "name": "irishette",
   "private": true,
   "type": "module",
-  "version": "0.24.0",
+  "version": "0.25.0",
   "scripts": {
     "dev": "vite dev --port 3000",
     "dev:cf": "vite build && pnpx wrangler dev",

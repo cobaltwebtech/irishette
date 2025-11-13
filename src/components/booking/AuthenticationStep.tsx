@@ -105,14 +105,16 @@ export function AuthenticationStep() {
 				<CardTitle className="text-lg flex items-center gap-2">
 					<Icon icon="tabler:user-circle" className="size-6" />
 					Sign In to Continue
-					</CardTitle>
+				</CardTitle>
 			</CardHeader>
 			<CardContent className="space-y-2">
 				<p className="text-muted-foreground">
 					We'll send you a magic link to continue with your booking. No password
-					required!</p> 
-					<p className="text-muted-foreground">Don't worry, if you don't have an account yet we will create
-					one for you automatically.
+					required!
+				</p>
+				<p className="text-muted-foreground">
+					Don't worry, if you don't have an account yet we will create one for
+					you automatically.
 				</p>
 				<form onSubmit={handleSendMagicLink} className="space-y-4">
 					<div>
@@ -138,8 +140,8 @@ export function AuthenticationStep() {
 							appearance: 'interaction-only',
 							theme: 'light',
 							size: 'flexible',
-							}}
-						style={{ 
+						}}
+						style={{
 							display: 'block',
 							width: '100%',
 							minWidth: '300px',
@@ -153,16 +155,13 @@ export function AuthenticationStep() {
 					>
 						{isLoading ? (
 							<>
-								<Icon
-									icon="tabler:loader-2"
-									className="size-5 animate-spin"
-								/>
+								<Icon icon="tabler:loader-2" className="size-5 animate-spin" />
 								Sending Magic Link...
 							</>
 						) : (
 							<>
-							<Icon icon="tabler:mail" className="size-5" />
-							Send Magic Link
+								<Icon icon="tabler:mail" className="size-5" />
+								Send Magic Link
 							</>
 						)}
 					</Button>
