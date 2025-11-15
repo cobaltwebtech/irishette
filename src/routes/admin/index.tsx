@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { BookingsChart } from '@/components/admin/BookingsChart';
+import { RevenueChart } from '@/components/admin/RevenueChart';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -113,11 +114,6 @@ function AdminDashboard() {
 
 	return (
 		<AdminLayout title="Property Admin Dashboard">
-			{/* Monthly Bookings Chart */}
-			<div className="mb-8">
-				<BookingsChart data={monthlyStats} isLoading={loadingMonthlyStats} />
-			</div>
-
 			{/* Rooms and Recent Bookings */}
 			<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 				{/* Upcoming Bookings Details */}
@@ -129,12 +125,12 @@ function AdminDashboard() {
 								<Button size="sm">View Current Bookings</Button>
 							</Link>
 						</div>
-						<p className="text-sm text-muted-foreground">
-							Shows 3 current bookings
+						<p className="text-xs text-muted-foreground">
+							Shows 3 current bookings. Click on booking to view details.
 						</p>
 					</CardHeader>
 					<CardContent>
-						<div className="space-y-4">
+						<div className="space-y-2">
 							{loadingBookings ? (
 								<div className="text-center py-4 text-muted-foreground">
 									Loading bookings...
@@ -153,20 +149,20 @@ function AdminDashboard() {
 											params={{ bookingId: booking.id }}
 											className="block"
 										>
-											<div className="flex items-center justify-between p-4 border rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+											<div className="flex items-center justify-between p-2 border rounded-lg bg-muted/50 hover:bg-muted transition-colors">
 												<div>
 													<h3 className="font-medium">
-														{' '}
-														Check-in:{' '}
 														{new Date(
 															`${booking.checkInDate}T00:00:00`,
 														).toLocaleDateString()}
 													</h3>
-													<p className="text-sm text-muted-foreground">
+													<p className="text-sm font-semibold text-muted-foreground">
 														{roomMap[bookingData.booking.roomId] ||
 															'Unknown Room'}
 													</p>
-													<p className="text-sm text-muted-foreground">
+												</div>
+												<div className="flex items-center gap-2">
+													<p className="text-sm font-semibold text-muted-foreground">
 														{booking.guestName}
 													</p>
 													<p className="text-xs text-muted-foreground">
@@ -174,20 +170,6 @@ function AdminDashboard() {
 														{booking.numberOfGuests !== 1 ? 's' : ''} • $
 														{booking.totalAmount.toFixed(2)}
 													</p>
-												</div>
-												<div className="flex items-center gap-2">
-													<Badge
-														variant={
-															booking.status === 'confirmed'
-																? 'secondary'
-																: booking.status === 'cancelled'
-																	? 'destructive'
-																	: 'outline'
-														}
-														className="uppercase"
-													>
-														{booking.status}
-													</Badge>
 												</div>
 											</div>
 										</Link>
@@ -207,9 +189,12 @@ function AdminDashboard() {
 								<Button size="sm">View All Rooms</Button>
 							</Link>
 						</div>
+						<p className="text-xs text-muted-foreground">
+							Shows all active rooms for the property. Click on room to edit.
+						</p>
 					</CardHeader>
 					<CardContent>
-						<div className="space-y-4">
+						<div className="space-y-2">
 							{loadingRooms ? (
 								<div className="text-center py-4 text-muted-foreground">
 									Loading rooms...
@@ -226,7 +211,7 @@ function AdminDashboard() {
 										params={{ roomId: room.id }}
 										className="block"
 									>
-										<div className="flex items-center justify-between p-4 bg-muted hover:bg-muted/50 border rounded-lg">
+										<div className="flex items-center justify-between p-4 bg-muted/50 hover:bg-muted border rounded-lg">
 											<div>
 												<h3 className="font-medium">{room.name}</h3>
 												<p className="text-sm text-muted-foreground">
@@ -250,6 +235,16 @@ function AdminDashboard() {
 						</div>
 					</CardContent>
 				</Card>
+			</div>
+
+			{/* Monthly Bookings Chart */}
+			<div className="mb-8">
+				<BookingsChart data={monthlyStats} isLoading={loadingMonthlyStats} />
+			</div>
+
+			{/* Monthly Revenue Chart */}
+			<div className="mb-8">
+				<RevenueChart data={monthlyStats} isLoading={loadingMonthlyStats} />
 			</div>
 		</AdminLayout>
 	);

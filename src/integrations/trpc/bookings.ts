@@ -977,17 +977,22 @@ export const bookingsRouter = createTRPCRouter({
 				// Group by month and aggregate
 				const monthlyMap = new Map<
 					string,
-					{ bookings: number; revenue: number }
+					{ bookings: number; revenue: number; baseRevenue: number }
 				>();
 
 				for (const booking of filteredBookings) {
 					// Extract YYYY-MM from check-in date
 					const month = booking.checkInDate.slice(0, 7); // 'YYYY-MM'
 
-					const existing = monthlyMap.get(month) || { bookings: 0, revenue: 0 };
+					const existing = monthlyMap.get(month) || {
+						bookings: 0,
+						revenue: 0,
+						baseRevenue: 0,
+					};
 					monthlyMap.set(month, {
 						bookings: existing.bookings + 1,
 						revenue: existing.revenue + booking.totalAmount,
+						baseRevenue: existing.baseRevenue + booking.baseAmount,
 					});
 				}
 
@@ -997,6 +1002,7 @@ export const bookingsRouter = createTRPCRouter({
 						month,
 						bookings: data.bookings,
 						revenue: data.revenue,
+						baseRevenue: data.baseRevenue,
 					}))
 					.sort((a, b) => a.month.localeCompare(b.month));
 

@@ -476,7 +476,7 @@ function AdminBookingDetailPage() {
 								<p className="text-sm font-medium text-muted-foreground">
 									Created At
 								</p>
-								<p className="text-sm">
+								<p className="font-mono text-sm">
 									{new Date(booking.booking.createdAt).toLocaleString()}
 								</p>
 							</div>
@@ -484,7 +484,7 @@ function AdminBookingDetailPage() {
 								<p className="text-sm font-medium text-muted-foreground">
 									Updated At
 								</p>
-								<p className="text-sm">
+								<p className="font-mono text-sm">
 									{new Date(booking.booking.updatedAt).toLocaleString()}
 								</p>
 							</div>

@@ -80,7 +80,7 @@ type BookingData = {
 function PastBookings() {
 	const { data: session, isPending } = useSession();
 	const [sorting, setSorting] = useState<SortingState>([
-		{ id: 'booking.checkOutDate', desc: true }, // Sort by checkout date, most recent first
+		{ id: 'booking.checkInDate', desc: true }, // Sort by checkout date, most recent first
 	]);
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 	const [globalFilter, setGlobalFilter] = useState('');
@@ -134,6 +134,7 @@ function PastBookings() {
 				),
 			}),
 			columnHelper.accessor('booking.checkInDate', {
+				id: 'booking.checkInDate',
 				header: ({ column }) => (
 					<Button
 						variant="ghost"
@@ -195,6 +196,7 @@ function PastBookings() {
 				header: 'Status',
 				cell: (info) => (
 					<Badge
+						className="uppercase"
 						variant={
 							info.getValue() === 'confirmed'
 								? 'default'
@@ -213,6 +215,7 @@ function PastBookings() {
 				header: 'Payment',
 				cell: (info) => (
 					<Badge
+						className="uppercase"
 						variant={
 							info.getValue() === 'paid'
 								? 'default'

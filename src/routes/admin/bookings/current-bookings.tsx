@@ -79,7 +79,9 @@ type BookingData = {
 
 function AdminBookings() {
 	const { data: session, isPending } = useSession();
-	const [sorting, setSorting] = useState<SortingState>([]);
+	const [sorting, setSorting] = useState<SortingState>([
+		{ id: 'booking.checkInDate', desc: false },
+	]);
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 	const [globalFilter, setGlobalFilter] = useState('');
 	// Use tRPC query to fetch admin bookings
@@ -131,6 +133,7 @@ function AdminBookings() {
 				),
 			}),
 			columnHelper.accessor('booking.checkInDate', {
+				id: 'booking.checkInDate',
 				header: ({ column }) => (
 					<Button
 						variant="ghost"
@@ -191,6 +194,7 @@ function AdminBookings() {
 				header: 'Status',
 				cell: (info) => (
 					<Badge
+						className="uppercase"
 						variant={
 							info.getValue() === 'confirmed'
 								? 'default'
@@ -209,6 +213,7 @@ function AdminBookings() {
 				header: 'Payment',
 				cell: (info) => (
 					<Badge
+						className="uppercase"
 						variant={
 							info.getValue() === 'paid'
 								? 'default'

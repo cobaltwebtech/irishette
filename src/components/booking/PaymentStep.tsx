@@ -125,8 +125,8 @@ function PaymentForm() {
 						Policies Acknowledgement
 					</Label>
 					<p className="">
-						Please check the box to acknowledge our policies and complete
-						your payment.
+						Please check the box to acknowledge our policies and complete your
+						payment.
 					</p>
 					<p className="text-balance">
 						I have read and accept the{' '}
