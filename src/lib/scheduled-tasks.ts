@@ -242,7 +242,6 @@ export async function scheduledIcalLogCleanup(_env: ScheduledEnv) {
  * Removes pending bookings that have passed their expiration time (30 minutes)
  */
 export async function scheduledBookingCleanup(env: ScheduledEnv) {
-	const startTime = Date.now();
 	console.log(
 		'🧹 Starting expired pending bookings cleanup...',
 		new Date().toISOString(),
@@ -251,30 +250,33 @@ export async function scheduledBookingCleanup(env: ScheduledEnv) {
 	try {
 		const db = createDrizzle(env.DB);
 		const now = new Date();
-		console.log(`⏱️ DB initialized at ${Date.now() - startTime}ms`);
+
+		// First, count how many bookings will be deleted (for logging)
+		const expiredBookings = await db
+			.select({ id: bookings.id })
+			.from(bookings)
+			.where(and(eq(bookings.status, 'pending'), lte(bookings.expiresAt, now)));
+
+		const deletedCount = expiredBookings.length;
 
 		// Delete pending bookings where expiresAt is in the past
-		const result = await db
-			.delete(bookings)
-			.where(and(eq(bookings.status, 'pending'), lte(bookings.expiresAt, now)))
-			.returning({ id: bookings.id });
-
-		const deletedCount = result.length;
-		console.log(`⏱️ Delete operation completed at ${Date.now() - startTime}ms`);
+		// Note: Removed .returning() to reduce D1 transaction overhead
+		if (deletedCount > 0) {
+			await db
+				.delete(bookings)
+				.where(
+					and(eq(bookings.status, 'pending'), lte(bookings.expiresAt, now)),
+				);
+		}
 
 		console.log(
 			`✅ Booking cleanup completed: ${deletedCount} expired pending bookings removed`,
 		);
-		
-		const summary = {
+
+		return {
 			deletedCount,
 			timestamp: now.toISOString(),
-			duration: Date.now() - startTime,
 		};
-		
-		console.log(`⏱️ Total function duration: ${summary.duration}ms`);
-
-		return summary;
 	} catch (error) {
 		console.error('💥 Scheduled booking cleanup failed:', error);
 		throw error;
@@ -291,7 +293,6 @@ export async function handleScheduledEvent(
 	_ctx: ExecutionContext,
 ): Promise<void> {
 	const cron = event.cron;
-	const handlerStartTime = Date.now();
 
 	console.log(`⏰ Scheduled event triggered: ${cron}`);
 
@@ -302,7 +303,7 @@ export async function handleScheduledEvent(
 				await scheduledCalendarSync(env);
 				break;
 
-			case '33 * * * *': // Every hour at 5 mins past - cleanup expired pending bookings
+			case '56 * * * *': // Every hour at 5 mins past - cleanup expired pending bookings
 				await scheduledBookingCleanup(env);
 				break;
 
@@ -315,10 +316,6 @@ export async function handleScheduledEvent(
 				// Default to calendar sync for any unrecognized schedule
 				await scheduledCalendarSync(env);
 		}
-		
-		console.log(
-			`⏱️ Handler total execution time: ${Date.now() - handlerStartTime}ms`,
-		);
 	} catch (error) {
 		console.error('💥 Scheduled event failed:', error);
 		// Don't re-throw to prevent infinite retries
