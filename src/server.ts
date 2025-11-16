@@ -7,26 +7,23 @@ console.log("[server-entry]: using custom server entry in 'src/server.ts'");
 
 export default {
 	fetch(request: Request, _env: Env, _ctx: ExecutionContext) {
-		return handler.fetch(request, {
-			context: {
-				fromFetch: true,
-			},
-		});
+		return handler.fetch(request);
 	},
 
 	/**
 	 * Cloudflare Workers scheduled event handler
 	 * Handles cron triggers for automated tasks
 	 * 
-	 * Note: Using fire-and-forget pattern to avoid Cloudflare's async timeout behavior.
-	 * The handler executes synchronously but doesn't wait for the promise to prevent
-	 * the ~7 minute wall time issue caused by async promise resolution waiting.
+	 * Note: Using synchronous handler with ctx.waitUntil() to avoid the async timeout
+	 * behavior while ensuring the work completes. This keeps wall time low while
+	 * guaranteeing task completion.
 	 */
-	scheduled(event: ScheduledEvent, env: Env, _ctx: ExecutionContext): void {
+	scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): void {
 		console.log('🔔 Scheduled event received in server.ts');
-		handleScheduledEvent(event, env, _ctx).then(
-			() => console.log('✨ Scheduled event handler completed successfully'),
-			(error) => console.error('❌ Scheduled event handler failed:', error),
+		ctx.waitUntil(
+			handleScheduledEvent(event, env, ctx)
+				.then(() => console.log('✨ Scheduled event handler completed successfully'))
+				.catch((error) => console.error('❌ Scheduled event handler failed:', error)),
 		);
 	},
 };
