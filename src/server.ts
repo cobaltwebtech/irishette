@@ -14,16 +14,16 @@ export default {
 	 * Cloudflare Workers scheduled event handler
 	 * Handles cron triggers for automated tasks
 	 * 
-	 * Note: Using synchronous handler with ctx.waitUntil() to avoid the async timeout
-	 * behavior while ensuring the work completes. This keeps wall time low while
-	 * guaranteeing task completion.
+	 * Note: Fire-and-forget with explicit void return to minimize wall time.
 	 */
 	scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): void {
 		console.log('🔔 Scheduled event received in server.ts');
-		ctx.waitUntil(
-			handleScheduledEvent(event, env, ctx)
-				.then(() => console.log('✨ Scheduled event handler completed successfully'))
-				.catch((error) => console.error('❌ Scheduled event handler failed:', error)),
-		);
+		
+		// Execute but don't await - handler returns immediately
+		void handleScheduledEvent(event, env, ctx)
+			.then(() => console.log('✨ Scheduled event handler completed successfully'))
+			.catch((error) => console.error('❌ Scheduled event handler failed:', error));
+		
+		return;
 	},
 };

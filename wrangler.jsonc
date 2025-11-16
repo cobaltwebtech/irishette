@@ -29,7 +29,7 @@
 			// Every 30 minutes - sync external calendars
 			"*/30 * * * *",
 			// Every hour at 5 mins past run cleanup on abandoned bookings
-			"25 * * * *",
+			"33 * * * *",
 			// Weekly on Sunday at 2 AM - clean up old logs
 			"0 2 * * SUN"
 		]
