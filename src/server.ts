@@ -17,18 +17,16 @@ export default {
 	/**
 	 * Cloudflare Workers scheduled event handler
 	 * Handles cron triggers for automated tasks
+	 * 
+	 * Note: Using fire-and-forget pattern to avoid Cloudflare's async timeout behavior.
+	 * The handler executes synchronously but doesn't wait for the promise to prevent
+	 * the ~7 minute wall time issue caused by async promise resolution waiting.
 	 */
-	async scheduled(
-		event: ScheduledEvent,
-		env: Env,
-		_ctx: ExecutionContext,
-	): Promise<void> {
+	scheduled(event: ScheduledEvent, env: Env, _ctx: ExecutionContext): void {
 		console.log('🔔 Scheduled event received in server.ts');
-		try {
-			await handleScheduledEvent(event, env, _ctx);
-			console.log('✨ Scheduled event handler completed successfully');
-		} catch (error) {
-			console.error('❌ Scheduled event handler failed:', error);
-		}
+		handleScheduledEvent(event, env, _ctx).then(
+			() => console.log('✨ Scheduled event handler completed successfully'),
+			(error) => console.error('❌ Scheduled event handler failed:', error),
+		);
 	},
 };
