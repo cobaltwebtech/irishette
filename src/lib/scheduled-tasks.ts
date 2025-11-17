@@ -323,11 +323,11 @@ export async function handleScheduledEvent(
 				await scheduledCalendarSync(env);
 				break;
 
-			case '5 2 * * *': // Every 24 hours at 2:05 AM - cleanup expired pending bookings
+			case '5 8 * * *': // Every 24 hours at 8:05 AM (UTC) - cleanup expired pending bookings
 				await scheduledBookingCleanup(env);
 				break;
 
-			case '55 * * * *': // Weekly on Sunday at 2 AM - cleanup iCal sync logs
+			case '15 9 * * *': // Every 24 hours at 9:15AM (UTC) - cleanup iCal sync logs
 				await scheduledIcalLogCleanup(env);
 				break;
 

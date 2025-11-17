@@ -26,12 +26,12 @@
 	},
 	"triggers": {
 		"crons": [
-			// Every 30 minutes - sync external calendars
+			// Every 30 minutes run calendar sync
 			"*/30 * * * *",
-			// Every 24 hours at 2:05 AM run cleanup on abandoned bookings
-			"5 2 * * *",
-			// Weekly on Sunday at 2 AM - clean up old logs
-			"55 * * * *"
+			// Every 24 hours at 8:05 AM (UTC) - cleanup expired pending bookings
+			"5 8 * * *",
+			// Every 24 hours at 9:15AM (UTC) - cleanup iCal sync logs
+			"15 9 * * *"
 		]
 	}
 }
