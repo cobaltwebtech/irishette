@@ -1,6 +1,6 @@
 import { and, eq, lte } from 'drizzle-orm';
 import { createDrizzle } from '@/db/drizzle-init';
-import { bookings, room } from '@/db/schema-export';
+import { bookings, icalSyncLog, room } from '@/db/schema-export';
 import { iCalService } from '@/lib/ical-service';
 
 interface ScheduledEnv {
@@ -213,21 +213,41 @@ export async function scheduledCalendarSync(env: ScheduledEnv) {
  * Cleanup old sync logs (runs weekly)
  * Removes sync logs older than 30 days to prevent database bloat
  */
-export async function scheduledIcalLogCleanup(_env: ScheduledEnv) {
+export async function scheduledIcalLogCleanup(env: ScheduledEnv) {
 	console.log('🧹 Starting scheduled cleanup...', new Date().toISOString());
 
 	try {
-		// Calculate 30 days ago
+		const db = createDrizzle(env.DB);
+
+		// Calculate 30 days ago in milliseconds
 		const thirtyDaysAgo = new Date();
 		thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
 		console.log(
-			`🗑️ Would clean up sync logs older than: ${thirtyDaysAgo.toISOString()}`,
+			`🗑️ Cleaning up sync logs older than: ${thirtyDaysAgo.toISOString()}`,
 		);
-		console.log('✅ Cleanup completed');
+
+		// First, count how many logs will be deleted (for logging)
+		const oldLogs = await db
+			.select({ id: icalSyncLog.id })
+			.from(icalSyncLog)
+			.where(lte(icalSyncLog.createdAt, thirtyDaysAgo));
+
+		const deletedCount = oldLogs.length;
+
+		// Delete sync logs older than 30 days
+		if (deletedCount > 0) {
+			await db
+				.delete(icalSyncLog)
+				.where(lte(icalSyncLog.createdAt, thirtyDaysAgo));
+		}
+
+		console.log(
+			`✅ Cleanup completed: ${deletedCount} old sync logs removed`,
+		);
 
 		return {
-			cleaned: 0, // Placeholder for actual cleanup count
+			cleaned: deletedCount,
 			cutoffDate: thirtyDaysAgo.toISOString(),
 			timestamp: new Date().toISOString(),
 		};
@@ -307,7 +327,7 @@ export async function handleScheduledEvent(
 				await scheduledBookingCleanup(env);
 				break;
 
-			case '0 2 * * SUN': // Weekly on Sunday at 2 AM - cleanup iCal sync logs
+			case '55 * * * *': // Weekly on Sunday at 2 AM - cleanup iCal sync logs
 				await scheduledIcalLogCleanup(env);
 				break;
 
