@@ -28,8 +28,8 @@
 		"crons": [
 			// Every 30 minutes - sync external calendars
 			"*/30 * * * *",
-			// Every hour at 5 mins past run cleanup on abandoned bookings
-			"56 * * * *",
+			// Every 24 hours at 2:05 AM run cleanup on abandoned bookings
+			"5 2 * * *",
 			// Weekly on Sunday at 2 AM - clean up old logs
 			"0 2 * * SUN"
 		]

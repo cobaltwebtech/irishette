@@ -303,7 +303,7 @@ export async function handleScheduledEvent(
 				await scheduledCalendarSync(env);
 				break;
 
-			case '56 * * * *': // Every hour at 5 mins past - cleanup expired pending bookings
+			case '5 2 * * *': // Every 24 hours at 2:05 AM - cleanup expired pending bookings
 				await scheduledBookingCleanup(env);
 				break;
 
