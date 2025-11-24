@@ -33,9 +33,8 @@ export const {
 	signUp,
 	$Infer,
 	updateUser,
-	changePassword,
+	requestPasswordReset,
 	resetPassword,
-	forgetPassword,
 	sendVerificationEmail,
 	changeEmail,
 } = authClient;

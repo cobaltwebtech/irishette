@@ -2,15 +2,14 @@ import { env } from 'cloudflare:workers';
 import { stripe } from '@better-auth/stripe';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { admin, magicLink, phoneNumber } from 'better-auth/plugins';
-import { reactStartCookies } from 'better-auth/react-start';
+import { admin, captcha, magicLink, phoneNumber } from 'better-auth/plugins';
+import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { drizzle } from 'drizzle-orm/d1';
 import { Resend } from 'resend';
 import Stripe from 'stripe';
 import { MagicLinkEmail } from '@/components/email/MagicLinkEmail';
 import { PasswordReset } from '@/components/email/PasswordReset';
 import * as authSchema from '@/db/auth-schema';
-import { captcha } from 'better-auth/plugins';
 
 // Initialize Drizzle with the Cloudflare D1 database
 export const createDrizzle = (db: D1Database) =>
@@ -20,7 +19,7 @@ export const createDrizzle = (db: D1Database) =>
 export const auth = async () => {
 	// Initialize Stripe with environment variables
 	const stripeClient = new Stripe(env.STRIPE_SECRET_KEY, {
-		apiVersion: '2025-10-29.clover',
+		apiVersion: '2025-11-17.clover',
 	});
 
 	// Initialize Resend for email service
@@ -68,6 +67,11 @@ export const auth = async () => {
 				}
 			},
 		},
+    user: {
+        changeEmail: {
+            enabled: true,
+        }
+    },		
 		plugins: [
 			admin(),
 			magicLink({
@@ -102,10 +106,10 @@ export const auth = async () => {
 					'/sign-in/magic-link',
 					'/sign-up/email',
 					'/sign-in/email',
-					'/forget-password',
+					'/request-password-reset',
 				],
 			}),
-			reactStartCookies(), // Handle cookies for TanStack Start. Needs to be last in array.
+			tanstackStartCookies(), // Handle cookies for TanStack Start. Needs to be last in array.
 		],
 	});
 };
