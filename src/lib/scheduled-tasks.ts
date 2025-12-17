@@ -242,9 +242,7 @@ export async function scheduledIcalLogCleanup(env: ScheduledEnv) {
 				.where(lte(icalSyncLog.createdAt, thirtyDaysAgo));
 		}
 
-		console.log(
-			`✅ Cleanup completed: ${deletedCount} old sync logs removed`,
-		);
+		console.log(`✅ Cleanup completed: ${deletedCount} old sync logs removed`);
 
 		return {
 			cleaned: deletedCount,

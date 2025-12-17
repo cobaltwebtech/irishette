@@ -3,7 +3,7 @@ import { stripe } from '@better-auth/stripe';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { admin, captcha, magicLink, phoneNumber } from 'better-auth/plugins';
-import { tanstackStartCookies } from "better-auth/tanstack-start";
+import { tanstackStartCookies } from 'better-auth/tanstack-start';
 import { drizzle } from 'drizzle-orm/d1';
 import { Resend } from 'resend';
 import Stripe from 'stripe';
@@ -19,7 +19,7 @@ export const createDrizzle = (db: D1Database) =>
 export const auth = async () => {
 	// Initialize Stripe with environment variables
 	const stripeClient = new Stripe(env.STRIPE_SECRET_KEY, {
-		apiVersion: '2025-11-17.clover',
+		apiVersion: '2025-12-15.clover',
 	});
 
 	// Initialize Resend for email service
@@ -67,11 +67,11 @@ export const auth = async () => {
 				}
 			},
 		},
-    user: {
-        changeEmail: {
-            enabled: true,
-        }
-    },		
+		user: {
+			changeEmail: {
+				enabled: true,
+			},
+		},
 		plugins: [
 			admin(),
 			magicLink({
