@@ -503,7 +503,6 @@ function PricingRuleForm({
 		startDate: rule?.startDate || '',
 		endDate: rule?.endDate || '',
 		isActive: rule?.isActive ?? true,
-		daysOfWeek: rule?.daysOfWeek || undefined,
 	});
 
 	const handleSubmit = async (e: React.FormEvent) => {

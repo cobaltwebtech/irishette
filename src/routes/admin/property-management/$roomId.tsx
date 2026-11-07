@@ -107,7 +107,6 @@ function EditRoom() {
 		pricingRulesQuery.data?.map((rule) => ({
 			...rule,
 			isActive: rule.isActive ?? true,
-			daysOfWeek: rule.daysOfWeek ?? undefined,
 		})) ?? [];
 
 	const blockedPeriods =

@@ -1,6 +1,7 @@
 import { and, eq, lte } from 'drizzle-orm';
 import { createDrizzle } from '@/db/drizzle-init';
 import { bookings, icalSyncLog, room } from '@/db/schema-export';
+import { getLegacyFeedConfig } from '@/lib/ical-feeds';
 import { iCalService } from '@/lib/ical-service';
 
 interface ScheduledEnv {
@@ -42,8 +43,11 @@ export async function scheduledCalendarSync(env: ScheduledEnv) {
 		for (const roomData of rooms) {
 			console.log(`🏠 Processing room: ${roomData.slug} (${roomData.id})`);
 
+			// Feed URLs now live in ical_feeds (see src/lib/ical-feeds.ts).
+			const feeds = await getLegacyFeedConfig(db, roomData.id);
+
 			// Sync Airbnb calendar if URL exists
-			if (roomData.airbnbIcalUrl) {
+			if (feeds.airbnbIcalUrl) {
 				console.log(`  📥 Syncing Airbnb calendar...`);
 				try {
 					const result = await icalService.syncExternalCalendar(
@@ -100,7 +104,7 @@ export async function scheduledCalendarSync(env: ScheduledEnv) {
 			}
 
 			// Sync expedia calendar if URL exists
-			if (roomData.expediaIcalUrl) {
+			if (feeds.expediaIcalUrl) {
 				console.log(`  📥 Syncing Expedia calendar...`);
 				try {
 					const result = await icalService.syncExternalCalendar(

@@ -71,10 +71,6 @@ type Room = {
 	basePrice: number;
 	status: RoomStatus;
 	isActive: boolean | null; // Keep for backward compatibility
-	airbnbIcalUrl: string | null;
-	expediaIcalUrl: string | null;
-	lastAirbnbSync: Date | null;
-	lastExpediaSync: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
 };

@@ -1,8 +1,12 @@
-import { and, eq, gte, inArray, lte } from 'drizzle-orm';
-import { nanoid } from 'nanoid';
+import { and, eq, getTableColumns, gte, inArray, lte } from 'drizzle-orm';
 import { z } from 'zod';
 import { createDrizzle } from '@/db/drizzle-init';
 import { room, roomBlockedPeriods, roomPricingRules } from '@/db/schema-export';
+import {
+	getActiveFeed,
+	getLegacyFeedConfig,
+	setLegacyFeedUrl,
+} from '@/lib/ical-feeds';
 import { iCalService } from '@/lib/ical-service';
 import {
 	bulkAvailabilitySchema,
@@ -23,6 +27,11 @@ import {
 	updateRoomSchema,
 } from '@/lib/room-validation';
 import { adminProcedure, createTRPCRouter, publicProcedure } from './init';
+
+// Room columns safe for public procedures: never expose the iCal export token.
+// TODO(upgrade Phase 7.1): replace with an explicit public room DTO.
+const { icalExportToken: _icalExportToken, ...publicRoomColumns } =
+	getTableColumns(room);
 
 export const roomsRouter = createTRPCRouter({
 	// Simple test procedure without input
@@ -48,14 +57,14 @@ export const roomsRouter = createTRPCRouter({
 		}
 
 		// Build the query
-		const baseQuery = db.select().from(room);
+		const baseQuery = db.select(publicRoomColumns).from(room);
 		const query =
 			conditions.length > 0 ? baseQuery.where(and(...conditions)) : baseQuery;
 
 		const result = await query.limit(input.limit).offset(input.offset);
 
 		// Get total count for pagination
-		const countBaseQuery = db.select().from(room);
+		const countBaseQuery = db.select({ id: room.id }).from(room);
 		const countQuery =
 			conditions.length > 0
 				? countBaseQuery.where(and(...conditions))
@@ -79,7 +88,10 @@ export const roomsRouter = createTRPCRouter({
 	get: publicProcedure.input(getRoomSchema).query(async ({ ctx, input }) => {
 		const db = createDrizzle(ctx.db);
 
-		const result = await db.select().from(room).where(eq(room.id, input.id));
+		const result = await db
+			.select(publicRoomColumns)
+			.from(room)
+			.where(eq(room.id, input.id));
 
 		if (!result[0]) {
 			throw new Error('Room not found');
@@ -94,28 +106,27 @@ export const roomsRouter = createTRPCRouter({
 		.mutation(async ({ ctx, input }) => {
 			const db = createDrizzle(ctx.db);
 
-			const roomId = nanoid();
 			const now = new Date();
 
-			const newRoom = {
-				id: roomId,
-				name: input.name,
-				slug: input.slug,
-				description: input.description || null,
-				basePrice: input.basePrice || 0, // Default price for now
-				status: input.status || 'active',
-				isActive: input.isActive,
-				airbnbIcalUrl: input.airbnbIcalUrl || null,
-				expediaIcalUrl: input.expediaIcalUrl || null,
-				lastAirbnbSync: null,
-				lastExpediaSync: null,
-				createdAt: now,
-				updatedAt: now,
-			};
+			const [newRoom] = await db
+				.insert(room)
+				.values({
+					name: input.name,
+					slug: input.slug,
+					description: input.description || null,
+					basePrice: input.basePrice || 0, // Default price for now
+					status: input.status || 'active',
+					isActive: input.isActive,
+					createdAt: now,
+					updatedAt: now,
+				})
+				.returning();
 
-			await db.insert(room).values(newRoom);
+			// Feed URLs live in ical_feeds.
+			await setLegacyFeedUrl(db, newRoom.id, 'airbnb', input.airbnbIcalUrl);
+			await setLegacyFeedUrl(db, newRoom.id, 'expedia', input.expediaIcalUrl);
 
-			return newRoom;
+			return { ...newRoom, ...(await getLegacyFeedConfig(db, newRoom.id)) };
 		}),
 
 	// Update existing room (admin only)
@@ -124,7 +135,7 @@ export const roomsRouter = createTRPCRouter({
 		.mutation(async ({ ctx, input }) => {
 			const db = createDrizzle(ctx.db);
 
-			const { id, ...updateData } = input;
+			const { id, airbnbIcalUrl, expediaIcalUrl, ...updateData } = input;
 
 			const result = await db
 				.update(room)
@@ -139,7 +150,15 @@ export const roomsRouter = createTRPCRouter({
 				throw new Error('Room not found');
 			}
 
-			return result[0];
+			// Feed URLs live in ical_feeds; only touch them when provided.
+			if (airbnbIcalUrl !== undefined) {
+				await setLegacyFeedUrl(db, id, 'airbnb', airbnbIcalUrl);
+			}
+			if (expediaIcalUrl !== undefined) {
+				await setLegacyFeedUrl(db, id, 'expedia', expediaIcalUrl);
+			}
+
+			return { ...result[0], ...(await getLegacyFeedConfig(db, id)) };
 		}),
 
 	// Archive room (admin only - replaces delete - preserves data for historical bookings)
@@ -274,17 +293,10 @@ export const roomsRouter = createTRPCRouter({
 				throw new Error('Room not found');
 			}
 
-			const roomData = result[0];
+			// Get the calendar feed for this platform
+			const feed = await getActiveFeed(db, input.roomId, input.platform);
 
-			// Get the appropriate calendar URL
-			let calendarUrl: string | null = null;
-			if (input.platform === 'airbnb') {
-				calendarUrl = roomData.airbnbIcalUrl;
-			} else if (input.platform === 'expedia') {
-				calendarUrl = roomData.expediaIcalUrl;
-			}
-
-			if (!calendarUrl) {
+			if (!feed) {
 				throw new Error(
 					`No ${input.platform} calendar URL configured for this room`,
 				);
@@ -328,20 +340,24 @@ export const roomsRouter = createTRPCRouter({
 				throw new Error('Room not found');
 			}
 
-			// Update iCal URLs
-			const updateData: Partial<typeof room.$inferInsert> = {
-				updatedAt: new Date(),
-			};
-
+			// Update iCal feed URLs (stored in ical_feeds)
 			if (input.airbnbIcalUrl !== undefined) {
-				updateData.airbnbIcalUrl = input.airbnbIcalUrl;
+				await setLegacyFeedUrl(db, input.roomId, 'airbnb', input.airbnbIcalUrl);
 			}
 
 			if (input.expediaIcalUrl !== undefined) {
-				updateData.expediaIcalUrl = input.expediaIcalUrl;
+				await setLegacyFeedUrl(
+					db,
+					input.roomId,
+					'expedia',
+					input.expediaIcalUrl,
+				);
 			}
 
-			await db.update(room).set(updateData).where(eq(room.id, input.roomId));
+			await db
+				.update(room)
+				.set({ updatedAt: new Date() })
+				.where(eq(room.id, input.roomId));
 
 			return {
 				success: true,
@@ -368,10 +384,6 @@ export const roomsRouter = createTRPCRouter({
 				.select({
 					id: room.id,
 					slug: room.slug,
-					airbnbIcalUrl: room.airbnbIcalUrl,
-					expediaIcalUrl: room.expediaIcalUrl,
-					lastAirbnbSync: room.lastAirbnbSync,
-					lastExpediaSync: room.lastExpediaSync,
 				})
 				.from(room)
 				.where(eq(room.id, input.roomId));
@@ -380,7 +392,10 @@ export const roomsRouter = createTRPCRouter({
 				throw new Error('Room not found');
 			}
 
-			const roomData = roomResult[0];
+			const roomData = {
+				...roomResult[0],
+				...(await getLegacyFeedConfig(db, input.roomId)),
+			};
 
 			return {
 				roomId: roomData.id,
@@ -530,24 +545,24 @@ export const roomsRouter = createTRPCRouter({
 				);
 			}
 
-			const ruleId = nanoid();
 			const now = new Date();
+			const isActive = input.isActive ?? true;
 
-			const newRule = {
-				id: ruleId,
-				roomId: input.roomId,
-				name: input.name,
-				ruleType: input.ruleType,
-				value: input.value,
-				startDate: input.startDate,
-				endDate: input.endDate,
-				isActive: input.isActive ?? true,
-				daysOfWeek: input.daysOfWeek ? JSON.stringify(input.daysOfWeek) : null,
-				createdAt: now,
-				updatedAt: now,
-			};
-
-			await db.insert(roomPricingRules).values(newRule);
+			const [newRule] = await db
+				.insert(roomPricingRules)
+				.values({
+					roomId: input.roomId,
+					name: input.name,
+					ruleType: input.ruleType,
+					value: input.value,
+					startDate: input.startDate,
+					endDate: input.endDate,
+					isActive,
+					activatedAt: isActive ? now : null,
+					createdAt: now,
+					updatedAt: now,
+				})
+				.returning();
 
 			return newRule;
 		}),
@@ -617,9 +632,6 @@ export const roomsRouter = createTRPCRouter({
 
 			const updatedRule = {
 				...updateData,
-				daysOfWeek: updateData.daysOfWeek
-					? JSON.stringify(updateData.daysOfWeek)
-					: undefined,
 				updatedAt: new Date(),
 			};
 
@@ -865,18 +877,17 @@ export const roomsRouter = createTRPCRouter({
 				);
 			}
 
-			const id = nanoid();
-			const newPeriod = {
-				id,
-				roomId: input.roomId,
-				startDate: input.startDate,
-				endDate: input.endDate,
-				reason: input.reason,
-				notes: input.notes || null,
-				createdAt: new Date(),
-			};
-
-			await db.insert(roomBlockedPeriods).values(newPeriod);
+			const [newPeriod] = await db
+				.insert(roomBlockedPeriods)
+				.values({
+					roomId: input.roomId,
+					startDate: input.startDate,
+					endDate: input.endDate,
+					reason: input.reason,
+					notes: input.notes || null,
+					createdAt: new Date(),
+				})
+				.returning();
 
 			return newPeriod;
 		}),

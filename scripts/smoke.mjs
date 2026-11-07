@@ -9,8 +9,8 @@ const BASE_URL = (process.env.BASE_URL ?? 'http://localhost:3000').replace(
 	'',
 );
 
-// Seeded room id from scripts/seed-local.sql (pre-Phase-4 iCal route shape).
-const SEED_ROOM_ID = 'seed-room-rose';
+// Seeded room id from scripts/seed-local.sql (current iCal route shape: /api/ical/<room id>.ics).
+const SEED_ROOM_ID = '019a5f00-0000-7000-8000-000000000001';
 
 const isRedirect = (status) => status >= 300 && status < 400;
 

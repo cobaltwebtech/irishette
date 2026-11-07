@@ -34,32 +34,23 @@ export const roomSchema = z.object({
 	// Legacy field - keep for backward compatibility
 	isActive: z.boolean().default(true),
 
-	// iCal sync URLs for external platforms
-	airbnbIcalUrl: z.url().optional(),
-	expediaIcalUrl: z.url().optional(),
+	// Admin-editable guest limit (enforced on booking in upgrade Phase 7.3).
+	maxGuests: z.number().int().min(1).max(10).default(2),
 
-	// Last sync timestamps (handled by system, not input)
-	lastAirbnbSync: z.date().optional(),
-	lastExpediaSync: z.date().optional(),
+	// iCal feed URLs (stored in ical_feeds; see src/lib/ical-feeds.ts).
+	airbnbIcalUrl: z.url().optional().nullable(),
+	expediaIcalUrl: z.url().optional().nullable(),
 });
 
-// Create room input (without ID and timestamps)
+// Create room input (without ID)
 export const createRoomSchema = roomSchema.omit({
 	id: true,
-	lastAirbnbSync: true,
-	lastExpediaSync: true,
 });
 
 // Update room input (partial with required ID)
-export const updateRoomSchema = roomSchema
-	.partial()
-	.extend({
-		id: z.string(),
-	})
-	.omit({
-		lastAirbnbSync: true,
-		lastExpediaSync: true,
-	});
+export const updateRoomSchema = roomSchema.partial().extend({
+	id: z.string(),
+});
 
 // Room query schemas
 export const getRoomSchema = z.object({
@@ -241,7 +232,6 @@ const roomPricingRuleBaseSchema = z.object({
 		.string()
 		.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
 	isActive: z.boolean().default(true),
-	daysOfWeek: z.string().optional(), // JSON stringified array
 });
 
 export const roomPricingRuleSchema = roomPricingRuleBaseSchema

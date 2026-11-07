@@ -5,9 +5,12 @@ import {
 	bookings,
 	icalSyncLog,
 	room,
-	roomAvailability,
 	roomBlockedPeriods,
 } from '@/db/schema-export';
+import {
+	getExternalEventsInRange,
+	getLegacyFeedConfig,
+} from '@/lib/ical-feeds';
 import { iCalService } from '@/lib/ical-service';
 import { adminProcedure, createTRPCRouter, publicProcedure } from './init';
 
@@ -65,19 +68,13 @@ export const availabilityRouter = createTRPCRouter({
 				throw new Error('Room not found or inactive');
 			}
 
-			// Check for blocked periods in roomAvailability (overlapping check-in/check-out)
-			const availabilityResult = await db
-				.select()
-				.from(roomAvailability)
-				.where(
-					and(
-						eq(roomAvailability.roomId, input.roomId),
-						eq(roomAvailability.isBlocked, true),
-						// Overlapping: block starts before our end, block ends after our start
-						lte(roomAvailability.checkInDate, input.endDate),
-						gte(roomAvailability.checkOutDate, input.startDate),
-					),
-				);
+			// Imported external events overlapping the range
+			const availabilityResult = await getExternalEventsInRange(
+				db,
+				input.roomId,
+				input.startDate,
+				input.endDate,
+			);
 
 			// Check confirmed bookings for overlapping date ranges
 			const bookingResult = await db
@@ -151,18 +148,14 @@ export const availabilityRouter = createTRPCRouter({
 			const availability = [];
 
 			for (const roomData of roomsResult) {
-				// Check for blocked periods in roomAvailability (overlapping check-in/check-out)
-				const availabilityResult = await db
-					.select()
-					.from(roomAvailability)
-					.where(
-						and(
-							eq(roomAvailability.roomId, roomData.id),
-							eq(roomAvailability.isBlocked, true),
-							lte(roomAvailability.checkInDate, input.endDate),
-							gte(roomAvailability.checkOutDate, input.startDate),
-						),
-					);
+				// Imported external events overlapping the range
+				const availabilityResult = await getExternalEventsInRange(
+					db,
+					roomData.id,
+					input.startDate,
+					input.endDate,
+				);
+				const feedConfig = await getLegacyFeedConfig(db, roomData.id);
 
 				const bookingResult = await db
 					.select()
@@ -184,8 +177,8 @@ export const availabilityRouter = createTRPCRouter({
 					basePrice: roomData.basePrice,
 					available: isAvailable,
 					conflictCount: availabilityResult.length + bookingResult.length,
-					lastAirbnbSync: roomData.lastAirbnbSync,
-					lastExpediaSync: roomData.lastExpediaSync,
+					lastAirbnbSync: feedConfig.lastAirbnbSync,
+					lastExpediaSync: feedConfig.lastExpediaSync,
 				});
 			}
 
@@ -244,8 +237,10 @@ export const availabilityRouter = createTRPCRouter({
 			const results = [];
 
 			for (const roomData of roomsResult) {
+				const feedConfig = await getLegacyFeedConfig(db, roomData.id);
+
 				// Sync Airbnb if URL exists
-				if (roomData.airbnbIcalUrl) {
+				if (feedConfig.airbnbIcalUrl) {
 					const airbnbResult = await icalService.syncExternalCalendar(
 						roomData.id,
 						'airbnb',
@@ -259,7 +254,7 @@ export const availabilityRouter = createTRPCRouter({
 				}
 
 				// Sync expedia if URL exists
-				if (roomData.expediaIcalUrl) {
+				if (feedConfig.expediaIcalUrl) {
 					const bookingResult = await icalService.syncExternalCalendar(
 						roomData.id,
 						'expedia',
@@ -308,17 +303,39 @@ export const availabilityRouter = createTRPCRouter({
 				throw new Error('Room not found');
 			}
 
-			// Get all roomAvailability records overlapping the range
-			const availabilityResult = await db
-				.select()
-				.from(roomAvailability)
+			// Imported external events plus confirmed bookings overlapping the range
+			// (previously both lived in room_availability).
+			const externalResult = await getExternalEventsInRange(
+				db,
+				input.roomId,
+				input.startDate,
+				input.endDate,
+			);
+			const confirmedBookings = await db
+				.select({
+					checkInDate: bookings.checkInDate,
+					checkOutDate: bookings.checkOutDate,
+				})
+				.from(bookings)
 				.where(
 					and(
-						eq(roomAvailability.roomId, input.roomId),
-						lte(roomAvailability.checkInDate, input.endDate),
-						gte(roomAvailability.checkOutDate, input.startDate),
+						eq(bookings.roomId, input.roomId),
+						eq(bookings.status, 'confirmed'),
+						lte(bookings.checkInDate, input.endDate),
+						gte(bookings.checkOutDate, input.startDate),
 					),
 				);
+			const availabilityResult = [
+				...externalResult,
+				...confirmedBookings.map((b) => ({
+					...b,
+					isBlocked: true,
+					source: 'booking_confirmed',
+					priceOverride: null as number | null,
+					externalBookingId: null as string | null,
+				})),
+			];
+			const feedConfig = await getLegacyFeedConfig(db, input.roomId);
 
 			// Get blocked periods for the date range
 			const blockedPeriodsResult = await db
@@ -384,8 +401,8 @@ export const availabilityRouter = createTRPCRouter({
 				},
 				calendar: calendarData,
 				lastSync: {
-					airbnb: roomResult[0].lastAirbnbSync,
-					expedia: roomResult[0].lastExpediaSync,
+					airbnb: feedConfig.lastAirbnbSync,
+					expedia: feedConfig.lastExpediaSync,
 				},
 			};
 		}),
@@ -478,17 +495,15 @@ export const availabilityRouter = createTRPCRouter({
 			const endDate =
 				input.endDate || defaultEndDate.toISOString().split('T')[0];
 
-			// Get all roomAvailability records overlapping the range
-			const availabilityResult = await db
-				.select()
-				.from(roomAvailability)
-				.where(
-					and(
-						eq(roomAvailability.roomId, roomData.id),
-						lte(roomAvailability.checkInDate, endDate),
-						gte(roomAvailability.checkOutDate, startDate),
-					),
-				);
+			// Imported external events overlapping the range (confirmed bookings
+			// are processed separately below).
+			const availabilityResult = await getExternalEventsInRange(
+				db,
+				roomData.id,
+				startDate,
+				endDate,
+			);
+			const feedConfig = await getLegacyFeedConfig(db, roomData.id);
 
 			// Get confirmed bookings for the date range
 			const bookingResult = await db
@@ -642,8 +657,8 @@ export const availabilityRouter = createTRPCRouter({
 					slug: roomData.slug,
 					basePrice: roomData.basePrice,
 					status: roomData.status,
-					lastAirbnbSync: roomData.lastAirbnbSync,
-					lastExpediaSync: roomData.lastExpediaSync,
+					lastAirbnbSync: feedConfig.lastAirbnbSync,
+					lastExpediaSync: feedConfig.lastExpediaSync,
 				},
 				dateRange: {
 					startDate,

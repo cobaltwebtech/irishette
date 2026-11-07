@@ -1,1 +1,0 @@
-ALTER TABLE `room` ADD `status` text DEFAULT 'active' NOT NULL;

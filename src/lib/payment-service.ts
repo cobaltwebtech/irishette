@@ -1,15 +1,16 @@
 import { and, eq, gte, lte } from 'drizzle-orm';
-import { customAlphabet, nanoid } from 'nanoid';
+import { customAlphabet } from 'nanoid';
 import type Stripe from 'stripe';
 import { createDrizzle } from '@/db/drizzle-init';
 import {
 	bookings,
 	paymentTransactions,
 	room,
-	roomAvailability,
 	roomPricingRules,
 	user,
 } from '@/db/schema-export';
+import { getExternalEventsInRange } from './ical-feeds';
+import { newId } from './ids';
 import type {
 	CreateBookingInput,
 	CreateCheckoutSessionInput,
@@ -119,38 +120,8 @@ export class PaymentService {
 			)
 			.orderBy(roomPricingRules.startDate); // Order by start date since priority doesn't exist
 
-		// Filter rules by days of week if specified
-		const filteredRules = applicableRules.filter((rule) => {
-			if (!rule.daysOfWeek) return true;
-
-			try {
-				const daysOfWeek = JSON.parse(rule.daysOfWeek) as string[];
-				const dayNames = [
-					'sunday',
-					'monday',
-					'tuesday',
-					'wednesday',
-					'thursday',
-					'friday',
-					'saturday',
-				];
-
-				// Check if any day in the booking range matches the rule's days
-				for (
-					let d = new Date(checkIn);
-					d < checkOut;
-					d.setDate(d.getDate() + 1)
-				) {
-					const dayName = dayNames[d.getDay()];
-					if (daysOfWeek.includes(dayName)) {
-						return true;
-					}
-				}
-				return false;
-			} catch {
-				return true; // If parsing fails, include the rule
-			}
-		});
+		// daysOfWeek was removed: rules apply by date range only.
+		const filteredRules = applicableRules;
 
 		// Apply pricing rules to calculate final price per night
 		let finalPricePerNight = roomData.basePrice;
@@ -284,19 +255,15 @@ export class PaymentService {
 			throw new Error('Room not found or inactive');
 		}
 
-		// Check for blocked periods in roomAvailability (overlapping check-in/check-out)
-		const availabilityResult = await this.db
-			.select()
-			.from(roomAvailability)
-			.where(
-				and(
-					eq(roomAvailability.roomId, roomId),
-					eq(roomAvailability.isBlocked, true),
-					// Overlapping: block starts before our end, block ends after our start
-					lte(roomAvailability.checkInDate, endDate),
-					gte(roomAvailability.checkOutDate, startDate),
-				),
-			);
+		// Check imported external events (iCal feeds) overlapping the stay.
+		// TODO(upgrade Phase 7.2): replace with the shared checkAvailability()
+		// (exclusive end dates, holds, admin blocks).
+		const availabilityResult = await getExternalEventsInRange(
+			this.db,
+			roomId,
+			startDate,
+			endDate,
+		);
 
 		// Check confirmed bookings for overlapping date ranges
 		const bookingResult = await this.db
@@ -344,7 +311,7 @@ export class PaymentService {
 		bookingData: CreateBookingInput,
 		userId: string,
 	): Promise<string> {
-		const bookingId = nanoid();
+		const bookingId = newId();
 
 		// Use the comprehensive availability checking system
 		try {
@@ -615,9 +582,7 @@ export class PaymentService {
 		});
 
 		// Create payment transaction record
-		const transactionId = nanoid();
 		await this.db.insert(paymentTransactions).values({
-			id: transactionId,
 			bookingId,
 			stripePaymentIntentId: session.payment_intent as string,
 			stripeCustomerId: customer.stripeCustomerId || '',
@@ -728,12 +693,8 @@ export class PaymentService {
 			guestEmail: booking.guestEmail,
 		});
 
-		// Block dates in room availability table
-		await this.blockRoomDates(
-			booking.roomId,
-			booking.checkInDate,
-			booking.checkOutDate,
-		);
+		// Confirmed bookings are read directly from `bookings` for availability;
+		// no separate availability row is written (room_availability was removed).
 
 		// Note: Confirmation email is sent by the webhook handler after payment confirmation. See the Stripe webhook endpoint at /api/stripe/$.ts
 
@@ -884,47 +845,6 @@ export class PaymentService {
 			room: roomData,
 			paymentDetails: paymentResult[0] || null,
 		};
-	}
-
-	/**
-	 * Block room dates in availability table after successful booking
-	 */
-	private async blockRoomDates(
-		roomId: string,
-		checkInDate: string,
-		checkOutDate: string,
-	): Promise<void> {
-		try {
-			console.log('Blocking room dates:', {
-				roomId,
-				checkInDate,
-				checkOutDate,
-			});
-
-			// Insert a single blocked period record for the entire booking
-			try {
-				await this.db.insert(roomAvailability).values({
-					id: nanoid(),
-					roomId,
-					checkInDate,
-					checkOutDate,
-					isBlocked: true,
-					source: 'booking_confirmed',
-					externalBookingId: null, // This is an internal booking
-					createdAt: new Date(),
-					updatedAt: new Date(),
-				});
-
-				console.log('Room dates blocked successfully as single period');
-			} catch (error) {
-				// If there's a conflict with existing availability record, log it
-				console.error('Failed to block room dates:', error);
-				throw error;
-			}
-		} catch (error) {
-			console.error('Failed to block room dates:', error);
-			// Don't throw here - booking is already confirmed, this is just cleanup
-		}
 	}
 
 	/**
@@ -1149,19 +1069,12 @@ export class PaymentService {
 			})
 			.where(eq(bookings.id, bookingId));
 
-		// Block room dates
 		const bookingResult = await this.db
 			.select()
 			.from(bookings)
 			.where(eq(bookings.id, bookingId));
 
 		if (bookingResult[0]) {
-			await this.blockRoomDates(
-				bookingResult[0].roomId,
-				bookingResult[0].checkInDate,
-				bookingResult[0].checkOutDate,
-			);
-
 			// Clean up any pending bookings for this user
 			await this.cleanupPendingBookings(bookingResult[0].userId);
 		}

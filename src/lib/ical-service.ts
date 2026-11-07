@@ -1,13 +1,14 @@
 import { and, eq } from 'drizzle-orm';
-import { nanoid } from 'nanoid';
 import { createDrizzle } from '@/db/drizzle-init';
 import {
 	bookings,
+	externalEvents,
+	icalFeeds,
 	icalSyncLog,
 	room,
-	roomAvailability,
 	roomBlockedPeriods,
 } from '@/db/schema-export';
+import { getActiveFeed } from '@/lib/ical-feeds';
 
 interface CalendarEvent {
 	uid: string;
@@ -87,11 +88,12 @@ export class iCalService {
 		const syncStartTime = Date.now();
 		let bookingsProcessed = 0;
 		let errorMessage: string | undefined;
+		let feedId: string | undefined;
 
 		try {
 			// Get room data
 			const roomResult = await this.db
-				.select()
+				.select({ id: room.id })
 				.from(room)
 				.where(eq(room.id, roomId));
 
@@ -99,17 +101,13 @@ export class iCalService {
 				throw new Error('Room not found');
 			}
 
-			const roomData = roomResult[0];
-
-			// Get calendar URL from database
-			const calendarUrl =
-				platform === 'airbnb'
-					? roomData.airbnbIcalUrl
-					: roomData.expediaIcalUrl;
-
-			if (!calendarUrl) {
+			// Get the calendar feed (URL) from ical_feeds
+			const feed = await getActiveFeed(this.db, roomId, platform);
+			if (!feed) {
 				throw new Error(`No ${platform} calendar URL configured`);
 			}
+			feedId = feed.id;
+			const calendarUrl = feed.url;
 
 			// Fetch iCal data
 			const response = await fetch(calendarUrl, {
@@ -129,30 +127,23 @@ export class iCalService {
 				`📅 Parsed ${events.length} events from ${platform} calendar for room ${roomId}`,
 			);
 
-			// Fetch existing availability records for this platform to compare
+			// Fetch existing imported events for this feed to compare
 			const existingRecords = await this.db
 				.select()
-				.from(roomAvailability)
-				.where(
-					and(
-						eq(roomAvailability.roomId, roomId),
-						eq(roomAvailability.source, platform),
-					),
-				);
+				.from(externalEvents)
+				.where(eq(externalEvents.feedId, feed.id));
 
-			// Create a map of existing bookings for quick lookup using externalBookingId as key
+			// Map of existing events keyed by iCal UID
 			const existingBookingsMap = new Map<
 				string,
 				{ id: string; checkInDate: string; checkOutDate: string }
 			>();
 			for (const record of existingRecords) {
-				if (record.externalBookingId && record.checkOutDate) {
-					existingBookingsMap.set(record.externalBookingId, {
-						id: record.id,
-						checkInDate: record.checkInDate,
-						checkOutDate: record.checkOutDate,
-					});
-				}
+				existingBookingsMap.set(record.uid, {
+					id: record.id,
+					checkInDate: record.startDate,
+					checkOutDate: record.endDate,
+				});
 			} // Process events and collect all bookings to create/update
 			const now = new Date();
 			now.setHours(0, 0, 0, 0); // Start of today
@@ -270,8 +261,8 @@ export class iCalService {
 				for (const recordId of bookingsToRemove) {
 					try {
 						await this.db
-							.delete(roomAvailability)
-							.where(eq(roomAvailability.id, recordId));
+							.delete(externalEvents)
+							.where(eq(externalEvents.id, recordId));
 					} catch (error) {
 						console.warn(
 							`⚠️ Error removing booking ${recordId}:`,
@@ -297,26 +288,23 @@ export class iCalService {
 					if (existingBooking) {
 						// Update existing booking
 						await this.db
-							.update(roomAvailability)
+							.update(externalEvents)
 							.set({
-								checkInDate: booking.checkInDate,
-								checkOutDate: booking.checkOutDate,
-								updatedAt: now,
+								startDate: booking.checkInDate,
+								endDate: booking.checkOutDate,
+								lastSeenAt: new Date(),
+								updatedAt: new Date(),
 							})
-							.where(eq(roomAvailability.id, existingBooking.id));
+							.where(eq(externalEvents.id, existingBooking.id));
 					} else {
-						// Insert new booking
-						await this.db.insert(roomAvailability).values({
-							id: nanoid(),
+						// Insert new imported event (end date exclusive, as in iCal)
+						await this.db.insert(externalEvents).values({
+							feedId: feed.id,
 							roomId,
-							checkInDate: booking.checkInDate,
-							checkOutDate: booking.checkOutDate,
-							isAvailable: false,
-							isBlocked: true,
-							source: platform,
-							externalBookingId,
-							createdAt: now,
-							updatedAt: now,
+							uid: externalBookingId,
+							startDate: booking.checkInDate,
+							endDate: booking.checkOutDate,
+							kind: 'reserved',
 						});
 					}
 				} catch (insertError) {
@@ -344,18 +332,6 @@ export class iCalService {
 					`⚠️ Completed with ${insertErrors} errors out of ${bookingsToWrite.length} bookings`,
 				);
 			}
-
-			// Update room sync timestamp
-			const updateField =
-				platform === 'airbnb' ? 'lastAirbnbSync' : 'lastExpediaSync';
-			const syncTime = new Date();
-			await this.db
-				.update(room)
-				.set({
-					[updateField]: syncTime,
-					updatedAt: syncTime,
-				})
-				.where(eq(room.id, roomId));
 
 			return { success: true, bookingsProcessed };
 		} catch (error) {
@@ -389,8 +365,26 @@ export class iCalService {
 						: errorMessage
 					: undefined;
 
+				// Record feed sync state
+				if (feedId) {
+					const attemptAt = new Date();
+					await this.db
+						.update(icalFeeds)
+						.set({
+							lastAttemptAt: attemptAt,
+							...(errorMessage
+								? { lastError: truncatedError ?? null }
+								: {
+										lastSuccessAt: attemptAt,
+										lastError: null,
+										lastEventCount: bookingsProcessed,
+									}),
+							updatedAt: attemptAt,
+						})
+						.where(eq(icalFeeds.id, feedId));
+				}
+
 				await this.db.insert(icalSyncLog).values({
-					id: nanoid(),
 					roomId,
 					platform,
 					status: errorMessage ? 'error' : 'success',

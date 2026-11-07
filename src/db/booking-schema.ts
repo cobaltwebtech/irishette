@@ -5,6 +5,7 @@ import {
 	sqliteTable,
 	text,
 } from 'drizzle-orm/sqlite-core';
+import { newId, newPublicId } from '../lib/ids';
 import { user } from './auth-schema';
 import { room } from './room-schema';
 
@@ -12,7 +13,9 @@ import { room } from './room-schema';
 export const bookings = sqliteTable(
 	'bookings',
 	{
-		id: text('id').primaryKey(),
+		id: text('id').primaryKey().$defaultFn(newId),
+		// Public id used in URLs (/account/booking/$publicId etc.).
+		publicId: text('public_id').notNull().unique().$defaultFn(newPublicId),
 		confirmationId: text('confirmation_id').notNull().unique(),
 
 		// Relationships
@@ -71,12 +74,19 @@ export const bookings = sqliteTable(
 		index('bookings_check_in_date_idx').on(table.checkInDate),
 		index('bookings_created_at_idx').on(table.createdAt),
 		index('bookings_expires_at_idx').on(table.expiresAt), // Index for efficient cleanup queries
+		// Availability / overlap lookups.
+		index('bookings_room_status_dates_idx').on(
+			table.roomId,
+			table.status,
+			table.checkInDate,
+			table.checkOutDate,
+		),
 	],
 );
 
 // Keep simplified payment tracking
 export const paymentTransactions = sqliteTable('payment_transactions', {
-	id: text('id').primaryKey(),
+	id: text('id').primaryKey().$defaultFn(newId),
 	bookingId: text('booking_id')
 		.notNull()
 		.references(() => bookings.id, { onDelete: 'cascade' }),

@@ -9,7 +9,7 @@ import { Resend } from 'resend';
 import { MagicLinkEmail } from '@/components/email/MagicLinkEmail';
 import { PasswordReset } from '@/components/email/PasswordReset';
 import * as authSchema from '@/db/auth-schema';
-import { newId } from '@/lib/ids';
+import { newId, newPublicId } from '@/lib/ids';
 import { createStripe } from '@/lib/stripe';
 
 // Initialize Drizzle with the Cloudflare D1 database
@@ -80,6 +80,15 @@ function createAuth() {
 			},
 		},
 		user: {
+			additionalFields: {
+				// Public id for URLs (column user.public_id, see auth-schema.ts).
+				publicId: {
+					type: 'string',
+					required: true,
+					input: false,
+					defaultValue: () => newPublicId(),
+				},
+			},
 			changeEmail: {
 				enabled: true,
 			},

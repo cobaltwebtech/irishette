@@ -15,6 +15,7 @@ CREATE TABLE `account` (
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
+CREATE INDEX `account_userId_idx` ON `account` (`user_id`);--> statement-breakpoint
 CREATE TABLE `session` (
 	`id` text PRIMARY KEY NOT NULL,
 	`expires_at` integer NOT NULL,
@@ -29,8 +30,10 @@ CREATE TABLE `session` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `session_token_unique` ON `session` (`token`);--> statement-breakpoint
+CREATE INDEX `session_userId_idx` ON `session` (`user_id`);--> statement-breakpoint
 CREATE TABLE `user` (
 	`id` text PRIMARY KEY NOT NULL,
+	`public_id` text NOT NULL,
 	`name` text NOT NULL,
 	`email` text NOT NULL,
 	`email_verified` integer NOT NULL,
@@ -41,21 +44,27 @@ CREATE TABLE `user` (
 	`banned` integer,
 	`ban_reason` text,
 	`ban_expires` integer,
-	`stripe_customer_id` text
+	`stripe_customer_id` text,
+	`phone_number` text,
+	`phone_number_verified` integer
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX `user_public_id_unique` ON `user` (`public_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `user_email_unique` ON `user` (`email`);--> statement-breakpoint
+CREATE UNIQUE INDEX `user_phone_number_unique` ON `user` (`phone_number`);--> statement-breakpoint
 CREATE TABLE `verification` (
 	`id` text PRIMARY KEY NOT NULL,
 	`identifier` text NOT NULL,
 	`value` text NOT NULL,
 	`expires_at` integer NOT NULL,
-	`created_at` integer,
-	`updated_at` integer
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL
 );
 --> statement-breakpoint
+CREATE INDEX `verification_identifier_idx` ON `verification` (`identifier`);--> statement-breakpoint
 CREATE TABLE `bookings` (
 	`id` text PRIMARY KEY NOT NULL,
+	`public_id` text NOT NULL,
 	`confirmation_id` text NOT NULL,
 	`user_id` text NOT NULL,
 	`room_id` text NOT NULL,
@@ -76,19 +85,25 @@ CREATE TABLE `bookings` (
 	`special_requests` text,
 	`internal_notes` text,
 	`stripe_customer_id` text,
+	`stripe_session_id` text,
+	`stripe_payment_intent_id` text,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL,
 	`confirmed_at` integer,
 	`cancelled_at` integer,
+	`expires_at` integer,
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`room_id`) REFERENCES `room`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX `bookings_public_id_unique` ON `bookings` (`public_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `bookings_confirmation_id_unique` ON `bookings` (`confirmation_id`);--> statement-breakpoint
 CREATE INDEX `bookings_room_id_idx` ON `bookings` (`room_id`);--> statement-breakpoint
 CREATE INDEX `bookings_status_idx` ON `bookings` (`status`);--> statement-breakpoint
 CREATE INDEX `bookings_check_in_date_idx` ON `bookings` (`check_in_date`);--> statement-breakpoint
 CREATE INDEX `bookings_created_at_idx` ON `bookings` (`created_at`);--> statement-breakpoint
+CREATE INDEX `bookings_expires_at_idx` ON `bookings` (`expires_at`);--> statement-breakpoint
+CREATE INDEX `bookings_room_status_dates_idx` ON `bookings` (`room_id`,`status`,`check_in_date`,`check_out_date`);--> statement-breakpoint
 CREATE TABLE `payment_transactions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`booking_id` text NOT NULL,
@@ -102,6 +117,44 @@ CREATE TABLE `payment_transactions` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `payment_transactions_stripe_payment_intent_id_unique` ON `payment_transactions` (`stripe_payment_intent_id`);--> statement-breakpoint
+CREATE TABLE `external_events` (
+	`id` text PRIMARY KEY NOT NULL,
+	`feed_id` text NOT NULL,
+	`room_id` text NOT NULL,
+	`uid` text NOT NULL,
+	`start_date` text NOT NULL,
+	`end_date` text NOT NULL,
+	`kind` text DEFAULT 'reserved' NOT NULL,
+	`summary` text,
+	`last_seen_at` integer NOT NULL,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	FOREIGN KEY (`feed_id`) REFERENCES `ical_feeds`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`room_id`) REFERENCES `room`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `external_events_feed_uid_unique` ON `external_events` (`feed_id`,`uid`);--> statement-breakpoint
+CREATE INDEX `external_events_room_dates_idx` ON `external_events` (`room_id`,`start_date`,`end_date`);--> statement-breakpoint
+CREATE TABLE `ical_feeds` (
+	`id` text PRIMARY KEY NOT NULL,
+	`room_id` text NOT NULL,
+	`source` text NOT NULL,
+	`label` text,
+	`url` text NOT NULL,
+	`is_active` integer DEFAULT true NOT NULL,
+	`etag` text,
+	`last_modified` text,
+	`last_success_at` integer,
+	`last_attempt_at` integer,
+	`last_event_count` integer,
+	`last_error` text,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	FOREIGN KEY (`room_id`) REFERENCES `room`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `ical_feeds_room_url_unique` ON `ical_feeds` (`room_id`,`url`);--> statement-breakpoint
+CREATE INDEX `ical_feeds_room_id_idx` ON `ical_feeds` (`room_id`);--> statement-breakpoint
 CREATE TABLE `ical_sync_log` (
 	`id` text PRIMARY KEY NOT NULL,
 	`room_id` text NOT NULL,
@@ -116,36 +169,25 @@ CREATE TABLE `ical_sync_log` (
 --> statement-breakpoint
 CREATE TABLE `room` (
 	`id` text PRIMARY KEY NOT NULL,
+	`public_id` text NOT NULL,
+	`name` text NOT NULL,
 	`slug` text NOT NULL,
+	`description` text,
 	`base_price` real NOT NULL,
+	`service_fee_rate` real DEFAULT 0.12 NOT NULL,
+	`state_tax_rate` real DEFAULT 0.06 NOT NULL,
+	`city_tax_rate` real DEFAULT 0.07 NOT NULL,
+	`max_guests` integer DEFAULT 2 NOT NULL,
+	`ical_export_token` text NOT NULL,
+	`status` text DEFAULT 'active' NOT NULL,
 	`is_active` integer DEFAULT true,
-	`airbnb_ical_url` text,
-	`booking_com_ical_url` text,
-	`last_airbnb_sync` integer,
-	`last_booking_com_sync` integer,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX `room_public_id_unique` ON `room` (`public_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `room_slug_unique` ON `room` (`slug`);--> statement-breakpoint
-CREATE TABLE `room_availability` (
-	`id` text PRIMARY KEY NOT NULL,
-	`room_id` text NOT NULL,
-	`date` text NOT NULL,
-	`is_available` integer DEFAULT true,
-	`is_blocked` integer DEFAULT false,
-	`source` text DEFAULT 'direct',
-	`external_booking_id` text,
-	`price_override` real,
-	`created_at` integer NOT NULL,
-	`updated_at` integer NOT NULL,
-	FOREIGN KEY (`room_id`) REFERENCES `room`(`id`) ON UPDATE no action ON DELETE cascade
-);
---> statement-breakpoint
-CREATE INDEX `room_availability_room_id_idx` ON `room_availability` (`room_id`);--> statement-breakpoint
-CREATE INDEX `room_availability_date_idx` ON `room_availability` (`date`);--> statement-breakpoint
-CREATE INDEX `room_availability_source_idx` ON `room_availability` (`source`);--> statement-breakpoint
-CREATE UNIQUE INDEX `room_availability_room_id_date_unique` ON `room_availability` (`room_id`,`date`);--> statement-breakpoint
+CREATE UNIQUE INDEX `room_ical_export_token_unique` ON `room` (`ical_export_token`);--> statement-breakpoint
 CREATE TABLE `room_blocked_periods` (
 	`id` text PRIMARY KEY NOT NULL,
 	`room_id` text NOT NULL,
@@ -156,3 +198,23 @@ CREATE TABLE `room_blocked_periods` (
 	`created_at` integer NOT NULL,
 	FOREIGN KEY (`room_id`) REFERENCES `room`(`id`) ON UPDATE no action ON DELETE cascade
 );
+--> statement-breakpoint
+CREATE TABLE `room_pricing_rules` (
+	`id` text PRIMARY KEY NOT NULL,
+	`room_id` text NOT NULL,
+	`name` text NOT NULL,
+	`rule_type` text NOT NULL,
+	`value` real NOT NULL,
+	`start_date` text NOT NULL,
+	`end_date` text NOT NULL,
+	`is_active` integer DEFAULT true,
+	`activated_at` integer,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	FOREIGN KEY (`room_id`) REFERENCES `room`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `room_pricing_rules_room_id_idx` ON `room_pricing_rules` (`room_id`);--> statement-breakpoint
+CREATE INDEX `room_pricing_rules_date_range_idx` ON `room_pricing_rules` (`start_date`,`end_date`);--> statement-breakpoint
+CREATE INDEX `room_pricing_rules_active_idx` ON `room_pricing_rules` (`is_active`);--> statement-breakpoint
+CREATE INDEX `room_pricing_rules_room_active_dates_idx` ON `room_pricing_rules` (`room_id`,`is_active`,`start_date`,`end_date`);

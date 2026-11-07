@@ -14,3 +14,14 @@ export const newPublicId = customAlphabet(
 );
 
 export const PUBLIC_ID_REGEX = /^[0-9a-z]{16}$/;
+
+/** Secret per-room iCal export token: 32 random bytes, base64url (43 chars). */
+export function newIcalExportToken(): string {
+	const bytes = crypto.getRandomValues(new Uint8Array(32));
+	let binary = '';
+	for (const b of bytes) binary += String.fromCharCode(b);
+	return btoa(binary)
+		.replace(/\+/g, '-')
+		.replace(/\//g, '_')
+		.replace(/=+$/, '');
+}
