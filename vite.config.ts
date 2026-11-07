@@ -6,6 +6,11 @@ import react, { reactCompilerPreset } from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 const config = defineConfig({
+	// `cf dev` does not forward --port, so pin it here.
+	server: {
+		port: 3000,
+		strictPort: true,
+	},
 	resolve: {
 		tsconfigPaths: true,
 	},

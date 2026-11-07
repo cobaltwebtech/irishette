@@ -859,7 +859,7 @@ export const bookingsRouter = createTRPCRouter({
 
 				// Send the confirmation email
 				const emailResult = await sendBookingConfirmationEmail(emailData, {
-					RESEND_API_KEY: process.env.RESEND_API_KEY || '',
+					RESEND_API_KEY: ctx.env.RESEND_API_KEY,
 				});
 
 				if (!emailResult.success) {

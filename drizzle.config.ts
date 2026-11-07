@@ -13,7 +13,8 @@ import type { Config } from 'drizzle-kit';
 //   CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_DATABASE_ID and CLOUDFLARE_D1_TOKEN from
 //   .env. That token can write: treat remote Studio as production access.
 
-const LOCAL_D1_DIR = '.wrangler/state/v3/d1/miniflare-D1DatabaseObject';
+// Shared by `pnpm dev` (@cloudflare/vite-plugin v2) and scripts/d1-local.mjs.
+const LOCAL_D1_DIR = '.cloudflare/state/v3/d1/miniflare-D1DatabaseObject';
 
 const base = {
 	schema: './src/db/schema-export.ts',
