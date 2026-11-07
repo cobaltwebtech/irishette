@@ -1,0 +1,15 @@
+allowBuilds:
+  esbuild: true
+  workerd: true
+  sharp: true
+permissions:
+  '@tanstack/react-router':
+    skills: true
+  '@tanstack/react-start':
+    skills: true
+  '@trpc/client':
+    skills: true
+  '@trpc/server':
+    skills: true
+  '@trpc/tanstack-react-query':
+    skills: true

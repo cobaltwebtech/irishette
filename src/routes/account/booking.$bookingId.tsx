@@ -185,7 +185,7 @@ function BookingDetailPage() {
 	}
 
 	// Final safety check - should not be needed but prevents runtime errors
-	if (!booking || !booking.booking || !booking.room) {
+	if (!booking?.booking || !booking.room) {
 		return (
 			<div className="flex items-center justify-center">
 				<div className="text-center">

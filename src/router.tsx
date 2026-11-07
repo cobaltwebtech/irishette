@@ -19,6 +19,7 @@ export const getRouter = () => {
 			auth: undefined!,
 		},
 		defaultPreload: 'intent',
+		// biome-ignore lint/correctness/noComponentHookFactories: created once per router instance and needs this router's queryClient; revisited in upgrade Phase 5b
 		Wrap: (props: { children: React.ReactNode }) => {
 			return (
 				<TanstackQuery.Provider queryClient={rqContext.queryClient}>

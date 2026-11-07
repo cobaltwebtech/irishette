@@ -223,7 +223,7 @@ function AdminGuests() {
 	}
 
 	// Access denied check
-	if (!session?.user || session.user.role !== 'admin') {
+	if (session?.user?.role !== 'admin') {
 		return (
 			<div className="container mx-auto px-4 py-8">
 				<div className="text-center">

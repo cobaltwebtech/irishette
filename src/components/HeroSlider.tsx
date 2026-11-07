@@ -58,7 +58,7 @@ export function HeroSlider({
 				className="zoom-container w-full h-full z-0"
 			>
 				{images.map((image, index) => (
-					<SwiperSlide key={`slide-${image.src}-${index}`}>
+					<SwiperSlide key={`slide-${image.src}`}>
 						<Image
 							src={image.src}
 							alt={image.alt}

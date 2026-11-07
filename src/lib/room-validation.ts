@@ -138,40 +138,43 @@ export const blockRoomSchema = z
 		},
 	);
 
-// Room blocked period validation schemas for CRUD operations
-export const roomBlockedPeriodSchema = z
-	.object({
-		id: z.string().optional(),
-		roomId: z.string(),
-		startDate: z
-			.string()
-			.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-		endDate: z
-			.string()
-			.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-		reason: z.string().min(1, 'Reason is required'),
-		notes: z.string().optional(),
-		createdAt: z.date().optional(),
-	})
-	.refine(
-		(data) => {
-			// Ensure start date is before or equal to end date
-			return new Date(data.startDate) <= new Date(data.endDate);
-		},
-		{
-			message: 'End date must be after or equal to start date',
-			path: ['endDate'],
-		},
-	);
+// Room blocked period validation schemas for CRUD operations.
+// Zod >= 4.6 throws on .omit()/.partial() of refined schemas (older versions
+// silently dropped the refinements), so derived schemas start from this
+// unrefined base to keep their previous behavior.
+const roomBlockedPeriodBaseSchema = z.object({
+	id: z.string().optional(),
+	roomId: z.string(),
+	startDate: z
+		.string()
+		.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+	endDate: z
+		.string()
+		.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+	reason: z.string().min(1, 'Reason is required'),
+	notes: z.string().optional(),
+	createdAt: z.date().optional(),
+});
+
+export const roomBlockedPeriodSchema = roomBlockedPeriodBaseSchema.refine(
+	(data) => {
+		// Ensure start date is before or equal to end date
+		return new Date(data.startDate) <= new Date(data.endDate);
+	},
+	{
+		message: 'End date must be after or equal to start date',
+		path: ['endDate'],
+	},
+);
 
 // Create blocked period input (without ID and timestamps)
-export const createBlockedPeriodSchema = roomBlockedPeriodSchema.omit({
+export const createBlockedPeriodSchema = roomBlockedPeriodBaseSchema.omit({
 	id: true,
 	createdAt: true,
 });
 
 // Update blocked period input (partial with required ID)
-export const updateBlockedPeriodSchema = roomBlockedPeriodSchema
+export const updateBlockedPeriodSchema = roomBlockedPeriodBaseSchema
 	.partial()
 	.extend({
 		id: z.string(),
@@ -224,22 +227,24 @@ export const pricingRuleTypeSchema = z.enum([
 ]);
 export type PricingRuleType = z.infer<typeof pricingRuleTypeSchema>;
 
-export const roomPricingRuleSchema = z
-	.object({
-		id: z.string().optional(),
-		roomId: z.string(),
-		name: z.string().min(1, 'Rule name is required'),
-		ruleType: pricingRuleTypeSchema,
-		value: z.number().min(0, 'Value must be positive'),
-		startDate: z
-			.string()
-			.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-		endDate: z
-			.string()
-			.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-		isActive: z.boolean().default(true),
-		daysOfWeek: z.string().optional(), // JSON stringified array
-	})
+// Unrefined base; see the note on roomBlockedPeriodBaseSchema.
+const roomPricingRuleBaseSchema = z.object({
+	id: z.string().optional(),
+	roomId: z.string(),
+	name: z.string().min(1, 'Rule name is required'),
+	ruleType: pricingRuleTypeSchema,
+	value: z.number().min(0, 'Value must be positive'),
+	startDate: z
+		.string()
+		.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+	endDate: z
+		.string()
+		.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+	isActive: z.boolean().default(true),
+	daysOfWeek: z.string().optional(), // JSON stringified array
+});
+
+export const roomPricingRuleSchema = roomPricingRuleBaseSchema
 	.refine(
 		(data) => {
 			// Ensure start date is before end date
@@ -266,14 +271,16 @@ export const roomPricingRuleSchema = z
 	);
 
 // Create pricing rule input (without ID and timestamps)
-export const createPricingRuleSchema = roomPricingRuleSchema.omit({
+export const createPricingRuleSchema = roomPricingRuleBaseSchema.omit({
 	id: true,
 });
 
 // Update pricing rule input (partial with required ID)
-export const updatePricingRuleSchema = roomPricingRuleSchema.partial().extend({
-	id: z.string(),
-});
+export const updatePricingRuleSchema = roomPricingRuleBaseSchema
+	.partial()
+	.extend({
+		id: z.string(),
+	});
 
 // Query schemas for pricing rules
 export const getPricingRulesSchema = z.object({

@@ -79,7 +79,7 @@ export function RoomGallery({
 				className="main-gallery mb-4 rounded-lg overflow-hidden"
 			>
 				{images.map((image, index) => (
-					<SwiperSlide key={`main-${image.src}-${index}`}>
+					<SwiperSlide key={`main-${image.src}`}>
 						<div className="relative w-full h-full">
 							{/* @ts-ignore - fullWidth is valid but not in current type definitions */}
 							<Image
@@ -132,10 +132,7 @@ export function RoomGallery({
 					}}
 				>
 					{images.map((image, index) => (
-						<SwiperSlide
-							key={`thumb-${image.src}-${index}`}
-							className="cursor-pointer"
-						>
+						<SwiperSlide key={`thumb-${image.src}`} className="cursor-pointer">
 							<div className="relative w-full h-full rounded overflow-hidden hover:opacity-80 transition-opacity">
 								{/* @ts-ignore - fullWidth is valid but not in current type definitions */}
 								<Image

@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
+import { drizzleAdapter } from '@better-auth/drizzle-adapter';
 import { stripe } from '@better-auth/stripe';
 import { betterAuth } from 'better-auth';
-import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { admin, captcha, magicLink, phoneNumber } from 'better-auth/plugins';
 import { tanstackStartCookies } from 'better-auth/tanstack-start';
 import { drizzle } from 'drizzle-orm/d1';
@@ -19,7 +19,7 @@ export const createDrizzle = (db: D1Database) =>
 export const auth = async () => {
 	// Initialize Stripe with environment variables
 	const stripeClient = new Stripe(env.STRIPE_SECRET_KEY, {
-		apiVersion: '2025-12-15.clover',
+		apiVersion: '2026-04-22.dahlia',
 	});
 
 	// Initialize Resend for email service

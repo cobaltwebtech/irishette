@@ -238,11 +238,11 @@ export const bookingActions = {
 
 	// Reset entire booking state
 	reset: () => {
-		bookingStore.setState({
+		bookingStore.setState(() => ({
 			...initialState,
 			createdAt: new Date().toISOString(),
 			updatedAt: new Date().toISOString(),
-		});
+		}));
 
 		// Also clear from localStorage
 		if (typeof window !== 'undefined') {
@@ -311,7 +311,7 @@ export const bookingActions = {
 
 	// Initialize a new booking session
 	initializeBooking: (roomId: string, roomSlug: string, roomName?: string) => {
-		bookingStore.setState({
+		bookingStore.setState(() => ({
 			...initialState,
 			roomId,
 			roomSlug,
@@ -319,7 +319,7 @@ export const bookingActions = {
 			currentStep: 'dates',
 			createdAt: new Date().toISOString(),
 			updatedAt: new Date().toISOString(),
-		});
+		}));
 	},
 };
 

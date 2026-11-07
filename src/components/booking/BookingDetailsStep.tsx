@@ -208,7 +208,7 @@ export function BookingDetailsStep() {
 			console.log('Current booking pricing fallback:', booking.pricing);
 
 			// If we have no pricing at all, show an error and stop
-			if (!booking.pricing || !booking.pricing.totalAmount) {
+			if (!booking.pricing?.totalAmount) {
 				console.error('No valid pricing data available');
 				booking.actions.setError(
 					'Failed to calculate pricing. Please try again or refresh the page.',

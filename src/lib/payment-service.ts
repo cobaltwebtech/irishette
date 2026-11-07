@@ -48,7 +48,7 @@ export class PaymentService {
 	constructor(env: PaymentEnv) {
 		this.db = createDrizzle(env.DB);
 		this.stripe = new Stripe(env.STRIPE_SECRET_KEY, {
-			apiVersion: '2025-12-15.clover',
+			apiVersion: '2026-04-22.dahlia',
 		});
 	}
 
@@ -492,7 +492,7 @@ export class PaymentService {
 			.from(user)
 			.where(eq(user.id, booking.userId));
 
-		if (!userResult[0] || !userResult[0].stripeCustomerId) {
+		if (!userResult[0]?.stripeCustomerId) {
 			throw new Error('Customer not found or not linked to Stripe');
 		}
 
@@ -515,7 +515,10 @@ export class PaymentService {
 		const cityTaxAmount = booking.baseAmount * roomData.cityTaxRate;
 
 		// Create line items for Stripe
-		const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+		// TODO(upgrade Phase 4): revert to Stripe.Checkout.SessionCreateParams.LineItem[] on stripe 23.
+		const lineItems: NonNullable<
+			Stripe.Checkout.SessionCreateParams['line_items']
+		> = [
 			{
 				price_data: {
 					currency: 'usd',

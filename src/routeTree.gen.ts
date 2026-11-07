@@ -9,49 +9,39 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as TermsOfServiceRouteImport } from './routes/terms-of-service'
-import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
-import { Route as ContactRouteImport } from './routes/contact'
-import { Route as CancellationRefundPolicyRouteImport } from './routes/cancellation-refund-policy'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as BookingIndexRouteImport } from './routes/booking/index'
-import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as CancellationRefundPolicyRouteImport } from './routes/cancellation-refund-policy'
+import { Route as ContactRouteImport } from './routes/contact'
+import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
+import { Route as TermsOfServiceRouteImport } from './routes/terms-of-service'
 import { Route as AccountIndexRouteImport } from './routes/account/index'
-import { Route as RoomsTexasRoomRouteImport } from './routes/rooms/texas-room'
-import { Route as RoomsRoseRoomRouteImport } from './routes/rooms/rose-room'
-import { Route as AuthSignupRouteImport } from './routes/auth/signup'
-import { Route as AuthResetPasswordRouteImport } from './routes/auth/reset-password'
-import { Route as AuthLogoutRouteImport } from './routes/auth/logout'
-import { Route as AuthLoginRouteImport } from './routes/auth/login'
-import { Route as AuthForgotPasswordRouteImport } from './routes/auth/forgot-password'
 import { Route as AccountPastBookingsRouteImport } from './routes/account/past-bookings'
-import { Route as AdminPropertyManagementIndexRouteImport } from './routes/admin/property-management/index'
-import { Route as AdminGuestIndexRouteImport } from './routes/admin/guest/index'
-import { Route as BookingConfirmationBookingIdRouteImport } from './routes/booking/confirmation.$bookingId'
-import { Route as ApiTrpcSplatRouteImport } from './routes/api/trpc.$'
-import { Route as ApiStripeSplatRouteImport } from './routes/api/stripe.$'
-import { Route as ApiIcalSplatRouteImport } from './routes/api/ical.$'
-import { Route as ApiAuthSplatRouteImport } from './routes/api/auth.$'
-import { Route as AdminPropertyManagementRoomIdRouteImport } from './routes/admin/property-management/$roomId'
-import { Route as AdminGuestUserIdRouteImport } from './routes/admin/guest/$userId'
-import { Route as AdminBookingsPastBookingsRouteImport } from './routes/admin/bookings/past-bookings'
-import { Route as AdminBookingsCurrentBookingsRouteImport } from './routes/admin/bookings/current-bookings'
-import { Route as AdminBookingsBookingIdRouteImport } from './routes/admin/bookings/$bookingId'
+import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AuthForgotPasswordRouteImport } from './routes/auth/forgot-password'
+import { Route as AuthLoginRouteImport } from './routes/auth/login'
+import { Route as AuthLogoutRouteImport } from './routes/auth/logout'
+import { Route as AuthResetPasswordRouteImport } from './routes/auth/reset-password'
+import { Route as AuthSignupRouteImport } from './routes/auth/signup'
+import { Route as BookingIndexRouteImport } from './routes/booking/index'
+import { Route as RoomsRoseRoomRouteImport } from './routes/rooms/rose-room'
+import { Route as RoomsTexasRoomRouteImport } from './routes/rooms/texas-room'
 import { Route as AccountBookingBookingIdRouteImport } from './routes/account/booking.$bookingId'
+import { Route as AdminBookingsBookingIdRouteImport } from './routes/admin/bookings/$bookingId'
+import { Route as AdminBookingsCurrentBookingsRouteImport } from './routes/admin/bookings/current-bookings'
+import { Route as AdminBookingsPastBookingsRouteImport } from './routes/admin/bookings/past-bookings'
+import { Route as AdminGuestIndexRouteImport } from './routes/admin/guest/index'
+import { Route as AdminGuestUserIdRouteImport } from './routes/admin/guest/$userId'
+import { Route as AdminPropertyManagementIndexRouteImport } from './routes/admin/property-management/index'
+import { Route as AdminPropertyManagementRoomIdRouteImport } from './routes/admin/property-management/$roomId'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth.$'
+import { Route as ApiIcalSplatRouteImport } from './routes/api/ical.$'
+import { Route as ApiStripeSplatRouteImport } from './routes/api/stripe.$'
+import { Route as ApiTrpcSplatRouteImport } from './routes/api/trpc.$'
+import { Route as BookingConfirmationBookingIdRouteImport } from './routes/booking/confirmation.$bookingId'
 
-const TermsOfServiceRoute = TermsOfServiceRouteImport.update({
-  id: '/terms-of-service',
-  path: '/terms-of-service',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PrivacyPolicyRoute = PrivacyPolicyRouteImport.update({
-  id: '/privacy-policy',
-  path: '/privacy-policy',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ContactRoute = ContactRouteImport.update({
-  id: '/contact',
-  path: '/contact',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CancellationRefundPolicyRoute =
@@ -60,19 +50,19 @@ const CancellationRefundPolicyRoute =
     path: '/cancellation-refund-policy',
     getParentRoute: () => rootRouteImport,
   } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const ContactRoute = ContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BookingIndexRoute = BookingIndexRouteImport.update({
-  id: '/booking/',
-  path: '/booking/',
+const PrivacyPolicyRoute = PrivacyPolicyRouteImport.update({
+  id: '/privacy-policy',
+  path: '/privacy-policy',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminIndexRoute = AdminIndexRouteImport.update({
-  id: '/admin/',
-  path: '/admin/',
+const TermsOfServiceRoute = TermsOfServiceRouteImport.update({
+  id: '/terms-of-service',
+  path: '/terms-of-service',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AccountIndexRoute = AccountIndexRouteImport.update({
@@ -80,34 +70,14 @@ const AccountIndexRoute = AccountIndexRouteImport.update({
   path: '/account/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const RoomsTexasRoomRoute = RoomsTexasRoomRouteImport.update({
-  id: '/rooms/texas-room',
-  path: '/rooms/texas-room',
+const AccountPastBookingsRoute = AccountPastBookingsRouteImport.update({
+  id: '/account/past-bookings',
+  path: '/account/past-bookings',
   getParentRoute: () => rootRouteImport,
 } as any)
-const RoomsRoseRoomRoute = RoomsRoseRoomRouteImport.update({
-  id: '/rooms/rose-room',
-  path: '/rooms/rose-room',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthSignupRoute = AuthSignupRouteImport.update({
-  id: '/auth/signup',
-  path: '/auth/signup',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthResetPasswordRoute = AuthResetPasswordRouteImport.update({
-  id: '/auth/reset-password',
-  path: '/auth/reset-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthLogoutRoute = AuthLogoutRouteImport.update({
-  id: '/auth/logout',
-  path: '/auth/logout',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthLoginRoute = AuthLoginRouteImport.update({
-  id: '/auth/login',
-  path: '/auth/login',
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/admin/',
+  path: '/admin/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
@@ -115,9 +85,71 @@ const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
   path: '/auth/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AccountPastBookingsRoute = AccountPastBookingsRouteImport.update({
-  id: '/account/past-bookings',
-  path: '/account/past-bookings',
+const AuthLoginRoute = AuthLoginRouteImport.update({
+  id: '/auth/login',
+  path: '/auth/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthLogoutRoute = AuthLogoutRouteImport.update({
+  id: '/auth/logout',
+  path: '/auth/logout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthResetPasswordRoute = AuthResetPasswordRouteImport.update({
+  id: '/auth/reset-password',
+  path: '/auth/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthSignupRoute = AuthSignupRouteImport.update({
+  id: '/auth/signup',
+  path: '/auth/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BookingIndexRoute = BookingIndexRouteImport.update({
+  id: '/booking/',
+  path: '/booking/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RoomsRoseRoomRoute = RoomsRoseRoomRouteImport.update({
+  id: '/rooms/rose-room',
+  path: '/rooms/rose-room',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RoomsTexasRoomRoute = RoomsTexasRoomRouteImport.update({
+  id: '/rooms/texas-room',
+  path: '/rooms/texas-room',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccountBookingBookingIdRoute = AccountBookingBookingIdRouteImport.update({
+  id: '/account/booking/$bookingId',
+  path: '/account/booking/$bookingId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminBookingsBookingIdRoute = AdminBookingsBookingIdRouteImport.update({
+  id: '/admin/bookings/$bookingId',
+  path: '/admin/bookings/$bookingId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminBookingsCurrentBookingsRoute =
+  AdminBookingsCurrentBookingsRouteImport.update({
+    id: '/admin/bookings/current-bookings',
+    path: '/admin/bookings/current-bookings',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AdminBookingsPastBookingsRoute =
+  AdminBookingsPastBookingsRouteImport.update({
+    id: '/admin/bookings/past-bookings',
+    path: '/admin/bookings/past-bookings',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AdminGuestIndexRoute = AdminGuestIndexRouteImport.update({
+  id: '/admin/guest/',
+  path: '/admin/guest/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminGuestUserIdRoute = AdminGuestUserIdRouteImport.update({
+  id: '/admin/guest/$userId',
+  path: '/admin/guest/$userId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminPropertyManagementIndexRoute =
@@ -126,9 +158,30 @@ const AdminPropertyManagementIndexRoute =
     path: '/admin/property-management/',
     getParentRoute: () => rootRouteImport,
   } as any)
-const AdminGuestIndexRoute = AdminGuestIndexRouteImport.update({
-  id: '/admin/guest/',
-  path: '/admin/guest/',
+const AdminPropertyManagementRoomIdRoute =
+  AdminPropertyManagementRoomIdRouteImport.update({
+    id: '/admin/property-management/$roomId',
+    path: '/admin/property-management/$roomId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiIcalSplatRoute = ApiIcalSplatRouteImport.update({
+  id: '/api/ical/$',
+  path: '/api/ical/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiStripeSplatRoute = ApiStripeSplatRouteImport.update({
+  id: '/api/stripe/$',
+  path: '/api/stripe/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTrpcSplatRoute = ApiTrpcSplatRouteImport.update({
+  id: '/api/trpc/$',
+  path: '/api/trpc/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BookingConfirmationBookingIdRoute =
@@ -137,59 +190,6 @@ const BookingConfirmationBookingIdRoute =
     path: '/booking/confirmation/$bookingId',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiTrpcSplatRoute = ApiTrpcSplatRouteImport.update({
-  id: '/api/trpc/$',
-  path: '/api/trpc/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiStripeSplatRoute = ApiStripeSplatRouteImport.update({
-  id: '/api/stripe/$',
-  path: '/api/stripe/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiIcalSplatRoute = ApiIcalSplatRouteImport.update({
-  id: '/api/ical/$',
-  path: '/api/ical/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
-  id: '/api/auth/$',
-  path: '/api/auth/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminPropertyManagementRoomIdRoute =
-  AdminPropertyManagementRoomIdRouteImport.update({
-    id: '/admin/property-management/$roomId',
-    path: '/admin/property-management/$roomId',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const AdminGuestUserIdRoute = AdminGuestUserIdRouteImport.update({
-  id: '/admin/guest/$userId',
-  path: '/admin/guest/$userId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminBookingsPastBookingsRoute =
-  AdminBookingsPastBookingsRouteImport.update({
-    id: '/admin/bookings/past-bookings',
-    path: '/admin/bookings/past-bookings',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const AdminBookingsCurrentBookingsRoute =
-  AdminBookingsCurrentBookingsRouteImport.update({
-    id: '/admin/bookings/current-bookings',
-    path: '/admin/bookings/current-bookings',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const AdminBookingsBookingIdRoute = AdminBookingsBookingIdRouteImport.update({
-  id: '/admin/bookings/$bookingId',
-  path: '/admin/bookings/$bookingId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AccountBookingBookingIdRoute = AccountBookingBookingIdRouteImport.update({
-  id: '/account/booking/$bookingId',
-  path: '/account/booking/$bookingId',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -205,9 +205,9 @@ export interface FileRoutesByFullPath {
   '/auth/signup': typeof AuthSignupRoute
   '/rooms/rose-room': typeof RoomsRoseRoomRoute
   '/rooms/texas-room': typeof RoomsTexasRoomRoute
-  '/account': typeof AccountIndexRoute
-  '/admin': typeof AdminIndexRoute
-  '/booking': typeof BookingIndexRoute
+  '/account/': typeof AccountIndexRoute
+  '/admin/': typeof AdminIndexRoute
+  '/booking/': typeof BookingIndexRoute
   '/account/booking/$bookingId': typeof AccountBookingBookingIdRoute
   '/admin/bookings/$bookingId': typeof AdminBookingsBookingIdRoute
   '/admin/bookings/current-bookings': typeof AdminBookingsCurrentBookingsRoute
@@ -219,8 +219,8 @@ export interface FileRoutesByFullPath {
   '/api/stripe/$': typeof ApiStripeSplatRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/booking/confirmation/$bookingId': typeof BookingConfirmationBookingIdRoute
-  '/admin/guest': typeof AdminGuestIndexRoute
-  '/admin/property-management': typeof AdminPropertyManagementIndexRoute
+  '/admin/guest/': typeof AdminGuestIndexRoute
+  '/admin/property-management/': typeof AdminPropertyManagementIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -301,9 +301,9 @@ export interface FileRouteTypes {
     | '/auth/signup'
     | '/rooms/rose-room'
     | '/rooms/texas-room'
-    | '/account'
-    | '/admin'
-    | '/booking'
+    | '/account/'
+    | '/admin/'
+    | '/booking/'
     | '/account/booking/$bookingId'
     | '/admin/bookings/$bookingId'
     | '/admin/bookings/current-bookings'
@@ -315,8 +315,8 @@ export interface FileRouteTypes {
     | '/api/stripe/$'
     | '/api/trpc/$'
     | '/booking/confirmation/$bookingId'
-    | '/admin/guest'
-    | '/admin/property-management'
+    | '/admin/guest/'
+    | '/admin/property-management/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -415,25 +415,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/terms-of-service': {
-      id: '/terms-of-service'
-      path: '/terms-of-service'
-      fullPath: '/terms-of-service'
-      preLoaderRoute: typeof TermsOfServiceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/privacy-policy': {
-      id: '/privacy-policy'
-      path: '/privacy-policy'
-      fullPath: '/privacy-policy'
-      preLoaderRoute: typeof PrivacyPolicyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/contact': {
-      id: '/contact'
-      path: '/contact'
-      fullPath: '/contact'
-      preLoaderRoute: typeof ContactRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cancellation-refund-policy': {
@@ -443,81 +429,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CancellationRefundPolicyRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/contact': {
+      id: '/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof ContactRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/booking/': {
-      id: '/booking/'
-      path: '/booking'
-      fullPath: '/booking'
-      preLoaderRoute: typeof BookingIndexRouteImport
+    '/privacy-policy': {
+      id: '/privacy-policy'
+      path: '/privacy-policy'
+      fullPath: '/privacy-policy'
+      preLoaderRoute: typeof PrivacyPolicyRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/': {
-      id: '/admin/'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AdminIndexRouteImport
+    '/terms-of-service': {
+      id: '/terms-of-service'
+      path: '/terms-of-service'
+      fullPath: '/terms-of-service'
+      preLoaderRoute: typeof TermsOfServiceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/account/': {
       id: '/account/'
       path: '/account'
-      fullPath: '/account'
+      fullPath: '/account/'
       preLoaderRoute: typeof AccountIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/rooms/texas-room': {
-      id: '/rooms/texas-room'
-      path: '/rooms/texas-room'
-      fullPath: '/rooms/texas-room'
-      preLoaderRoute: typeof RoomsTexasRoomRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/rooms/rose-room': {
-      id: '/rooms/rose-room'
-      path: '/rooms/rose-room'
-      fullPath: '/rooms/rose-room'
-      preLoaderRoute: typeof RoomsRoseRoomRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth/signup': {
-      id: '/auth/signup'
-      path: '/auth/signup'
-      fullPath: '/auth/signup'
-      preLoaderRoute: typeof AuthSignupRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth/reset-password': {
-      id: '/auth/reset-password'
-      path: '/auth/reset-password'
-      fullPath: '/auth/reset-password'
-      preLoaderRoute: typeof AuthResetPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth/logout': {
-      id: '/auth/logout'
-      path: '/auth/logout'
-      fullPath: '/auth/logout'
-      preLoaderRoute: typeof AuthLogoutRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth/login': {
-      id: '/auth/login'
-      path: '/auth/login'
-      fullPath: '/auth/login'
-      preLoaderRoute: typeof AuthLoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth/forgot-password': {
-      id: '/auth/forgot-password'
-      path: '/auth/forgot-password'
-      fullPath: '/auth/forgot-password'
-      preLoaderRoute: typeof AuthForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/account/past-bookings': {
@@ -527,81 +464,74 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountPastBookingsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/property-management/': {
-      id: '/admin/property-management/'
-      path: '/admin/property-management'
-      fullPath: '/admin/property-management'
-      preLoaderRoute: typeof AdminPropertyManagementIndexRouteImport
+    '/admin/': {
+      id: '/admin/'
+      path: '/admin'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/guest/': {
-      id: '/admin/guest/'
-      path: '/admin/guest'
-      fullPath: '/admin/guest'
-      preLoaderRoute: typeof AdminGuestIndexRouteImport
+    '/auth/forgot-password': {
+      id: '/auth/forgot-password'
+      path: '/auth/forgot-password'
+      fullPath: '/auth/forgot-password'
+      preLoaderRoute: typeof AuthForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/booking/confirmation/$bookingId': {
-      id: '/booking/confirmation/$bookingId'
-      path: '/booking/confirmation/$bookingId'
-      fullPath: '/booking/confirmation/$bookingId'
-      preLoaderRoute: typeof BookingConfirmationBookingIdRouteImport
+    '/auth/login': {
+      id: '/auth/login'
+      path: '/auth/login'
+      fullPath: '/auth/login'
+      preLoaderRoute: typeof AuthLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/trpc/$': {
-      id: '/api/trpc/$'
-      path: '/api/trpc/$'
-      fullPath: '/api/trpc/$'
-      preLoaderRoute: typeof ApiTrpcSplatRouteImport
+    '/auth/logout': {
+      id: '/auth/logout'
+      path: '/auth/logout'
+      fullPath: '/auth/logout'
+      preLoaderRoute: typeof AuthLogoutRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/stripe/$': {
-      id: '/api/stripe/$'
-      path: '/api/stripe/$'
-      fullPath: '/api/stripe/$'
-      preLoaderRoute: typeof ApiStripeSplatRouteImport
+    '/auth/reset-password': {
+      id: '/auth/reset-password'
+      path: '/auth/reset-password'
+      fullPath: '/auth/reset-password'
+      preLoaderRoute: typeof AuthResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/ical/$': {
-      id: '/api/ical/$'
-      path: '/api/ical/$'
-      fullPath: '/api/ical/$'
-      preLoaderRoute: typeof ApiIcalSplatRouteImport
+    '/auth/signup': {
+      id: '/auth/signup'
+      path: '/auth/signup'
+      fullPath: '/auth/signup'
+      preLoaderRoute: typeof AuthSignupRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/auth/$': {
-      id: '/api/auth/$'
-      path: '/api/auth/$'
-      fullPath: '/api/auth/$'
-      preLoaderRoute: typeof ApiAuthSplatRouteImport
+    '/booking/': {
+      id: '/booking/'
+      path: '/booking'
+      fullPath: '/booking/'
+      preLoaderRoute: typeof BookingIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/property-management/$roomId': {
-      id: '/admin/property-management/$roomId'
-      path: '/admin/property-management/$roomId'
-      fullPath: '/admin/property-management/$roomId'
-      preLoaderRoute: typeof AdminPropertyManagementRoomIdRouteImport
+    '/rooms/rose-room': {
+      id: '/rooms/rose-room'
+      path: '/rooms/rose-room'
+      fullPath: '/rooms/rose-room'
+      preLoaderRoute: typeof RoomsRoseRoomRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/guest/$userId': {
-      id: '/admin/guest/$userId'
-      path: '/admin/guest/$userId'
-      fullPath: '/admin/guest/$userId'
-      preLoaderRoute: typeof AdminGuestUserIdRouteImport
+    '/rooms/texas-room': {
+      id: '/rooms/texas-room'
+      path: '/rooms/texas-room'
+      fullPath: '/rooms/texas-room'
+      preLoaderRoute: typeof RoomsTexasRoomRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/bookings/past-bookings': {
-      id: '/admin/bookings/past-bookings'
-      path: '/admin/bookings/past-bookings'
-      fullPath: '/admin/bookings/past-bookings'
-      preLoaderRoute: typeof AdminBookingsPastBookingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/bookings/current-bookings': {
-      id: '/admin/bookings/current-bookings'
-      path: '/admin/bookings/current-bookings'
-      fullPath: '/admin/bookings/current-bookings'
-      preLoaderRoute: typeof AdminBookingsCurrentBookingsRouteImport
+    '/account/booking/$bookingId': {
+      id: '/account/booking/$bookingId'
+      path: '/account/booking/$bookingId'
+      fullPath: '/account/booking/$bookingId'
+      preLoaderRoute: typeof AccountBookingBookingIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/bookings/$bookingId': {
@@ -611,11 +541,81 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminBookingsBookingIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/account/booking/$bookingId': {
-      id: '/account/booking/$bookingId'
-      path: '/account/booking/$bookingId'
-      fullPath: '/account/booking/$bookingId'
-      preLoaderRoute: typeof AccountBookingBookingIdRouteImport
+    '/admin/bookings/current-bookings': {
+      id: '/admin/bookings/current-bookings'
+      path: '/admin/bookings/current-bookings'
+      fullPath: '/admin/bookings/current-bookings'
+      preLoaderRoute: typeof AdminBookingsCurrentBookingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/bookings/past-bookings': {
+      id: '/admin/bookings/past-bookings'
+      path: '/admin/bookings/past-bookings'
+      fullPath: '/admin/bookings/past-bookings'
+      preLoaderRoute: typeof AdminBookingsPastBookingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/guest/': {
+      id: '/admin/guest/'
+      path: '/admin/guest'
+      fullPath: '/admin/guest/'
+      preLoaderRoute: typeof AdminGuestIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/guest/$userId': {
+      id: '/admin/guest/$userId'
+      path: '/admin/guest/$userId'
+      fullPath: '/admin/guest/$userId'
+      preLoaderRoute: typeof AdminGuestUserIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/property-management/': {
+      id: '/admin/property-management/'
+      path: '/admin/property-management'
+      fullPath: '/admin/property-management/'
+      preLoaderRoute: typeof AdminPropertyManagementIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/property-management/$roomId': {
+      id: '/admin/property-management/$roomId'
+      path: '/admin/property-management/$roomId'
+      fullPath: '/admin/property-management/$roomId'
+      preLoaderRoute: typeof AdminPropertyManagementRoomIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/ical/$': {
+      id: '/api/ical/$'
+      path: '/api/ical/$'
+      fullPath: '/api/ical/$'
+      preLoaderRoute: typeof ApiIcalSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/stripe/$': {
+      id: '/api/stripe/$'
+      path: '/api/stripe/$'
+      fullPath: '/api/stripe/$'
+      preLoaderRoute: typeof ApiStripeSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/trpc/$': {
+      id: '/api/trpc/$'
+      path: '/api/trpc/$'
+      fullPath: '/api/trpc/$'
+      preLoaderRoute: typeof ApiTrpcSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/booking/confirmation/$bookingId': {
+      id: '/booking/confirmation/$bookingId'
+      path: '/booking/confirmation/$bookingId'
+      fullPath: '/booking/confirmation/$bookingId'
+      preLoaderRoute: typeof BookingConfirmationBookingIdRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
