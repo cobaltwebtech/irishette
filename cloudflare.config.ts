@@ -9,12 +9,24 @@ import * as entrypoint from './src/server.ts' with { type: 'cf-worker' };
 //   cf d1 migrations apply <DATABASE_ID> --dir ./drizzle [--local]
 // Note: `cf d1` commands target the REMOTE database unless `--local` is passed.
 //
-// Secrets: only secrets declared with bindings.secret() reach `env`.
-// Local values come from .env (never commit it). Production values are set
-// with `pnpm dlx wrangler secret put <NAME> --name irishette` or
-// `cf deploy --secrets-file <PATH>`.
+// Env values: Varlock (.env.schema) owns them. Every command that needs values
+// runs as `varlock run --inject vars -- <cmd>`, which puts them in process.env.
+// - Public values (BETTER_AUTH_URL, STRIPE_PUBLISHABLE_KEY) are text bindings
+//   read from process.env here.
+// - Secrets are declared with bindings.secret() and carry no value here. Local
+//   dev reads them from process.env; production values are set with
+//   `pnpm dlx wrangler secret put <NAME> --name irishette` or
+//   `cf deploy --secrets-file <PATH>`.
 // VITE_TURNSTILE_PUBLIC_KEY is a public build-time value inlined by Vite and is
 // intentionally not declared here.
+
+// tsconfig has no Node types (types: ["vite/client"]); this file runs under
+// Node (cf / Vite), where Varlock injects values into process.env.
+declare const process: { env: Record<string, string | undefined> };
+
+// Public, non-secret values are baked in as text bindings at build time.
+// The `as string` cast keeps the generated Env type as `string`.
+const publicValue = (name: string) => process.env[name] ?? '';
 
 export default defineConfig({
 	worker: {
@@ -38,9 +50,11 @@ export default defineConfig({
 			KV_ICAL_SYNC_LOG: bindings.kv({
 				id: '481a64572c1145de958404c9512755d6',
 			}),
-			BETTER_AUTH_URL: bindings.secret(),
+			BETTER_AUTH_URL: bindings.text(publicValue('BETTER_AUTH_URL') as string),
 			BETTER_AUTH_SECRET: bindings.secret(),
-			STRIPE_PUBLISHABLE_KEY: bindings.secret(),
+			STRIPE_PUBLISHABLE_KEY: bindings.text(
+				publicValue('STRIPE_PUBLISHABLE_KEY') as string,
+			),
 			STRIPE_SECRET_KEY: bindings.secret(),
 			STRIPE_BETTER_AUTH_WEBHOOK_SECRET: bindings.secret(),
 			STRIPE_TRPC_WEBHOOK_SECRET: bindings.secret(),

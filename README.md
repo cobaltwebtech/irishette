@@ -296,6 +296,38 @@ Once we've created the derived store we can use it in the `App` component just l
 
 You can find out everything you need to know on how to use TanStack Store in the [TanStack Store documentation](https://tanstack.com/store/latest).
 
+# Environment variables (Varlock + `cf`)
+
+`.env.schema` is the contract for every variable. [Varlock](https://varlock.dev) validates it and generates `varlock.d.ts` (committed). `cloudflare.config.ts` owns the Worker bindings. Wrangler and Varlock's Cloudflare/Vite integrations are not used.
+
+Every command that needs values runs as `varlock run --inject vars -- <cmd>`, which puts them in `process.env`. The `dev`, `build`, `deploy`, `deploy:dry` and `preview` scripts already do this. `vite.config.ts` sets `envDir: false`, so `.env*` and `.dev.vars` files are never read by Vite or the Cloudflare plugin.
+
+| Script | Purpose |
+|---|---|
+| `pnpm env:check` | `varlock load --agent` (validates the schema and resolves values) |
+| `pnpm env:scan` | `varlock scan` (fails if sensitive values appear in plaintext) |
+| `pnpm env:types` | regenerate `varlock.d.ts` |
+| `pnpm check:bundle` | after a build, fails if a secret variable name appears in client assets |
+
+## Local secrets
+
+Plaintext secrets live only in the gitignored `.env.local`. Encrypt them in place with:
+
+```bash
+pnpm exec varlock encrypt --file .env.local
+```
+
+Only `@sensitive` items are encrypted. Decryption happens automatically in `varlock run` and `varlock load`, and each decrypt asks for Touch ID or your password (macOS Secure Enclave).
+
+The key is bound to this machine, so encrypted values do not decrypt on another Mac. On a new machine, create a fresh `.env.local` from the variable names in `.env.schema`, fill in the real values from the provider dashboards (Stripe, Resend, Turnstile, Better Auth), then run `varlock encrypt --file .env.local` again. Never copy an encrypted `.env.local` between machines.
+
+## Deploying
+
+- Local dev: `pnpm dev` (`cf dev`).
+- `cf build --mode` is not supported for TanStack Start. For a non-default mode, run `varlock run --inject vars -- vite build --mode <m>`, then `varlock run --inject vars -- cf deploy --prebuilt --mode <m>`.
+- Public values (`BETTER_AUTH_URL`, `STRIPE_PUBLISHABLE_KEY`) are baked into the build as text bindings, so build with the right values.
+- Worker secrets are not uploaded by Varlock. Set them with `pnpm dlx wrangler secret put <NAME> --name irishette` (interactive), or `cf deploy --secrets-file <PATH>`.
+
 # Demo files
 
 Files prefixed with `demo` can be safely deleted. They are there to provide a starting point for you to play around with the features you've installed.

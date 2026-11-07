@@ -4,7 +4,13 @@ dist
 dist-ssr
 *.local
 count.txt
+# Varlock: .env.schema is the committed contract (no secret values).
+# Every other .env file may hold secrets and stays local.
 .env
+.env.*
+!.env.schema
+.dev.vars
+.dev.vars.*
 .nitro
 .tanstack
 .output

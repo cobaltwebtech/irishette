@@ -11,6 +11,10 @@ const config = defineConfig({
 		port: 3000,
 		strictPort: true,
 	},
+	// Varlock is the only env source. Stops @cloudflare/vite-plugin (and Vite)
+	// from reading .env*/.dev.vars files, where encrypted values appear as
+	// literal `varlock("local:...")` text. Values arrive via process.env.
+	envDir: false,
 	resolve: {
 		tsconfigPaths: true,
 	},

@@ -15,9 +15,10 @@ Irishette is a room-booking site (rooms, availability, bookings, payments, admin
 | Auth | Better Auth + `@better-auth/stripe` + Drizzle adapter (`src/lib/auth.ts`) |
 | Payments | Stripe (`src/lib/payment-service.ts`, webhooks in `src/routes/api/stripe.$.ts`) |
 | Database | Cloudflare D1 (binding `DB`) via Drizzle ORM (SQLite dialect) |
-| Other bindings | KV `KV_ICAL_SYNC_LOG`; cron triggers (see `wrangler.jsonc`) |
+| Other bindings | KV `KV_ICAL_SYNC_LOG`; cron triggers (see `cloudflare.config.ts`) |
 | Email | Resend + react-email templates in `src/components/email/` |
 | Bot protection | Cloudflare Turnstile |
+| Env / secrets | **Varlock** (`.env.schema` contract, generated `varlock.d.ts`, local encryption). Cloudflare config via `cf` + `cloudflare.config.ts`; no Wrangler config, no Varlock Cloudflare/Vite integrations (see [Secrets and environment](#secrets-and-environment-varlock)) |
 | UI | Tailwind CSS v4, shadcn/ui (new-york, Stone) + Radix, `sonner` toasts |
 | Validation | Zod v4 |
 | Lint / format | **Biome** 2.x |
@@ -27,32 +28,46 @@ Path alias: `@/*` -> `src/*`. TypeScript is `strict` with `noUnusedLocals` / `no
 
 ## Commands
 
-Always run project tools through `pnpm` (Biome, Wrangler, drizzle-kit, tsc are **not** on the global PATH).
+Always run project tools through `pnpm` (Biome, drizzle-kit, tsc, `cf`, Varlock are **not** guaranteed on the global PATH; use `pnpm exec <tool>` for ad-hoc calls). Wrangler is not a dependency; see [CLI tools](#cli-tools).
 
 ```bash
 pnpm install                 # install deps
-pnpm dev                     # Vite dev server on :3000 (Cloudflare Vite plugin, local D1/KV)
-pnpm build                   # vite build
-pnpm dev:cf                  # build, then `wrangler dev` (closest to production)
-pnpm serve                   # vite preview
-pnpm deploy:cf               # build + wrangler deploy  (ASK THE USER FIRST)
+pnpm dev                     # varlock run --inject vars -> cf dev (Vite on :3000, local D1/KV). Asks the user for Touch ID/password to decrypt secrets.
+pnpm build                   # varlock run --inject vars -> cf build (output in .cloudflare/output/)
+pnpm preview                 # varlock run --inject vars -> vite preview
+pnpm run deploy              # varlock run --inject vars -> cf deploy  (ASK THE USER FIRST). Must be `pnpm run deploy`: bare `pnpm deploy` is a pnpm built-in.
+pnpm deploy:dry              # same, with --dry-run
 pnpm clean                   # removes dist, .tanstack, src/routeTree.gen.ts
+pnpm types                   # cf workers types: regenerate Worker `Env` types in .cloudflare/types/ from cloudflare.config.ts
+pnpm tail                    # wrangler tail irishette (the one allowed Wrangler use besides `secret put`; streams live logs)
+
+pnpm db:generate             # drizzle-kit generate (new SQL migration in drizzle/)
+pnpm db:migrate:local        # apply ./drizzle to the LOCAL D1 (scripts/d1-local.mjs always passes --local)
+pnpm db:seed:local           # seed local D1
+pnpm db:make-admin:local     # promote an existing local user to admin
+pnpm db:reset:local          # wipe local D1, re-migrate, re-seed
+pnpm db:migrate:remote       # cf d1 migrations apply on the REMOTE database (ASK THE USER FIRST)
+
+pnpm env:check               # varlock load --agent: validate schema + resolve values (sensitive values redacted)
+pnpm env:scan                # varlock scan: fail if sensitive values appear in plaintext in tracked/unignored files
+pnpm env:types               # varlock codegen: regenerate varlock.d.ts from .env.schema
+pnpm check:bundle            # after a build: fail if secret variable names appear in client assets
 
 pnpm biome check --write     # lint + format + organize imports (preferred before finishing)
 pnpm lint                    # biome lint (read-only)
 pnpm format                  # biome format --write
-pnpm tsc --noEmit            # type check (no script exists; Vite does not type check)
+pnpm typecheck               # cf workers types && tsc --noEmit (Vite does not type check)
 pnpm vitest run              # tests (Vitest is installed; there are currently no test files)
 ```
 
 Notes:
 - `README.md` mentions ESLint/Prettier/`pnpm check`/`pnpm start`; that is stale. Biome is the only linter/formatter.
-- `src/routeTree.gen.ts` and `worker-configuration.d.ts` are generated. Never hand-edit them; Biome ignores them.
+- `src/routeTree.gen.ts`, `varlock.d.ts` and `.cloudflare/types/` (Worker `Env` types) are generated. Never hand-edit them. `.cloudflare/` is gitignored; `varlock.d.ts` is committed.
 - `docs/CLAUDE.md` is an older, partially stale overview. Prefer this file when they conflict.
 
 ## Code style (Biome)
 
-Config is `biome.json`. It formats and lints only `src/**` (plus `.vscode/*`).
+Config is `biome.json`. It formats and lints only `src/**`, `.vscode/*` and `vite.config.ts`.
 
 - **Tabs** for indentation, **single quotes** for JS/TS.
 - `recommended` lint rules; organize-imports is on (run `pnpm biome check --write` to fix import order).
@@ -75,7 +90,9 @@ src/lib/                 Services and validation: auth, auth-client, payment-ser
 src/db/                  Drizzle schemas (auth-, booking-, room-), schema-export.ts, drizzle-init.ts
 src/components/          UI (ui/ = shadcn, admin/, booking/, email/)
 src/stores/              TanStack Store booking state
-drizzle/                 Generated SQL migrations (applied via Wrangler)
+drizzle/                 Generated SQL migrations (applied via `cf d1 migrations apply`)
+scripts/                 d1-local.mjs (local D1 helpers), smoke.mjs, check-client-bundle.mjs (post-build secret-name check)
+cloudflare.config.ts     Worker config (bindings, cron triggers, compat flags). Replaces wrangler.jsonc.
 docs/                    Feature/architecture notes (see below)
 db-copy/                 Local DB dumps (gitignored; never commit or edit)
 ```
@@ -106,26 +123,48 @@ These may lag the code; verify against the source.
   1. Edit schema in `src/db/`.
   2. `pnpm drizzle-kit generate` (writes a new SQL migration into `drizzle/`).
   3. Review the generated SQL. D1/SQLite has limited `ALTER TABLE` support.
-  4. Apply locally: `pnpm wrangler d1 migrations apply DB --local`.
-  5. Remote (`--remote`) only with explicit user approval.
+  4. Apply locally: `pnpm db:migrate:local` (wraps `cf d1 migrations apply <DATABASE_ID> --dir ./drizzle --local`).
+  5. Remote (`pnpm db:migrate:remote`) only with explicit user approval. `cf d1` commands target the **remote** database unless `--local` is passed, so always include `--local` for ad-hoc commands. Remote needs `cf auth login`.
+- Never run `drizzle-kit migrate` or `push` against D1 (see `drizzle.config.ts`); drizzle-kit is for `generate`, `check` and `studio` only.
 - Better Auth tables live in `src/db/auth-schema.ts`; keep them in sync with Better Auth plugin changes.
-- Local D1 state lives in `.wrangler/` (gitignored). Inspect local data with Wrangler or the Local Explorer (see `workers-development` skill).
-- `wrangler.jsonc` currently binds `irishette-dev`. Treat any `--remote` command as touching real data.
+- Local D1 state lives in `.cloudflare/state/` (gitignored), shared by `pnpm dev` and `scripts/d1-local.mjs`. Inspect local data with `pnpm db:studio` or the Local Explorer (see `workers-development` skill).
+- `cloudflare.config.ts` binds the D1 database `irishette-dev`. Treat any remote command as touching real data.
 
-## Secrets and environment
+## Secrets and environment (Varlock)
 
-- Local secrets are in `.env` (gitignored). **Never print, log, commit, or paste its values.** Reading key names is fine.
-- Server: `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_BETTER_AUTH_WEBHOOK_SECRET`, `STRIPE_TRPC_WEBHOOK_SECRET`, `RESEND_API_KEY`, `TURNSTILE_SECRET_KEY`.
-- Client (build-time, `VITE_` prefix only, must be non-sensitive): `VITE_TURNSTILE_PUBLIC_KEY`.
-- Production secrets: `pnpm wrangler secret put <NAME>`. Do not put secrets in `wrangler.jsonc`.
-- After changing bindings or vars in `wrangler.jsonc`, regenerate types: `pnpm wrangler types`.
+Varlock owns the env contract, validation, types and local secret encryption. `cloudflare.config.ts` owns the Worker bindings. Do **not** add `wrangler.jsonc`, `varlock-wrangler`, `varlockCloudflareVitePlugin()`, `@varlock/cloudflare-*`, or the plain Varlock Vite plugin, and do not use 1Password plugins; the `cf` CLI is not supported by Varlock's Cloudflare integration, and secrets are encrypted locally instead.
+
+Files:
+- `.env.schema` (**committed**): declares every variable with `@public` / sensitive (default) decorators, types and docs. It holds **no secret values, so agents may read and edit it.** Never put a sensitive literal default in it; `varlock scan` flags that.
+- `varlock.d.ts` (**committed**, generated): typed `ENV`. Regenerate with `pnpm env:types` after editing the schema. Never hand-edit.
+- `.env.local` (**gitignored**): real values. Sensitive values are encrypted in place with `varlock encrypt --file .env.local` (macOS Secure Enclave; the key is bound to the user's Mac, and each decrypt asks for Touch ID or a password).
+- Every other `.env*` file and `.dev.vars*` is gitignored. `vite.config.ts` sets `envDir: false`, so Vite and the Cloudflare plugin never read them; Varlock is the only source.
+
+Rules for agents:
+- **Never read `.env`, `.env.local` or any other `.env*` file other than `.env.schema`.** Never print, `cat`, `reveal` or `printenv` secret values, and never write decrypted values to disk or into tracked files.
+- Check config with `pnpm env:check` (redacted). It triggers a Touch ID prompt, so tell the user first. Note `varlock load --format json` prints `@public` values in plain text; that is fine, but do not use it on sensitive ones.
+- Do not run `varlock encrypt` or `varlock reveal` yourself. The user runs them.
+- Do not change `@public` / sensitive markings without asking. A secret marked `@public` will be printed, bundled or unencrypted.
+- When adding a variable: add it to `.env.schema`, run `pnpm env:types`, then declare it in `cloudflare.config.ts` (`bindings.secret()` for sensitive, `bindings.text(publicValue('NAME') as string)` for `@public`). Add secrets to `SECRET_NAMES` in `scripts/check-client-bundle.mjs`. Ask the user to add the value to `.env.local`.
+
+How values reach the app:
+- Every command that needs values runs as `varlock run --inject vars -- <cmd>` (the `dev`, `build`, `preview`, `deploy` scripts already do; run the last as `pnpm run deploy`). `cloudflare.config.ts` reads `process.env`.
+- `@public` server values (`BETTER_AUTH_URL`, `STRIPE_PUBLISHABLE_KEY`) become **text bindings baked in at build time**; build with the right values. If they are unset at build time, `publicValue()` silently gives an empty string.
+- Secrets are `bindings.secret()` with no value in config. Local dev reads them from `process.env`; a missing one only logs a warning in `cf dev`, so run `pnpm env:check`.
+- Production secrets are **not** uploaded by Varlock. The user sets them with `pnpm dlx wrangler secret put <NAME> --name irishette` (interactive) or `cf deploy --secrets-file <PATH>`. Do not script a secrets file from decrypted values without asking.
+- `VITE_TURNSTILE_PUBLIC_KEY` is a build-time Vite value (read as `import.meta.env.VITE_TURNSTILE_PUBLIC_KEY`, marked `@public`). Do not add `VITE_` to a secret.
+- Server-only code reads bindings with `import { env } from 'cloudflare:workers'`.
+
+Modes: `cf build --mode` is rejected for TanStack Start. For a non-default mode use `varlock run --inject vars -- vite build --mode <m>` then `cf deploy --prebuilt --mode <m>`. Varlock's `APP_ENV` (when added) is independent of the cf/Vite mode.
+
+Variables: public `BETTER_AUTH_URL`, `STRIPE_PUBLISHABLE_KEY`, `VITE_TURNSTILE_PUBLIC_KEY`; sensitive `BETTER_AUTH_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_BETTER_AUTH_WEBHOOK_SECRET`, `STRIPE_TRPC_WEBHOOK_SECRET`, `RESEND_API_KEY`, `TURNSTILE_SECRET_KEY`.
 
 ## CLI tools
 
 | Tool | How to run | Use for |
 |---|---|---|
-| Wrangler | `pnpm wrangler ...` | Local dev, D1 migrations, KV, secrets, deploy, tail logs, `wrangler types` |
-| `cf` (Cloudflare CLI, beta) | `cf ...` (global) | Cloudflare API/resource commands, `cf cli search`, `cf schema`. Project has a `wrangler.jsonc`, so Wrangler is the default for project commands. |
+| `cf` (Cloudflare CLI, beta) | `pnpm exec cf ...` (also installed as a project dependency) | **Default for everything Cloudflare**: dev, build, deploy, D1, KV, types, `cf cli search`, `cf schema`. Config lives in `cloudflare.config.ts`. Run `cf <cmd> --help` before guessing flags. |
+| Wrangler | `pnpm dlx wrangler ...` (not a dependency) | Only where `cf` has no equivalent: `wrangler secret put <NAME> --name irishette` (interactive) and `pnpm tail`. There is no `wrangler.jsonc`; do not run Wrangler config, dev, build or types commands. |
 | Stripe CLI | `stripe ...` (global, `/opt/homebrew/bin/stripe`) | `stripe listen --forward-to localhost:3000/api/...` for webhooks, `stripe trigger`, test-mode inspection |
 | Biome | `pnpm biome ...` | Lint/format |
 | Fallow | `fallow ...` (global) | Dead code, duplication, architecture, audit/review (see below) |
@@ -134,7 +173,7 @@ These may lag the code; verify against the source.
 
 Rules:
 - Stripe: use **test mode** only. Never run live-mode or destructive Stripe commands without explicit approval.
-- Cloudflare: prefer local (`--local`) operations. Ask before `--remote`, `deploy`, `secret put/delete`, `d1 delete`, or anything that changes live resources.
+- Cloudflare: prefer local (`--local`) operations. Ask before any remote `cf d1`/`cf kv` command, `deploy`, `secret put/delete`, `d1 delete`, or anything that changes live resources.
 - For Cloudflare docs, use the `cloudflare-docs` MCP (`opencode.jsonc`) or the skills below instead of relying on memory; Workers APIs change.
 
 ## Skills
@@ -146,8 +185,8 @@ Skills are installed in **`.agents/skills/`** (locked in `skills-lock.json`; `.c
 | Writing/reviewing Worker code | `workers-best-practices` |
 | Running/debugging locally, logs, Local Explorer | `workers-development` |
 | CPU/memory profiling of the deployed Worker | `workers-profiling` |
-| Wrangler commands and config | `wrangler` |
-| Cloudflare `cf` CLI, choosing cf vs Wrangler | `cf-cli` |
+| Cloudflare `cf` CLI (primary CLI here), choosing cf vs Wrangler | `cf-cli` |
+| Wrangler commands (only `secret put` / `tail` here; the skill targets projects with a `wrangler.jsonc`, which this repo does not have) | `wrangler` |
 | Picking Cloudflare products, Cloudflare error pages | `cloudflare` |
 | Getting bindings/secrets/data working locally | `cloudflare-app-bootstrap` |
 | Cloudflare Email Sending / Routing | `cloudflare-email-service` |
@@ -200,9 +239,10 @@ Rules:
 After any non-trivial change (new feature, refactor, deletion, dependency change), run in this order and fix what you introduced:
 
 1. `pnpm biome check --write <changed paths>`
-2. `pnpm tsc --noEmit`
-3. `pnpm build`
-4. **Fallow review** (below)
+2. `pnpm typecheck` (regenerates Worker types, then `tsc --noEmit`)
+3. `pnpm build`, then `pnpm check:bundle`
+4. If you touched env or secrets: `pnpm env:scan` (and `pnpm env:check`, after telling the user it triggers Touch ID)
+5. **Fallow review** (below)
 
 Do not claim a task is done until these pass, or state clearly which step failed and why.
 
@@ -250,7 +290,7 @@ Fallow is running on defaults (no `.fallowrc.json` exists; `fallow config --path
 
 Likely sources of false positives to keep in mind (verify each, do not assume):
 - TanStack Start/Router: route files export `Route`; `src/routeTree.gen.ts`, `src/start.tsx`, `src/router.tsx`, `src/server.ts` are framework entry points.
-- The `cloudflare:workers` virtual module and Worker `Env` types from `worker-configuration.d.ts`.
+- The `cloudflare:workers` virtual module and Worker `Env` types generated into `.cloudflare/types/`.
 - Drizzle schema exports consumed only by `drizzle-kit` (`src/db/schema-export.ts`) and `drizzle/` SQL.
 - `react-email` templates and Better Auth / tRPC types consumed only for inference (`AppRouter`, `typeof auth`).
 - Scheduled handlers invoked by Cloudflare cron, not by imports (`src/lib/scheduled-tasks.ts`).
@@ -275,8 +315,8 @@ Until tuning is done, use Fallow as a **signal**: prioritize findings in files y
 - Do not commit, push, or open PRs unless asked.
 - **Always ask permission before creating a new branch or opening a new pull request.** Do this before starting work that would need one; do not create branches or PRs on your own initiative, even when asked to commit or push. Work on the current branch unless the user approves otherwise.
 - **Do not co-author commits.** Never add `Co-authored-by:` trailers, "Generated with ..." lines, or any other agent/AI attribution to commit messages or PR descriptions. Commits are authored solely by the user's configured git identity.
-- Never commit `.env`, `.wrangler/`, `db-copy/`, `dist/`, or `.fallow/`.
-- Do not edit generated files (`src/routeTree.gen.ts`, `worker-configuration.d.ts`, `drizzle/**`) by hand.
+- Never commit `.env`, `.env.*` (other than `.env.schema`, which **must** be committed), `.dev.vars*`, `.wrangler/`, `.cloudflare/`, `db-copy/`, `dist/`, or `.fallow/`.
+- Do not edit generated files (`src/routeTree.gen.ts`, `varlock.d.ts`, `.cloudflare/types/**`, `drizzle/**`) by hand.
 - Do not remove `src/server.ts`; it is the Worker entry and cron handler.
 - Keep Stripe webhook signature verification and Turnstile verification intact when editing those flows; never log full payment payloads, card data, or session tokens.
-- Scheduled tasks (`wrangler.jsonc` cron triggers): `*/30` iCal sync, `5 8 * * *` expired pending bookings cleanup, `15 9 * * *` iCal log cleanup. Changing the schedule requires updating both `wrangler.jsonc` and `src/lib/scheduled-tasks.ts`.
+- Scheduled tasks (cron triggers in `cloudflare.config.ts`): `*/30` iCal sync, `5 8 * * *` expired pending bookings cleanup, `15 9 * * *` iCal log cleanup. Changing the schedule requires updating both `cloudflare.config.ts` and `src/lib/scheduled-tasks.ts`.

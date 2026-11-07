@@ -4,6 +4,12 @@
     "cloudflare-docs": {
       "type": "remote",
       "url": "https://docs.mcp.cloudflare.com/mcp",
+      "enabled": true,
     },
+    "varlock-docs-mcp": {
+      "type": "remote",
+      "url": "https://docs.mcp.varlock.dev/mcp",
+      "enabled": true,
+    }
   },
 }

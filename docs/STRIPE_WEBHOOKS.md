@@ -93,8 +93,8 @@ above.
 
 ## Production secrets
 
-Set the signing secrets (and keys) on the deployed Worker; they are not uploaded
-from `.env`:
+Set the signing secrets (and keys) on the deployed Worker; Varlock does not
+upload them from `.env.local`:
 
 ```bash
 pnpm dlx wrangler secret put STRIPE_TRPC_WEBHOOK_SECRET --name irishette
@@ -149,11 +149,13 @@ same value. To print it without starting a listener:
 stripe listen --print-secret
 ```
 
-1. In `.env` (local only, never committed), set:
+1. In `.env.local` (gitignored, never committed), set:
    - `STRIPE_TRPC_WEBHOOK_SECRET=<CLI whsec_...>`
    - `STRIPE_BETTER_AUTH_WEBHOOK_SECRET=<CLI whsec_...>`
    - `STRIPE_SECRET_KEY` / `STRIPE_PUBLISHABLE_KEY`: the same sandbox's keys
-2. Restart `pnpm dev`.
+2. Encrypt the sensitive values in place: `pnpm exec varlock encrypt --file .env.local`.
+3. Optionally validate with `pnpm env:check` (redacted; asks for Touch ID).
+4. Restart `pnpm dev` (it runs `varlock run --inject vars -- cf dev`).
 
 ### Test
 
@@ -184,7 +186,7 @@ should change to `confirmed`.
 | Symptom | Cause / fix |
 |---|---|
 | `must specify events to forward using --events, --all-snapshot, or --all-thin` | Newer CLI; add one of those flags (see above). |
-| Listener shows `[400]`, log says signature verification failed | `.env` has a dashboard secret instead of the CLI secret, or `pnpm dev` was not restarted. |
+| Listener shows `[400]`, log says signature verification failed | `.env.local` has a dashboard secret instead of the CLI secret, or `pnpm dev` was not restarted. |
 | Events forwarded but nothing happens to bookings | `stripe trigger` events have no `booking_id` metadata; use a real checkout. |
 | `Connection refused` in the listener | `pnpm dev` is not running on port 3000. |
 | Events from the wrong account | Run `stripe login` again and pick the sandbox; check with `stripe config --list`. |
