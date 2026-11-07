@@ -32,7 +32,6 @@ export const {
 	revokeSessions,
 	signUp,
 	$Infer,
-	updateUser,
 	requestPasswordReset,
 	resetPassword,
 	sendVerificationEmail,

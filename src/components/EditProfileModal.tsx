@@ -15,7 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTRPC } from '@/integrations/trpc/react';
-import { updateUser } from '@/lib/auth-client';
+import { changeEmail } from '@/lib/auth-client';
 import { refreshSession } from '@/lib/session';
 
 interface EditProfileModalProps {
@@ -49,27 +49,18 @@ export function EditProfileModal({
 		phoneNumber?: string;
 	}>({});
 
-	// tRPC mutation for updating profile in database
+	// Name and phone (database). Email changes go through Better Auth's
+	// changeEmail, which verifies the address by email first.
 	const updateProfileMutation = useMutation(
-		trpc.users.updateProfile.mutationOptions({
-			onSuccess: async () => {
-				// Refetch the session so the header and account page show the
-				// new values (re-runs route guards/loaders).
-				await refreshSession(queryClient, router);
-				toast.success('Profile updated successfully!');
-				onOpenChange(false);
-			},
-			onError: (error) => {
-				console.error('Failed to update profile:', error);
-				toast.error('Failed to update profile. Please try again.');
-			},
-		}),
+		trpc.users.updateProfile.mutationOptions(),
 	);
-
-	// Better Auth mutation for updating user (this updates the session)
-	const updateBetterAuthUser = useMutation({
-		mutationFn: async (data: { name?: string; image?: string }) => {
-			return await updateUser(data);
+	const changeEmailMutation = useMutation({
+		mutationFn: async (newEmail: string) => {
+			const { error } = await changeEmail({
+				newEmail,
+				callbackURL: '/account',
+			});
+			if (error) throw new Error(error.message ?? 'Could not change email');
 		},
 	});
 
@@ -108,38 +99,42 @@ export function EditProfileModal({
 			return;
 		}
 
+		const nameChanged = name.trim() !== user.name;
+		const phoneChanged = phoneNumber.trim() !== (user.phoneNumber ?? '');
+		const emailChanged =
+			email.trim().toLowerCase() !== user.email.toLowerCase();
 		try {
-			// Update via tRPC (updates database)
-			const updateData: {
-				name?: string;
-				email?: string;
-				phoneNumber?: string;
-			} = {};
-
-			if (name !== user.name) {
-				updateData.name = name;
+			if (nameChanged || phoneChanged) {
+				await updateProfileMutation.mutateAsync({
+					...(nameChanged ? { name: name.trim() } : {}),
+					...(phoneChanged && phoneNumber.trim()
+						? { phoneNumber: phoneNumber.trim() }
+						: {}),
+				});
 			}
-			if (email !== user.email) {
-				updateData.email = email;
+			if (emailChanged) {
+				await changeEmailMutation.mutateAsync(email.trim());
+				toast.info('Check your email', {
+					description:
+						'We sent a link to confirm the change. Your email stays the same until you confirm it.',
+					duration: 8000,
+				});
 			}
-			if (phoneNumber !== user.phoneNumber) {
-				updateData.phoneNumber = phoneNumber;
+			if (nameChanged || phoneChanged) {
+				// Refetch the session so the header and account page update.
+				await refreshSession(queryClient, router);
+				toast.success('Profile updated successfully!');
 			}
-
-			// Update database via tRPC
-			await updateProfileMutation.mutateAsync(updateData);
-
-			// Update Better Auth session for name changes
-			if (name !== user.name) {
-				await updateBetterAuthUser.mutateAsync({ name });
-			}
+			onOpenChange(false);
 		} catch (error) {
-			console.error('Error updating profile:', error);
+			toast.error('Failed to update profile', {
+				description: error instanceof Error ? error.message : undefined,
+			});
 		}
 	};
 
 	const isLoading =
-		updateProfileMutation.isPending || updateBetterAuthUser.isPending;
+		updateProfileMutation.isPending || changeEmailMutation.isPending;
 
 	// Reset form when dialog closes or opens
 	const handleOpenChange = (newOpen: boolean) => {
@@ -210,7 +205,7 @@ export function EditProfileModal({
 								<p className="text-sm text-red-500">{errors.email}</p>
 							)}
 							<p className="text-xs text-muted-foreground">
-								Note: Changing your email may require verification.
+								Changing your email sends a confirmation link first.
 							</p>
 						</div>
 

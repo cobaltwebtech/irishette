@@ -8,10 +8,13 @@ import { handleScheduledEvent } from '@/lib/scheduled-tasks';
 import { handleStripeWebhook } from '@/lib/stripe-webhook';
 
 export default {
-	fetch(request) {
+	fetch(request, env, ctx) {
 		const { pathname } = new URL(request.url);
 		if (request.method === 'POST' && pathname === '/api/stripe/webhook') {
-			return handleStripeWebhook(request);
+			return handleStripeWebhook(request, {
+				env,
+				waitUntil: (p) => ctx.waitUntil(p),
+			});
 		}
 		if (request.method === 'GET' && pathname.startsWith('/api/ical/')) {
 			return handleIcalExportRequest(request);

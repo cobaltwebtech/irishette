@@ -168,61 +168,47 @@ export const usersRouter = createTRPCRouter({
 		}),
 
 	/**
-	 * Update user profile (name, email, phone number)
+	 * Update the user's name and phone number. Email changes go through Better
+	 * Auth's changeEmail (verified by email), never through here.
 	 */
 	updateProfile: protectedProcedure
 		.input(
 			z.object({
-				name: z.string().min(1, 'Name is required').optional(),
-				email: z.email('Invalid email address').optional(),
+				name: z.string().trim().min(1, 'Name is required').max(100).optional(),
 				phoneNumber: z
 					.string()
+					.trim()
 					.min(10, 'Phone number must be at least 10 digits')
+					.max(20)
 					.optional(),
 			}),
 		)
 		.mutation(async ({ ctx, input }) => {
-			const db = ctx.db;
-
 			try {
-				// Use authenticated user's ID from session
-				const userId = ctx.user.id;
-
-				// Build the update object dynamically
-				const updateData: {
-					name?: string;
-					email?: string;
-					phoneNumber?: string;
-					updatedAt: Date;
-				} = {
-					updatedAt: new Date(),
-				};
-
-				if (input.name !== undefined) {
-					updateData.name = input.name;
-				}
-				if (input.email !== undefined) {
-					updateData.email = input.email;
-				}
-				if (input.phoneNumber !== undefined) {
-					updateData.phoneNumber = input.phoneNumber;
-				}
-
-				// Update the user's profile
-				await db.update(user).set(updateData).where(eq(user.id, userId));
-
-				return {
-					success: true,
-					message: 'Profile updated successfully',
-				};
+				await ctx.db
+					.update(user)
+					.set({
+						...(input.name !== undefined ? { name: input.name } : {}),
+						...(input.phoneNumber !== undefined
+							? { phoneNumber: input.phoneNumber }
+							: {}),
+						updatedAt: new Date(),
+					})
+					.where(eq(user.id, ctx.user.id));
 			} catch (error) {
-				console.error('Failed to update profile:', error);
-				if (error instanceof TRPCError) throw error;
-				throw new TRPCError({
-					code: 'INTERNAL_SERVER_ERROR',
-					message:
-						error instanceof Error ? error.message : 'Failed to update profile',
-				});
+				if (
+					error instanceof Error &&
+					/UNIQUE constraint failed/i.test(
+						`${error.message} ${(error.cause as Error | undefined)?.message ?? ''}`,
+					)
+				) {
+					throw new TRPCError({
+						code: 'CONFLICT',
+						message: 'This phone number is already used by another account',
+					});
+				}
+				throw error;
 			}
+			return { success: true, message: 'Profile updated successfully' };
 		}),
 });

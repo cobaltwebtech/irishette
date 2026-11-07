@@ -54,7 +54,10 @@ function BookingFlow() {
 		trpc.rooms.get.queryOptions(
 			{ id: booking.roomId || '' },
 			{
-				enabled: isClient && !!booking.roomId && !booking.roomName,
+				enabled:
+					isClient &&
+					!!booking.roomId &&
+					(!booking.roomName || booking.maxGuests === null),
 				staleTime: 5 * 60 * 1000, // Cache for 5 minutes
 			},
 		),
@@ -117,7 +120,12 @@ function BookingFlow() {
 	// Update room name when data is fetched (derived state sync)
 	useEffect(() => {
 		if (roomData && booking.roomSlug && booking.roomId) {
-			booking.actions.setRoom(booking.roomId, booking.roomSlug, roomData.name);
+			booking.actions.setRoom(
+				booking.roomId,
+				booking.roomSlug,
+				roomData.name,
+				roomData.maxGuests,
+			);
 		}
 	}, [roomData, booking.roomSlug, booking.roomId, booking.actions]);
 

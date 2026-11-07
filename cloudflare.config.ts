@@ -47,9 +47,6 @@ export default defineConfig({
 				name: 'irishette-dev',
 				id: '7a52bbfc-592e-4792-990e-6a5e51ca8cbd',
 			}),
-			KV_ICAL_SYNC_LOG: bindings.kv({
-				id: '481a64572c1145de958404c9512755d6',
-			}),
 			BETTER_AUTH_URL: bindings.text(publicValue('BETTER_AUTH_URL') as string),
 			BETTER_AUTH_SECRET: bindings.secret(),
 			STRIPE_PUBLISHABLE_KEY: bindings.text(

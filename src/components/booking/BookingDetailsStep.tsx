@@ -43,7 +43,11 @@ export function BookingDetailsStep() {
 		// Prioritize session phone, then booking phone
 		() => session?.user.phoneNumber || booking.guestInfo?.phone || '',
 	);
-	const [numberOfGuests, setNumberOfGuests] = useState(booking.guestCount || 1);
+	// Room limit (room.max_guests); 2 until the room is loaded.
+	const maxGuests = booking.maxGuests ?? 2;
+	const [numberOfGuests, setNumberOfGuests] = useState(
+		Math.min(booking.guestCount || 1, maxGuests),
+	);
 	const [specialRequests, setSpecialRequests] = useState(
 		() => booking.guestInfo?.specialRequests || '',
 	);
@@ -167,7 +171,7 @@ export function BookingDetailsStep() {
 				throw new Error('Missing required booking information');
 			}
 
-			// Always calculate precise pricing using PaymentService, don't use
+			// Always calculate precise pricing on the server, don't use
 			// estimated pricing (staleTime 0: never reuse a cached result)
 			const pricingData = await queryClient.fetchQuery(
 				trpc.bookings.calculateBooking.queryOptions(
@@ -434,9 +438,9 @@ export function BookingDetailsStep() {
 									variant="outline"
 									size="icon"
 									onClick={() =>
-										setNumberOfGuests(Math.min(4, numberOfGuests + 1))
+										setNumberOfGuests(Math.min(maxGuests, numberOfGuests + 1))
 									}
-									disabled={numberOfGuests >= 4}
+									disabled={numberOfGuests >= maxGuests}
 									className="size-8 rounded-full border-2 transition-all hover:scale-105 active:scale-95 disabled:opacity-40 disabled:hover:scale-100"
 									aria-label="Increase guest count"
 								>

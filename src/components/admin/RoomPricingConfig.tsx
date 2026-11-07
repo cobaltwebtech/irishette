@@ -15,10 +15,12 @@ interface RoomPricingConfigProps {
 	serviceFeeRate: number;
 	stateTaxRate: number;
 	cityTaxRate: number;
+	maxGuests: number;
 	onBasePriceChange: (value: number) => void;
 	onServiceFeeRateChange: (value: number) => void;
 	onStateTaxRateChange: (value: number) => void;
 	onCityTaxRateChange: (value: number) => void;
+	onMaxGuestsChange: (value: number) => void;
 }
 
 export function RoomPricingConfig({
@@ -26,11 +28,14 @@ export function RoomPricingConfig({
 	serviceFeeRate,
 	stateTaxRate,
 	cityTaxRate,
+	maxGuests,
 	onBasePriceChange,
 	onServiceFeeRateChange,
 	onStateTaxRateChange,
 	onCityTaxRateChange,
+	onMaxGuestsChange,
 }: RoomPricingConfigProps) {
+	const maxGuestsId = useId();
 	const basePriceId = useId();
 	const serviceFeeRateId = useId();
 	const stateTaxRateId = useId();
@@ -41,7 +46,7 @@ export function RoomPricingConfig({
 			<CardHeader>
 				<CardTitle className="text-lg flex items-center gap-2">
 					<Icon icon="tabler:settings-dollar" className="size-6" />
-					Pricing & Tax Configuration
+					Pricing, Tax & Guests
 				</CardTitle>
 				<CardDescription>
 					Configure service fee and tax rates applied to room bookings. Hotel
@@ -50,6 +55,31 @@ export function RoomPricingConfig({
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="space-y-4">
+				<div>
+					<Label htmlFor={maxGuestsId} className="text-sm font-medium mb-2">
+						Maximum Guests
+					</Label>
+					<Input
+						id={maxGuestsId}
+						type="number"
+						step="1"
+						min="1"
+						max="10"
+						value={maxGuests}
+						onChange={(e) =>
+							onMaxGuestsChange(
+								Math.min(
+									10,
+									Math.max(1, Number.parseInt(e.target.value, 10) || 1),
+								),
+							)
+						}
+					/>
+					<p className="text-xs text-muted-foreground mt-1">
+						Enforced on new bookings (1-10). Existing bookings are not affected.
+					</p>
+				</div>
+
 				<div>
 					<Label htmlFor={basePriceId} className="text-sm font-medium mb-2">
 						Room Nightly Base Price (USD)

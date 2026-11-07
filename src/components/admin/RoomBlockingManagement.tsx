@@ -1,4 +1,6 @@
 import { Icon } from '@iconify/react';
+import { Link } from '@tanstack/react-router';
+import { isTRPCClientError } from '@trpc/client';
 import { useId, useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -34,6 +36,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import type { TRPCRouter } from '@/integrations/trpc/router';
+import { daysBetween } from '@/lib/date-range';
 import type {
 	CreateBlockedPeriod,
 	RoomBlockedPeriod,
@@ -48,23 +52,83 @@ function formatDateString(dateString: string): string {
 	return date.toLocaleDateString();
 }
 
-// Helper function to parse validation errors into human-readable messages
-function parseValidationErrors(errorMessage: string): string {
-	try {
-		const errors = JSON.parse(errorMessage);
-		if (Array.isArray(errors)) {
-			const fieldErrors = errors.map(
-				(error: { code: string; path?: string[]; message?: string }) => {
-					const field = error.path ? error.path[0] : 'unknown field';
-					return `${field}: ${error.message || error.code}`;
-				},
-			);
-			return fieldErrors.join(', ');
-		}
-		return errorMessage;
-	} catch {
-		return errorMessage;
+/** A reservation a block would overlap (CONFLICT data.conflicts). */
+interface BlockConflict {
+	publicId: string | null;
+	confirmationId: string | null;
+	source: string;
+	checkIn: string;
+	checkOut: string;
+	status: string;
+}
+
+/** Message and conflicts from a failed save. */
+function readSaveError(error: unknown) {
+	if (isTRPCClientError<TRPCRouter>(error)) {
+		return {
+			message: error.message,
+			conflicts: (error.data?.conflicts as BlockConflict[] | null) ?? [],
+		};
 	}
+	return {
+		message: error instanceof Error ? error.message : 'Unexpected error',
+		conflicts: [] as BlockConflict[],
+	};
+}
+
+const SOURCE_LABELS: Record<string, string> = {
+	direct: 'Booking on this site',
+	block: 'Blocked period',
+	airbnb: 'Airbnb',
+	expedia: 'Expedia',
+	vrbo: 'Vrbo',
+	booking: 'Booking.com',
+	other: 'Imported calendar',
+};
+
+/** Lists what a block would overlap, inside the dialog. */
+function BlockConflictList({
+	message,
+	conflicts,
+}: {
+	message: string;
+	conflicts: BlockConflict[];
+}) {
+	return (
+		<div
+			role="alert"
+			className="space-y-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm"
+		>
+			<p className="font-medium text-destructive">{message}</p>
+			{conflicts.length > 0 && (
+				<ul className="space-y-1">
+					{conflicts.map((c) => (
+						<li
+							key={`${c.source}-${c.publicId ?? ''}-${c.checkIn}-${c.checkOut}`}
+							className="flex flex-wrap items-center gap-2"
+						>
+							<Badge variant="outline">
+								{SOURCE_LABELS[c.source] ?? c.source}
+							</Badge>
+							<span>
+								{formatDateString(c.checkIn)} to {formatDateString(c.checkOut)}
+							</span>
+							<span className="text-muted-foreground">({c.status})</span>
+							{c.publicId && (
+								<Link
+									to="/admin/bookings/$publicId"
+									params={{ publicId: c.publicId }}
+									className="text-primary underline"
+								>
+									{c.confirmationId ?? 'Open booking'}
+								</Link>
+							)}
+						</li>
+					))}
+				</ul>
+			)}
+		</div>
+	);
 }
 
 // Helper function to format date range
@@ -115,11 +179,10 @@ function makeColumns({
 			id: 'duration',
 			header: 'Duration',
 			cell: (info) => {
-				const startDate = new Date(info.row.original.startDate);
-				const endDate = new Date(info.row.original.endDate);
-				const duration = Math.ceil(
-					(endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
-				);
+				// Inclusive dates: Jun 8 to Jun 10 is 3 days.
+				const duration =
+					daysBetween(info.row.original.startDate, info.row.original.endDate) +
+					1;
 				return (
 					<Badge variant="outline">
 						{duration} {duration === 1 ? 'Day' : 'Days'}
@@ -183,34 +246,22 @@ export function RoomBlockingManagement({
 	const [deletingPeriod, setDeletingPeriod] =
 		useState<RoomBlockedPeriod | null>(null);
 
+	// Errors propagate to the dialogs, which stay open and show them.
 	const handleCreatePeriod = async (period: CreateBlockedPeriod) => {
-		try {
-			await onCreateBlockedPeriod(period);
-			setShowCreateDialog(false);
-		} catch (error) {
-			console.error('Error creating blocked period:', error);
-			// Error handling is done in the parent component
-		}
+		await onCreateBlockedPeriod(period);
+		setShowCreateDialog(false);
+		toast.success('Blocked period created successfully!');
 	};
 
 	const handleUpdatePeriod = async (period: UpdateBlockedPeriod) => {
-		try {
-			await onUpdateBlockedPeriod(period);
-			setEditingPeriod(null);
-		} catch (error) {
-			console.error('Error updating blocked period:', error);
-			// Error handling is done in the parent component
-		}
+		await onUpdateBlockedPeriod(period);
+		setEditingPeriod(null);
+		toast.success('Blocked period updated successfully!');
 	};
 
 	const handleDeletePeriod = async (periodId: string) => {
-		try {
-			await onDeleteBlockedPeriod(periodId);
-			setDeletingPeriod(null);
-		} catch (error) {
-			console.error('Error deleting blocked period:', error);
-			// Error handling is done in the parent component
-		}
+		await onDeleteBlockedPeriod(periodId);
+		setDeletingPeriod(null);
 	};
 
 	// Filter blocked periods to show only current and future periods
@@ -309,9 +360,9 @@ export function RoomBlockingManagement({
 				<DeleteBlockedPeriodDialog
 					open={!!deletingPeriod}
 					onOpenChange={() => setDeletingPeriod(null)}
-					onConfirm={() => {
+					onConfirm={async () => {
 						if (deletingPeriod.id) {
-							handleDeletePeriod(deletingPeriod.id);
+							await handleDeletePeriod(deletingPeriod.id);
 						}
 					}}
 					period={deletingPeriod}
@@ -325,7 +376,7 @@ export function RoomBlockingManagement({
 interface CreateBlockedPeriodDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	onSubmit: (period: CreateBlockedPeriod) => void;
+	onSubmit: (period: CreateBlockedPeriod) => Promise<void>;
 	roomId: string;
 }
 
@@ -340,11 +391,22 @@ function CreateBlockedPeriodDialog({
 	const [reason, setReason] = useState('');
 	const [notes, setNotes] = useState('');
 	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [saveError, setSaveError] = useState<ReturnType<
+		typeof readSaveError
+	> | null>(null);
 
 	const startDateId = useId();
 	const endDateId = useId();
 	const reasonId = useId();
 	const notesId = useId();
+
+	const resetForm = () => {
+		setStartDate('');
+		setEndDate('');
+		setReason('');
+		setNotes('');
+		setSaveError(null);
+	};
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -353,42 +415,31 @@ function CreateBlockedPeriodDialog({
 			toast.error('Please fill in all required fields');
 			return;
 		}
+		if (endDate < startDate) {
+			toast.error('End date must be on or after the start date');
+			return;
+		}
 
 		setIsSubmitting(true);
+		setSaveError(null);
 		try {
-			onSubmit({
+			await onSubmit({
 				roomId,
 				startDate,
 				endDate,
 				reason: reason.trim(),
 				notes: notes.trim() || undefined,
 			});
-
-			// Reset form
-			setStartDate('');
-			setEndDate('');
-			setReason('');
-			setNotes('');
-
-			toast.success('Blocked period created successfully!');
+			resetForm();
 		} catch (error) {
-			console.error('Error creating blocked period:', error);
-			const errorMessage =
-				error instanceof Error ? error.message : 'Unknown error';
-
-			toast.error('Failed to create blocked period', {
-				description: parseValidationErrors(errorMessage),
-			});
+			setSaveError(readSaveError(error));
 		} finally {
 			setIsSubmitting(false);
 		}
 	};
 
 	const resetAndClose = () => {
-		setStartDate('');
-		setEndDate('');
-		setReason('');
-		setNotes('');
+		resetForm();
 		onOpenChange(false);
 	};
 
@@ -448,6 +499,8 @@ function CreateBlockedPeriodDialog({
 						/>
 					</div>
 
+					{saveError && <BlockConflictList {...saveError} />}
+
 					<div className="flex justify-end gap-2">
 						<Button
 							type="button"
@@ -471,7 +524,7 @@ function CreateBlockedPeriodDialog({
 interface EditBlockedPeriodDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	onSubmit: (period: UpdateBlockedPeriod) => void;
+	onSubmit: (period: UpdateBlockedPeriod) => Promise<void>;
 	period: RoomBlockedPeriod;
 }
 
@@ -486,6 +539,9 @@ function EditBlockedPeriodDialog({
 	const [reason, setReason] = useState(period.reason);
 	const [notes, setNotes] = useState(period.notes || '');
 	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [saveError, setSaveError] = useState<ReturnType<
+		typeof readSaveError
+	> | null>(null);
 
 	const startDateId = useId();
 	const endDateId = useId();
@@ -505,7 +561,13 @@ function EditBlockedPeriodDialog({
 			return;
 		}
 
+		if (endDate < startDate) {
+			toast.error('End date must be on or after the start date');
+			return;
+		}
+
 		setIsSubmitting(true);
+		setSaveError(null);
 		try {
 			await onSubmit({
 				id: period.id,
@@ -514,16 +576,8 @@ function EditBlockedPeriodDialog({
 				reason: reason.trim(),
 				notes: notes.trim() || undefined,
 			});
-
-			toast.success('Blocked period updated successfully!');
 		} catch (error) {
-			console.error('Error updating blocked period:', error);
-			const errorMessage =
-				error instanceof Error ? error.message : 'Unknown error';
-
-			toast.error('Failed to update blocked period', {
-				description: parseValidationErrors(errorMessage),
-			});
+			setSaveError(readSaveError(error));
 		} finally {
 			setIsSubmitting(false);
 		}
@@ -584,6 +638,8 @@ function EditBlockedPeriodDialog({
 						/>
 					</div>
 
+					{saveError && <BlockConflictList {...saveError} />}
+
 					<div className="flex justify-end gap-2">
 						<Button
 							type="button"
@@ -607,7 +663,7 @@ function EditBlockedPeriodDialog({
 interface DeleteBlockedPeriodDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	onConfirm: () => void;
+	onConfirm: () => Promise<void>;
 	period: RoomBlockedPeriod;
 }
 

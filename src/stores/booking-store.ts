@@ -17,7 +17,7 @@ export interface PricingBreakdown {
 	fees: number;
 	totalAmount: number;
 	currency: string;
-	// Enhanced pricing information from PaymentService
+	// Enhanced pricing information from bookings.calculateBooking
 	appliedRules?: Array<{
 		id: string;
 		name: string;
@@ -47,6 +47,8 @@ export interface BookingState {
 	roomId: string | null;
 	roomSlug: string | null;
 	roomName: string | null;
+	/** Room's guest limit (room.max_guests); null until known. */
+	maxGuests: number | null;
 	checkInDate: string | null; // ISO date string
 	checkOutDate: string | null; // ISO date string
 	guestCount: number;
@@ -81,6 +83,7 @@ const initialState: BookingState = {
 	roomId: null,
 	roomSlug: null,
 	roomName: null,
+	maxGuests: null,
 	checkInDate: null,
 	checkOutDate: null,
 	guestCount: 1,
@@ -142,18 +145,33 @@ bookingStore.subscribe(() => {
 	}
 });
 
+/** At least 1, at most the room's limit (when known). */
+function clampGuests(count: number, maxGuests: number | null): number {
+	const atLeastOne = Math.max(1, Math.floor(count) || 1);
+	return maxGuests ? Math.min(atLeastOne, maxGuests) : atLeastOne;
+}
+
 // Store actions/utilities
 export const bookingActions = {
-	// Set room and initial dates
-	setRoom: (roomId: string, roomSlug: string, roomName?: string) => {
-		bookingStore.setState((state) => ({
-			...state,
-			roomId,
-			roomSlug,
-			roomName: roomName || null,
-			currentStep: 'dates',
-			updatedAt: new Date().toISOString(),
-		}));
+	// Set room details (keeps dates, guests and step)
+	setRoom: (
+		roomId: string,
+		roomSlug: string,
+		roomName?: string,
+		maxGuests?: number,
+	) => {
+		bookingStore.setState((state) => {
+			const limit = maxGuests ?? state.maxGuests;
+			return {
+				...state,
+				roomId,
+				roomSlug,
+				roomName: roomName || null,
+				maxGuests: limit,
+				guestCount: clampGuests(state.guestCount, limit),
+				updatedAt: new Date().toISOString(),
+			};
+		});
 	},
 
 	// Set booking dates
@@ -166,11 +184,11 @@ export const bookingActions = {
 		}));
 	},
 
-	// Set guest count
+	// Set guest count (1 to the room's max_guests)
 	setGuestCount: (count: number) => {
 		bookingStore.setState((state) => ({
 			...state,
-			guestCount: Math.max(1, count),
+			guestCount: clampGuests(count, state.maxGuests),
 			updatedAt: new Date().toISOString(),
 		}));
 	},
@@ -314,12 +332,18 @@ export const bookingActions = {
 	},
 
 	// Initialize a new booking session
-	initializeBooking: (roomId: string, roomSlug: string, roomName?: string) => {
+	initializeBooking: (
+		roomId: string,
+		roomSlug: string,
+		roomName?: string,
+		maxGuests?: number,
+	) => {
 		bookingStore.setState(() => ({
 			...initialState,
 			roomId,
 			roomSlug,
 			roomName: roomName || null,
+			maxGuests: maxGuests ?? null,
 			currentStep: 'dates',
 			createdAt: new Date().toISOString(),
 			updatedAt: new Date().toISOString(),

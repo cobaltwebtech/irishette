@@ -1,81 +1,137 @@
 import { TRPCError } from '@trpc/server';
-import { and, eq, getTableColumns, gte, inArray, lte } from 'drizzle-orm';
-import { z } from 'zod';
+import { and, asc, eq, gte, lte, ne, notExists, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
+import type { Database } from '@/db/drizzle-init';
 import { room, roomBlockedPeriods, roomPricingRules } from '@/db/schema-export';
+import { findBlockConflicts } from '@/lib/availability';
+import { quoteStay } from '@/lib/booking-service';
+import { inclusiveRangesOverlap } from '@/lib/date-range';
+import { newId } from '@/lib/ids';
 import {
-	getActiveFeed,
-	getLegacyFeedConfig,
-	setLegacyFeedUrl,
-} from '@/lib/ical-feeds';
-import { iCalService } from '@/lib/ical-service';
-import {
-	bulkAvailabilitySchema,
-	checkAvailabilitySchema,
+	calculatePricingSchema,
 	createBlockedPeriodSchema,
 	createPricingRuleSchema,
 	createRoomSchema,
 	deleteBlockedPeriodSchema,
 	deletePricingRuleSchema,
-	getBlockedPeriodSchema,
 	getBlockedPeriodsSchema,
 	getPricingRulesSchema,
 	getRoomSchema,
 	getRoomsSchema,
-	roomIdSchema,
-	syncCalendarSchema,
 	updateBlockedPeriodSchema,
 	updatePricingRuleSchema,
 	updateRoomSchema,
 } from '@/lib/room-validation';
+import { todayIn } from '@/lib/timezone';
 import { adminProcedure, createTRPCRouter, publicProcedure } from './init';
 
-// Room columns safe for public procedures: never expose the iCal export token.
-// TODO(upgrade Phase 7.1): replace with an explicit public room DTO.
-const { icalExportToken: _icalExportToken, ...publicRoomColumns } =
-	getTableColumns(room);
+/**
+ * Room fields safe for anyone. Never the iCal export token; feed URLs live in
+ * ical_feeds and are only returned by admin procedures (ical router).
+ */
+const publicRoomColumns = {
+	id: room.id,
+	publicId: room.publicId,
+	name: room.name,
+	slug: room.slug,
+	description: room.description,
+	basePrice: room.basePrice,
+	serviceFeeRate: room.serviceFeeRate,
+	stateTaxRate: room.stateTaxRate,
+	cityTaxRate: room.cityTaxRate,
+	maxGuests: room.maxGuests,
+	status: room.status,
+	isActive: room.isActive,
+	createdAt: room.createdAt,
+	updatedAt: room.updatedAt,
+};
+
+async function requireRoom(db: Database, roomId: string) {
+	const [row] = await db
+		.select({ id: room.id })
+		.from(room)
+		.where(eq(room.id, roomId));
+	if (!row)
+		throw new TRPCError({ code: 'NOT_FOUND', message: 'Room not found' });
+}
+
+function rejectPastDate(date: string, label: string) {
+	if (date < todayIn()) {
+		throw new TRPCError({
+			code: 'BAD_REQUEST',
+			message: `${label} cannot be in the past`,
+		});
+	}
+}
+
+const isUniqueViolation = (error: unknown) =>
+	error instanceof Error &&
+	/UNIQUE constraint failed/i.test(
+		`${error.message} ${(error.cause as Error | undefined)?.message ?? ''}`,
+	);
+
+// --- Pricing rules -----------------------------------------------------------
+
+type Rule = typeof roomPricingRules.$inferSelect;
+
+function conflictDetails(rule: Rule) {
+	return {
+		id: rule.id,
+		name: rule.name,
+		startDate: rule.startDate,
+		endDate: rule.endDate,
+	};
+}
+
+/** First active rule in the room overlapping [start, end], except `excludeId`. */
+async function findOverlappingRule(
+	db: Database,
+	roomId: string,
+	start: string,
+	end: string,
+	excludeId?: string,
+) {
+	const conditions = [
+		eq(roomPricingRules.roomId, roomId),
+		eq(roomPricingRules.isActive, true),
+		lte(roomPricingRules.startDate, end),
+		gte(roomPricingRules.endDate, start),
+	];
+	if (excludeId) conditions.push(ne(roomPricingRules.id, excludeId));
+	const [rule] = await db
+		.select()
+		.from(roomPricingRules)
+		.where(and(...conditions))
+		.orderBy(asc(roomPricingRules.startDate))
+		.limit(1);
+	return rule;
+}
+
+function overlapError(rule: Rule): TRPCError {
+	return new TRPCError({
+		code: 'CONFLICT',
+		message: `Overlaps with "${rule.name}" (${rule.startDate} to ${rule.endDate})`,
+		cause: { conflict: conflictDetails(rule) },
+	});
+}
+
+const nowSeconds = (d: Date) => Math.floor(d.getTime() / 1000);
 
 export const roomsRouter = createTRPCRouter({
-	// Simple test procedure without input
-	ping: publicProcedure.query(async () => {
-		return { message: 'pong', timestamp: new Date().toISOString() };
-	}),
-
-	// Get all rooms with pagination and filtering
 	list: publicProcedure.input(getRoomsSchema).query(async ({ ctx, input }) => {
-		const db = ctx.db;
-
-		// Build query conditions
-		const conditions = [];
-
-		// Filter by status if provided
-		if (input.status) {
-			conditions.push(eq(room.status, input.status));
-		}
-
-		// Legacy support: filter by isActive if provided and no status filter
-		if (input.isActive !== undefined && !input.status) {
-			conditions.push(eq(room.isActive, input.isActive));
-		}
-
-		// Build the query
-		const baseQuery = db.select(publicRoomColumns).from(room);
-		const query =
-			conditions.length > 0 ? baseQuery.where(and(...conditions)) : baseQuery;
-
-		const result = await query.limit(input.limit).offset(input.offset);
-
-		// Get total count for pagination
-		const countBaseQuery = db.select({ id: room.id }).from(room);
-		const countQuery =
-			conditions.length > 0
-				? countBaseQuery.where(and(...conditions))
-				: countBaseQuery;
-
-		const totalResult = await countQuery;
-		const total = totalResult.length;
-
+		const where = input.status ? eq(room.status, input.status) : undefined;
+		const [rooms, [{ total }]] = await Promise.all([
+			ctx.db
+				.select(publicRoomColumns)
+				.from(room)
+				.where(where)
+				.orderBy(asc(room.name))
+				.limit(input.limit)
+				.offset(input.offset),
+			ctx.db.select({ total: sql<number>`count(*)` }).from(room).where(where),
+		]);
 		return {
-			rooms: result,
+			rooms,
 			pagination: {
 				total,
 				limit: input.limit,
@@ -85,804 +141,310 @@ export const roomsRouter = createTRPCRouter({
 		};
 	}),
 
-	// Get single room by ID
 	get: publicProcedure.input(getRoomSchema).query(async ({ ctx, input }) => {
-		const db = ctx.db;
-
-		const result = await db
+		const [result] = await ctx.db
 			.select(publicRoomColumns)
 			.from(room)
 			.where(
 				'publicId' in input
 					? eq(room.publicId, input.publicId)
-					: eq(room.id, input.id),
+					: 'slug' in input
+						? eq(room.slug, input.slug)
+						: eq(room.id, input.id),
 			);
-
-		if (!result[0]) {
+		if (!result) {
 			throw new TRPCError({ code: 'NOT_FOUND', message: 'Room not found' });
 		}
-
-		return result[0];
+		return result;
 	}),
 
-	// Create new room (admin only)
+	/** Room price for a stay (calendar). Same calculation as checkout. */
+	calculatePricing: publicProcedure
+		.input(calculatePricingSchema)
+		.query(async ({ ctx, input }) => {
+			const price = await quoteStay(
+				ctx.db,
+				input.roomId,
+				input.checkInDate,
+				input.checkOutDate,
+			);
+			return {
+				baseAmount: price.baseAmount,
+				numberOfNights: price.numberOfNights,
+				nights: price.nights.map((n) => ({ date: n.date, price: n.price })),
+				appliedRules: price.appliedRules.map((r) => ({
+					name: r.name,
+					nights: r.nights,
+					appliedAmount: r.appliedAmount,
+				})),
+				roomBasePrice: price.roomBasePrice,
+			};
+		}),
+
 	create: adminProcedure
 		.input(createRoomSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = ctx.db;
-
-			const now = new Date();
-
-			const [newRoom] = await db
-				.insert(room)
-				.values({
-					name: input.name,
-					slug: input.slug,
-					description: input.description || null,
-					basePrice: input.basePrice || 0, // Default price for now
-					status: input.status || 'active',
-					isActive: input.isActive,
-					createdAt: now,
-					updatedAt: now,
-				})
-				.returning();
-
-			// Feed URLs live in ical_feeds.
-			await setLegacyFeedUrl(db, newRoom.id, 'airbnb', input.airbnbIcalUrl);
-			await setLegacyFeedUrl(db, newRoom.id, 'expedia', input.expediaIcalUrl);
-
-			return { ...newRoom, ...(await getLegacyFeedConfig(db, newRoom.id)) };
+			try {
+				const [created] = await ctx.db
+					.insert(room)
+					.values({
+						...input,
+						description: input.description || null,
+						isActive: input.status === 'active',
+					})
+					.returning(publicRoomColumns);
+				return created;
+			} catch (error) {
+				if (isUniqueViolation(error)) {
+					throw new TRPCError({
+						code: 'CONFLICT',
+						message: 'A room with this slug already exists',
+					});
+				}
+				throw error;
+			}
 		}),
 
-	// Update existing room (admin only)
 	update: adminProcedure
 		.input(updateRoomSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = ctx.db;
-
-			const { id, airbnbIcalUrl, expediaIcalUrl, ...updateData } = input;
-
-			const result = await db
-				.update(room)
-				.set({
-					...updateData,
-					updatedAt: new Date(),
-				})
-				.where(eq(room.id, id))
-				.returning();
-
-			if (!result[0]) {
-				throw new Error('Room not found');
-			}
-
-			// Feed URLs live in ical_feeds; only touch them when provided.
-			if (airbnbIcalUrl !== undefined) {
-				await setLegacyFeedUrl(db, id, 'airbnb', airbnbIcalUrl);
-			}
-			if (expediaIcalUrl !== undefined) {
-				await setLegacyFeedUrl(db, id, 'expedia', expediaIcalUrl);
-			}
-
-			return { ...result[0], ...(await getLegacyFeedConfig(db, id)) };
-		}),
-
-	// Archive room (admin only - replaces delete - preserves data for historical bookings)
-	archive: adminProcedure
-		.input(roomIdSchema)
-		.mutation(async ({ ctx, input }) => {
-			const db = ctx.db;
-
-			const result = await db
-				.update(room)
-				.set({
-					status: 'archived',
-					isActive: false, // Keep legacy field in sync
-					updatedAt: new Date(),
-				})
-				.where(eq(room.id, input.id))
-				.returning();
-
-			if (!result[0]) {
-				throw new Error('Room not found');
-			}
-
-			return { success: true, id: input.id, status: 'archived' };
-		}),
-
-	// Activate room (admin only)
-	activate: adminProcedure
-		.input(roomIdSchema)
-		.mutation(async ({ ctx, input }) => {
-			const db = ctx.db;
-
-			const result = await db
-				.update(room)
-				.set({
-					status: 'active',
-					isActive: true, // Keep legacy field in sync
-					updatedAt: new Date(),
-				})
-				.where(eq(room.id, input.id))
-				.returning();
-
-			if (!result[0]) {
-				throw new Error('Room not found');
-			}
-
-			return { success: true, id: input.id, status: 'active' };
-		}),
-
-	// Deactivate room (admin only - temporarily unavailable)
-	deactivate: adminProcedure
-		.input(roomIdSchema)
-		.mutation(async ({ ctx, input }) => {
-			const db = ctx.db;
-
-			const result = await db
-				.update(room)
-				.set({
-					status: 'inactive',
-					isActive: false, // Keep legacy field in sync
-					updatedAt: new Date(),
-				})
-				.where(eq(room.id, input.id))
-				.returning();
-
-			if (!result[0]) {
-				throw new Error('Room not found');
-			}
-
-			return { success: true, id: input.id, status: 'inactive' };
-		}),
-
-	// Check room availability
-	checkAvailability: publicProcedure
-		.input(checkAvailabilitySchema)
-		.query(async ({ input }) => {
-			return {
-				roomId: input.roomId,
-				available: true, // Placeholder
-				conflictingBookings: [],
-				externalConflicts: [],
-			};
-		}),
-
-	// Bulk availability check
-	bulkAvailability: publicProcedure
-		.input(bulkAvailabilitySchema)
-		.query(async ({ ctx, input }) => {
-			const db = ctx.db;
-
-			// Build query conditions - only check active rooms for availability
-			const conditions = [eq(room.status, 'active')];
-			if (input.roomIds && input.roomIds.length > 0) {
-				conditions.push(inArray(room.id, input.roomIds));
-			}
-
-			// Execute query with all conditions
-			const roomsToCheck = await db
-				.select()
-				.from(room)
-				.where(and(...conditions));
-
-			const availability = roomsToCheck.map((roomData) => ({
-				roomId: roomData.id,
-				roomSlug: roomData.slug,
-				available: true, // Placeholder
-				conflictingBookings: [],
-				externalConflicts: [],
-			}));
-
-			return {
-				dateRange: {
-					startDate: input.startDate,
-					endDate: input.endDate,
-				},
-				availability,
-			};
-		}),
-
-	// Sync external calendar (admin only)
-	syncCalendar: adminProcedure
-		.input(syncCalendarSchema)
-		.mutation(async ({ ctx, input }) => {
-			const db = ctx.db;
-
-			// Get room to sync
-			const result = await db
-				.select()
-				.from(room)
-				.where(eq(room.id, input.roomId));
-
-			if (!result[0]) {
-				throw new Error('Room not found');
-			}
-
-			// Get the calendar feed for this platform
-			const feed = await getActiveFeed(db, input.roomId, input.platform);
-
-			if (!feed) {
-				throw new Error(
-					`No ${input.platform} calendar URL configured for this room`,
-				);
-			}
-
-			// Use iCal service to perform the actual sync
-			const icalServiceInstance = new iCalService(ctx.env.DB);
-			const syncResult = await icalServiceInstance.syncExternalCalendar(
-				input.roomId,
-				input.platform,
-			);
-
-			return {
-				success: syncResult.success,
-				syncedEvents: syncResult.bookingsProcessed,
-				lastSync: new Date(),
-				platform: input.platform,
-				errorMessage: syncResult.errorMessage,
-			};
-		}),
-
-	// Update room iCal URLs (admin only)
-	updateIcalUrls: adminProcedure
-		.input(
-			z.object({
-				roomId: z.string(),
-				airbnbIcalUrl: z.string().url().optional().nullable(),
-				expediaIcalUrl: z.string().url().optional().nullable(),
-			}),
-		)
-		.mutation(async ({ ctx, input }) => {
-			const db = ctx.db;
-
-			// Verify room exists
-			const roomResult = await db
-				.select()
-				.from(room)
-				.where(eq(room.id, input.roomId));
-
-			if (!roomResult[0]) {
-				throw new Error('Room not found');
-			}
-
-			// Update iCal feed URLs (stored in ical_feeds)
-			if (input.airbnbIcalUrl !== undefined) {
-				await setLegacyFeedUrl(db, input.roomId, 'airbnb', input.airbnbIcalUrl);
-			}
-
-			if (input.expediaIcalUrl !== undefined) {
-				await setLegacyFeedUrl(
-					db,
-					input.roomId,
-					'expedia',
-					input.expediaIcalUrl,
-				);
-			}
-
-			await db
-				.update(room)
-				.set({ updatedAt: new Date() })
-				.where(eq(room.id, input.roomId));
-
-			return {
-				success: true,
-				roomId: input.roomId,
-				updatedUrls: {
-					airbnb: input.airbnbIcalUrl,
-					expedia: input.expediaIcalUrl,
-				},
-				updatedAt: new Date(),
-			};
-		}),
-
-	// Get room iCal configuration
-	getIcalConfig: publicProcedure
-		.input(
-			z.object({
-				roomId: z.string(),
-			}),
-		)
-		.query(async ({ ctx, input }) => {
-			const db = ctx.db;
-
-			const roomResult = await db
-				.select({
-					id: room.id,
-					slug: room.slug,
-				})
-				.from(room)
-				.where(eq(room.id, input.roomId));
-
-			if (!roomResult[0]) {
-				throw new Error('Room not found');
-			}
-
-			const roomData = {
-				...roomResult[0],
-				...(await getLegacyFeedConfig(db, input.roomId)),
-			};
-
-			return {
-				roomId: roomData.id,
-				roomSlug: roomData.slug,
-				icalUrls: {
-					airbnb: roomData.airbnbIcalUrl,
-					expedia: roomData.expediaIcalUrl,
-				},
-				lastSync: {
-					airbnb: roomData.lastAirbnbSync,
-					expedia: roomData.lastExpediaSync,
-				},
-				configured: {
-					airbnb: !!roomData.airbnbIcalUrl,
-					expedia: !!roomData.expediaIcalUrl,
-				},
-				// Generate URLs for this room's calendar feed
-				exportUrls: {
-					byId: `/api/rooms/${roomData.id}/calendar.ics`,
-					bySlug: `/api/rooms/slug/${roomData.slug}/calendar.ics`,
-				},
-			};
-		}),
-
-	// Test iCal URL (admin only - validate it works)
-	testIcalUrl: adminProcedure
-		.input(
-			z.object({
-				url: z.string().url(),
-			}),
-		)
-		.mutation(async ({ input }) => {
+			const { id, ...changes } = input;
 			try {
-				const response = await fetch(input.url, {
-					headers: {
-						'User-Agent': 'Irishette Calendar Test/1.0',
-					},
-				});
-
-				if (!response.ok) {
-					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+				const [updated] = await ctx.db
+					.update(room)
+					.set({
+						...changes,
+						...(changes.status
+							? { isActive: changes.status === 'active' }
+							: {}),
+						updatedAt: new Date(),
+					})
+					.where(eq(room.id, id))
+					.returning(publicRoomColumns);
+				if (!updated) {
+					throw new TRPCError({ code: 'NOT_FOUND', message: 'Room not found' });
 				}
-
-				const content = await response.text();
-
-				// Basic validation
-				if (!content.includes('BEGIN:VCALENDAR')) {
-					throw new Error('Invalid iCal format: Missing VCALENDAR');
-				}
-
-				// Count events
-				const eventCount = (content.match(/BEGIN:VEVENT/g) || []).length;
-				const lines = content.split('\n').length;
-
-				return {
-					success: true,
-					url: input.url,
-					contentLength: content.length,
-					lines,
-					eventCount,
-					preview: `${content.substring(0, 300)}...`,
-					validatedAt: new Date(),
-				};
+				return updated;
 			} catch (error) {
-				return {
-					success: false,
-					url: input.url,
-					error: error instanceof Error ? error.message : 'Unknown error',
-					validatedAt: new Date(),
-				};
+				if (isUniqueViolation(error)) {
+					throw new TRPCError({
+						code: 'CONFLICT',
+						message: 'A room with this slug already exists',
+					});
+				}
+				throw error;
 			}
 		}),
 
-	// Pricing Rules Management
-	// Get pricing rules for a room (admin only)
+	// --- Pricing rules (admin) ---------------------------------------------
+
 	getPricingRules: adminProcedure
 		.input(getPricingRulesSchema)
 		.query(async ({ ctx, input }) => {
-			const db = ctx.db;
-
 			const conditions = [eq(roomPricingRules.roomId, input.roomId)];
-
-			// Filter by active status if provided
 			if (input.isActive !== undefined) {
 				conditions.push(eq(roomPricingRules.isActive, input.isActive));
 			}
-
-			// Filter by date range if provided
 			if (input.startDate) {
-				conditions.push(
-					lte(roomPricingRules.startDate, input.endDate || input.startDate),
-				);
+				conditions.push(gte(roomPricingRules.endDate, input.startDate));
 			}
 			if (input.endDate) {
-				conditions.push(
-					gte(roomPricingRules.endDate, input.startDate || input.endDate),
-				);
+				conditions.push(lte(roomPricingRules.startDate, input.endDate));
 			}
-
-			const result = await db
+			return ctx.db
 				.select()
 				.from(roomPricingRules)
 				.where(and(...conditions))
-				.orderBy(roomPricingRules.startDate);
-
-			return result;
+				.orderBy(asc(roomPricingRules.startDate));
 		}),
 
-	// Create a new pricing rule (admin only)
+	/**
+	 * Creates a rule. An active rule may not overlap another active rule in
+	 * the room; the check and the insert are one statement, so concurrent
+	 * creates cannot both succeed.
+	 */
 	createPricingRule: adminProcedure
 		.input(createPricingRuleSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = ctx.db;
+			await requireRoom(ctx.db, input.roomId);
+			rejectPastDate(input.endDate, 'End date');
 
-			// Validate that dates are not in the past
-			const today = new Date();
-			today.setHours(0, 0, 0, 0); // Reset time to start of day
-			const startDate = new Date(input.startDate);
-			const endDate = new Date(input.endDate);
+			const id = newId();
+			const now = new Date();
+			const ts = nowSeconds(now);
+			const active = input.isActive ?? true;
+			const guard = active
+				? sql`NOT EXISTS (
+						SELECT 1 FROM room_pricing_rules AS r
+						WHERE r.room_id = ${input.roomId}
+							AND r.is_active = 1
+							AND r.start_date <= ${input.endDate}
+							AND ${input.startDate} <= r.end_date
+					)`
+				: sql`1 = 1`;
+			const result = await ctx.db.run(sql`
+				INSERT INTO room_pricing_rules (
+					id, room_id, name, rule_type, value, start_date, end_date,
+					is_active, activated_at, created_at, updated_at
+				)
+				SELECT ${id}, ${input.roomId}, ${input.name}, ${input.ruleType},
+					${input.value}, ${input.startDate}, ${input.endDate},
+					${active ? 1 : 0}, ${active ? ts : null}, ${ts}, ${ts}
+				WHERE ${guard}`);
 
-			if (startDate < today) {
-				throw new Error('Start date cannot be in the past');
+			if (!result.meta.changes) {
+				const overlapping = await findOverlappingRule(
+					ctx.db,
+					input.roomId,
+					input.startDate,
+					input.endDate,
+				);
+				if (overlapping) throw overlapError(overlapping);
+				throw new TRPCError({
+					code: 'CONFLICT',
+					message: 'The rule could not be saved. Please try again.',
+				});
 			}
-
-			if (endDate < today) {
-				throw new Error('End date cannot be in the past');
-			}
-
-			// Check for overlapping rules
-			const existingRules = await db
+			const [created] = await ctx.db
 				.select()
 				.from(roomPricingRules)
-				.where(
-					and(
-						eq(roomPricingRules.roomId, input.roomId),
-						eq(roomPricingRules.isActive, true),
-						// Check for date range overlap
-						gte(roomPricingRules.endDate, input.startDate),
-						lte(roomPricingRules.startDate, input.endDate),
-					),
-				);
-
-			if (existingRules.length > 0) {
-				const overlappingRule = existingRules[0];
-				throw new Error(
-					`Pricing rule overlaps with existing rule "${overlappingRule.name}" (${overlappingRule.startDate} - ${overlappingRule.endDate})`,
-				);
-			}
-
-			const now = new Date();
-			const isActive = input.isActive ?? true;
-
-			const [newRule] = await db
-				.insert(roomPricingRules)
-				.values({
-					roomId: input.roomId,
-					name: input.name,
-					ruleType: input.ruleType,
-					value: input.value,
-					startDate: input.startDate,
-					endDate: input.endDate,
-					isActive,
-					activatedAt: isActive ? now : null,
-					createdAt: now,
-					updatedAt: now,
-				})
-				.returning();
-
-			return newRule;
+				.where(eq(roomPricingRules.id, id));
+			return created;
 		}),
 
-	// Update an existing pricing rule (admin only)
+	/**
+	 * Updates a rule. If the result is active (including reactivation), it is
+	 * re-checked against the room's other active rules in the same statement.
+	 */
 	updatePricingRule: adminProcedure
 		.input(updatePricingRuleSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = ctx.db;
+			const { id, ...changes } = input;
+			const [current] = await ctx.db
+				.select()
+				.from(roomPricingRules)
+				.where(eq(roomPricingRules.id, id));
+			if (!current) {
+				throw new TRPCError({
+					code: 'NOT_FOUND',
+					message: 'Pricing rule not found',
+				});
+			}
+			const startDate = changes.startDate ?? current.startDate;
+			const endDate = changes.endDate ?? current.endDate;
+			if (startDate > endDate) {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: 'End date must be on or after the start date',
+				});
+			}
+			if (changes.endDate && changes.endDate !== current.endDate) {
+				rejectPastDate(changes.endDate, 'End date');
+			}
+			const active = changes.isActive ?? current.isActive ?? false;
+			const reactivated = active && !current.isActive;
+			const now = new Date();
 
-			const { id, ...updateData } = input;
-
-			// If date range is being updated, check for overlaps
-			if (updateData.startDate || updateData.endDate) {
-				// Get the current rule to get roomId and current date range
-				const currentRule = await db
-					.select()
-					.from(roomPricingRules)
-					.where(eq(roomPricingRules.id, id))
-					.limit(1);
-
-				if (!currentRule[0]) {
-					throw new Error('Pricing rule not found');
-				}
-
-				const startDate = updateData.startDate || currentRule[0].startDate;
-				const endDate = updateData.endDate || currentRule[0].endDate;
-
-				// Validate that dates are not in the past
-				const today = new Date();
-				today.setHours(0, 0, 0, 0); // Reset time to start of day
-				const startDateObj = new Date(startDate);
-				const endDateObj = new Date(endDate);
-
-				if (startDateObj < today) {
-					throw new Error('Start date cannot be in the past');
-				}
-
-				if (endDateObj < today) {
-					throw new Error('End date cannot be in the past');
-				}
-
-				// Check for overlapping rules (excluding the current rule being updated)
-				const existingRules = await db
-					.select()
-					.from(roomPricingRules)
+			const other = alias(roomPricingRules, 'other');
+			const noOverlap = notExists(
+				ctx.db
+					.select({ one: sql`1` })
+					.from(other)
 					.where(
 						and(
-							eq(roomPricingRules.roomId, currentRule[0].roomId),
-							eq(roomPricingRules.isActive, true),
-							// Check for date range overlap
-							gte(roomPricingRules.endDate, startDate),
-							lte(roomPricingRules.startDate, endDate),
+							eq(other.roomId, current.roomId),
+							ne(other.id, id),
+							eq(other.isActive, true),
+							lte(other.startDate, endDate),
+							gte(other.endDate, startDate),
 						),
-					);
+					),
+			);
 
-				// Filter out the current rule from the results
-				const overlappingRules = existingRules.filter((rule) => rule.id !== id);
-
-				if (overlappingRules.length > 0) {
-					const overlappingRule = overlappingRules[0];
-					throw new Error(
-						`Pricing rule overlaps with existing rule "${overlappingRule.name}" (${overlappingRule.startDate} - ${overlappingRule.endDate})`,
-					);
-				}
-			}
-
-			const updatedRule = {
-				...updateData,
-				updatedAt: new Date(),
-			};
-
-			const result = await db
+			const [updated] = await ctx.db
 				.update(roomPricingRules)
-				.set(updatedRule)
-				.where(eq(roomPricingRules.id, id))
+				.set({
+					...changes,
+					isActive: active,
+					activatedAt: reactivated ? now : current.activatedAt,
+					updatedAt: now,
+				})
+				.where(and(eq(roomPricingRules.id, id), active ? noOverlap : undefined))
 				.returning();
 
-			if (!result[0]) {
-				throw new Error('Pricing rule not found');
+			if (!updated) {
+				const overlapping = await findOverlappingRule(
+					ctx.db,
+					current.roomId,
+					startDate,
+					endDate,
+					id,
+				);
+				if (overlapping) throw overlapError(overlapping);
+				throw new TRPCError({
+					code: 'NOT_FOUND',
+					message: 'Pricing rule not found',
+				});
 			}
-
-			return result[0];
+			return updated;
 		}),
 
-	// Delete a pricing rule (admin only)
 	deletePricingRule: adminProcedure
 		.input(deletePricingRuleSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = ctx.db;
-
-			const result = await db
+			const [deleted] = await ctx.db
 				.delete(roomPricingRules)
 				.where(eq(roomPricingRules.id, input.id))
 				.returning();
-
-			if (!result[0]) {
-				throw new Error('Pricing rule not found');
-			}
-
-			return { success: true, deletedRule: result[0] };
-		}),
-
-	// Calculate room pricing with dynamic rules (for frontend calendar)
-	calculatePricing: publicProcedure
-		.input(
-			z.object({
-				roomId: z.string(),
-				checkInDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-				checkOutDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-				guestCount: z.number().min(1).default(2),
-			}),
-		)
-		.query(async ({ ctx, input }) => {
-			const db = ctx.db;
-
-			// Get room data
-			const roomResult = await db
-				.select()
-				.from(room)
-				.where(eq(room.id, input.roomId));
-
-			if (!roomResult[0]) {
-				throw new Error('Room not found');
-			}
-
-			const roomData = roomResult[0];
-
-			// Calculate number of nights
-			const checkIn = new Date(input.checkInDate);
-			const checkOut = new Date(input.checkOutDate);
-			const numberOfNights = Math.ceil(
-				(checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24),
-			);
-
-			if (numberOfNights <= 0) {
-				throw new Error('Invalid date range');
-			}
-
-			// Start with base pricing
-			let baseAmount = roomData.basePrice * numberOfNights;
-
-			// Get applicable pricing rules - get all rules that might overlap
-			const pricingRules = await db
-				.select()
-				.from(roomPricingRules)
-				.where(
-					and(
-						eq(roomPricingRules.roomId, input.roomId),
-						eq(roomPricingRules.isActive, true),
-					),
-				);
-
-			const appliedRules: Array<{
-				id: string;
-				name: string;
-				ruleType: string;
-				value: number;
-				appliedAmount: number;
-			}> = [];
-
-			// Calculate which nights are affected by each rule
-			const stayNights: string[] = [];
-			const currentDate = new Date(input.checkInDate);
-			const checkOutDate = new Date(input.checkOutDate);
-
-			// Generate array of stay nights (checkIn to checkOut, exclusive of checkOut)
-			while (currentDate < checkOutDate) {
-				stayNights.push(currentDate.toISOString().split('T')[0]);
-				currentDate.setDate(currentDate.getDate() + 1);
-			}
-
-			// Apply pricing rules only for nights that fall within rule periods
-			for (const rule of pricingRules) {
-				// Find which stay nights fall within this rule's date range
-				// Rule end date is EXCLUSIVE (just like checkout dates)
-				const affectedNights = stayNights.filter((night) => {
-					return night >= rule.startDate && night < rule.endDate;
+			if (!deleted) {
+				throw new TRPCError({
+					code: 'NOT_FOUND',
+					message: 'Pricing rule not found',
 				});
-
-				if (affectedNights.length === 0) {
-					// No nights affected by this rule
-					continue;
-				}
-
-				let appliedAmount = 0;
-
-				if (rule.ruleType === 'surcharge_rate') {
-					// Percentage surcharge on base price for affected nights only
-					const affectedBaseAmount = roomData.basePrice * affectedNights.length;
-					appliedAmount = affectedBaseAmount * rule.value;
-					baseAmount += appliedAmount;
-				} else if (rule.ruleType === 'fixed_amount') {
-					// Fixed amount per affected night
-					appliedAmount = rule.value * affectedNights.length;
-					baseAmount += appliedAmount;
-				} else if (rule.ruleType === 'absolute_price') {
-					// Override with absolute price for affected nights only
-					const originalAffectedAmount =
-						roomData.basePrice * affectedNights.length;
-					const newAffectedAmount = rule.value * affectedNights.length;
-					appliedAmount = newAffectedAmount - originalAffectedAmount;
-					baseAmount = baseAmount - originalAffectedAmount + newAffectedAmount;
-				}
-
-				if (appliedAmount !== 0) {
-					appliedRules.push({
-						id: rule.id,
-						name: rule.name,
-						ruleType: rule.ruleType,
-						value: rule.value,
-						appliedAmount,
-					});
-				}
 			}
-
-			// For the calendar component, we only return the room rate (no fees/taxes)
-			// Fees and taxes will be calculated later in the booking flow
-			return {
-				baseAmount: baseAmount, // This includes base price + pricing rules
-				numberOfNights,
-				appliedRules,
-				roomBasePrice: roomData.basePrice,
-			};
+			return { success: true, deletedRule: deleted };
 		}),
 
-	// Room blocking procedures (admin only)
+	// --- Blocked periods (admin; inclusive dates) ------------------------------
+
 	getBlockedPeriods: adminProcedure
 		.input(getBlockedPeriodsSchema)
 		.query(async ({ ctx, input }) => {
-			const db = ctx.db;
-
-			// Build query conditions
 			const conditions = [];
-
-			// Filter by room if provided
 			if (input.roomId) {
 				conditions.push(eq(roomBlockedPeriods.roomId, input.roomId));
 			}
-
-			// Filter by date range if provided
 			if (input.startDate) {
-				conditions.push(lte(roomBlockedPeriods.startDate, input.startDate));
+				conditions.push(gte(roomBlockedPeriods.endDate, input.startDate));
 			}
-
 			if (input.endDate) {
-				conditions.push(gte(roomBlockedPeriods.endDate, input.endDate));
+				conditions.push(lte(roomBlockedPeriods.startDate, input.endDate));
 			}
-
-			// Build the query
-			const baseQuery = db.select().from(roomBlockedPeriods);
-			const query =
-				conditions.length > 0 ? baseQuery.where(and(...conditions)) : baseQuery;
-
-			const result = await query
-				.limit(input.limit)
-				.offset(input.offset)
-				.orderBy(roomBlockedPeriods.startDate);
-
-			return result;
-		}),
-
-	getBlockedPeriod: adminProcedure
-		.input(getBlockedPeriodSchema)
-		.query(async ({ ctx, input }) => {
-			const db = ctx.db;
-
-			const result = await db
+			return ctx.db
 				.select()
 				.from(roomBlockedPeriods)
-				.where(eq(roomBlockedPeriods.id, input.id))
-				.limit(1);
-
-			if (result.length === 0) {
-				throw new Error('Blocked period not found');
-			}
-
-			return result[0];
+				.where(conditions.length > 0 ? and(...conditions) : undefined)
+				.orderBy(asc(roomBlockedPeriods.startDate))
+				.limit(input.limit)
+				.offset(input.offset);
 		}),
 
+	/**
+	 * Blocks dates. Rejected with CONFLICT (data.conflicts) if the block would
+	 * cover a confirmed booking, a live hold or an imported reservation, or
+	 * overlap another block.
+	 */
 	createBlockedPeriod: adminProcedure
 		.input(createBlockedPeriodSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = ctx.db;
-
-			// Check if room exists
-			const roomExists = await db
-				.select({ id: room.id })
-				.from(room)
-				.where(eq(room.id, input.roomId))
-				.limit(1);
-
-			if (roomExists.length === 0) {
-				throw new Error('Room not found');
-			}
-
-			// Check for overlapping blocked periods
-			const overlapping = await db
-				.select()
-				.from(roomBlockedPeriods)
-				.where(
-					and(
-						eq(roomBlockedPeriods.roomId, input.roomId),
-						lte(roomBlockedPeriods.startDate, input.endDate),
-						gte(roomBlockedPeriods.endDate, input.startDate),
-					),
-				);
-
-			if (overlapping.length > 0) {
-				throw new Error(
-					'This date range overlaps with an existing blocked period',
-				);
-			}
-
-			const [newPeriod] = await db
+			await requireRoom(ctx.db, input.roomId);
+			await assertBlockAllowed(
+				ctx.db,
+				input.roomId,
+				input.startDate,
+				input.endDate,
+			);
+			const [created] = await ctx.db
 				.insert(roomBlockedPeriods)
 				.values({
 					roomId: input.roomId,
@@ -890,131 +452,119 @@ export const roomsRouter = createTRPCRouter({
 					endDate: input.endDate,
 					reason: input.reason,
 					notes: input.notes || null,
-					createdAt: new Date(),
 				})
 				.returning();
-
-			return newPeriod;
+			return created;
 		}),
 
 	updateBlockedPeriod: adminProcedure
 		.input(updateBlockedPeriodSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = ctx.db;
-
-			// Check if blocked period exists
-			const existing = await db
+			const [existing] = await ctx.db
 				.select()
 				.from(roomBlockedPeriods)
-				.where(eq(roomBlockedPeriods.id, input.id))
-				.limit(1);
-
-			if (existing.length === 0) {
-				throw new Error('Blocked period not found');
-			}
-
-			const existingPeriod = existing[0];
-
-			// If dates are being updated, check for overlaps with other periods
-			if (input.startDate || input.endDate) {
-				const startDate = input.startDate || existingPeriod.startDate;
-				const endDate = input.endDate || existingPeriod.endDate;
-
-				const overlapping = await db
-					.select()
-					.from(roomBlockedPeriods)
-					.where(
-						and(
-							eq(roomBlockedPeriods.roomId, existingPeriod.roomId),
-							lte(roomBlockedPeriods.startDate, endDate),
-							gte(roomBlockedPeriods.endDate, startDate),
-							// Exclude the current period from overlap check
-							eq(roomBlockedPeriods.id, input.id),
-						),
-					);
-
-				if (overlapping.length > 1) {
-					// More than 1 means there are overlaps besides itself
-					throw new Error(
-						'This date range overlaps with an existing blocked period',
-					);
-				}
-			}
-
-			// Build update object with only provided fields
-			const updateData: Partial<typeof existingPeriod> = {};
-			if (input.startDate) updateData.startDate = input.startDate;
-			if (input.endDate) updateData.endDate = input.endDate;
-			if (input.reason) updateData.reason = input.reason;
-			if (input.notes !== undefined) updateData.notes = input.notes || null;
-
-			await db
-				.update(roomBlockedPeriods)
-				.set(updateData)
 				.where(eq(roomBlockedPeriods.id, input.id));
-
-			// Return updated period
-			const updated = await db
-				.select()
-				.from(roomBlockedPeriods)
+			if (!existing) {
+				throw new TRPCError({
+					code: 'NOT_FOUND',
+					message: 'Blocked period not found',
+				});
+			}
+			const startDate = input.startDate ?? existing.startDate;
+			const endDate = input.endDate ?? existing.endDate;
+			if (startDate > endDate) {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: 'End date must be on or after the start date',
+				});
+			}
+			if (startDate !== existing.startDate || endDate !== existing.endDate) {
+				await assertBlockAllowed(
+					ctx.db,
+					existing.roomId,
+					startDate,
+					endDate,
+					existing.id,
+				);
+			}
+			const [updated] = await ctx.db
+				.update(roomBlockedPeriods)
+				.set({
+					startDate,
+					endDate,
+					...(input.reason ? { reason: input.reason } : {}),
+					...(input.notes !== undefined ? { notes: input.notes || null } : {}),
+				})
 				.where(eq(roomBlockedPeriods.id, input.id))
-				.limit(1);
-
-			return updated[0];
+				.returning();
+			return updated;
 		}),
 
 	deleteBlockedPeriod: adminProcedure
 		.input(deleteBlockedPeriodSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = ctx.db;
-
-			// Check if blocked period exists
-			const existing = await db
-				.select()
-				.from(roomBlockedPeriods)
-				.where(eq(roomBlockedPeriods.id, input.id))
-				.limit(1);
-
-			if (existing.length === 0) {
-				throw new Error('Blocked period not found');
-			}
-
-			await db
+			const [deleted] = await ctx.db
 				.delete(roomBlockedPeriods)
-				.where(eq(roomBlockedPeriods.id, input.id));
-
-			return { success: true, id: input.id };
-		}),
-
-	// Generate iCal feed for a room
-	generateIcal: publicProcedure
-		.input(
-			z.object({
-				roomId: z.string(),
-			}),
-		)
-		.query(async ({ ctx, input }) => {
-			const icalService = new iCalService(ctx.env.DB);
-
-			// Check if room exists
-			const db = ctx.db;
-			const roomExists = await db
-				.select()
-				.from(room)
-				.where(eq(room.id, input.roomId))
-				.limit(1);
-
-			if (roomExists.length === 0) {
-				throw new Error('Room not found');
+				.where(eq(roomBlockedPeriods.id, input.id))
+				.returning({ id: roomBlockedPeriods.id });
+			if (!deleted) {
+				throw new TRPCError({
+					code: 'NOT_FOUND',
+					message: 'Blocked period not found',
+				});
 			}
-
-			const icalContent = await icalService.generateICalForRoom(input.roomId);
-
-			return {
-				roomId: input.roomId,
-				icalContent,
-				contentType: 'text/calendar',
-				filename: `room-${input.roomId}.ics`,
-			};
+			return { success: true, id: deleted.id };
 		}),
 });
+
+async function assertBlockAllowed(
+	db: Database,
+	roomId: string,
+	startDate: string,
+	endDate: string,
+	excludeBlockId?: string,
+) {
+	const conflicts = await findBlockConflicts(db, roomId, startDate, endDate);
+	if (conflicts.length > 0) {
+		throw new TRPCError({
+			code: 'CONFLICT',
+			message: `These dates overlap ${conflicts.length} existing reservation${conflicts.length === 1 ? '' : 's'}`,
+			cause: { conflicts },
+		});
+	}
+	const blocks = await db
+		.select()
+		.from(roomBlockedPeriods)
+		.where(
+			and(
+				eq(roomBlockedPeriods.roomId, roomId),
+				lte(roomBlockedPeriods.startDate, endDate),
+				gte(roomBlockedPeriods.endDate, startDate),
+				excludeBlockId ? ne(roomBlockedPeriods.id, excludeBlockId) : undefined,
+			),
+		);
+	const overlapping = blocks.find((b) =>
+		inclusiveRangesOverlap(
+			{ start: b.startDate, end: b.endDate },
+			{ start: startDate, end: endDate },
+		),
+	);
+	if (overlapping) {
+		throw new TRPCError({
+			code: 'CONFLICT',
+			message: `Overlaps the blocked period ${overlapping.startDate} to ${overlapping.endDate} (${overlapping.reason})`,
+			cause: {
+				conflicts: [
+					{
+						publicId: null,
+						confirmationId: null,
+						source: 'block',
+						checkIn: overlapping.startDate,
+						checkOut: overlapping.endDate,
+						status: 'blocked',
+					},
+				],
+			},
+		});
+	}
+}

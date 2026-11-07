@@ -45,7 +45,7 @@ describe('pricing rule overlap', () => {
 		).resolves.toBeTruthy();
 	});
 
-	it.fails('rejects an overlapping active rule on create with CONFLICT details', async () => {
+	it('rejects an overlapping active rule on create with CONFLICT details', async () => {
 		const existing = await insertPricingRule({
 			name: 'Existing',
 			startDate: '2030-06-08',
@@ -65,7 +65,7 @@ describe('pricing rule overlap', () => {
 		});
 	});
 
-	it.fails('rejects an overlapping active rule on update', async () => {
+	it('rejects an overlapping active rule on update', async () => {
 		await insertPricingRule({
 			name: 'Existing',
 			startDate: '2030-10-08',
@@ -86,7 +86,7 @@ describe('pricing rule overlap', () => {
 		expect(causeField(error, 'conflict')).toMatchObject({ name: 'Existing' });
 	});
 
-	it.fails('allows an overlapping rule while it is inactive', async () => {
+	it('allows an overlapping rule while it is inactive', async () => {
 		await insertPricingRule({
 			startDate: '2030-11-08',
 			endDate: '2030-11-10',
@@ -101,7 +101,7 @@ describe('pricing rule overlap', () => {
 		expect(inactive.isActive).toBe(false);
 	});
 
-	it.fails('rejects reactivating an overlapping rule', async () => {
+	it('rejects reactivating an overlapping rule', async () => {
 		await insertPricingRule({
 			name: 'Active',
 			startDate: '2031-01-08',
@@ -121,7 +121,7 @@ describe('pricing rule overlap', () => {
 		expect(causeField(error, 'conflict')).toMatchObject({ name: 'Active' });
 	});
 
-	it.fails('two concurrent overlapping creates: only one succeeds', async () => {
+	it('two concurrent overlapping creates: only one succeeds', async () => {
 		const results = await Promise.allSettled([
 			admin().rooms.createPricingRule(
 				ruleInput({
@@ -143,7 +143,7 @@ describe('pricing rule overlap', () => {
 		expect((rejected as PromiseRejectedResult).reason.code).toBe('CONFLICT');
 	});
 
-	it.fails('sets activatedAt when a rule is reactivated', async () => {
+	it('sets activatedAt when a rule is reactivated', async () => {
 		const rule = await insertPricingRule({
 			startDate: '2031-03-01',
 			endDate: '2031-03-02',
@@ -161,7 +161,7 @@ describe('pricing rule overlap', () => {
 describe('pricing per night (calendar and checkout)', () => {
 	// Rule Jun 8-10 (inclusive), stay Jun 10-12: night of the 10th at the
 	// rule price (150), night of the 11th at the base price (100).
-	it.fails('calendar prices each night independently', async () => {
+	it('calendar prices each night independently', async () => {
 		await insertPricingRule({
 			startDate: '2032-06-08',
 			endDate: '2032-06-10',
@@ -176,7 +176,7 @@ describe('pricing per night (calendar and checkout)', () => {
 		expect(pricing.baseAmount).toBe(250);
 	});
 
-	it.fails('checkout prices each night independently', async () => {
+	it('checkout prices each night independently', async () => {
 		await insertPricingRule({
 			startDate: '2032-07-08',
 			endDate: '2032-07-10',

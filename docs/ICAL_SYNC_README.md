@@ -1,210 +1,100 @@
-# iCal Calendar Sync System
+# iCal sync (import and export)
 
-This system provides bidirectional calendar synchronization between your booking platform and external platforms like Airbnb and Expedia to prevent double bookings.
+The site shares availability with Airbnb, Expedia, Vrbo, Booking.com and other
+platforms through iCal feeds, in both directions.
 
-## Components
+| Direction | What | Code |
+|---|---|---|
+| Import | Other platforms' reservations block dates here | `src/lib/ical-sync.ts`, `src/lib/ical-parse.ts` |
+| Export | Our bookings and blocks block dates on the platforms | `src/lib/ical-export.ts`, `src/lib/ical-generate.ts` |
 
-### 1. iCal Service (`src/lib/ical-service.ts`)
+Admin UI: **Admin → Property → (room) → Calendar Integrations**
+(`src/components/admin/RoomCalendarIntegration.tsx`). Admin API: the `ical`
+tRPC router (`src/integrations/trpc/ical.ts`). All of it is admin-only.
 
-- Parses external iCal feeds from platforms like Airbnb/Expedia
-- Generates your own iCal feed for external platforms to consume
-- Handles calendar synchronization and conflict detection
+## Import
 
-### 2. Availability API (`src/integrations/trpc/availability.ts`)
+### Feeds are data
 
-- TRPC endpoints for checking room availability
-- Sync external calendars on-demand
-- Get availability calendar data for admin dashboard
+Each room has any number of rows in `ical_feeds` (source, label, URL, active).
+Adding a platform is adding a feed in the admin UI, not a code change. Feed URLs
+contain the platform's secret and are only returned by admin procedures.
 
-### 3. HTTP Endpoints (`src/integrations/hono/config.ts`)
+### When feeds sync
 
-- `GET /api/rooms/:roomId/calendar.ics` - Serves iCal calendar file
-- `GET /api/rooms/slug/:roomSlug/calendar.ics` - Alternative endpoint using room slug
-- `GET /api/rooms/:roomId/calendar-info` - JSON endpoint with calendar metadata
-- `POST /api/admin/sync-calendars` - Manual sync trigger for admin
-- `GET /api/admin/sync-status` - Get sync status and history
+- Every 30 minutes (cron `*/30 * * * *`, all active feeds in parallel).
+- Before every PaymentIntent (`bookings.createPaymentIntent`): the room's
+  feeds, skipping any attempted in the last 2 minutes, 5-second timeout. Then
+  availability is checked again.
+- "Sync now" in the admin UI (`ical.syncRoom`, `ical.syncFeed`).
 
-### 4. Scheduled Tasks (`src/lib/scheduled-tasks.ts`)
+Evaluate a 5-minute cron at production go-live.
 
-- Automatic calendar synchronization every hour
-- Weekly cleanup of old sync logs
-- Comprehensive logging and error handling
+### One sync run (`syncFeed`)
 
-## Cron Schedules
+1. **Fetch** with a 10 s timeout and `If-None-Match` / `If-Modified-Since`. A
+   `304` only updates the feed's timestamps.
+2. **Validate.** The run is rejected, and stored events are left untouched,
+   when the response is not HTTP 200, is not a `VCALENDAR`, has no events
+   while the last run had some, or drops by more than half (from 4 or more).
+   The error is stored on the feed and the admins get one email when a healthy
+   feed starts failing (not on every retry). If a drop is real, use
+   **Apply anyway** (`force: true`).
+3. **Parse** (RFC 5545): line unfolding, CRLF/LF, `VALUE=DATE`, `TZID` and
+   UTC date-times (converted to property dates in `America/Chicago`),
+   `DURATION`, no `DTEND` (one day). Skipped: `STATUS:CANCELLED`, events
+   without a `UID`, and our own exported events (`booking-…@irishette`,
+   `block-…@irishette`). Host blocks ("Not available", "Blocked", ...) are kept
+   as `unavailable`.
+4. **Diff** by `(feed, UID)` against `external_events`, ignoring events that
+   already ended, and apply inserts, updates, deletes, the run log and the
+   change log in **one D1 batch** (a transaction).
+5. **Conflicts:** new or changed events that overlap a confirmed booking or a
+   live hold are logged and emailed to the admins.
 
-The system uses Cloudflare Workers' scheduled events with these cron expressions:
+Imported events have an **exclusive** end date (iCal `DTEND`).
 
-- `0 * * * *` - Every hour: Sync external calendars
-- `0 2 * * 0` - Weekly on Sunday at 2 AM: Cleanup old logs
+### Sync history
 
-### Cron Format Reference
+- `ical_sync_log`: one row per run (trigger, status, HTTP status, events in
+  feed, added/updated/removed/conflicts, error, duration).
+- `ical_sync_changes`: what each run changed (event dates before/after) and,
+  for conflicts, the booking.
+- Both are kept 30 days (cron `15 9 * * *`). Admin: "Recent syncs" in the room
+  page, `ical.getSyncLogs` (newest first) and `ical.getSyncChanges`.
 
-```
-* * * * *
-| | | | |
-| | | | └── Day of week (0-7, Sunday = 0 or 7)
-| | | └──── Month (1-12)
-| | └────── Day of month (1-31)
-| └──────── Hour (0-23)
-└────────── Minute (0-59)
-```
+## Export
 
-## Usage
+URL: `/api/ical/<room publicId>/<token>.ics`. The token is a per-room secret
+(`room.ical_export_token`). A wrong token or an unknown room is a plain `404`;
+tokens are compared in constant time.
 
-## Usage
+Contents: only **confirmed bookings on this site** and **admin blocks**, from
+30 days ago to 2 years ahead, each as an all-day `SUMMARY:Reserved` event (no
+names, notes or confirmation ids). Imported events are never exported. Booking
+`DTEND` is the check-out date; block `DTEND` is the day after the block's last
+day. Headers: `text/calendar; charset=utf-8`, `Cache-Control: private,
+max-age=300`.
 
-### Admin Dashboard Management
+Admin: copy the URL from the room page. **Regenerate URL** creates a new token;
+the old URL stops working, so update it on every platform.
 
-iCal URLs are managed through the admin dashboard via TRPC endpoints:
+Before connecting a platform: validate the feed with an iCal validator and
+test-import it into Google Calendar. After connecting, check that a direct
+booking appears after the platform's next pull (Airbnb pulls about every 3
+hours).
 
-#### **Room iCal Configuration Endpoints:**
+## Date rules
 
-1. **Get iCal Configuration**:
+Shared by the server and the booking calendar (`src/lib/date-range.ts`):
 
-```typescript
-const config = await trpc.rooms.getIcalConfig.query({
-  roomId: 'room_123',
-})
-```
+| Rule | Condition |
+|---|---|
+| Stay vs booking or live hold | `in < b.out && out > b.in` (same-day turnover allowed) |
+| Stay vs imported event | `in < e.end && out > e.start` (end exclusive) |
+| Stay vs admin block | `in <= blk.end && out > blk.start` (block inclusive) |
 
-2. **Update iCal URLs**:
+## Tests
 
-```typescript
-await trpc.rooms.updateIcalUrls.mutate({
-  roomId: 'room_123',
-  airbnbIcalUrl: 'https://airbnb.com/calendar/ical/property123.ics',
-  expediaIcalUrl: 'https://expedia.com/calendar/ical/property123.ics',
-})
-```
-
-3. **Test iCal URL**:
-
-```typescript
-const test = await trpc.rooms.testIcalUrl.mutate({
-  url: 'https://airbnb.com/calendar/ical/property123.ics',
-})
-```
-
-#### **Admin Dashboard Features:**
-
-- ✅ **URL Management**: Add/edit/remove iCal URLs per room
-- ✅ **URL Testing**: Validate URLs before saving
-- ✅ **Sync Status**: See last sync times and status
-- ✅ **Export URLs**: Get calendar feed URLs for sharing
-- ✅ **Configuration Overview**: See which platforms are configured
-
-### Development Testing
-
-For testing during development, you can temporarily set iCal URLs through the admin interface to point to test calendars (like Google Calendar public feeds).
-
-## Calendar Structure Options
-
-The system supports both **property-level** and **room-level** calendar configurations:
-
-### **Option 1: Property-Level Calendars (Most Common)**
-
-- **1 Airbnb calendar** for the entire property
-- **1 Expedia calendar** for the entire property
-- All rooms' bookings appear in the same calendar
-- Room identification through event titles/descriptions
-- Simpler setup and management
-
-### **Option 2: Room-Level Calendars**
-
-- **Each room has its own calendar URL** on each platform
-- More granular control per room
-- Requires separate calendar setup for each room
-- More complex but offers better room-specific management
-
-### Setting up External Calendar URLs
-
-**Production URLs are managed through the admin dashboard:**
-
-- No more manual database updates
-- URL validation before saving
-- Easy updates when platform URLs change
-
-### Providing Your Calendar to External PlatformsGive these URLs to external platforms:
-
-- **By Room ID**: `https://yourdomain.com/api/rooms/:roomId/calendar.ics`
-- **By Room Slug**: `https://yourdomain.com/api/rooms/slug/:roomSlug/calendar.ics`
-
-### Manual Sync
-
-Use TRPC endpoints or HTTP API:
-
-```typescript
-// Sync specific room and platform
-const result = await trpc.availability.syncCalendar.mutate({
-  roomId: 'room_123',
-  platform: 'airbnb',
-})
-
-// Sync all calendars
-const result = await trpc.availability.syncAllCalendars.mutate()
-```
-
-Or use HTTP API:
-
-```bash
-curl -X POST https://yourdomain.com/api/admin/sync-calendars
-```
-
-### Checking Availability
-
-```typescript
-// Check specific room availability
-const availability = await trpc.availability.checkRoom.query({
-  roomId: 'room_123',
-  startDate: '2025-08-15',
-  endDate: '2025-08-20',
-})
-
-// Bulk check multiple rooms
-const bulkAvailability = await trpc.availability.checkBulk.query({
-  roomIds: ['room_123', 'room_456'], // optional
-  startDate: '2025-08-15',
-  endDate: '2025-08-20',
-})
-```
-
-## Database Schema
-
-The system uses these tables:
-
-- `room` - Room information with iCal URLs and sync timestamps
-- `room_availability` - Daily availability records with external booking info
-- `ical_sync_log` - Sync operation logs for monitoring
-- `bookings` - Your internal bookings
-
-## Monitoring
-
-- Check sync logs: `trpc.availability.getSyncLogs.query()`
-- Get sync status: `GET /api/admin/sync-status`
-- View recent sync summaries stored in Cloudflare KV
-
-## Deployment
-
-The scheduled tasks are automatically deployed with your Cloudflare Worker. The cron triggers are configured in `wrangler.toml`:
-
-```toml
-[triggers]
-crons = [
-  "0 * * * *",    # Every hour - sync external calendars
-  "0 2 * * 0"     # Weekly on Sunday at 2 AM - cleanup old logs
-]
-```
-
-## Error Handling
-
-- All sync operations include comprehensive error handling
-- Failed syncs are logged to `ical_sync_log` table
-- Sync continues for other rooms even if one fails
-- Rate limiting with delays between API calls
-
-## Security Considerations
-
-- iCal endpoints are public (as required by external platforms)
-- Admin endpoints can be protected with authentication
-- External API calls include proper user agents
-- Caching headers prevent excessive requests
+`test/unit/ical-parse.test.ts`, `test/unit/ical-generate.test.ts`,
+`test/workers/ical-sync.test.ts`, `test/workers/ical-route.test.ts`.

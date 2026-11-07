@@ -7,7 +7,7 @@ import { defineConfig } from 'vitest/config';
 // Projects:
 // - unit:    pure modules in Node (test/unit/**). TZ=UTC.
 // - workers: tRPC procedures, webhooks, cron and the iCal route inside workerd
-//            with a local D1/KV (test/workers/**).
+//            with a local D1 (test/workers/**).
 //
 // The workers project declares every binding explicitly with test-only values.
 // It does not read cloudflare.config.ts (`config` is unset) or any .env file,
@@ -42,7 +42,6 @@ export default defineConfig({
 							compatibilityDate: '2026-11-01',
 							compatibilityFlags: ['nodejs_compat'],
 							d1Databases: { DB: 'irishette-test' },
-							kvNamespaces: { KV_ICAL_SYNC_LOG: 'irishette-test-kv' },
 							bindings: {
 								TEST_MIGRATIONS: await readD1Migrations('./drizzle'),
 								// Test-only values. Never real keys.

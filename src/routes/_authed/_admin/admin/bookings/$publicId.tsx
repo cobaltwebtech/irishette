@@ -4,6 +4,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { toast } from 'sonner';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { BookingInternalNotes } from '@/components/admin/BookingInternalNotes';
+import { CancelBookingButton } from '@/components/booking/CancelBookingButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -378,14 +379,12 @@ function AdminBookingDetailPage() {
 								{isResendingEmail ? 'Sending...' : 'Resend Confirmation Email'}
 							</span>
 						</Button>
-						<Button variant="destructive" className="w-full">
-							<Icon icon="tabler:circle-x" className="size-6" />
-							Cancel Booking
-						</Button>
-						<p className="bg-destructive uppercase">
-							The cancellation policy and process needs to be implemented.
-							Button does not work yet.
-						</p>
+						{booking.booking.status !== 'cancelled' && (
+							<CancelBookingButton
+								publicId={booking.booking.publicId}
+								mode="admin"
+							/>
+						)}
 					</CardContent>
 				</Card>
 

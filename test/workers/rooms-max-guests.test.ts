@@ -27,7 +27,7 @@ describe('room max guests', () => {
 		expect(error.code).toBe('FORBIDDEN');
 	});
 
-	it.fails('rejects a booking above the room maximum', async () => {
+	it('rejects a booking above the room maximum', async () => {
 		await caller('admin').rooms.update({ id: TEXAS.id, maxGuests: 2 });
 		const error = await trpcError(
 			caller('user').bookings.createBooking(

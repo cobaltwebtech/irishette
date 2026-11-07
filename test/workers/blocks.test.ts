@@ -44,7 +44,7 @@ describe('creating a block over existing stays', () => {
 		).resolves.toBeTruthy();
 	});
 
-	it.fails('rejects a block over a confirmed booking', async () => {
+	it('rejects a block over a confirmed booking', async () => {
 		const booking = await insertBooking({
 			checkInDate: '2030-05-10',
 			checkOutDate: '2030-05-12',
@@ -64,7 +64,7 @@ describe('creating a block over existing stays', () => {
 		]);
 	});
 
-	it.fails('rejects a block over a non-expired pending booking', async () => {
+	it('rejects a block over a non-expired pending booking', async () => {
 		await insertBooking({
 			checkInDate: '2030-06-20',
 			checkOutDate: '2030-06-22',
@@ -94,7 +94,7 @@ describe('creating a block over existing stays', () => {
 		).resolves.toBeTruthy();
 	});
 
-	it.fails('rejects a block over an imported external event', async () => {
+	it('rejects a block over an imported external event', async () => {
 		const feed = await insertFeed();
 		await insertExternalEvent({
 			feedId: feed.id,
@@ -110,7 +110,7 @@ describe('creating a block over existing stays', () => {
 		]);
 	});
 
-	it.fails('rejects moving a block over a booking (update)', async () => {
+	it('rejects moving a block over a booking (update)', async () => {
 		await insertBooking({
 			checkInDate: '2030-09-10',
 			checkOutDate: '2030-09-12',
@@ -132,7 +132,7 @@ describe('creating a block over existing stays', () => {
 describe('booking around a block (block Jun 8-10)', () => {
 	const guest = () => caller('user');
 
-	it.fails('rejects check-in on the block’s last day', async () => {
+	it('rejects check-in on the block’s last day', async () => {
 		await insertBlock({ startDate: '2031-06-08', endDate: '2031-06-10' });
 		const error = await trpcError(
 			guest().bookings.createBooking(
@@ -160,7 +160,7 @@ describe('booking around a block (block Jun 8-10)', () => {
 		).resolves.toMatchObject({ success: true });
 	});
 
-	it.fails('rejects a stay that runs into the block (Jun 7-9)', async () => {
+	it('rejects a stay that runs into the block (Jun 7-9)', async () => {
 		await insertBlock({ startDate: '2031-09-08', endDate: '2031-09-10' });
 		const error = await trpcError(
 			guest().bookings.createBooking(
@@ -170,7 +170,7 @@ describe('booking around a block (block Jun 8-10)', () => {
 		expect(error.code).toBe('CONFLICT');
 	});
 
-	it.fails('rejects a one-night stay inside the block', async () => {
+	it('rejects a one-night stay inside the block', async () => {
 		await insertBlock({ startDate: '2031-10-08', endDate: '2031-10-10' });
 		const error = await trpcError(
 			guest().bookings.createBooking(

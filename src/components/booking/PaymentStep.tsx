@@ -8,6 +8,7 @@ import {
 import { loadStripe, type Stripe } from '@stripe/stripe-js';
 import { useMutation } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
+import { isTRPCClientError } from '@trpc/client';
 import { useLenis } from 'lenis/react';
 import { useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
@@ -77,27 +78,40 @@ function PaymentForm() {
 				if (!booking.bookingId) {
 					throw new Error('No booking ID found');
 				}
-				await confirmPaymentMutation.mutateAsync({
+				const confirmed = await confirmPaymentMutation.mutateAsync({
 					bookingId: booking.bookingId,
 					paymentIntentId: paymentIntent.id,
 				});
 
-				// Navigate to confirmation page with the booking's public id
+				// Navigate to the confirmation page. Drafts saved before public ids
+				// existed have no bookingPublicId; the server returns it.
 				toast.success('Payment successful!');
-				if (booking.bookingPublicId) {
+				const publicId = booking.bookingPublicId ?? confirmed.publicId;
+				if (publicId) {
 					navigate({
 						to: '/booking/confirmation/$publicId',
-						params: { publicId: booking.bookingPublicId },
+						params: { publicId },
 						search: { step: undefined },
 					});
+				} else {
+					navigate({ to: '/account' });
 				}
 			}
 		} catch (error) {
 			console.error('Payment error:', error);
+			// CONFLICT: the dates were taken meanwhile and the payment was
+			// refunded automatically; the server message explains it.
+			const refunded =
+				isTRPCClientError(error) && error.data?.code === 'CONFLICT';
 			const errorMsg =
 				error instanceof Error ? error.message : 'Payment failed';
 			setErrorMessage(errorMsg);
-			toast.error('Payment processing failed');
+			if (refunded) {
+				toast.error(errorMsg, { duration: 10_000 });
+				booking.actions.reset();
+			} else {
+				toast.error('Payment processing failed');
+			}
 		} finally {
 			setIsProcessing(false);
 		}
@@ -273,7 +287,12 @@ export function PaymentStep() {
 				setStripePublishableKey(result.publishableKey);
 			} catch (error) {
 				console.error('Failed to initialize payment:', error);
-				toast.error('Failed to initialize payment');
+				toast.error(
+					isTRPCClientError(error) && error.data?.code === 'CONFLICT'
+						? error.message
+						: 'Failed to initialize payment',
+					{ duration: 6000 },
+				);
 				booking.actions.setStep('details');
 			} finally {
 				setIsLoading(false);

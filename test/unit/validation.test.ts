@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { publicIdSchema } from '@/lib/ids';
 import {
+	confirmPaymentSchema,
 	createBookingSchema,
-	updateBookingSchema,
 } from '@/lib/payment-validation';
 import { redirectSearchParam } from '@/lib/redirect';
 import {
@@ -30,8 +30,7 @@ describe('pricing rule schemas', () => {
 		expect(result.success).toBe(true);
 	});
 
-	// Phase 7.3: create/update must reject end < start.
-	it.fails('rejects end before start on create', () => {
+	it('rejects end before start on create', () => {
 		const result = createPricingRuleSchema.safeParse({
 			...rule,
 			startDate: '2030-06-10',
@@ -40,7 +39,7 @@ describe('pricing rule schemas', () => {
 		expect(result.success).toBe(false);
 	});
 
-	it.fails('rejects end before start on update when both are given', () => {
+	it('rejects end before start on update when both are given', () => {
 		const result = updatePricingRuleSchema.safeParse({
 			id: 'rule-1',
 			startDate: '2030-06-10',
@@ -74,8 +73,7 @@ describe('createBookingSchema', () => {
 		).toBe(false);
 	});
 
-	// Phase 7.2: check-out must be after check-in.
-	it.fails('requires check-out after check-in', () => {
+	it('requires check-out after check-in', () => {
 		expect(
 			createBookingSchema.safeParse({
 				...booking,
@@ -86,14 +84,25 @@ describe('createBookingSchema', () => {
 	});
 });
 
-describe('updateBookingSchema', () => {
-	// Phase 7.2 (critical): users must not be able to set `status`.
-	it.fails('does not accept a status', () => {
-		const parsed = updateBookingSchema.parse({
-			bookingId: 'b1',
-			status: 'confirmed',
-		});
-		expect(parsed).not.toHaveProperty('status');
+describe('booking inputs', () => {
+	it('rejects impossible dates', () => {
+		expect(
+			createBookingSchema.safeParse({ ...booking, checkInDate: '2030-02-30' })
+				.success,
+		).toBe(false);
+	});
+
+	it('requires a Stripe PaymentIntent id', () => {
+		expect(
+			confirmPaymentSchema.safeParse({
+				bookingId: 'b1',
+				paymentIntentId: 'pi_123',
+			}).success,
+		).toBe(true);
+		expect(
+			confirmPaymentSchema.safeParse({ bookingId: 'b1', paymentIntentId: 'x' })
+				.success,
+		).toBe(false);
 	});
 });
 

@@ -1,345 +1,149 @@
-import { and, eq, lte } from 'drizzle-orm';
-import { createDrizzle } from '@/db/drizzle-init';
-import { bookings, icalSyncLog, room } from '@/db/schema-export';
-import { getLegacyFeedConfig } from '@/lib/ical-feeds';
-import { iCalService } from '@/lib/ical-service';
+import { and, eq, inArray, lte } from 'drizzle-orm';
+import { bookings, icalSyncChanges, icalSyncLog } from '@/db/schema-export';
+import { confirmBookingPayment } from './booking-service';
+import { createServiceDeps, type ServiceDeps } from './deps';
+import { syncAllFeeds } from './ical-sync';
 
-interface ScheduledEnv {
-	DB: D1Database;
-	KV_ICAL_SYNC_LOG: KVNamespace;
+// Cron handlers. Keep CRON_SCHEDULES in sync with the triggers in
+// cloudflare.config.ts (test/workers/scheduled.test.ts checks this).
+
+/** Sync history kept for this many days. */
+export const SYNC_LOG_RETENTION_DAYS = 30;
+
+/** Import all active iCal feeds (every 30 minutes). */
+export async function scheduledCalendarSync(deps: ServiceDeps) {
+	const results = await syncAllFeeds(deps, { trigger: 'cron' });
+	const failed = results.filter(
+		(r) => r.status === 'error' || r.status === 'rejected',
+	);
+	console.log(
+		`iCal sync: ${results.length} feed(s), ${failed.length} failed, ` +
+			`${results.reduce((n, r) => n + r.added + r.updated + r.removed, 0)} change(s), ` +
+			`${results.reduce((n, r) => n + r.conflicts, 0)} conflict(s)`,
+	);
+	return results;
 }
 
 /**
- * Scheduled calendar sync function
- * Automatically syncs external calendars from Airbnb and expedia
+ * Deletes pending holds that expired. A hold whose PaymentIntent succeeded
+ * (the guest paid but confirmation never ran) is confirmed instead, or kept
+ * if that fails; a hold whose intent is still open has the intent cancelled.
  */
-export async function scheduledCalendarSync(env: ScheduledEnv) {
-	const db = createDrizzle(env.DB);
-	const icalService = new iCalService(env.DB);
+export async function scheduledBookingCleanup(
+	deps: ServiceDeps,
+	now = new Date(),
+) {
+	const { db, stripe } = deps;
+	const expired = await db
+		.select()
+		.from(bookings)
+		.where(and(eq(bookings.status, 'pending'), lte(bookings.expiresAt, now)));
 
-	console.log(
-		'🚀 Starting scheduled calendar sync...',
-		new Date().toISOString(),
-	);
-
-	try {
-		// Get all active rooms with external calendar URLs
-		const rooms = await db.select().from(room).where(eq(room.isActive, true));
-
-		console.log(`📋 Found ${rooms.length} active rooms to sync`);
-
-		let totalSynced = 0;
-		let totalErrors = 0;
-		const syncResults: Array<{
-			roomId: string;
-			roomSlug: string;
-			platform: 'airbnb' | 'expedia';
-			success: boolean;
-			bookingsProcessed?: number;
-			errorMessage?: string;
-		}> = [];
-
-		// Process each room
-		for (const roomData of rooms) {
-			console.log(`🏠 Processing room: ${roomData.slug} (${roomData.id})`);
-
-			// Feed URLs now live in ical_feeds (see src/lib/ical-feeds.ts).
-			const feeds = await getLegacyFeedConfig(db, roomData.id);
-
-			// Sync Airbnb calendar if URL exists
-			if (feeds.airbnbIcalUrl) {
-				console.log(`  📥 Syncing Airbnb calendar...`);
-				try {
-					const result = await icalService.syncExternalCalendar(
-						roomData.id,
-						'airbnb',
-					);
-
-					syncResults.push({
-						roomId: roomData.id,
-						roomSlug: roomData.slug,
-						platform: 'airbnb',
-						success: result.success,
-						bookingsProcessed: result.bookingsProcessed,
-						errorMessage: result.errorMessage,
-					});
-
-					if (result.success) {
-						totalSynced++;
-						console.log(
-							`  ✅ Airbnb sync successful: ${result.bookingsProcessed} bookings processed`,
-						);
-					} else {
-						totalErrors++;
-						// Truncate long error messages for logging
-						const truncatedError = result.errorMessage
-							? result.errorMessage.length > 200
-								? `${result.errorMessage.substring(0, 200)}... (truncated)`
-								: result.errorMessage
-							: 'Unknown error';
-						console.error(`  ❌ Airbnb sync failed: ${truncatedError}`);
-					}
-				} catch (error) {
-					totalErrors++;
-					const errorMsg =
-						error instanceof Error ? error.message : 'Unknown error';
-					// Truncate long error messages for logging
-					const truncatedError =
-						errorMsg.length > 200
-							? `${errorMsg.substring(0, 200)}... (truncated)`
-							: errorMsg;
-					console.error(`  ❌ Airbnb sync error: ${truncatedError}`);
-
-					syncResults.push({
-						roomId: roomData.id,
-						roomSlug: roomData.slug,
-						platform: 'airbnb',
-						success: false,
-						errorMessage: errorMsg,
-					});
-				}
-
-				// Small delay to avoid overwhelming external APIs
-				await new Promise((resolve) => setTimeout(resolve, 1000));
-			}
-
-			// Sync expedia calendar if URL exists
-			if (feeds.expediaIcalUrl) {
-				console.log(`  📥 Syncing Expedia calendar...`);
-				try {
-					const result = await icalService.syncExternalCalendar(
-						roomData.id,
-						'expedia',
-					);
-
-					syncResults.push({
-						roomId: roomData.id,
-						roomSlug: roomData.slug,
-						platform: 'expedia',
-						success: result.success,
-						bookingsProcessed: result.bookingsProcessed,
-						errorMessage: result.errorMessage,
-					});
-
-					if (result.success) {
-						totalSynced++;
-						console.log(
-							`  ✅ Expedia.com sync successful: ${result.bookingsProcessed} bookings processed`,
-						);
-					} else {
-						totalErrors++;
-						// Truncate long error messages for logging
-						const truncatedError = result.errorMessage
-							? result.errorMessage.length > 200
-								? `${result.errorMessage.substring(0, 200)}... (truncated)`
-								: result.errorMessage
-							: 'Unknown error';
-						console.error(`  ❌ Expedia.com sync failed: ${truncatedError}`);
-					}
-				} catch (error) {
-					totalErrors++;
-					const errorMsg =
-						error instanceof Error ? error.message : 'Unknown error';
-					// Truncate long error messages for logging
-					const truncatedError =
-						errorMsg.length > 200
-							? `${errorMsg.substring(0, 200)}... (truncated)`
-							: errorMsg;
-					console.error(`  ❌ Expedia.com sync error: ${truncatedError}`);
-
-					syncResults.push({
-						roomId: roomData.id,
-						roomSlug: roomData.slug,
-						platform: 'expedia',
-						success: false,
-						errorMessage: errorMsg,
-					});
-				}
-
-				// Small delay to avoid overwhelming external APIs
-				await new Promise((resolve) => setTimeout(resolve, 1000));
-			}
+	const deletable: string[] = [];
+	let kept = 0;
+	for (const booking of expired) {
+		if (!booking.stripePaymentIntentId) {
+			deletable.push(booking.id);
+			continue;
 		}
-
-		const summary = {
-			totalRooms: rooms.length,
-			totalSyncAttempts: syncResults.length,
-			totalSynced,
-			totalErrors,
-			timestamp: new Date().toISOString(),
-			// Only store summary of results, not full details (reduces size)
-			successfulSyncs: syncResults
-				.filter((r) => r.success)
-				.map((r) => ({ roomId: r.roomId, platform: r.platform })),
-			failedSyncs: syncResults
-				.filter((r) => !r.success)
-				.map((r) => ({
-					roomId: r.roomId,
-					platform: r.platform,
-					error:
-						r.errorMessage && r.errorMessage.length > 100
-							? `${r.errorMessage.substring(0, 100)}...`
-							: r.errorMessage,
-				})),
-		};
-
-		console.log(`🎉 Calendar sync completed:`);
-		console.log(`  📊 Total rooms: ${summary.totalRooms}`);
-		console.log(`  🔄 Sync attempts: ${summary.totalSyncAttempts}`);
-		console.log(`  ✅ Successful: ${summary.totalSynced}`);
-		console.log(`  ❌ Errors: ${summary.totalErrors}`);
-
-		// Store summary in KV for monitoring dashboard (optional)
-		// Add a small delay to avoid hitting rate limits after heavy DB operations
 		try {
-			await new Promise((resolve) => setTimeout(resolve, 100));
-			const key = `sync_summary:${Date.now()}`;
-			await env.KV_ICAL_SYNC_LOG.put(key, JSON.stringify(summary), {
-				expirationTtl: 86400 * 7, // Keep for 7 days
-			});
-			console.log(`📝 Sync summary stored in KV: ${key}`);
-		} catch (kvError) {
-			// KV storage is optional, don't let it break the sync
-			console.warn(
-				'⚠️ Failed to store sync summary in KV (non-critical):',
-				kvError instanceof Error ? kvError.message : 'Unknown error',
+			const intent = await stripe.paymentIntents.retrieve(
+				booking.stripePaymentIntentId,
+			);
+			if (intent.status === 'succeeded') {
+				kept++;
+				await confirmBookingPayment(deps, booking.id, intent.id, now).catch(
+					(error: unknown) =>
+						console.error(
+							`Paid hold ${booking.confirmationId} could not be confirmed:`,
+							error instanceof Error ? error.message : 'Unknown error',
+						),
+				);
+				continue;
+			}
+			if (intent.status === 'processing') {
+				kept++;
+				continue;
+			}
+			if (intent.status !== 'canceled') {
+				await stripe.paymentIntents.cancel(intent.id);
+			}
+			deletable.push(booking.id);
+		} catch (error) {
+			// Unknown payment state: keep the hold and try again tomorrow.
+			kept++;
+			console.error(
+				`Expired hold ${booking.confirmationId} kept (Stripe check failed):`,
+				error instanceof Error ? error.message : 'Unknown error',
 			);
 		}
-
-		return summary;
-	} catch (error) {
-		console.error('💥 Scheduled sync failed:', error);
-		throw error;
 	}
-}
 
-/**
- * Cleanup old sync logs (runs weekly)
- * Removes sync logs older than 30 days to prevent database bloat
- */
-export async function scheduledIcalLogCleanup(env: ScheduledEnv) {
-	console.log('🧹 Starting scheduled cleanup...', new Date().toISOString());
-
-	try {
-		const db = createDrizzle(env.DB);
-
-		// Calculate 30 days ago in milliseconds
-		const thirtyDaysAgo = new Date();
-		thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-		console.log(
-			`🗑️ Cleaning up sync logs older than: ${thirtyDaysAgo.toISOString()}`,
-		);
-
-		// First, count how many logs will be deleted (for logging)
-		const oldLogs = await db
-			.select({ id: icalSyncLog.id })
-			.from(icalSyncLog)
-			.where(lte(icalSyncLog.createdAt, thirtyDaysAgo));
-
-		const deletedCount = oldLogs.length;
-
-		// Delete sync logs older than 30 days
-		if (deletedCount > 0) {
-			await db
-				.delete(icalSyncLog)
-				.where(lte(icalSyncLog.createdAt, thirtyDaysAgo));
-		}
-
-		console.log(`✅ Cleanup completed: ${deletedCount} old sync logs removed`);
-
-		return {
-			cleaned: deletedCount,
-			cutoffDate: thirtyDaysAgo.toISOString(),
-			timestamp: new Date().toISOString(),
-		};
-	} catch (error) {
-		console.error('💥 Scheduled cleanup failed:', error);
-		throw error;
+	if (deletable.length > 0) {
+		await db
+			.delete(bookings)
+			.where(
+				and(inArray(bookings.id, deletable), eq(bookings.status, 'pending')),
+			);
 	}
-}
-
-/**
- * Cleanup expired pending bookings (runs hourly)
- * Removes pending bookings that have passed their expiration time (30 minutes)
- */
-export async function scheduledBookingCleanup(env: ScheduledEnv) {
 	console.log(
-		'🧹 Starting expired pending bookings cleanup...',
-		new Date().toISOString(),
+		`Expired holds: ${deletable.length} deleted, ${kept} kept (payment found or unknown)`,
 	);
-
-	try {
-		const db = createDrizzle(env.DB);
-		const now = new Date();
-
-		// First, count how many bookings will be deleted (for logging)
-		const expiredBookings = await db
-			.select({ id: bookings.id })
-			.from(bookings)
-			.where(and(eq(bookings.status, 'pending'), lte(bookings.expiresAt, now)));
-
-		const deletedCount = expiredBookings.length;
-
-		// Delete pending bookings where expiresAt is in the past
-		// Note: Removed .returning() to reduce D1 transaction overhead
-		if (deletedCount > 0) {
-			await db
-				.delete(bookings)
-				.where(
-					and(eq(bookings.status, 'pending'), lte(bookings.expiresAt, now)),
-				);
-		}
-
-		console.log(
-			`✅ Booking cleanup completed: ${deletedCount} expired pending bookings removed`,
-		);
-
-		return {
-			deletedCount,
-			timestamp: now.toISOString(),
-		};
-	} catch (error) {
-		console.error('💥 Scheduled booking cleanup failed:', error);
-		throw error;
-	}
+	return { deletedCount: deletable.length, kept };
 }
 
-/**
- * Main scheduled event handler for Cloudflare Workers
- * This function will be called by the cron triggers
- */
+/** Deletes iCal sync history older than SYNC_LOG_RETENTION_DAYS. */
+export async function scheduledIcalLogCleanup(
+	deps: ServiceDeps,
+	now = new Date(),
+) {
+	const { db } = deps;
+	const cutoff = new Date(now.getTime() - SYNC_LOG_RETENTION_DAYS * 86_400_000);
+	const [changes, logs] = await db.batch([
+		db
+			.delete(icalSyncChanges)
+			.where(lte(icalSyncChanges.createdAt, cutoff))
+			.returning({ id: icalSyncChanges.id }),
+		db
+			.delete(icalSyncLog)
+			.where(lte(icalSyncLog.createdAt, cutoff))
+			.returning({ id: icalSyncLog.id }),
+	]);
+	console.log(
+		`Sync history cleanup: ${logs.length} run(s), ${changes.length} change(s) older than ${cutoff.toISOString()} removed`,
+	);
+	return { logs: logs.length, changes: changes.length, cutoff };
+}
+
+type Task = (deps: ServiceDeps) => Promise<unknown>;
+
+/** Cron expression → task. Unknown expressions do nothing. */
+export const CRON_SCHEDULES: Readonly<Record<string, Task>> = {
+	'*/30 * * * *': scheduledCalendarSync,
+	'5 8 * * *': (deps) => scheduledBookingCleanup(deps), // 08:05 UTC
+	'15 9 * * *': (deps) => scheduledIcalLogCleanup(deps), // 09:15 UTC
+};
+
+/** Worker `scheduled` handler (src/server.ts). */
 export async function handleScheduledEvent(
 	controller: ScheduledController,
-	env: ScheduledEnv,
-	_ctx: ExecutionContext,
+	env: Env,
+	ctx: ExecutionContext,
 ): Promise<void> {
-	const cron = controller.cron;
-
-	console.log(`⏰ Scheduled event triggered: ${cron}`);
-
+	const task = CRON_SCHEDULES[controller.cron];
+	if (!task) {
+		console.warn(`Unknown cron schedule "${controller.cron}": nothing to do`);
+		return;
+	}
+	const deps = createServiceDeps(env, (p) => ctx.waitUntil(p));
 	try {
-		// Handle different cron schedules
-		switch (cron) {
-			case '*/30 * * * *': // Every 30 minutes run calendar sync
-				await scheduledCalendarSync(env);
-				break;
-
-			case '5 8 * * *': // Every 24 hours at 8:05 AM (UTC) - cleanup expired pending bookings
-				await scheduledBookingCleanup(env);
-				break;
-
-			case '15 9 * * *': // Every 24 hours at 9:15AM (UTC) - cleanup iCal sync logs
-				await scheduledIcalLogCleanup(env);
-				break;
-
-			default:
-				console.warn(`⚠️ Unknown cron schedule: ${cron}`);
-				// Default to calendar sync for any unrecognized schedule
-				await scheduledCalendarSync(env);
-		}
+		await task(deps);
 	} catch (error) {
-		console.error('💥 Scheduled event failed:', error);
-		// Don't re-throw to prevent infinite retries
+		console.error(
+			`Cron "${controller.cron}" failed:`,
+			error instanceof Error ? (error.stack ?? error.message) : error,
+		);
+		// Rethrow so the failure shows in Workers observability.
+		throw error;
 	}
 }

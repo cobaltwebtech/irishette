@@ -1,4 +1,3 @@
-import { exports } from 'cloudflare:workers';
 import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { bookings } from '@/db/schema-export';
@@ -6,9 +5,11 @@ import { createStripe } from '@/lib/stripe';
 import {
 	caller,
 	db,
+	fetchWorker,
 	insertBooking,
 	insertExternalEvent,
 	insertFeed,
+	settle,
 	trpcError,
 } from './helpers';
 import {
@@ -77,7 +78,7 @@ describe('confirmPayment verification', () => {
 		expect((await row(booking.id)).status).toBe('pending');
 	});
 
-	it.fails.each([
+	it.each([
 		[
 			'booking id',
 			{ metadata: { bookingId: 'someone-else', userId: GUEST.id } },
@@ -111,7 +112,7 @@ describe('confirmPayment verification', () => {
 });
 
 describe('confirmation when the dates were taken meanwhile', () => {
-	it.fails('refunds automatically, cancels the booking and emails the admin', {
+	it('refunds automatically, cancels the booking and emails the admin', {
 		timeout: 20_000,
 	}, async () => {
 		const booking = await pendingBooking('pi_taken');
@@ -138,12 +139,54 @@ describe('confirmation when the dates were taken meanwhile', () => {
 		const after = await row(booking.id);
 		expect(after.status).toBe('cancelled');
 		expect(after.paymentStatus).toBe('refunded');
+		await settle();
 		expect(sent.some((e) => e.to.includes(ADMIN.email))).toBe(true);
+		expect(sent.some((e) => e.to.includes(booking.guestEmail))).toBe(true);
+	});
+
+	it('the webhook path refunds too, once, and returns 200', async () => {
+		const booking = await pendingBooking('pi_taken_webhook');
+		const feed = await insertFeed();
+		await insertExternalEvent({
+			feedId: feed.id,
+			startDate: booking.checkInDate,
+			endDate: booking.checkOutDate,
+		});
+		const intent = intentFor(booking);
+		mockStripePaymentIntents(intent);
+		const refunds = mockStripeRefunds();
+		mockResend();
+		const stripe = createStripe('sk_test_x');
+		const payload = JSON.stringify({
+			id: 'evt_taken',
+			object: 'event',
+			type: 'payment_intent.succeeded',
+			data: { object: paymentIntentObject(intent) },
+		});
+		const request = async () =>
+			new Request('http://localhost/api/stripe/webhook', {
+				method: 'POST',
+				headers: {
+					'content-type': 'application/json',
+					'stripe-signature':
+						await stripe.webhooks.generateTestHeaderStringAsync({
+							payload,
+							secret: 'whsec_test',
+						}),
+				},
+				body: payload,
+			});
+		expect((await fetchWorker(await request())).status).toBe(200);
+		expect((await fetchWorker(await request())).status).toBe(200);
+		expect(refunds).toHaveLength(1);
+		expect((await row(booking.id)).cancellationReason).toBe(
+			'dates_unavailable',
+		);
 	});
 });
 
 describe('idempotency', () => {
-	it.fails('front-end confirm, webhook and a repeated confirm send one confirmation', {
+	it('front-end confirm, webhook and a repeated confirm send one confirmation', {
 		timeout: 30_000,
 	}, async () => {
 		const booking = await pendingBooking('pi_idem');
@@ -167,7 +210,7 @@ describe('idempotency', () => {
 			payload,
 			secret: 'whsec_test',
 		});
-		await exports.default.fetch(
+		await fetchWorker(
 			new Request('http://localhost/api/stripe/webhook', {
 				method: 'POST',
 				headers: {
@@ -183,9 +226,11 @@ describe('idempotency', () => {
 			paymentIntentId: 'pi_idem',
 		});
 
+		await settle();
 		expect((await row(booking.id)).status).toBe('confirmed');
 		expect(sent.filter((e) => e.to.includes(booking.guestEmail))).toHaveLength(
 			1,
 		);
+		expect(sent.filter((e) => e.to.includes(ADMIN.email))).toHaveLength(1);
 	});
 });

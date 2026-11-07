@@ -44,7 +44,7 @@ describe('cron map', () => {
 		);
 	});
 
-	it.fails('CRON_SCHEDULES matches the triggers in cloudflare.config.ts', () => {
+	it('CRON_SCHEDULES matches the triggers in cloudflare.config.ts', () => {
 		const map = (scheduledTasks as Record<string, unknown>).CRON_SCHEDULES as
 			| Record<string, unknown>
 			| undefined;
@@ -78,7 +78,7 @@ describe('expired pending bookings cleanup (5 8 * * *)', () => {
 		expect(await exists(confirmed.id)).toBe(true);
 	});
 
-	it.fails('keeps an expired hold whose PaymentIntent succeeded', async () => {
+	it('keeps an expired hold whose PaymentIntent succeeded', async () => {
 		const paid = await insertBooking({
 			checkInDate: '2042-04-10',
 			checkOutDate: '2042-04-12',
@@ -125,7 +125,7 @@ describe('iCal sync log cleanup (15 9 * * *)', () => {
 });
 
 describe('unknown cron', () => {
-	it.fails('does nothing (no feed fetches)', async () => {
+	it('does nothing (no feed fetches)', async () => {
 		const feed = await insertFeed();
 		const requests = mockFeed(feed.url, () => calendarResponse(vcalendar([])));
 		await runCron('0 0 1 1 *');

@@ -8,40 +8,42 @@ import { makeCtx, trpcError } from './helpers';
 
 /** Procedures anyone may call. Keep this list short and explicit. */
 const PUBLIC = new Set([
-	'rooms.ping',
 	'rooms.list',
 	'rooms.get',
 	'rooms.calculatePricing',
-	'rooms.checkAvailability',
-	'rooms.bulkAvailability',
 	'bookings.calculateBooking',
-	'bookings.checkAvailability',
 	'availability.getBySlug',
-	'availability.checkRoom',
-	'availability.checkBulk',
-]);
-
-/** Public today but must become admin-only (Phase 7.1). */
-const KNOWN_PUBLIC_LEAKS = new Set([
-	'rooms.getIcalConfig',
-	'rooms.generateIcal',
+	'policies.getCancellationPolicy',
 ]);
 
 /** Procedures a signed-in normal user may call (they check ownership). */
 const USER = new Set([
 	'bookings.createBooking',
-	'bookings.createCheckoutSession',
 	'bookings.createPaymentIntent',
 	'bookings.refreshBooking',
 	'bookings.confirmPayment',
 	'bookings.getBooking',
 	'bookings.getMyBookings',
-	'bookings.updateBooking',
+	'bookings.getCancellationQuote',
 	'bookings.cancelBooking',
 	'bookings.resendConfirmationEmail',
 	'users.updatePhoneNumber',
 	'users.updateProfile',
 ]);
+
+/** Removed in Phase 7 (leaks, placeholders or the self-confirm hole). */
+const REMOVED = [
+	'rooms.ping',
+	'rooms.getIcalConfig',
+	'rooms.generateIcal',
+	'rooms.checkAvailability',
+	'rooms.bulkAvailability',
+	'bookings.updateBooking',
+	'bookings.checkAvailability',
+	'bookings.createCheckoutSession',
+	'availability.checkRoom',
+	'availability.checkBulk',
+];
 
 const paths = Object.keys(trpcRouter._def.procedures).sort();
 
@@ -60,47 +62,32 @@ function call(role: 'user' | null, path: string) {
 
 describe('procedure inventory', () => {
 	it('every allowlisted procedure exists', () => {
-		for (const path of [...PUBLIC, ...KNOWN_PUBLIC_LEAKS, ...USER]) {
+		for (const path of [...PUBLIC, ...USER]) {
 			expect(paths).toContain(path);
+		}
+	});
+
+	it('removed procedures are gone', () => {
+		for (const path of REMOVED) {
+			expect(paths).not.toContain(path);
 		}
 	});
 });
 
 describe('anonymous callers', () => {
-	const protectedPaths = paths.filter(
-		(p) => !PUBLIC.has(p) && !KNOWN_PUBLIC_LEAKS.has(p),
-	);
+	const protectedPaths = paths.filter((p) => !PUBLIC.has(p));
 
 	it.each(protectedPaths)('%s rejects with UNAUTHORIZED', async (path) => {
 		const error = await trpcError(call(null, path));
 		expect(error.code).toBe('UNAUTHORIZED');
 	});
-
-	it.fails.each([...KNOWN_PUBLIC_LEAKS])(
-		'%s rejects with UNAUTHORIZED (Phase 7.1)',
-		async (path) => {
-			const error = await trpcError(call(null, path));
-			expect(error.code).toBe('UNAUTHORIZED');
-		},
-	);
 });
 
 describe('normal users', () => {
 	const adminPaths = paths.filter((p) => !PUBLIC.has(p) && !USER.has(p));
 
-	it.each(adminPaths.filter((p) => !KNOWN_PUBLIC_LEAKS.has(p)))(
-		'%s rejects with FORBIDDEN',
-		async (path) => {
-			const error = await trpcError(call('user', path));
-			expect(error.code).toBe('FORBIDDEN');
-		},
-	);
-
-	it.fails.each([...KNOWN_PUBLIC_LEAKS])(
-		'%s rejects with FORBIDDEN (Phase 7.1)',
-		async (path) => {
-			const error = await trpcError(call('user', path));
-			expect(error.code).toBe('FORBIDDEN');
-		},
-	);
+	it.each(adminPaths)('%s rejects with FORBIDDEN', async (path) => {
+		const error = await trpcError(call('user', path));
+		expect(error.code).toBe('FORBIDDEN');
+	});
 });

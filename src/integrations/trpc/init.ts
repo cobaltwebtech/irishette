@@ -19,8 +19,14 @@ function causeField(cause: unknown, key: 'conflict' | 'conflicts'): unknown {
 const t = initTRPC.context<TRPCContext>().create({
 	transformer: superjson,
 	errorFormatter({ shape, error }) {
+		// Unexpected errors (plain Error, SQL, Stripe) never reach the client
+		// verbatim; the server logs them (src/routes/api/trpc.$.ts).
+		const internal = error.code === 'INTERNAL_SERVER_ERROR';
 		return {
 			...shape,
+			message: internal
+				? 'Something went wrong. Please try again.'
+				: shape.message,
 			data: {
 				...shape.data,
 				// Field-level input errors for forms: { formErrors, fieldErrors }.

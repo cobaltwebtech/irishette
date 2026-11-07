@@ -1,3 +1,7 @@
+import {
+	createExecutionContext,
+	waitOnExecutionContext,
+} from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { TRPCError } from '@trpc/server';
 import { expect } from 'vitest';
@@ -15,6 +19,7 @@ import {
 } from '@/integrations/trpc/inner-context';
 import { trpcRouter } from '@/integrations/trpc/router';
 import { newId, newPublicId } from '@/lib/ids';
+import worker from './entry';
 import { ADMIN, GUEST, OTHER_GUEST, ROSE } from './seed';
 
 export const db = () => createDrizzle(env.DB);
@@ -59,6 +64,16 @@ function fakeSession(u: SeedUser): NonNullable<AuthSession> {
  * seeded GUEST), another normal user ('other') or an admin ('admin').
  * Users are seeded in seed.ts, so ids match real rows.
  */
+/** Background work (emails, alerts) started by procedures under test. */
+const pending: Promise<unknown>[] = [];
+
+/** Waits for all background work started so far (like waitUntil). */
+export async function settle() {
+	while (pending.length > 0) {
+		await Promise.allSettled(pending.splice(0));
+	}
+}
+
 export function makeCtx(role: 'admin' | 'user' | 'other' | null) {
 	const u =
 		role === 'admin'
@@ -68,7 +83,27 @@ export function makeCtx(role: 'admin' | 'user' | 'other' | null) {
 				: role === 'other'
 					? OTHER_GUEST
 					: null;
-	return createInnerTRPCContext({ session: u ? fakeSession(u) : null });
+	return createInnerTRPCContext({
+		session: u ? fakeSession(u) : null,
+		waitUntil: (p) => {
+			pending.push(p);
+		},
+	});
+}
+
+/**
+ * Calls the test Worker's fetch handler and waits for its background work
+ * (ctx.waitUntil), like a finished request in production.
+ */
+export async function fetchWorker(request: Request) {
+	const ctx = createExecutionContext();
+	const response = await worker.fetch(
+		request as Request<unknown, IncomingRequestCfProperties>,
+		env,
+		ctx,
+	);
+	await waitOnExecutionContext(ctx);
+	return response;
 }
 
 export function caller(role: 'admin' | 'user' | 'other' | null) {

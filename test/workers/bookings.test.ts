@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { bookings } from '@/db/schema-export';
+import { dateInZone } from '@/lib/timezone';
 import {
 	bookingInput,
 	caller,
@@ -9,10 +10,16 @@ import {
 	insertExternalEvent,
 	insertFeed,
 	insertPricingRule,
+	settle,
 	trpcError,
 } from './helpers';
-import { mockStripeRefunds } from './mocks';
-import { ROSE, TEXAS } from './seed';
+import {
+	mockResend,
+	mockStripeIntentCancel,
+	mockStripePaymentIntents,
+	mockStripeRefunds,
+} from './mocks';
+import { ADMIN, ROSE, TEXAS } from './seed';
 
 const guest = () => caller('user');
 
@@ -46,7 +53,7 @@ describe('date overlap with other bookings (stay Jun 10-12 exists)', () => {
 		);
 	});
 
-	it.fails('allows same-day turnover after (check-in on its check-out)', async () => {
+	it('allows same-day turnover after (check-in on its check-out)', async () => {
 		await insertBooking({
 			checkInDate: '2033-08-10',
 			checkOutDate: '2033-08-12',
@@ -58,7 +65,7 @@ describe('date overlap with other bookings (stay Jun 10-12 exists)', () => {
 		).resolves.toMatchObject({ success: true });
 	});
 
-	it.fails('allows same-day turnover before (check-out on its check-in)', async () => {
+	it('allows same-day turnover before (check-out on its check-in)', async () => {
 		await insertBooking({
 			checkInDate: '2033-09-10',
 			checkOutDate: '2033-09-12',
@@ -70,7 +77,7 @@ describe('date overlap with other bookings (stay Jun 10-12 exists)', () => {
 		).resolves.toMatchObject({ success: true });
 	});
 
-	it.fails('allows check-in on an imported event’s end date (exclusive)', async () => {
+	it('allows check-in on an imported event’s end date (exclusive)', async () => {
 		const feed = await insertFeed();
 		await insertExternalEvent({
 			feedId: feed.id,
@@ -113,7 +120,7 @@ describe('date overlap with other bookings (stay Jun 10-12 exists)', () => {
 });
 
 describe('pending holds', () => {
-	it.fails('a non-expired hold blocks a second guest', async () => {
+	it('a non-expired hold blocks a second guest', async () => {
 		await insertBooking({
 			checkInDate: '2034-01-10',
 			checkOutDate: '2034-01-12',
@@ -146,7 +153,7 @@ describe('pending holds', () => {
 });
 
 describe('booking pricing', () => {
-	it.fails('calendar total equals checkout total', async () => {
+	it('calendar total equals checkout total', async () => {
 		// Rule covers only part of the stay.
 		await insertPricingRule({
 			startDate: '2034-03-08',
@@ -165,7 +172,7 @@ describe('booking pricing', () => {
 		expect(checkout.baseAmount).toBe(calendar.baseAmount);
 	});
 
-	it.fails('has no large-group surcharge', async () => {
+	it('has no large-group surcharge', async () => {
 		await caller('admin').rooms.update({ id: ROSE.id, maxGuests: 6 });
 		const input = {
 			roomId: ROSE.id,
@@ -228,45 +235,32 @@ describe('access and ownership', () => {
 		expect(asAdmin.user).toMatchObject({ email: booking.guestEmail });
 	});
 
-	it.fails('updateBooking: a user cannot confirm their own booking', async () => {
-		const booking = await insertBooking({
-			checkInDate: '2034-07-01',
-			checkOutDate: '2034-07-02',
-			status: 'pending',
-			paymentStatus: 'pending',
-			expiresAt: new Date(Date.now() + 20 * 60 * 1000),
-		});
-		// Either the input is rejected or the status is ignored.
-		await guest()
-			.bookings.updateBooking({
-				bookingId: booking.id,
-				status: 'confirmed',
-			} as never)
-			.catch(() => undefined);
-		expect((await bookingRow(booking.id)).status).toBe('pending');
-	});
-
 	it('cancelBooking: another user’s booking is NOT_FOUND', async () => {
 		const booking = await insertBooking({
 			checkInDate: '2034-08-01',
 			checkOutDate: '2034-08-02',
 		});
 		const error = await trpcError(
-			caller('other').bookings.cancelBooking({ bookingId: booking.id }),
+			caller('other').bookings.cancelBooking({ publicId: booking.publicId }),
 		);
 		expect(error.code).toBe('NOT_FOUND');
 	});
 });
 
 describe('cancellation', () => {
+	const inDays = (n: number) =>
+		dateInZone(new Date(Date.now() + n * 86_400_000));
+
 	it('cancelling frees the dates', async () => {
 		mockStripeRefunds();
+		mockResend();
 		const booking = await insertBooking({
 			checkInDate: '2034-09-10',
 			checkOutDate: '2034-09-12',
 			stripePaymentIntentId: 'pi_cancel_1',
 		});
-		await guest().bookings.cancelBooking({ bookingId: booking.id });
+		await guest().bookings.cancelBooking({ publicId: booking.publicId });
+		await settle();
 		expect((await bookingRow(booking.id)).status).toBe('cancelled');
 		await expect(
 			caller('other').bookings.createBooking(
@@ -275,17 +269,131 @@ describe('cancellation', () => {
 		).resolves.toMatchObject({ success: true });
 	});
 
-	it.fails('cancelling a paid booking refunds it in Stripe', async () => {
+	it('refunds in full more than 72 hours ahead, and emails guest and admins', async () => {
 		const refunds = mockStripeRefunds();
+		const sent = mockResend();
 		const booking = await insertBooking({
-			checkInDate: '2034-10-10',
-			checkOutDate: '2034-10-12',
+			checkInDate: inDays(10),
+			checkOutDate: inDays(12),
 			stripePaymentIntentId: 'pi_cancel_2',
 		});
-		await guest().bookings.cancelBooking({ bookingId: booking.id });
+		const result = await guest().bookings.cancelBooking({
+			publicId: booking.publicId,
+		});
+		await settle();
+		expect(result).toMatchObject({ refundAmount: 250, refundPercent: 100 });
 		expect(refunds).toHaveLength(1);
 		expect(refunds[0].body.get('payment_intent')).toBe('pi_cancel_2');
+		expect(refunds[0].body.get('amount')).toBe('25000');
 		expect(refunds[0].idempotencyKey).toBeTruthy();
-		expect((await bookingRow(booking.id)).paymentStatus).toBe('refunded');
+		const row = await bookingRow(booking.id);
+		expect(row).toMatchObject({
+			status: 'cancelled',
+			paymentStatus: 'refunded',
+			refundAmount: 250,
+			cancelledBy: 'guest',
+		});
+		expect(sent.some((e) => e.to.includes(booking.guestEmail))).toBe(true);
+		expect(sent.some((e) => e.to.includes(ADMIN.email))).toBe(true);
+	});
+
+	it('refunds 50% between 24 and 72 hours ahead', async () => {
+		const refunds = mockStripeRefunds();
+		mockResend();
+		const booking = await insertBooking({
+			checkInDate: inDays(2),
+			checkOutDate: inDays(4),
+			stripePaymentIntentId: 'pi_cancel_3',
+		});
+		const quote = await guest().bookings.getCancellationQuote({
+			publicId: booking.publicId,
+		});
+		expect(quote).toMatchObject({
+			canCancel: true,
+			refundPercent: 50,
+			refundAmount: 125,
+		});
+		await guest().bookings.cancelBooking({ publicId: booking.publicId });
+		await settle();
+		expect(refunds[0].body.get('amount')).toBe('12500');
+		expect((await bookingRow(booking.id)).paymentStatus).toBe(
+			'partially_refunded',
+		);
+	});
+
+	it('guests cannot cancel after check-in time; admins can, with a full refund', async () => {
+		const refunds = mockStripeRefunds();
+		mockResend();
+		const booking = await insertBooking({
+			checkInDate: inDays(-1),
+			checkOutDate: inDays(1),
+			stripePaymentIntentId: 'pi_cancel_4',
+		});
+		const error = await trpcError(
+			guest().bookings.cancelBooking({ publicId: booking.publicId }),
+		);
+		expect(error.code).toBe('BAD_REQUEST');
+		expect(refunds).toHaveLength(0);
+
+		const result = await caller('admin').bookings.adminCancelBooking({
+			publicId: booking.publicId,
+			refund: 'full',
+			reason: 'Storm damage',
+		});
+		await settle();
+		expect(result.refundAmount).toBe(250);
+		expect((await bookingRow(booking.id)).cancelledBy).toBe('admin');
+	});
+
+	it('cancelling an unpaid hold cancels its PaymentIntent and refunds nothing', async () => {
+		const cancelled = mockStripeIntentCancel();
+		mockStripePaymentIntents({
+			id: 'pi_hold_1',
+			amount: 25000,
+			status: 'requires_payment_method',
+		});
+		const booking = await insertBooking({
+			checkInDate: '2034-11-10',
+			checkOutDate: '2034-11-12',
+			status: 'pending',
+			paymentStatus: 'pending',
+			expiresAt: new Date(Date.now() + 20 * 60_000),
+			stripePaymentIntentId: 'pi_hold_1',
+		});
+		const result = await guest().bookings.cancelBooking({
+			publicId: booking.publicId,
+		});
+		expect(result.refundAmount).toBe(0);
+		expect(cancelled).toEqual(['pi_hold_1']);
+		expect((await bookingRow(booking.id)).status).toBe('cancelled');
+	});
+
+	it('keeps the policy a booking was made under', async () => {
+		mockResend();
+		const before = await guest().bookings.createBooking(
+			bookingInput({ checkInDate: inDays(30), checkOutDate: inDays(32) }),
+		);
+		await caller('admin').policies.saveCancellationPolicy({
+			name: 'Strict',
+			checkInTime: '16:00',
+			timezone: 'America/Chicago',
+			tiers: [{ minHoursBefore: 0, refundPercent: 0 }],
+		});
+		const after = await caller('other').bookings.createBooking(
+			bookingInput({ checkInDate: inDays(40), checkOutDate: inDays(42) }),
+		);
+		const oldRow = await bookingRow(before.bookingId);
+		const newRow = await bookingRow(after.bookingId);
+		expect(oldRow.cancellationPolicyId).toBeNull();
+		expect(newRow.cancellationPolicyId).toBeTruthy();
+		await db()
+			.update(bookings)
+			.set({ status: 'confirmed', paymentStatus: 'paid' })
+			.where(eq(bookings.id, after.bookingId));
+		const quote = await caller('other').bookings.getCancellationQuote({
+			publicId: after.publicId,
+		});
+		expect(quote.refundPercent).toBe(0);
+		expect(quote.policy.name).toBe('Strict');
 	});
 });

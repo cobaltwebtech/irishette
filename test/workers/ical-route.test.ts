@@ -1,10 +1,12 @@
 import { exports } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+	caller,
 	insertBlock,
 	insertBooking,
 	insertExternalEvent,
 	insertFeed,
+	trpcError,
 } from './helpers';
 import { ROSE, TEXAS } from './seed';
 
@@ -59,7 +61,7 @@ beforeAll(async () => {
 });
 
 describe('iCal export access', () => {
-	it.fails('serves the feed for the right room and token', async () => {
+	it('serves the feed for the right room and token', async () => {
 		const response = await get(exportUrl(ROSE.publicId, ROSE.icalExportToken));
 		expect(response.status).toBe(200);
 		expect(response.headers.get('content-type')).toBe(
@@ -85,7 +87,7 @@ describe('iCal export access', () => {
 		expect(response.status).toBe(404);
 	});
 
-	it.fails('no longer serves the feed by internal room id without a token', async () => {
+	it('no longer serves the feed by internal room id without a token', async () => {
 		const response = await get(`http://localhost/api/ical/${ROSE.id}.ics`);
 		expect(response.status).toBe(404);
 	});
@@ -98,7 +100,7 @@ describe('iCal export contents', () => {
 		return response.text();
 	}
 
-	it.fails('has the RFC 5545 headers and CRLF line endings', async () => {
+	it('has the RFC 5545 headers and CRLF line endings', async () => {
 		const text = await feedText();
 		expect(text.startsWith('BEGIN:VCALENDAR\r\n')).toBe(true);
 		for (const header of [
@@ -116,7 +118,7 @@ describe('iCal export contents', () => {
 		}
 	});
 
-	it.fails('contains only confirmed bookings and blocks, as "Reserved"', async () => {
+	it('contains only confirmed bookings and blocks, as "Reserved"', async () => {
 		const text = await feedText();
 		const events = text.split('BEGIN:VEVENT').length - 1;
 		expect(events).toBe(2);
@@ -129,7 +131,7 @@ describe('iCal export contents', () => {
 		]);
 	});
 
-	it.fails('has no personal data, notes or confirmation ids', async () => {
+	it('has no personal data, notes or confirmation ids', async () => {
 		const text = await feedText();
 		for (const secret of [
 			"O'Guest",
@@ -143,7 +145,7 @@ describe('iCal export contents', () => {
 		}
 	});
 
-	it.fails('uses date-only DTEND: check-out for bookings, end + 1 for blocks', async () => {
+	it('uses date-only DTEND: check-out for bookings, end + 1 for blocks', async () => {
 		const text = await feedText();
 		const compact = (d: string) => d.replaceAll('-', '');
 		expect(text).toContain(
@@ -157,5 +159,82 @@ describe('iCal export contents', () => {
 		expect(text).toContain(
 			`DTEND;VALUE=DATE:${compact(blockEnd.toISOString().slice(0, 10))}`,
 		);
+	});
+});
+
+describe('export URL management (admin)', () => {
+	it('getExportUrl returns the working URL; regenerating revokes the old one', async () => {
+		const admin = caller('admin');
+		const { url } = await admin.ical.getExportUrl({ roomId: TEXAS.id });
+		const path = new URL(url).pathname;
+		expect((await get(`http://localhost${path}`)).status).toBe(200);
+
+		const { url: next } = await admin.ical.regenerateExportToken({
+			roomId: TEXAS.id,
+		});
+		expect(next).not.toBe(url);
+		expect((await get(`http://localhost${path}`)).status).toBe(404);
+		expect(
+			(await get(`http://localhost${new URL(next).pathname}`)).status,
+		).toBe(200);
+	});
+});
+
+describe('import feeds (admin)', () => {
+	it('creates, lists, updates and deletes feeds; duplicates are CONFLICT', async () => {
+		const admin = caller('admin');
+		const url = 'https://www.airbnb.com/calendar/ical/123.ics?s=secret';
+		const { id } = await admin.ical.createFeed({
+			roomId: TEXAS.id,
+			source: 'airbnb',
+			label: 'Main listing',
+			url,
+			isActive: true,
+		});
+		const duplicate = await trpcError(
+			admin.ical.createFeed({
+				roomId: TEXAS.id,
+				source: 'airbnb',
+				url,
+				isActive: true,
+			}),
+		);
+		expect(duplicate.code).toBe('CONFLICT');
+
+		const feeds = await admin.ical.listFeeds({ roomId: TEXAS.id });
+		expect(feeds).toContainEqual(
+			expect.objectContaining({
+				id,
+				url,
+				label: 'Main listing',
+				isActive: true,
+			}),
+		);
+
+		await admin.ical.updateFeed({ id, isActive: false });
+		expect(
+			(await admin.ical.listFeeds({ roomId: TEXAS.id })).find(
+				(f) => f.id === id,
+			)?.isActive,
+		).toBe(false);
+
+		await admin.ical.deleteFeed({ id });
+		expect(
+			(await admin.ical.listFeeds({ roomId: TEXAS.id })).some(
+				(f) => f.id === id,
+			),
+		).toBe(false);
+	});
+
+	it('rejects non-http feed URLs', async () => {
+		const error = await trpcError(
+			caller('admin').ical.createFeed({
+				roomId: TEXAS.id,
+				source: 'other',
+				url: 'javascript:alert(1)',
+				isActive: true,
+			}),
+		);
+		expect(error.code).toBe('BAD_REQUEST');
 	});
 });

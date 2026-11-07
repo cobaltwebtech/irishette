@@ -65,16 +65,19 @@ describe('booking store', () => {
 		expect(bookingStore.state.guestCount).toBe(1);
 	});
 
-	// Phase 7.3: the store clamps the guest count to the room's max_guests.
-	it.fails('clamps guests to the room maximum', async () => {
+	it('clamps guests to the room maximum', async () => {
 		const { bookingActions, bookingStore } = await loadStore();
-		// Planned signature: initializeBooking(roomId, slug, name, maxGuests).
-		const initialize = bookingActions.initializeBooking as (
-			...args: unknown[]
-		) => void;
-		initialize('room-1', 'rose-room', 'Rose Room', 2);
+		bookingActions.initializeBooking('room-1', 'rose-room', 'Rose Room', 2);
 		bookingActions.setGuestCount(5);
 		expect(bookingStore.state.guestCount).toBe(2);
+	});
+
+	it('re-clamps when the room limit becomes known', async () => {
+		const { bookingActions, bookingStore } = await loadStore();
+		bookingActions.initializeBooking('room-1', 'rose-room');
+		bookingActions.setGuestCount(4);
+		bookingActions.setRoom('room-1', 'rose-room', 'Rose Room', 3);
+		expect(bookingStore.state).toMatchObject({ maxGuests: 3, guestCount: 3 });
 	});
 
 	it('persists to localStorage and restores on load', async () => {

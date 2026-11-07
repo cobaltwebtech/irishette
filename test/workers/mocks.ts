@@ -10,20 +10,39 @@ interface SentEmail {
 	subject: string;
 }
 
-/** Resend: accepts every email and records recipients and subjects. */
+type ResendBody = { to: string | string[]; subject: string };
+
+/**
+ * Resend: accepts single and batch sends and records recipients and
+ * subjects. Honors Idempotency-Key like Resend (a repeated key sends nothing).
+ */
 export function mockResend() {
 	const sent: SentEmail[] = [];
+	const seenKeys = new Set<string>();
+	const record = (email: ResendBody) =>
+		sent.push({
+			to: Array.isArray(email.to) ? email.to : [email.to],
+			subject: email.subject,
+		});
+	const duplicate = (request: { headers: Headers }) => {
+		const key = request.headers.get('idempotency-key');
+		if (!key) return false;
+		if (seenKeys.has(key)) return true;
+		seenKeys.add(key);
+		return false;
+	};
 	network.use(
 		http.post('https://api.resend.com/emails', async ({ request }) => {
-			const body = (await request.json()) as {
-				to: string | string[];
-				subject: string;
-			};
-			sent.push({
-				to: Array.isArray(body.to) ? body.to : [body.to],
-				subject: body.subject,
-			});
+			const body = (await request.json()) as ResendBody;
+			if (!duplicate(request)) record(body);
 			return HttpResponse.json({ id: `email_${sent.length}` });
+		}),
+		http.post('https://api.resend.com/emails/batch', async ({ request }) => {
+			const body = (await request.json()) as ResendBody[];
+			if (!duplicate(request)) body.forEach(record);
+			return HttpResponse.json({
+				data: body.map((_, i) => ({ id: `email_${sent.length}_${i}` })),
+			});
 		}),
 	);
 	return sent;
@@ -70,6 +89,27 @@ export function paymentIntentObject(pi: FakePaymentIntent) {
 		latest_charge: `ch_${pi.id}`,
 		livemode: false,
 	};
+}
+
+/** Stripe: POST /v1/payment_intents/:id/cancel succeeds; records the ids. */
+export function mockStripeIntentCancel() {
+	const cancelled: string[] = [];
+	network.use(
+		http.post(
+			'https://api.stripe.com/v1/payment_intents/:id/cancel',
+			({ params }) => {
+				cancelled.push(String(params.id));
+				return HttpResponse.json(
+					paymentIntentObject({
+						id: String(params.id),
+						amount: 0,
+						status: 'canceled',
+					}),
+				);
+			},
+		),
+	);
+	return cancelled;
 }
 
 /** Stripe: POST /v1/refunds succeeds and records the form body. */

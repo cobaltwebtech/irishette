@@ -43,12 +43,25 @@ export const Route = createFileRoute(
 				context.trpc.rooms.get.queryOptions({ publicId: params.publicId }),
 			),
 		);
+		// Fired together, so the browser sends them as one batched request.
 		await Promise.all([
 			context.queryClient.ensureQueryData(
 				context.trpc.rooms.getPricingRules.queryOptions({ roomId: room.id }),
 			),
 			context.queryClient.ensureQueryData(
 				context.trpc.rooms.getBlockedPeriods.queryOptions({ roomId: room.id }),
+			),
+			context.queryClient.ensureQueryData(
+				context.trpc.ical.listFeeds.queryOptions({ roomId: room.id }),
+			),
+			context.queryClient.ensureQueryData(
+				context.trpc.ical.getExportUrl.queryOptions({ roomId: room.id }),
+			),
+			context.queryClient.ensureQueryData(
+				context.trpc.ical.getSyncLogs.queryOptions({
+					roomId: room.id,
+					limit: 10,
+				}),
 			),
 		]);
 	},
@@ -70,6 +83,7 @@ type RoomFormData = {
 	cityTaxRate: number;
 	status: RoomStatus;
 	isActive: boolean; // Keep for backward compatibility
+	maxGuests: number;
 };
 
 function roomToFormData(room: RouterOutputs['rooms']['get']): RoomFormData {
@@ -83,6 +97,7 @@ function roomToFormData(room: RouterOutputs['rooms']['get']): RoomFormData {
 		cityTaxRate: room.cityTaxRate ?? 0.07, // Only use default if not in DB
 		status: room.status || 'active',
 		isActive: room.isActive ?? true,
+		maxGuests: room.maxGuests,
 	};
 }
 
@@ -172,19 +187,18 @@ function EditRoom() {
 				});
 			},
 			onError: (error) => {
-				console.error('Update room error:', error);
 				toast.error('Error updating room', {
-					description:
-						'Please try again or contact support if the problem persists.',
-					duration: 4000,
+					description: error.message,
+					duration: 5000,
 				});
 			},
 		}),
 	);
 
-	// Save room changes
-	const handleSaveRoom = async () => {
-		updateRoomMutation.mutate({ id: room.id, ...formData });
+	// Save room changes (isActive follows status on the server)
+	const handleSaveRoom = () => {
+		const { isActive: _isActive, ...changes } = formData;
+		updateRoomMutation.mutate({ id: room.id, ...changes });
 	};
 
 	const handleNameChange = (name: string) => {
@@ -201,9 +215,6 @@ function EditRoom() {
 			onSuccess: () => {
 				queryClient.invalidateQueries(trpc.rooms.getPricingRules.pathFilter());
 			},
-			onError: (error) => {
-				console.error('Failed to create pricing rule:', error);
-			},
 		}),
 	);
 
@@ -212,9 +223,6 @@ function EditRoom() {
 			onSuccess: () => {
 				queryClient.invalidateQueries(trpc.rooms.getPricingRules.pathFilter());
 			},
-			onError: (error) => {
-				console.error('Failed to update pricing rule:', error);
-			},
 		}),
 	);
 
@@ -222,35 +230,22 @@ function EditRoom() {
 		trpc.rooms.deletePricingRule.mutationOptions({
 			onSuccess: () => {
 				queryClient.invalidateQueries(trpc.rooms.getPricingRules.pathFilter());
-				toast.success('Pricing rule deleted successfully!', {
-					description: 'The pricing rule has been removed.',
-					duration: 4000,
-				});
-			},
-			onError: (error) => {
-				console.error('Failed to delete pricing rule:', error);
-				toast.error('Failed to delete pricing rule', {
-					description:
-						error instanceof Error
-							? error.message
-							: 'An unexpected error occurred.',
-					duration: 5000,
-				});
 			},
 		}),
 	);
 
-	// Pricing rules management functions
+	// The forms await these: they close and show success only after the
+	// server answers, and show its errors (overlap conflicts) otherwise.
 	const handleCreatePricingRule = async (rule: CreatePricingRule) => {
-		createPricingRuleMutation.mutate(rule);
+		await createPricingRuleMutation.mutateAsync(rule);
 	};
 
 	const handleUpdatePricingRule = async (rule: UpdatePricingRule) => {
-		updatePricingRuleMutation.mutate(rule);
+		await updatePricingRuleMutation.mutateAsync(rule);
 	};
 
 	const handleDeletePricingRule = async (ruleId: string) => {
-		deletePricingRuleMutation.mutate({ id: ruleId });
+		await deletePricingRuleMutation.mutateAsync({ id: ruleId });
 	};
 
 	// Blocked periods mutations
@@ -260,9 +255,6 @@ function EditRoom() {
 				queryClient.invalidateQueries(
 					trpc.rooms.getBlockedPeriods.pathFilter(),
 				);
-			},
-			onError: (error) => {
-				console.error('Failed to create blocked period:', error);
 			},
 		}),
 	);
@@ -274,9 +266,6 @@ function EditRoom() {
 					trpc.rooms.getBlockedPeriods.pathFilter(),
 				);
 			},
-			onError: (error) => {
-				console.error('Failed to update blocked period:', error);
-			},
 		}),
 	);
 
@@ -287,23 +276,20 @@ function EditRoom() {
 					trpc.rooms.getBlockedPeriods.pathFilter(),
 				);
 			},
-			onError: (error) => {
-				console.error('Failed to delete blocked period:', error);
-			},
 		}),
 	);
 
 	// Blocked periods management functions
 	const handleCreateBlockedPeriod = async (period: CreateBlockedPeriod) => {
-		createBlockedPeriodMutation.mutate(period);
+		await createBlockedPeriodMutation.mutateAsync(period);
 	};
 
 	const handleUpdateBlockedPeriod = async (period: UpdateBlockedPeriod) => {
-		updateBlockedPeriodMutation.mutate(period);
+		await updateBlockedPeriodMutation.mutateAsync(period);
 	};
 
 	const handleDeleteBlockedPeriod = async (periodId: string) => {
-		deleteBlockedPeriodMutation.mutate({ id: periodId });
+		await deleteBlockedPeriodMutation.mutateAsync({ id: periodId });
 	};
 
 	return (
@@ -355,16 +341,13 @@ function EditRoom() {
 						setFormData((prev) => ({ ...prev, description: value }))
 					}
 					onStatusChange={(checked: boolean) => {
-						setFormData((prev) => {
-							const updated = {
-								...prev,
-								isActive: checked,
-								status: checked ? ('active' as const) : ('inactive' as const),
-							};
-							// Persist change immediately
-							updateRoomMutation.mutate({ id: room.id, ...updated });
-							return updated;
-						});
+						// Persist immediately. The mutation runs outside the state
+						// updater (updaters must be pure; StrictMode runs them twice).
+						const status = checked
+							? ('active' as const)
+							: ('inactive' as const);
+						setFormData((prev) => ({ ...prev, isActive: checked, status }));
+						updateRoomMutation.mutate({ id: room.id, status });
 					}}
 				/>
 
@@ -374,6 +357,10 @@ function EditRoom() {
 					serviceFeeRate={formData.serviceFeeRate}
 					stateTaxRate={formData.stateTaxRate}
 					cityTaxRate={formData.cityTaxRate}
+					maxGuests={formData.maxGuests}
+					onMaxGuestsChange={(value) =>
+						setFormData((prev) => ({ ...prev, maxGuests: value }))
+					}
 					onBasePriceChange={(value) =>
 						setFormData((prev) => ({ ...prev, basePrice: value }))
 					}
@@ -410,12 +397,7 @@ function EditRoom() {
 			/>
 
 			{/* Calendar Integrations */}
-			<RoomCalendarIntegration
-				room={room}
-				onRoomUpdate={() =>
-					queryClient.invalidateQueries(trpc.rooms.get.pathFilter())
-				}
-			/>
+			<RoomCalendarIntegration roomId={room.id} />
 		</AdminLayout>
 	);
 }

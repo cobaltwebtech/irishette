@@ -1,9 +1,8 @@
-import { exports } from 'cloudflare:workers';
 import { eq } from 'drizzle-orm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { bookings } from '@/db/schema-export';
 import { createStripe } from '@/lib/stripe';
-import { db, insertBooking } from './helpers';
+import { db, fetchWorker, insertBooking } from './helpers';
 import {
 	mockResend,
 	mockStripePaymentIntents,
@@ -67,7 +66,7 @@ afterEach(() => {
 
 describe('Stripe webhook signature', () => {
 	it('rejects a missing signature with 400', async () => {
-		const response = await exports.default.fetch(
+		const response = await fetchWorker(
 			new Request(WEBHOOK_URL, {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
@@ -79,18 +78,18 @@ describe('Stripe webhook signature', () => {
 
 	it('rejects an invalid signature with 400', async () => {
 		const request = await signedRequest({ type: 'x' }, 'whsec_wrong');
-		const response = await exports.default.fetch(request);
+		const response = await fetchWorker(request);
 		expect(response.status).toBe(400);
 	});
 
-	it.fails('does not echo signature verification details', async () => {
+	it('does not echo signature verification details', async () => {
 		const request = await signedRequest({ type: 'x' }, 'whsec_wrong');
-		const body = await (await exports.default.fetch(request)).text();
+		const body = await (await fetchWorker(request)).text();
 		expect(body).not.toMatch(/No signatures found|payload|expected/i);
 	});
 
 	it('returns 404 for other paths', async () => {
-		const response = await exports.default.fetch(
+		const response = await fetchWorker(
 			new Request('http://localhost/api/stripe/other', { method: 'POST' }),
 		);
 		expect(response.status).toBe(404);
@@ -110,7 +109,7 @@ describe('payment_intent.succeeded', () => {
 		mockStripePaymentIntents(pi);
 		const sent = mockResend();
 
-		const response = await exports.default.fetch(
+		const response = await fetchWorker(
 			await signedRequest(paymentIntentSucceeded(pi)),
 		);
 		expect(response.status).toBe(200);
@@ -124,7 +123,7 @@ describe('payment_intent.succeeded', () => {
 		expect(sent.filter((e) => e.to.includes(ADMIN.email))).toHaveLength(1);
 
 		// Replay: idempotent, no second email.
-		const replay = await exports.default.fetch(
+		const replay = await fetchWorker(
 			await signedRequest(paymentIntentSucceeded(pi)),
 		);
 		expect(replay.status).toBe(200);
@@ -132,7 +131,7 @@ describe('payment_intent.succeeded', () => {
 	});
 
 	it('acknowledges an intent with no matching booking', async () => {
-		const response = await exports.default.fetch(
+		const response = await fetchWorker(
 			await signedRequest(
 				paymentIntentSucceeded({ id: 'pi_unknown', amount: 100 }),
 			),
@@ -140,7 +139,7 @@ describe('payment_intent.succeeded', () => {
 		expect(response.status).toBe(200);
 	});
 
-	it.fails('does not log guest or admin email addresses', {
+	it('does not log guest or admin email addresses', {
 		timeout: 20_000,
 	}, async () => {
 		const logged: string[] = [];
@@ -161,12 +160,41 @@ describe('payment_intent.succeeded', () => {
 		};
 		mockStripePaymentIntents(pi);
 		mockResend();
-		await exports.default.fetch(
-			await signedRequest(paymentIntentSucceeded(pi)),
-		);
+		await fetchWorker(await signedRequest(paymentIntentSucceeded(pi)));
 
 		const output = logged.join('\n');
 		expect(output).not.toContain(booking.guestEmail);
 		expect(output).not.toContain(ADMIN.email);
+	});
+});
+
+describe('charge.refunded', () => {
+	it('records partial and full refunds made in Stripe', async () => {
+		const booking = await insertBooking({
+			checkInDate: '2037-03-10',
+			checkOutDate: '2037-03-12',
+			stripePaymentIntentId: 'pi_refunded_in_dashboard',
+		});
+		const charge = (amountRefunded: number) => ({
+			id: 'evt_charge_refunded',
+			object: 'event',
+			type: 'charge.refunded',
+			data: {
+				object: {
+					id: 'ch_1',
+					object: 'charge',
+					amount: 25000,
+					amount_refunded: amountRefunded,
+					payment_intent: 'pi_refunded_in_dashboard',
+				},
+			},
+		});
+		await fetchWorker(await signedRequest(charge(5000)));
+		expect(await bookingStatus(booking.id)).toEqual({
+			status: 'confirmed',
+			paymentStatus: 'partially_refunded',
+		});
+		await fetchWorker(await signedRequest(charge(25000)));
+		expect((await bookingStatus(booking.id)).paymentStatus).toBe('refunded');
 	});
 });

@@ -155,21 +155,93 @@ export const roomBlockedPeriods = sqliteTable('room_blocked_periods', {
 		.notNull(),
 });
 
-// iCal sync log for debugging and monitoring
-export const icalSyncLog = sqliteTable('ical_sync_log', {
-	id: text('id').primaryKey().$defaultFn(newId),
-	roomId: text('room_id')
-		.notNull()
-		.references(() => room.id, { onDelete: 'cascade' }),
-	platform: text('platform').notNull(), // feed source: airbnb, expedia, ...
-	status: text('status').notNull(), // success, error, partial
-	bookingsProcessed: integer('bookings_processed').default(0),
-	errorMessage: text('error_message'),
-	syncDuration: integer('sync_duration'), // milliseconds
-	createdAt: integer('created_at', { mode: 'timestamp' })
-		.$defaultFn(() => new Date())
-		.notNull(),
-});
+// iCal import sync runs: one row per feed fetch (cron, "Sync now", or the
+// on-demand sync before payment). Kept 30 days (cron 15 9 * * *).
+export const icalSyncStatuses = [
+	'success', // feed applied (possibly with no changes)
+	'not_modified', // HTTP 304 (conditional GET)
+	'rejected', // fetched but failed validation; stored events left unchanged
+	'error', // fetch/parse/write failed; stored events left unchanged
+] as const;
+export type IcalSyncStatus = (typeof icalSyncStatuses)[number];
+
+export const icalSyncLog = sqliteTable(
+	'ical_sync_log',
+	{
+		id: text('id').primaryKey().$defaultFn(newId),
+		roomId: text('room_id')
+			.notNull()
+			.references(() => room.id, { onDelete: 'cascade' }),
+		feedId: text('feed_id').references(() => icalFeeds.id, {
+			onDelete: 'set null',
+		}),
+		platform: text('platform').notNull(), // feed source: airbnb, expedia, ...
+		trigger: text('trigger', { enum: ['cron', 'manual', 'checkout'] })
+			.notNull()
+			.default('cron'),
+		status: text('status', { enum: icalSyncStatuses }).notNull(),
+		httpStatus: integer('http_status'),
+		eventsInFeed: integer('events_in_feed'),
+		added: integer('added').notNull().default(0),
+		updated: integer('updated').notNull().default(0),
+		removed: integer('removed').notNull().default(0),
+		conflicts: integer('conflicts').notNull().default(0),
+		errorMessage: text('error_message'),
+		syncDuration: integer('sync_duration'), // milliseconds
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.$defaultFn(() => new Date())
+			.notNull(),
+	},
+	(table) => [
+		index('ical_sync_log_room_created_idx').on(table.roomId, table.createdAt),
+		index('ical_sync_log_created_idx').on(table.createdAt),
+	],
+);
+
+// What one sync run changed: every imported event added, updated or removed,
+// and every conflict with one of our bookings. Deleted with its run.
+export const icalSyncChangeActions = [
+	'added',
+	'updated',
+	'removed',
+	'conflict',
+] as const;
+export type IcalSyncChangeAction = (typeof icalSyncChangeActions)[number];
+
+export const icalSyncChanges = sqliteTable(
+	'ical_sync_changes',
+	{
+		id: text('id').primaryKey().$defaultFn(newId),
+		syncLogId: text('sync_log_id')
+			.notNull()
+			.references(() => icalSyncLog.id, { onDelete: 'cascade' }),
+		roomId: text('room_id')
+			.notNull()
+			.references(() => room.id, { onDelete: 'cascade' }),
+		feedId: text('feed_id').references(() => icalFeeds.id, {
+			onDelete: 'set null',
+		}),
+		action: text('action', { enum: icalSyncChangeActions }).notNull(),
+		uid: text('uid').notNull(),
+		kind: text('kind', { enum: externalEventKinds }),
+		startDate: text('start_date'), // YYYY-MM-DD (new value)
+		endDate: text('end_date'), // YYYY-MM-DD, exclusive (new value)
+		previousStartDate: text('previous_start_date'),
+		previousEndDate: text('previous_end_date'),
+		// For conflicts: the booking that overlaps the imported event.
+		bookingId: text('booking_id'),
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.$defaultFn(() => new Date())
+			.notNull(),
+	},
+	(table) => [
+		index('ical_sync_changes_log_idx').on(table.syncLogId),
+		index('ical_sync_changes_room_created_idx').on(
+			table.roomId,
+			table.createdAt,
+		),
+	],
+);
 
 // Room pricing rules for dynamic pricing management.
 // Inclusive start/end dates; active rules in a room must not overlap.
@@ -263,12 +335,31 @@ export const roomBlockedPeriodsRelations = relations(
 	}),
 );
 
-export const icalSyncLogRelations = relations(icalSyncLog, ({ one }) => ({
+export const icalSyncLogRelations = relations(icalSyncLog, ({ one, many }) => ({
 	room: one(room, {
 		fields: [icalSyncLog.roomId],
 		references: [room.id],
 	}),
+	feed: one(icalFeeds, {
+		fields: [icalSyncLog.feedId],
+		references: [icalFeeds.id],
+	}),
+	changes: many(icalSyncChanges),
 }));
+
+export const icalSyncChangesRelations = relations(
+	icalSyncChanges,
+	({ one }) => ({
+		syncLog: one(icalSyncLog, {
+			fields: [icalSyncChanges.syncLogId],
+			references: [icalSyncLog.id],
+		}),
+		room: one(room, {
+			fields: [icalSyncChanges.roomId],
+			references: [room.id],
+		}),
+	}),
+);
 
 export const roomPricingRulesRelations = relations(
 	roomPricingRules,

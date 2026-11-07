@@ -73,7 +73,7 @@ function serveSequence(url: string, bodies: Array<() => Response>) {
 
 describe('applying a feed', () => {
 	it('imports events with exclusive end dates', {
-		timeout: 20_000,
+		timeout: 10_000,
 	}, async () => {
 		const feed = await insertFeed();
 		serveSequence(feed.url, [
@@ -106,7 +106,7 @@ describe('applying a feed', () => {
 	});
 
 	it('deletes removed events and updates changed dates', {
-		timeout: 20_000,
+		timeout: 10_000,
 	}, async () => {
 		const feed = await insertFeed();
 		serveSequence(feed.url, [
@@ -159,8 +159,8 @@ describe('applying a feed', () => {
 		expect(await eventsFor(feed.id)).toHaveLength(1);
 	});
 
-	it.fails('writes sync logs, newest first in getSyncLogs', {
-		timeout: 20_000,
+	it('writes sync logs, newest first in getSyncLogs', {
+		timeout: 10_000,
 	}, async () => {
 		const feed = await insertFeed();
 		serveSequence(feed.url, [
@@ -169,7 +169,7 @@ describe('applying a feed', () => {
 		]);
 		await runSync();
 		await runSync();
-		const { logs } = await caller('admin').availability.getSyncLogs({
+		const { logs } = await caller('admin').ical.getSyncLogs({
 			roomId: feed.roomId,
 			limit: 100,
 		});
@@ -195,21 +195,25 @@ describe('feed validation (protect stored data)', () => {
 	}
 
 	it('a 500 leaves stored events unchanged and records the error', {
-		timeout: 20_000,
+		timeout: 10_000,
 	}, async () => {
 		const { feed, first } = await feedWithEvents(['a@x', 'b@x']);
 		serveSequence(feed.url, [
 			() => calendarResponse(first),
 			() => new HttpResponse('boom', { status: 500 }),
 		]);
+		const sent = mockResend();
 		await runSync();
 		await runSync();
 		expect(await eventsFor(feed.id)).toHaveLength(2);
-		expect((await feedRow(feed.id)).lastError).toBeTruthy();
+		expect((await feedRow(feed.id)).lastError).toBe('HTTP 500');
+		// One alert when a healthy feed starts failing; none on repeats.
+		await runSync();
+		expect(sent.filter((e) => e.to.includes(ADMIN.email))).toHaveLength(1);
 	});
 
-	it.fails('an empty calendar leaves stored events unchanged, records the error and alerts the admin', {
-		timeout: 20_000,
+	it('an empty calendar leaves stored events unchanged, records the error and alerts the admin', {
+		timeout: 10_000,
 	}, async () => {
 		const { feed, first } = await feedWithEvents(['a@x', 'b@x']);
 		serveSequence(feed.url, [
@@ -224,8 +228,8 @@ describe('feed validation (protect stored data)', () => {
 		expect(sent.some((e) => e.to.includes(ADMIN.email))).toBe(true);
 	});
 
-	it.fails('an HTML page leaves stored events unchanged', {
-		timeout: 20_000,
+	it('an HTML page leaves stored events unchanged', {
+		timeout: 10_000,
 	}, async () => {
 		const { feed, first } = await feedWithEvents(['a@x', 'b@x']);
 		serveSequence(feed.url, [
@@ -239,8 +243,8 @@ describe('feed validation (protect stored data)', () => {
 		expect((await feedRow(feed.id)).lastError).toBeTruthy();
 	});
 
-	it.fails('a sudden drop of more than half is not applied', {
-		timeout: 20_000,
+	it('a sudden drop of more than half is not applied', {
+		timeout: 10_000,
 	}, async () => {
 		const { feed, first } = await feedWithEvents(['a@x', 'b@x', 'c@x', 'd@x']);
 		serveSequence(feed.url, [
@@ -254,8 +258,8 @@ describe('feed validation (protect stored data)', () => {
 		expect(await eventsFor(feed.id)).toHaveLength(4);
 	});
 
-	it.fails('uses conditional GET (ETag / 304)', {
-		timeout: 20_000,
+	it('uses conditional GET (ETag / 304)', {
+		timeout: 10_000,
 	}, async () => {
 		const feed = await insertFeed();
 		const body = vcalendar([event('a@x', '2040-02-10', '2040-02-12')]);
@@ -279,8 +283,8 @@ describe('feed validation (protect stored data)', () => {
 });
 
 describe('conflicts', () => {
-	it.fails('an imported event over a confirmed booking emails the admin', {
-		timeout: 20_000,
+	it('an imported event over a confirmed booking emails the admin', {
+		timeout: 10_000,
 	}, async () => {
 		await insertBooking({
 			checkInDate: '2040-03-10',
@@ -331,7 +335,7 @@ describe('parsing (RFC 5545)', () => {
 		).toEqual([]);
 	});
 
-	it.fails('unfolds folded lines', { timeout: 20_000 }, async () => {
+	it('unfolds folded lines', { timeout: 20_000 }, async () => {
 		const rows = await importOne([
 			[
 				'UID:folded-1234567890',
@@ -345,8 +349,8 @@ describe('parsing (RFC 5545)', () => {
 		]);
 	});
 
-	it.fails('converts UTC times to the property date (America/Chicago)', {
-		timeout: 20_000,
+	it('converts UTC times to the property date (America/Chicago)', {
+		timeout: 10_000,
 	}, async () => {
 		// 03:00Z on Apr 11 is 22:00 on Apr 10 in Chicago.
 		const rows = await importOne([
@@ -380,8 +384,8 @@ describe('parsing (RFC 5545)', () => {
 		]);
 	});
 
-	it.fails('supports DURATION instead of DTEND', {
-		timeout: 20_000,
+	it('supports DURATION instead of DTEND', {
+		timeout: 10_000,
 	}, async () => {
 		const rows = await importOne([
 			['UID:dur@x', 'DTSTART;VALUE=DATE:20410610', 'DURATION:P3D'],
@@ -396,8 +400,8 @@ describe('parsing (RFC 5545)', () => {
 		]);
 	});
 
-	it.fails('treats a missing DTEND on a date as one day', {
-		timeout: 20_000,
+	it('treats a missing DTEND on a date as one day', {
+		timeout: 10_000,
 	}, async () => {
 		const rows = await importOne([
 			['UID:one@x', 'DTSTART;VALUE=DATE:20410710'],
@@ -412,7 +416,7 @@ describe('parsing (RFC 5545)', () => {
 		]);
 	});
 
-	it.fails('skips STATUS:CANCELLED', { timeout: 20_000 }, async () => {
+	it('skips STATUS:CANCELLED', { timeout: 20_000 }, async () => {
 		expect(
 			await importOne([
 				event('cx@x', '2041-08-10', '2041-08-12', ['STATUS:CANCELLED']),
@@ -420,7 +424,7 @@ describe('parsing (RFC 5545)', () => {
 		).toEqual([]);
 	});
 
-	it.fails('skips our own exported events', { timeout: 20_000 }, async () => {
+	it('skips our own exported events', { timeout: 20_000 }, async () => {
 		expect(
 			await importOne([
 				event('booking-abc0000000000000@irishette', '2041-09-10', '2041-09-12'),
@@ -428,8 +432,8 @@ describe('parsing (RFC 5545)', () => {
 		).toEqual([]);
 	});
 
-	it.fails('keeps host blocks as unavailable', {
-		timeout: 20_000,
+	it('keeps host blocks as unavailable', {
+		timeout: 10_000,
 	}, async () => {
 		const rows = await importOne([
 			[

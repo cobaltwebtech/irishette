@@ -2,6 +2,7 @@ import { Icon } from '@iconify/react';
 import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { toast } from 'sonner';
+import { CancelBookingButton } from '@/components/booking/CancelBookingButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -368,16 +369,12 @@ function BookingDetailPage() {
 								<Icon icon="tabler:message-circle" className="size-6" />
 								Contact Support
 							</Button>
-							<Button asChild variant="destructive" className="w-full">
-								<Link to="/account">
-									<Icon icon="tabler:circle-x" className="size-6" />
-									IMPLEMENT CANCEL BOOKING
-								</Link>
-							</Button>
-							<p className="bg-destructive uppercase">
-								The cancellation policy and process needs to be implemented.
-								Button does not work yet.
-							</p>
+							{booking.booking.status !== 'cancelled' && (
+								<CancelBookingButton
+									publicId={booking.booking.publicId}
+									mode="guest"
+								/>
+							)}
 						</CardContent>
 						<CardFooter>
 							Can add link for Google and Apple Maps directions here later on.

@@ -91,6 +91,17 @@ export function AdminSidebar({
 				},
 			],
 		},
+		{
+			title: 'Policies',
+			url: '/admin/cancellation-policy',
+			icon: 'tabler:receipt-refund',
+			items: [
+				{
+					title: 'Cancellation & Refunds',
+					url: '/admin/cancellation-policy',
+				},
+			],
+		},
 	];
 
 	return (

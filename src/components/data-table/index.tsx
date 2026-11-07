@@ -107,10 +107,13 @@ export function DataTableView<TData extends RowData>({
 	table,
 	emptyMessage = 'No results.',
 	onRowClick,
+	rowClassName,
 }: {
 	table: DataTable<TData>;
 	emptyMessage?: ReactNode;
 	onRowClick?: (row: TData) => void;
+	/** Extra classes per row (e.g. to highlight one). */
+	rowClassName?: (row: TData) => string | undefined;
 }) {
 	'use no memo';
 	const rows = table.getRowModel().rows;
@@ -132,7 +135,14 @@ export function DataTableView<TData extends RowData>({
 					rows.map((row) => (
 						<TableRow
 							key={row.id}
-							className={onRowClick ? 'cursor-pointer' : undefined}
+							className={
+								[
+									onRowClick ? 'cursor-pointer' : undefined,
+									rowClassName?.(row.original),
+								]
+									.filter(Boolean)
+									.join(' ') || undefined
+							}
 							onClick={onRowClick ? () => onRowClick(row.original) : undefined}
 						>
 							{row.getAllCells().map((cell) => (

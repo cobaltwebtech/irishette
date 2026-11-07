@@ -17,6 +17,10 @@ import {
 import { useBookingStore } from '@/stores';
 
 export const Route = createFileRoute('/rooms/texas-room')({
+	loader: ({ context }) =>
+		context.queryClient.ensureQueryData(
+			context.trpc.rooms.get.queryOptions({ slug: 'texas-room' }),
+		),
 	head: () => ({
 		meta: [
 			{
@@ -35,9 +39,9 @@ function TexasRoomPage() {
 	const [nights, setNights] = useState<number>(0);
 	const booking = useBookingStore();
 	const navigate = useNavigate();
+	const room = Route.useLoaderData();
 
 	// Room information
-	const roomSlug = 'texas-room';
 
 	// Texas Room images from Cloudinary
 	const texasRoomImages = [
@@ -79,18 +83,18 @@ function TexasRoomPage() {
 		},
 	];
 
-	// Initialize booking store if we're starting a new booking
+	// Start a booking for this room (also replaces drafts saved with an old
+	// room id). The room comes from the route loader.
 	useEffect(() => {
-		// Check if we have a room already set in the store
-		if (!booking.roomSlug || booking.roomSlug !== roomSlug) {
-			// This will reset any existing booking and start fresh for this room
+		if (booking.roomId !== room.id) {
 			booking.actions.initializeBooking(
-				'qSDFP06DGD7v8M3rC3DwE',
-				roomSlug,
-				'Texas Room',
-			); // Actual Texas Room ID from database
+				room.id,
+				room.slug,
+				room.name,
+				room.maxGuests,
+			);
 		}
-	}, [booking.roomSlug, booking.actions]);
+	}, [booking.roomId, booking.actions, room]);
 
 	const handleRangeSelect = (
 		dateRange: DateRange | undefined,

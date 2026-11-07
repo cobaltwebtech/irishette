@@ -7,6 +7,7 @@ import {
 } from 'drizzle-orm/sqlite-core';
 import { newId, newPublicId } from '../lib/ids';
 import { user } from './auth-schema';
+import { cancellationPolicies } from './policy-schema';
 import { room } from './room-schema';
 
 // Main booking/reservation table
@@ -41,7 +42,8 @@ export const bookings = sqliteTable(
 
 		// Essential status tracking
 		status: text('status').notNull().default('pending'), // pending, confirmed, cancelled
-		paymentStatus: text('payment_status').notNull().default('pending'), // pending, paid, refunded
+		// pending, paid, partially_refunded, refunded, failed
+		paymentStatus: text('payment_status').notNull().default('pending'),
 
 		// Guest contact (essential for communication)
 		guestName: text('guest_name').notNull(),
@@ -66,6 +68,18 @@ export const bookings = sqliteTable(
 			.notNull(),
 		confirmedAt: integer('confirmed_at', { mode: 'timestamp' }),
 		cancelledAt: integer('cancelled_at', { mode: 'timestamp' }),
+
+		// Cancellation & refund
+		// Policy the booking was made under (null: the built-in default).
+		cancellationPolicyId: text('cancellation_policy_id').references(
+			() => cancellationPolicies.id,
+			{ onDelete: 'set null' },
+		),
+		cancelledBy: text('cancelled_by'), // guest, admin, system
+		// guest_request, admin, dates_unavailable, payment_failed, ...
+		cancellationReason: text('cancellation_reason'),
+		refundAmount: real('refund_amount'), // dollars refunded (0 if none)
+		stripeRefundId: text('stripe_refund_id'),
 		expiresAt: integer('expires_at', { mode: 'timestamp' }), // For pending bookings - matches Stripe session expiration (30 minutes)
 	},
 	(table) => [

@@ -71,7 +71,7 @@ describe('public procedure outputs', () => {
 		);
 	});
 
-	it.fails('availability.getBySlug returns date ranges only (no booking ids)', async () => {
+	it('availability.getBySlug returns date ranges only (no booking ids)', async () => {
 		const output = await caller(null).availability.getBySlug({
 			roomSlug: ROSE.slug,
 			startDate: '2036-01-01',
@@ -80,19 +80,19 @@ describe('public procedure outputs', () => {
 		expectNoSecrets(output);
 	});
 
-	it.fails('rooms.getIcalConfig does not return feed URLs to the public', async () => {
-		const output = await caller(null)
-			.rooms.getIcalConfig({ roomId: ROSE.id })
-			.catch(() => null);
-		expectNoSecrets(output);
-		// It must also not succeed for anonymous callers at all.
-		expect(output).toBeNull();
+	it('availability.getBySlug still marks the booked nights', async () => {
+		const output = await caller(null).availability.getBySlug({
+			roomSlug: ROSE.slug,
+			startDate: '2036-01-01',
+			endDate: '2036-01-31',
+		});
+		expect(output.unavailability.stays).toContainEqual({
+			checkIn: '2036-01-10',
+			checkOut: '2036-01-12',
+		});
 	});
 
-	it.fails('rooms.generateIcal is not public', async () => {
-		const output = await caller(null)
-			.rooms.generateIcal({ roomId: ROSE.id })
-			.catch(() => null);
-		expect(output).toBeNull();
+	it('policies.getCancellationPolicy', async () => {
+		expectNoSecrets(await caller(null).policies.getCancellationPolicy());
 	});
 });

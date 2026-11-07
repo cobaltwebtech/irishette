@@ -9,8 +9,13 @@ const BASE_URL = (process.env.BASE_URL ?? 'http://localhost:3000').replace(
 	'',
 );
 
-// Seeded room id from scripts/seed-local.sql (current iCal route shape: /api/ical/<room id>.ics).
+// Seeded Rose Room from scripts/seed-local.sql: export feed is
+// /api/ical/<room publicId>/<export token>.ics (local-only test token).
 const SEED_ROOM_ID = '019a5f00-0000-7000-8000-000000000001';
+const SEED_ROOM_PUBLIC_ID = 'seedroomrose0001';
+const SEED_EXPORT_TOKEN = 'mg8wQCtXTOJmHZ8Sc5XXzOWlUGxNDJHbDz-oXiHa0Mc';
+// tRPC GET input (superjson): {}.
+const EMPTY_INPUT = encodeURIComponent(JSON.stringify({ json: {} }));
 
 const isRedirect = (status) => status >= 300 && status < 400;
 
@@ -47,8 +52,8 @@ const checks = [
 		check: (r) => isRedirect(r.status) && !!r.location,
 	},
 	{
-		name: 'ical export',
-		path: `/api/ical/${SEED_ROOM_ID}.ics`,
+		name: 'ical export (token)',
+		path: `/api/ical/${SEED_ROOM_PUBLIC_ID}/${SEED_EXPORT_TOKEN}.ics`,
 		expect: '200 text/calendar',
 		check: (r) =>
 			r.status === 200 &&
@@ -56,10 +61,32 @@ const checks = [
 			r.body.includes('BEGIN:VCALENDAR'),
 	},
 	{
-		name: 'trpc rooms.ping',
-		path: '/api/trpc/rooms.ping',
+		name: 'ical export (wrong token)',
+		path: `/api/ical/${SEED_ROOM_PUBLIC_ID}/not-the-right-token-000000.ics`,
+		expect: '404',
+		check: (r) => r.status === 404,
+	},
+	{
+		name: 'ical export (old id URL)',
+		path: `/api/ical/${SEED_ROOM_ID}.ics`,
+		expect: '404',
+		check: (r) => r.status === 404,
+	},
+	{
+		name: 'trpc rooms.list',
+		path: `/api/trpc/rooms.list?input=${EMPTY_INPUT}`,
 		expect: '200 json',
-		check: (r) => r.status === 200 && r.contentType.includes('json'),
+		check: (r) =>
+			r.status === 200 &&
+			r.contentType.includes('json') &&
+			r.body.includes('rose-room') &&
+			!r.body.includes('icalExportToken'),
+	},
+	{
+		name: 'trpc admin (anonymous)',
+		path: `/api/trpc/ical.listFeeds?input=${encodeURIComponent(JSON.stringify({ json: { roomId: SEED_ROOM_ID } }))}`,
+		expect: '401',
+		check: (r) => r.status === 401,
 	},
 ];
 

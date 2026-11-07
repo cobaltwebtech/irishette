@@ -7,6 +7,7 @@ import { tanstackStartCookies } from 'better-auth/tanstack-start';
 import { drizzle } from 'drizzle-orm/d1';
 import { Resend } from 'resend';
 import { MagicLinkEmail } from '@/components/email/MagicLinkEmail';
+import { NotificationEmail } from '@/components/email/NotificationEmail';
 import { PasswordReset } from '@/components/email/PasswordReset';
 import * as authSchema from '@/db/auth-schema';
 import { newId, newPublicId } from '@/lib/ids';
@@ -79,6 +80,28 @@ function createAuth() {
 				}
 			},
 		},
+		// Sign-up asks users to verify their address (the sign-up page says an
+		// email was sent), and email changes are verified too.
+		emailVerification: {
+			sendOnSignUp: true,
+			autoSignInAfterVerification: true,
+			sendVerificationEmail: async ({ user, url }) => {
+				await resend.emails.send({
+					from: 'Irishette <auth@contact.cobaltweb.tech>',
+					to: user.email,
+					subject: 'Verify your email | Irishette',
+					react: NotificationEmail({
+						preview: 'Verify your email address',
+						heading: 'Verify your email',
+						paragraphs: [
+							'Click the button below to verify your email address for your Irishette account.',
+							'If you did not request this, you can ignore this email.',
+						],
+						button: { label: 'Verify email', href: url },
+					}),
+				});
+			},
+		},
 		user: {
 			additionalFields: {
 				// Public id for URLs (column user.public_id, see auth-schema.ts).
@@ -91,6 +114,24 @@ function createAuth() {
 			},
 			changeEmail: {
 				enabled: true,
+				// Verified users approve the change from their current address;
+				// the new address is then verified too.
+				sendChangeEmailConfirmation: async ({ user, newEmail, url }) => {
+					await resend.emails.send({
+						from: 'Irishette <auth@contact.cobaltweb.tech>',
+						to: user.email,
+						subject: 'Confirm your email change | Irishette',
+						react: NotificationEmail({
+							preview: 'Confirm your new email address',
+							heading: 'Confirm your email change',
+							paragraphs: [
+								`Someone asked to change the email on your Irishette account to ${newEmail}.`,
+								'If this was you, confirm below. If not, ignore this email and your account stays unchanged.',
+							],
+							button: { label: 'Confirm change', href: url },
+						}),
+					});
+				},
 			},
 		},
 		plugins: [
@@ -98,7 +139,6 @@ function createAuth() {
 			magicLink({
 				sendMagicLink: async ({ email, url }) => {
 					try {
-						console.log('Attempting to send magic link email to:', email);
 						await resend.emails.send({
 							from: 'Irishette <auth@contact.cobaltweb.tech>',
 							to: email,
@@ -107,7 +147,6 @@ function createAuth() {
 								url: url,
 							}),
 						});
-						console.log('Magic link email sent successfully');
 					} catch (error) {
 						console.error('Error sending magic link email:', error);
 						throw error;

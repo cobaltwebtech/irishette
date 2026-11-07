@@ -1,4 +1,5 @@
 import { Icon } from '@iconify/react';
+import { isTRPCClientError } from '@trpc/client';
 import { useId, useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -33,56 +34,39 @@ import {
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import type { TRPCRouter } from '@/integrations/trpc/router';
 import type {
 	CreatePricingRule,
 	RoomPricingRule,
 	UpdatePricingRule,
 } from '@/lib/room-validation';
 
-// Helper function to parse validation errors into human-readable messages
-function parseValidationErrors(errorMessage: string): string {
-	try {
-		const errors = JSON.parse(errorMessage);
-		if (Array.isArray(errors)) {
-			const fieldErrors = errors.map(
-				(error: { code: string; path?: string[]; message?: string }) => {
-					const field = error.path ? error.path[0] : 'unknown field';
-					const friendlyField = field.replace(/([A-Z])/g, ' $1').toLowerCase();
+/** Overlap details from a CONFLICT error (data.conflict). */
+interface RuleConflict {
+	id: string;
+	name: string;
+	startDate: string;
+	endDate: string;
+}
 
-					switch (error.code) {
-						case 'invalid_type':
-							return `${friendlyField} is required`;
-						case 'invalid_value':
-							return `${friendlyField} has an invalid value`;
-						case 'too_small':
-							return `${friendlyField} is too small`;
-						case 'too_big':
-							return `${friendlyField} is too large`;
-						default:
-							return error.message || `${friendlyField} is invalid`;
-					}
-				},
-			);
-
-			return (
-				fieldErrors.slice(0, 3).join(', ') +
-				(fieldErrors.length > 3 ? ', and more...' : '')
-			);
-		}
-	} catch {
-		// If parsing fails, return a generic message
+/** Reads the server's structured error for the form. */
+function readSaveError(error: unknown): {
+	message: string;
+	conflict: RuleConflict | null;
+	fieldErrors: Record<string, string[] | undefined>;
+} {
+	if (isTRPCClientError<TRPCRouter>(error)) {
+		return {
+			message: error.message,
+			conflict: (error.data?.conflict as RuleConflict | null) ?? null,
+			fieldErrors: error.data?.zodError?.fieldErrors ?? {},
+		};
 	}
-
-	// Fallback for non-JSON errors or parsing failures
-	if (errorMessage.includes('overlaps with existing rule')) {
-		return errorMessage; // Keep overlap messages as they are already user-friendly
-	}
-
-	if (errorMessage.includes('roomId') && errorMessage.includes('undefined')) {
-		return 'There was a problem with the room data. Please refresh the page and try again.';
-	}
-
-	return 'Please check your input and try again';
+	return {
+		message: error instanceof Error ? error.message : 'Unexpected error',
+		conflict: null,
+		fieldErrors: {},
+	};
 }
 
 const formatRuleValue = (rule: RoomPricingRule) => {
@@ -168,7 +152,14 @@ function makeColumns({
 		}),
 		columnHelper.accessor('name', {
 			header: 'Rule Name',
-			cell: (info) => <span className="font-medium">{info.getValue()}</span>,
+			cell: (info) => (
+				<span
+					id={`pricing-rule-${info.row.original.id}`}
+					className="font-medium"
+				>
+					{info.getValue()}
+				</span>
+			),
 		}),
 		columnHelper.accessor('ruleType', {
 			header: 'Type',
@@ -257,6 +248,8 @@ export function PricingRulesManagement({
 	const [deletingRule, setDeletingRule] = useState<RoomPricingRule | null>(
 		null,
 	);
+	// Rule highlighted after an overlap error ("Show rule").
+	const [highlightId, setHighlightId] = useState<string | null>(null);
 
 	// Only current and future rules are displayed
 	const today = new Date();
@@ -278,6 +271,24 @@ export function PricingRulesManagement({
 			sorting: [{ id: 'startDate', desc: false }],
 		},
 	});
+
+	/** Closes the dialog, pages to the conflicting rule and highlights it. */
+	const showRule = (id: string) => {
+		setIsCreating(false);
+		setEditingRule(null);
+		setHighlightId(id);
+		const index = table
+			.getSortedRowModel()
+			.rows.findIndex((row) => row.original.id === id);
+		if (index >= 0) {
+			table.setPageIndex(Math.floor(index / table.state.pagination.pageSize));
+		}
+		requestAnimationFrame(() =>
+			document
+				.getElementById(`pricing-rule-${id}`)
+				?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+		);
+	};
 
 	return (
 		<Card>
@@ -321,6 +332,11 @@ export function PricingRulesManagement({
 						<DataTableView
 							table={table}
 							emptyMessage="No pricing rules found."
+							rowClassName={(rule) =>
+								rule.id === highlightId
+									? 'bg-amber-100 ring-2 ring-amber-400 ring-inset'
+									: undefined
+							}
 						/>
 						<PaginationControls table={table} noun="rules" />
 					</>
@@ -339,6 +355,7 @@ export function PricingRulesManagement({
 						<PricingRuleForm
 							roomId={roomId}
 							rule={editingRule}
+							onShowConflict={showRule}
 							onSave={async (rule) => {
 								if (editingRule?.id) {
 									await onUpdateRule({ ...rule, id: editingRule.id });
@@ -435,6 +452,7 @@ interface PricingRuleFormProps {
 	rule?: RoomPricingRule | null;
 	onSave: (rule: CreatePricingRule) => Promise<void>;
 	onCancel: () => void;
+	onShowConflict: (ruleId: string) => void;
 }
 
 function PricingRuleForm({
@@ -442,12 +460,18 @@ function PricingRuleForm({
 	rule,
 	onSave,
 	onCancel,
+	onShowConflict,
 }: PricingRuleFormProps) {
 	const formId = useId();
 	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [conflict, setConflict] = useState<RuleConflict | null>(null);
+	const [fieldErrors, setFieldErrors] = useState<
+		Record<string, string[] | undefined>
+	>({});
 
-	// Get today's date in YYYY-MM-DD format for input min attribute
-	const today = new Date().toISOString().split('T')[0];
+	// Today (local) as YYYY-MM-DD, for the date inputs' min.
+	const now = new Date();
+	const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
 	const [formData, setFormData] = useState<CreatePricingRule>({
 		roomId,
@@ -473,26 +497,13 @@ function PricingRuleForm({
 			return;
 		}
 
-		if (
-			new Date(`${formData.startDate}T00:00:00`) >=
-			new Date(`${formData.endDate}T00:00:00`)
-		) {
-			toast.error('End date must be after start date');
+		// Inclusive dates: a single-night rule has start = end.
+		if (formData.endDate < formData.startDate) {
+			toast.error('End date must be on or after the start date');
 			return;
 		}
 
-		// Prevent creating rules with past dates
-		const today = new Date();
-		today.setHours(0, 0, 0, 0); // Reset time to start of day
-		const startDate = new Date(`${formData.startDate}T00:00:00`);
-		const endDate = new Date(`${formData.endDate}T00:00:00`);
-
-		if (startDate < today) {
-			toast.error('Start date cannot be in the past');
-			return;
-		}
-
-		if (endDate < today) {
+		if (formData.endDate < today) {
 			toast.error('End date cannot be in the past');
 			return;
 		}
@@ -513,39 +524,21 @@ function PricingRuleForm({
 
 		try {
 			setIsSubmitting(true);
+			setConflict(null);
+			setFieldErrors({});
 			await onSave(formData);
-
-			// If we get here, the operation was successful
-			// The success toast and modal closing is handled by the parent component
+			// Success toast and closing are handled by the parent.
 		} catch (error) {
-			// Handle specific error types
-			if (error instanceof Error) {
-				if (error.message.includes('overlaps with existing rule')) {
-					toast.error('Date Overlap Detected', {
-						description: error.message,
-						duration: 6000,
-					});
-				} else if (error.message.includes('not found')) {
-					toast.error('Rule not found', {
-						description:
-							'The pricing rule may have been deleted by another user.',
-						duration: 5000,
-					});
-				} else {
-					// Parse validation errors or use the error message
-					const friendlyMessage = parseValidationErrors(error.message);
-					toast.error('Failed to save pricing rule', {
-						description: friendlyMessage,
-						duration: 5000,
-					});
-				}
-			} else {
+			// Keep the dialog open so the admin can fix and retry.
+			const { message, conflict, fieldErrors } = readSaveError(error);
+			setConflict(conflict);
+			setFieldErrors(fieldErrors);
+			if (!conflict) {
 				toast.error('Failed to save pricing rule', {
-					description: 'An unexpected error occurred. Please try again.',
+					description: message,
 					duration: 5000,
 				});
 			}
-			// Don't close the modal on error - let user fix and retry
 		} finally {
 			setIsSubmitting(false);
 		}
@@ -638,7 +631,6 @@ function PricingRuleForm({
 						<Input
 							id={`${formId}-startDate`}
 							type="date"
-							min={today}
 							value={formData.startDate}
 							onChange={(e) =>
 								setFormData((prev) => ({
@@ -671,6 +663,32 @@ function PricingRuleForm({
 						/>
 					</div>
 				</div>
+				{conflict && (
+					<div
+						role="alert"
+						className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+					>
+						<span>
+							Overlaps with '{conflict.name}' (
+							{formatDateRange(conflict.startDate, conflict.endDate)})
+						</span>
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onClick={() => onShowConflict(conflict.id)}
+						>
+							Show rule
+						</Button>
+					</div>
+				)}
+				{[...(fieldErrors.startDate ?? []), ...(fieldErrors.endDate ?? [])].map(
+					(message) => (
+						<p key={message} className="text-sm text-destructive">
+							{message}
+						</p>
+					),
+				)}
 
 				<div className="flex items-center space-x-2">
 					<input

@@ -91,9 +91,15 @@ CREATE TABLE `bookings` (
 	`updated_at` integer NOT NULL,
 	`confirmed_at` integer,
 	`cancelled_at` integer,
+	`cancellation_policy_id` text,
+	`cancelled_by` text,
+	`cancellation_reason` text,
+	`refund_amount` real,
+	`stripe_refund_id` text,
 	`expires_at` integer,
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`room_id`) REFERENCES `room`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`room_id`) REFERENCES `room`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`cancellation_policy_id`) REFERENCES `cancellation_policies`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `bookings_public_id_unique` ON `bookings` (`public_id`);--> statement-breakpoint
@@ -117,6 +123,26 @@ CREATE TABLE `payment_transactions` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `payment_transactions_stripe_payment_intent_id_unique` ON `payment_transactions` (`stripe_payment_intent_id`);--> statement-breakpoint
+CREATE TABLE `cancellation_policies` (
+	`id` text PRIMARY KEY NOT NULL,
+	`name` text NOT NULL,
+	`check_in_time` text DEFAULT '16:00' NOT NULL,
+	`timezone` text DEFAULT 'America/Chicago' NOT NULL,
+	`is_active` integer DEFAULT false NOT NULL,
+	`created_by` text,
+	`created_at` integer NOT NULL
+);
+--> statement-breakpoint
+CREATE INDEX `cancellation_policies_active_idx` ON `cancellation_policies` (`is_active`);--> statement-breakpoint
+CREATE TABLE `cancellation_policy_tiers` (
+	`id` text PRIMARY KEY NOT NULL,
+	`policy_id` text NOT NULL,
+	`min_hours_before` integer NOT NULL,
+	`refund_percent` integer NOT NULL,
+	FOREIGN KEY (`policy_id`) REFERENCES `cancellation_policies`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `cancellation_policy_tiers_policy_hours_unique` ON `cancellation_policy_tiers` (`policy_id`,`min_hours_before`);--> statement-breakpoint
 CREATE TABLE `external_events` (
 	`id` text PRIMARY KEY NOT NULL,
 	`feed_id` text NOT NULL,
@@ -155,18 +181,49 @@ CREATE TABLE `ical_feeds` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `ical_feeds_room_url_unique` ON `ical_feeds` (`room_id`,`url`);--> statement-breakpoint
 CREATE INDEX `ical_feeds_room_id_idx` ON `ical_feeds` (`room_id`);--> statement-breakpoint
+CREATE TABLE `ical_sync_changes` (
+	`id` text PRIMARY KEY NOT NULL,
+	`sync_log_id` text NOT NULL,
+	`room_id` text NOT NULL,
+	`feed_id` text,
+	`action` text NOT NULL,
+	`uid` text NOT NULL,
+	`kind` text,
+	`start_date` text,
+	`end_date` text,
+	`previous_start_date` text,
+	`previous_end_date` text,
+	`booking_id` text,
+	`created_at` integer NOT NULL,
+	FOREIGN KEY (`sync_log_id`) REFERENCES `ical_sync_log`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`room_id`) REFERENCES `room`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`feed_id`) REFERENCES `ical_feeds`(`id`) ON UPDATE no action ON DELETE set null
+);
+--> statement-breakpoint
+CREATE INDEX `ical_sync_changes_log_idx` ON `ical_sync_changes` (`sync_log_id`);--> statement-breakpoint
+CREATE INDEX `ical_sync_changes_room_created_idx` ON `ical_sync_changes` (`room_id`,`created_at`);--> statement-breakpoint
 CREATE TABLE `ical_sync_log` (
 	`id` text PRIMARY KEY NOT NULL,
 	`room_id` text NOT NULL,
+	`feed_id` text,
 	`platform` text NOT NULL,
+	`trigger` text DEFAULT 'cron' NOT NULL,
 	`status` text NOT NULL,
-	`bookings_processed` integer DEFAULT 0,
+	`http_status` integer,
+	`events_in_feed` integer,
+	`added` integer DEFAULT 0 NOT NULL,
+	`updated` integer DEFAULT 0 NOT NULL,
+	`removed` integer DEFAULT 0 NOT NULL,
+	`conflicts` integer DEFAULT 0 NOT NULL,
 	`error_message` text,
 	`sync_duration` integer,
 	`created_at` integer NOT NULL,
-	FOREIGN KEY (`room_id`) REFERENCES `room`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`room_id`) REFERENCES `room`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`feed_id`) REFERENCES `ical_feeds`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
+CREATE INDEX `ical_sync_log_room_created_idx` ON `ical_sync_log` (`room_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `ical_sync_log_created_idx` ON `ical_sync_log` (`created_at`);--> statement-breakpoint
 CREATE TABLE `room` (
 	`id` text PRIMARY KEY NOT NULL,
 	`public_id` text NOT NULL,
