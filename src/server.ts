@@ -4,6 +4,7 @@
 // `import { env, waitUntil } from 'cloudflare:workers'`, so no request context
 // is passed to the Start handler.
 import handler from '@tanstack/react-start/server-entry';
+
 import { handleScheduledEvent } from '@/lib/scheduled-tasks';
 
 export default {

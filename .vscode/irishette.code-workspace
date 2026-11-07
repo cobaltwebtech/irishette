@@ -1,10 +1,10 @@
 {
 	"folders": [
 		{
-			"path": ".."
-		}
+			"path": "..",
+		},
 	],
 	"settings": {
-		"css.validate": false
-	}
+		"css.validate": false,
+	},
 }

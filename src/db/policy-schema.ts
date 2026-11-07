@@ -6,6 +6,7 @@ import {
 	text,
 	uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
+
 import { newId } from '../lib/ids';
 
 // Cancellation & refund policy (docs/cancellation-refund-policy.md), stored so

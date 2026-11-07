@@ -7,6 +7,7 @@ import {
 	XAxis,
 	YAxis,
 } from 'recharts';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
 	type ChartConfig,
@@ -87,7 +88,7 @@ export function BookingsChart({ data, isLoading }: BookingsChartProps) {
 					</p>
 				</CardHeader>
 				<CardContent>
-					<div className="flex items-center justify-center h-[300px] md:h-[400px] text-muted-foreground">
+					<div className="flex h-[300px] items-center justify-center text-muted-foreground md:h-[400px]">
 						Loading chart data...
 					</div>
 				</CardContent>

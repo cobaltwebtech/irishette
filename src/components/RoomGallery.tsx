@@ -51,7 +51,7 @@ export function RoomGallery({
 	if (!images || images.length === 0) {
 		return (
 			<div
-				className={`bg-muted rounded-lg flex items-center justify-center ${className}`}
+				className={`flex items-center justify-center rounded-lg bg-muted ${className}`}
 				style={{ height: mainImageHeight }}
 			>
 				<p className="text-muted-foreground">No images available</p>
@@ -76,11 +76,11 @@ export function RoomGallery({
 					swiper: thumbsSwiper && !thumbsSwiper.destroyed ? thumbsSwiper : null,
 				}}
 				modules={[FreeMode, Navigation, Thumbs]}
-				className="main-gallery mb-4 rounded-lg overflow-hidden"
+				className="main-gallery mb-4 overflow-hidden rounded-lg"
 			>
 				{images.map((image, index) => (
 					<SwiperSlide key={`main-${image.src}`}>
-						<div className="relative w-full h-full">
+						<div className="relative h-full w-full">
 							{/* @ts-ignore - fullWidth is valid but not in current type definitions */}
 							<Image
 								src={image.src}
@@ -88,11 +88,11 @@ export function RoomGallery({
 								width={800}
 								height={mainImageHeight}
 								priority={index === 0} // Prioritize loading the first image
-								className="w-full h-full object-cover"
+								className="h-full w-full object-cover"
 								layout="fullWidth"
 							/>
 							{image.caption && (
-								<div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white p-3">
+								<div className="absolute right-0 bottom-0 left-0 bg-black/60 p-3 text-white">
 									<p className="text-sm">{image.caption}</p>
 								</div>
 							)}
@@ -133,14 +133,14 @@ export function RoomGallery({
 				>
 					{images.map((image, index) => (
 						<SwiperSlide key={`thumb-${image.src}`} className="cursor-pointer">
-							<div className="relative w-full h-full rounded overflow-hidden hover:opacity-80 transition-opacity">
+							<div className="relative h-full w-full overflow-hidden rounded transition-opacity hover:opacity-80">
 								{/* @ts-ignore - fullWidth is valid but not in current type definitions */}
 								<Image
 									src={image.src}
 									alt={`${roomName} thumbnail ${index + 1}`}
 									width={100}
 									height={thumbImageHeight}
-									className="w-full h-full object-cover"
+									className="h-full w-full object-cover"
 									layout="fullWidth"
 								/>
 							</div>

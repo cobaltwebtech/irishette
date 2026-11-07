@@ -4,6 +4,7 @@ import {
 	useSuspenseQuery,
 } from '@tanstack/react-query';
 import type { AnyRouter } from '@tanstack/react-router';
+
 import { type AppSession, getSessionFn } from '@/core/functions/auth-server';
 
 export type { AppSession } from '@/core/functions/auth-server';

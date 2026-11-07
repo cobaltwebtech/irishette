@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
+
 import { MAX_BATCH_SIZE } from '@/integrations/trpc/batching';
 import { createTRPCContext } from '@/integrations/trpc/context';
 import { trpcRouter } from '@/integrations/trpc/router';

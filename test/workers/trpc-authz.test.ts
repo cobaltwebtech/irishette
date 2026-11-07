@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
+
 import { trpcRouter } from '@/integrations/trpc/router';
+
 import { makeCtx, trpcError } from './helpers';
 
 // Sweeps every procedure in the router, so new procedures are covered

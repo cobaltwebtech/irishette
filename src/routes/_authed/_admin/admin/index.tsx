@@ -1,5 +1,6 @@
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
+
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { BookingsChart } from '@/components/admin/BookingsChart';
 import { RevenueChart } from '@/components/admin/RevenueChart';
@@ -84,7 +85,7 @@ function AdminDashboard() {
 	return (
 		<AdminLayout title="Property Admin Dashboard">
 			{/* Rooms and Recent Bookings */}
-			<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+			<div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
 				{/* Upcoming Bookings Details */}
 				<Card>
 					<CardHeader>
@@ -101,7 +102,7 @@ function AdminDashboard() {
 					<CardContent>
 						<div className="space-y-2">
 							{upcomingBookings.length === 0 ? (
-								<div className="text-center py-4 text-muted-foreground">
+								<div className="py-4 text-center text-muted-foreground">
 									No upcoming bookings
 								</div>
 							) : (
@@ -114,7 +115,7 @@ function AdminDashboard() {
 											params={{ publicId: booking.publicId }}
 											className="block"
 										>
-											<div className="flex items-center justify-between p-2 border rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+											<div className="flex items-center justify-between rounded-lg border bg-muted/50 p-2 transition-colors hover:bg-muted">
 												<div>
 													<h3 className="font-medium">
 														{new Date(
@@ -161,7 +162,7 @@ function AdminDashboard() {
 					<CardContent>
 						<div className="space-y-2">
 							{rooms.length === 0 ? (
-								<div className="text-center py-4 text-muted-foreground">
+								<div className="py-4 text-center text-muted-foreground">
 									No rooms found
 								</div>
 							) : (
@@ -172,7 +173,7 @@ function AdminDashboard() {
 										params={{ publicId: room.publicId }}
 										className="block"
 									>
-										<div className="flex items-center justify-between p-4 bg-muted/50 hover:bg-muted border rounded-lg">
+										<div className="flex items-center justify-between rounded-lg border bg-muted/50 p-4 hover:bg-muted">
 											<div>
 												<h3 className="font-medium">{room.name}</h3>
 												<p className="text-sm text-muted-foreground">

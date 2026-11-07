@@ -2,6 +2,7 @@ import { Icon } from '@iconify/react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { useEffect, useId, useState } from 'react';
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -56,7 +57,6 @@ export function BookingDetailsStep() {
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
 	// Validate essential booking data on mount only
-	// biome-ignore lint/correctness/useExhaustiveDependencies: This effect should only run once on mount to validate initial booking data
 	useEffect(() => {
 		// Check if essential booking data is present on mount
 		if (!booking.roomId || !booking.checkInDate || !booking.checkOutDate) {
@@ -72,6 +72,7 @@ export function BookingDetailsStep() {
 				'Missing booking information. Please start from the beginning.',
 			);
 		}
+		// oxlint-disable-next-line react-hooks/exhaustive-deps -- This effect should only run once on mount to validate initial booking data
 	}, []);
 
 	const validateForm = () => {
@@ -353,7 +354,7 @@ export function BookingDetailsStep() {
 				<div className="space-y-4">
 					<h3 className="text-lg font-semibold">Guest Information</h3>
 
-					<div className="grid sm:grid-cols-2 gap-4">
+					<div className="grid gap-4 sm:grid-cols-2">
 						{/* Guest Name */}
 						<div className="space-y-2">
 							<Label htmlFor={nameId}>Full Name *</Label>
@@ -387,7 +388,7 @@ export function BookingDetailsStep() {
 						</div>
 					</div>
 
-					<div className="grid sm:grid-cols-2 gap-4">
+					<div className="grid gap-4 sm:grid-cols-2">
 						{/* Guest Phone */}
 						<div className="space-y-2">
 							<Label htmlFor={phoneId}>Phone Number *</Label>
@@ -422,10 +423,10 @@ export function BookingDetailsStep() {
 									<Icon icon="tabler:minus" className="size-5" />
 								</Button>
 
-								<div className="px-4 py-2 border border-border rounded-sm">
+								<div className="rounded-sm border border-border px-4 py-2">
 									<div
 										key={numberOfGuests}
-										className="animate-in fade-in zoom-in-50 duration-200"
+										className="animate-in duration-200 zoom-in-50 fade-in"
 									>
 										<span className="text-xl font-semibold tabular-nums">
 											{numberOfGuests}
@@ -468,7 +469,7 @@ export function BookingDetailsStep() {
 					<p
 						className={`text-xs ${
 							specialRequests.length > 900
-								? 'text-destructive font-semibold'
+								? 'font-semibold text-destructive'
 								: 'text-muted-foreground'
 						}`}
 					>
@@ -491,7 +492,7 @@ export function BookingDetailsStep() {
 						</CardTitle>
 					</CardHeader>
 					<CardContent>
-						<div className="text-sm space-y-1 font-semibold">
+						<div className="space-y-1 text-sm font-semibold">
 							<p>
 								<span className="font-light">Room:</span>{' '}
 								{booking.roomName || booking.roomSlug || 'N/A'}
@@ -537,7 +538,7 @@ export function BookingDetailsStep() {
 
 				{/* Error Display */}
 				{booking.error && (
-					<div className="bg-destructive/10 border border-destructive/20 rounded-md p-3">
+					<div className="rounded-md border border-destructive/20 bg-destructive/10 p-3">
 						<p className="text-sm text-destructive">{booking.error}</p>
 					</div>
 				)}

@@ -1,7 +1,9 @@
 import { eq } from 'drizzle-orm';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
+
 import { bookings } from '@/db/schema-export';
 import { createStripe } from '@/lib/stripe';
+
 import { db, fetchWorker, insertBooking } from './helpers';
 import {
 	mockResend,
@@ -97,38 +99,42 @@ describe('Stripe webhook signature', () => {
 });
 
 describe('payment_intent.succeeded', () => {
-	it('confirms the booking and emails the guest and admins once', {
-		timeout: 20_000,
-	}, async () => {
-		const booking = await pendingBookingWithIntent('pi_webhook_1');
-		const pi = {
-			id: 'pi_webhook_1',
-			amount: Math.round(booking.totalAmount * 100),
-			metadata: { bookingId: booking.id, userId: GUEST.id },
-		};
-		mockStripePaymentIntents(pi);
-		const sent = mockResend();
+	it(
+		'confirms the booking and emails the guest and admins once',
+		{
+			timeout: 20_000,
+		},
+		async () => {
+			const booking = await pendingBookingWithIntent('pi_webhook_1');
+			const pi = {
+				id: 'pi_webhook_1',
+				amount: Math.round(booking.totalAmount * 100),
+				metadata: { bookingId: booking.id, userId: GUEST.id },
+			};
+			mockStripePaymentIntents(pi);
+			const sent = mockResend();
 
-		const response = await fetchWorker(
-			await signedRequest(paymentIntentSucceeded(pi)),
-		);
-		expect(response.status).toBe(200);
-		expect(await bookingStatus(booking.id)).toEqual({
-			status: 'confirmed',
-			paymentStatus: 'paid',
-		});
-		expect(sent.filter((e) => e.to.includes(booking.guestEmail))).toHaveLength(
-			1,
-		);
-		expect(sent.filter((e) => e.to.includes(ADMIN.email))).toHaveLength(1);
+			const response = await fetchWorker(
+				await signedRequest(paymentIntentSucceeded(pi)),
+			);
+			expect(response.status).toBe(200);
+			expect(await bookingStatus(booking.id)).toEqual({
+				status: 'confirmed',
+				paymentStatus: 'paid',
+			});
+			expect(
+				sent.filter((e) => e.to.includes(booking.guestEmail)),
+			).toHaveLength(1);
+			expect(sent.filter((e) => e.to.includes(ADMIN.email))).toHaveLength(1);
 
-		// Replay: idempotent, no second email.
-		const replay = await fetchWorker(
-			await signedRequest(paymentIntentSucceeded(pi)),
-		);
-		expect(replay.status).toBe(200);
-		expect(sent).toHaveLength(2);
-	});
+			// Replay: idempotent, no second email.
+			const replay = await fetchWorker(
+				await signedRequest(paymentIntentSucceeded(pi)),
+			);
+			expect(replay.status).toBe(200);
+			expect(sent).toHaveLength(2);
+		},
+	);
 
 	it('acknowledges an intent with no matching booking', async () => {
 		const response = await fetchWorker(
@@ -139,33 +145,37 @@ describe('payment_intent.succeeded', () => {
 		expect(response.status).toBe(200);
 	});
 
-	it('does not log guest or admin email addresses', {
-		timeout: 20_000,
-	}, async () => {
-		const logged: string[] = [];
-		for (const method of ['log', 'info', 'warn', 'error', 'debug'] as const) {
-			vi.spyOn(console, method).mockImplementation((...args: unknown[]) => {
-				logged.push(
-					args
-						.map((a) => (typeof a === 'string' ? a : JSON.stringify(a)))
-						.join(' '),
-				);
-			});
-		}
-		const booking = await pendingBookingWithIntent('pi_webhook_2');
-		const pi = {
-			id: 'pi_webhook_2',
-			amount: Math.round(booking.totalAmount * 100),
-			metadata: { bookingId: booking.id, userId: GUEST.id },
-		};
-		mockStripePaymentIntents(pi);
-		mockResend();
-		await fetchWorker(await signedRequest(paymentIntentSucceeded(pi)));
+	it(
+		'does not log guest or admin email addresses',
+		{
+			timeout: 20_000,
+		},
+		async () => {
+			const logged: string[] = [];
+			for (const method of ['log', 'info', 'warn', 'error', 'debug'] as const) {
+				vi.spyOn(console, method).mockImplementation((...args: unknown[]) => {
+					logged.push(
+						args
+							.map((a) => (typeof a === 'string' ? a : JSON.stringify(a)))
+							.join(' '),
+					);
+				});
+			}
+			const booking = await pendingBookingWithIntent('pi_webhook_2');
+			const pi = {
+				id: 'pi_webhook_2',
+				amount: Math.round(booking.totalAmount * 100),
+				metadata: { bookingId: booking.id, userId: GUEST.id },
+			};
+			mockStripePaymentIntents(pi);
+			mockResend();
+			await fetchWorker(await signedRequest(paymentIntentSucceeded(pi)));
 
-		const output = logged.join('\n');
-		expect(output).not.toContain(booking.guestEmail);
-		expect(output).not.toContain(ADMIN.email);
-	});
+			const output = logged.join('\n');
+			expect(output).not.toContain(booking.guestEmail);
+			expect(output).not.toContain(ADMIN.email);
+		},
+	);
 });
 
 describe('charge.refunded', () => {

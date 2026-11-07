@@ -33,7 +33,7 @@ export function HeroSlider({
 	if (!images || images.length === 0) {
 		return (
 			<div className={`absolute inset-0 bg-muted ${className}`}>
-				<div className="w-full h-full flex items-center justify-center">
+				<div className="flex h-full w-full items-center justify-center">
 					<p className="text-muted-foreground">No images available</p>
 				</div>
 			</div>
@@ -55,7 +55,7 @@ export function HeroSlider({
 				}}
 				loop={true}
 				allowTouchMove={false}
-				className="zoom-container w-full h-full z-0"
+				className="zoom-container z-0 h-full w-full"
 			>
 				{images.map((image, index) => (
 					<SwiperSlide key={`slide-${image.src}`}>

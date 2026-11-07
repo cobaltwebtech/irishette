@@ -1,11 +1,12 @@
-import { env } from 'cloudflare:workers';
 import { drizzleAdapter } from '@better-auth/drizzle-adapter';
 import { stripe } from '@better-auth/stripe';
 import { betterAuth } from 'better-auth';
 import { admin, captcha, magicLink, phoneNumber } from 'better-auth/plugins';
 import { tanstackStartCookies } from 'better-auth/tanstack-start';
+import { env } from 'cloudflare:workers';
 import { drizzle } from 'drizzle-orm/d1';
 import { Resend } from 'resend';
+
 import { MagicLinkEmail } from '@/components/email/MagicLinkEmail';
 import { NotificationEmail } from '@/components/email/NotificationEmail';
 import { PasswordReset } from '@/components/email/PasswordReset';

@@ -1,4 +1,5 @@
 import { env, waitUntil as workerWaitUntil } from 'cloudflare:workers';
+
 import type { auth } from '@/lib/auth';
 import { createServiceDeps } from '@/lib/deps';
 

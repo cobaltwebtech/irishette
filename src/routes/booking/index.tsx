@@ -2,6 +2,7 @@ import { Icon } from '@iconify/react';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useEffectEvent, useSyncExternalStore } from 'react';
+
 import { AuthenticationStep } from '@/components/booking/AuthenticationStep';
 import { BookingDetailsStep } from '@/components/booking/BookingDetailsStep';
 import { BookingProgressSteps } from '@/components/booking/BookingProgressSteps';
@@ -163,7 +164,7 @@ function BookingFlow() {
 	// Wait for hydration before rendering
 	if (!isClient) {
 		return (
-			<div className="bg-background flex items-center justify-center">
+			<div className="flex items-center justify-center bg-background">
 				<div className="text-muted-foreground">Loading...</div>
 			</div>
 		);
@@ -184,14 +185,14 @@ function BookingFlow() {
 		};
 
 		return (
-			<div className="max-w-5xl mx-auto flex flex-auto flex-col justify-center">
+			<div className="mx-auto flex max-w-5xl flex-auto flex-col justify-center">
 				<Card>
 					<CardHeader>
 						<CardTitle className="text-center text-2xl font-bold">
 							No Active Booking
 						</CardTitle>
 					</CardHeader>
-					<CardContent className="text-center space-y-4">
+					<CardContent className="space-y-4 text-center">
 						<p className="text-muted-foreground">
 							You have no active booking started yet.
 						</p>
@@ -214,16 +215,16 @@ function BookingFlow() {
 
 			{/* Main Content */}
 			<div className="container mx-auto max-w-4xl px-4 py-12">
-				<div className="grid lg:grid-cols-3 gap-8">
+				<div className="grid gap-8 lg:grid-cols-3">
 					{/* Booking Steps */}
-					<div className="lg:col-span-2 order-2 lg:order-1">
+					<div className="order-2 lg:order-1 lg:col-span-2">
 						{booking.isStep('auth') && <AuthenticationStep />}
 						{booking.isStep('details') && <BookingDetailsStep />}
 						{booking.isStep('payment') && <PaymentStep />}
 					</div>
 
 					{/* Booking Summary Sidebar */}
-					<div className="lg:col-span-1 order-1 lg:order-2">
+					<div className="order-1 lg:order-2 lg:col-span-1">
 						<BookingSummaryCard />
 					</div>
 				</div>

@@ -1,4 +1,5 @@
 import { Icon } from '@iconify/react';
+
 import { useSession } from '@/lib/session';
 import { type BookingStep, useBookingStore } from '@/stores';
 import type { BookingStepItem } from '@/utils/booking-utils';
@@ -27,16 +28,16 @@ export function BookingProgressSteps() {
 	];
 
 	return (
-		<div className="bg-muted border-b">
+		<div className="border-b bg-muted">
 			<div className="container mx-auto max-w-4xl px-4 py-6">
-				<h2 className="text-center text-2xl font-bold mb-4">
+				<h2 className="mb-4 text-center text-2xl font-bold">
 					Booking Progress
 				</h2>
-				<div className="flex flex-wrap gap-4 items-center justify-between">
+				<div className="flex flex-wrap items-center justify-between gap-4">
 					{steps.map((item, index) => (
 						<div key={item.step} className="flex items-center">
 							<div
-								className={`flex items-center justify-center size-8 rounded-full ${
+								className={`flex size-8 items-center justify-center rounded-full ${
 									item.completed || booking.isStep(item.step as BookingStep)
 										? 'bg-primary text-primary-foreground'
 										: 'bg-background text-muted-foreground'

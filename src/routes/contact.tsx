@@ -1,6 +1,7 @@
 import { Icon } from '@iconify/react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useId } from 'react';
+
 import { Button } from '@/components/ui/button';
 import {
 	Card,
@@ -45,7 +46,7 @@ function ContactPage() {
 	return (
 		<div className="bg-background">
 			{/* Hero Section */}
-			<section className="relative h-[40vh] min-h-[400px] flex items-center justify-center overflow-hidden shadow-lg shadow-foreground/50">
+			<section className="relative flex h-[40vh] min-h-[400px] items-center justify-center overflow-hidden shadow-lg shadow-foreground/50">
 				{/* Background Image - using one of the existing room images as placeholder */}
 				<div
 					className="absolute inset-0 bg-cover bg-center bg-no-repeat"
@@ -58,25 +59,25 @@ function ContactPage() {
 				<div className="absolute inset-0 bg-black/60" />
 
 				{/* Content */}
-				<div className="relative z-10 container mx-auto max-w-4xl text-center px-4">
-					<h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-6 text-white">
+				<div className="relative z-10 container mx-auto max-w-4xl px-4 text-center">
+					<h1 className="mb-6 text-4xl font-black text-white md:text-6xl lg:text-7xl">
 						Contact Us
 					</h1>
-					<p className="text-xl md:text-2xl italic text-popover mb-8 font-medium drop-shadow-md max-w-3xl mx-auto">
+					<p className="mx-auto mb-8 max-w-3xl text-xl font-medium text-popover italic drop-shadow-md md:text-2xl">
 						We're here to help make your stay at Irishette unforgettable
 					</p>
 				</div>
 			</section>
 
 			{/* Contact Information & Form */}
-			<section className="py-16 px-4">
+			<section className="px-4 py-16">
 				<div className="container mx-auto max-w-6xl">
-					<div className="grid lg:grid-cols-2 gap-12">
+					<div className="grid gap-12 lg:grid-cols-2">
 						{/* Contact Information */}
 						<div className="space-y-8">
 							<div>
-								<h2 className="text-3xl font-bold mb-6">Get in Touch</h2>
-								<p className="text-muted-foreground text-lg leading-relaxed mb-8">
+								<h2 className="mb-6 text-3xl font-bold">Get in Touch</h2>
+								<p className="mb-8 text-lg leading-relaxed text-muted-foreground">
 									Have questions about your stay, need help with booking, or
 									want to know more about our amenities? We'd love to hear from
 									you! Our team is here to ensure you have the perfect Dublin,
@@ -91,16 +92,16 @@ function ContactPage() {
 										<div className="flex items-start gap-4">
 											<Icon
 												icon="tabler:mail"
-												className="size-6 text-accent mt-1"
+												className="mt-1 size-6 text-accent"
 											/>
 											<div>
-												<h3 className="font-semibold text-lg mb-2">Email Us</h3>
-												<p className="text-muted-foreground mb-2">
+												<h3 className="mb-2 text-lg font-semibold">Email Us</h3>
+												<p className="mb-2 text-muted-foreground">
 													For general inquiries and booking questions
 												</p>
 												<a
 													href="mailto:info@irishette.com"
-													className="text-accent hover:text-accent/80 font-medium"
+													className="font-medium text-accent hover:text-accent/80"
 												>
 													info@irishette.com
 												</a>
@@ -114,16 +115,16 @@ function ContactPage() {
 										<div className="flex items-start gap-4">
 											<Icon
 												icon="tabler:phone"
-												className="size-6 text-accent mt-1"
+												className="mt-1 size-6 text-accent"
 											/>
 											<div>
-												<h3 className="font-semibold text-lg mb-2">Call Us</h3>
-												<p className="text-muted-foreground mb-2">
+												<h3 className="mb-2 text-lg font-semibold">Call Us</h3>
+												<p className="mb-2 text-muted-foreground">
 													Speak directly with our friendly staff
 												</p>
 												<a
 													href="tel:+1234567890"
-													className="text-accent hover:text-accent/80 font-medium"
+													className="font-medium text-accent hover:text-accent/80"
 												>
 													(123) 456-7890
 												</a>
@@ -137,11 +138,11 @@ function ContactPage() {
 										<div className="flex items-start gap-4">
 											<Icon
 												icon="tabler:map-pin"
-												className="size-6 text-accent mt-1"
+												className="mt-1 size-6 text-accent"
 											/>
 											<div>
-												<h3 className="font-semibold text-lg mb-2">Visit Us</h3>
-												<p className="text-muted-foreground mb-2">
+												<h3 className="mb-2 text-lg font-semibold">Visit Us</h3>
+												<p className="mb-2 text-muted-foreground">
 													Located in historic Dublin, Texas
 												</p>
 												<address className="text-accent not-italic">
@@ -168,7 +169,7 @@ function ContactPage() {
 								</CardHeader>
 								<CardContent>
 									<form onSubmit={handleSubmit} className="space-y-6">
-										<div className="grid md:grid-cols-2 gap-4">
+										<div className="grid gap-4 md:grid-cols-2">
 											<div className="space-y-2">
 												<Label htmlFor={firstNameId}>First Name *</Label>
 												<Input
@@ -227,7 +228,7 @@ function ContactPage() {
 												name="message"
 												required
 												rows={5}
-												className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+												className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
 												placeholder="Tell us more about your inquiry..."
 											/>
 										</div>
@@ -237,7 +238,7 @@ function ContactPage() {
 												<Icon icon="tabler:send" className="size-5" />
 												Send Message
 											</Button>
-											<p className="text-sm text-muted-foreground text-center">
+											<p className="text-center text-sm text-muted-foreground">
 												* Required fields. We typically respond within 24 hours.
 											</p>
 										</div>
@@ -250,18 +251,18 @@ function ContactPage() {
 			</section>
 
 			{/* Additional Information */}
-			<section className="py-16 px-4 bg-secondary">
+			<section className="bg-secondary px-4 py-16">
 				<div className="container mx-auto max-w-4xl">
 					<Card className="border-accent/20">
 						<CardHeader>
-							<CardTitle className="text-2xl text-center">
+							<CardTitle className="text-center text-2xl">
 								Planning Your Visit?
 							</CardTitle>
 						</CardHeader>
 						<CardContent>
-							<div className="grid md:grid-cols-2 gap-8 text-center">
+							<div className="grid gap-8 text-center md:grid-cols-2">
 								<div>
-									<h3 className="font-semibold text-lg mb-3 text-accent">
+									<h3 className="mb-3 text-lg font-semibold text-accent">
 										Check-in & Check-out
 									</h3>
 									<p className="text-muted-foreground">
@@ -271,7 +272,7 @@ function ContactPage() {
 									</p>
 								</div>
 								<div>
-									<h3 className="font-semibold text-lg mb-3 text-accent">
+									<h3 className="mb-3 text-lg font-semibold text-accent">
 										Cancellation Policy
 									</h3>
 									<p className="text-muted-foreground">
@@ -287,7 +288,7 @@ function ContactPage() {
 									call us directly at{' '}
 									<a
 										href="tel:+1234567890"
-										className="text-accent hover:text-accent/80 font-medium"
+										className="font-medium text-accent hover:text-accent/80"
 									>
 										(123) 456-7890
 									</a>

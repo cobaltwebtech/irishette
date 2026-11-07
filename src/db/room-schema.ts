@@ -7,6 +7,7 @@ import {
 	text,
 	uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
+
 import { newIcalExportToken, newId, newPublicId } from '../lib/ids';
 
 export const room = sqliteTable('room', {

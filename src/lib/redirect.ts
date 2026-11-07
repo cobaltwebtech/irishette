@@ -1,5 +1,6 @@
 import { redirect } from '@tanstack/react-router';
 import { z } from 'zod';
+
 import type { AppSession } from '@/lib/session';
 
 export const DEFAULT_AUTH_REDIRECT = '/account';
@@ -10,7 +11,7 @@ export const DEFAULT_AUTH_REDIRECT = '/account';
  */
 function isSafeRedirect(value: string): boolean {
 	if (!value.startsWith('/') || value.startsWith('//')) return false;
-	// biome-ignore lint/suspicious/noControlCharactersInRegex: rejecting control characters is the point
+	// oxlint-disable-next-line eslint/no-control-regex -- rejecting control characters is the point
 	if (/[\\\u0000-\u001f\u007f]/.test(value)) return false;
 	try {
 		const base = 'http://localhost';

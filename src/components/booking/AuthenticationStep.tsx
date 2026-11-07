@@ -1,6 +1,7 @@
 import { Icon } from '@iconify/react';
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
 import { useRef, useState } from 'react';
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -28,7 +29,7 @@ export function AuthenticationStep() {
 					</CardTitle>
 				</CardHeader>
 				<CardContent>
-					<p className="text-muted-foreground mb-4">
+					<p className="mb-4 text-muted-foreground">
 						You're signed in and ready to continue with your booking.
 					</p>
 					<Button onClick={() => booking.actions.setStep('details')}>
@@ -81,7 +82,7 @@ export function AuthenticationStep() {
 					<CardTitle>Check Your Email</CardTitle>
 				</CardHeader>
 				<CardContent>
-					<p className="text-muted-foreground mb-4">
+					<p className="mb-4 text-muted-foreground">
 						We've sent a magic link to <strong>{email}</strong>. Click the link
 						in your email to continue with your booking.
 					</p>
@@ -103,7 +104,7 @@ export function AuthenticationStep() {
 	return (
 		<Card>
 			<CardHeader>
-				<CardTitle className="text-lg flex items-center gap-2">
+				<CardTitle className="flex items-center gap-2 text-lg">
 					<Icon icon="tabler:user-circle" className="size-6" />
 					Sign In to Continue
 				</CardTitle>

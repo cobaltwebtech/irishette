@@ -2,9 +2,58 @@ import { cloudflare } from '@cloudflare/vite-plugin';
 import tailwindcss from '@tailwindcss/vite';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig, lazyPlugins } from 'vite-plus';
 
 const config = defineConfig({
+	fmt: {
+		useTabs: true,
+		singleQuote: true,
+		printWidth: 80,
+		overrides: [{ files: ['**/*.css'], options: { singleQuote: false } }],
+		sortImports: {
+			internalPattern: ['@/'],
+		},
+		sortTailwindcss: {
+			stylesheet: './src/styles/styles.css',
+			functions: ['cn', 'cva', 'clsx'],
+		},
+		ignorePatterns: [
+			'src/routeTree.gen.ts',
+			'worker-configuration.d.ts',
+			'.tanstack',
+			'**/dist',
+			// Keep Oxfmt scoped like Biome was: not docs, agent files, generated
+			// output, migrations or root config/manifest files.
+			'.agents',
+			'.claude',
+			'.zed',
+			'.fallow',
+			'docs',
+			'drizzle',
+			'public',
+			'/*.md',
+			'/*.json',
+			'/*.jsonc',
+			'/*.yaml',
+			'/varlock.d.ts',
+			'/drizzle.config.ts',
+			'/cloudflare.config.ts',
+		],
+	},
+	lint: {
+		plugins: ['typescript', 'unicorn', 'oxc', 'react', 'jsx-a11y'],
+		categories: { correctness: 'error' },
+		ignorePatterns: [
+			'src/routeTree.gen.ts',
+			'.tanstack/**',
+			'.cloudflare/**',
+			// Typed by e2e/tsconfig.json (root tsconfig excludes it).
+			'playwright.config.ts',
+		],
+		jsPlugins: [{ name: 'vite-plus', specifier: 'vite-plus/oxlint-plugin' }],
+		rules: { 'vite-plus/prefer-vite-plus-imports': 'error' },
+		options: { typeAware: true, typeCheck: true },
+	},
 	// `cf dev` does not forward --port, so pin it here.
 	server: {
 		port: 3000,
@@ -17,7 +66,7 @@ const config = defineConfig({
 	resolve: {
 		tsconfigPaths: true,
 	},
-	plugins: [
+	plugins: lazyPlugins(() => [
 		cloudflare({
 			viteEnvironment: {
 				name: 'ssr',
@@ -31,7 +80,7 @@ const config = defineConfig({
 		}),
 		// React Compiler via the Rust port (oxc-transform-react); no Babel.
 		react({ compiler: true }),
-	],
+	]),
 });
 
 export default config;

@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
+
 import {
 	type PricingRule,
 	priceNights,
@@ -82,7 +83,11 @@ describe('priceNights', () => {
 		});
 		expect(
 			priceNights(100, [late, early], '2030-06-08', '2030-06-09')[0],
-		).toEqual({ date: '2030-06-08', price: 200, ruleId: 'early' });
+		).toEqual({
+			date: '2030-06-08',
+			price: 200,
+			ruleId: 'early',
+		});
 	});
 });
 

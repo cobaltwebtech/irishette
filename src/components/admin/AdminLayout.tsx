@@ -1,4 +1,5 @@
 import { useState } from 'react';
+
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -47,7 +48,7 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
 						{title && <h1 className="text-3xl font-bold">{title}</h1>}
 					</div>
 				</header>
-				<div className="flex flex-1 flex-col gap-8 p-6 min-w-0">{children}</div>
+				<div className="flex min-w-0 flex-1 flex-col gap-8 p-6">{children}</div>
 			</SidebarInset>
 		</SidebarProvider>
 	);

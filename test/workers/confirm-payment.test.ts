@@ -1,7 +1,9 @@
 import { eq } from 'drizzle-orm';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
+
 import { bookings } from '@/db/schema-export';
 import { createStripe } from '@/lib/stripe';
+
 import {
 	caller,
 	db,
@@ -112,37 +114,41 @@ describe('confirmPayment verification', () => {
 });
 
 describe('confirmation when the dates were taken meanwhile', () => {
-	it('refunds automatically, cancels the booking and emails the admin', {
-		timeout: 20_000,
-	}, async () => {
-		const booking = await pendingBooking('pi_taken');
-		// An Airbnb reservation arrived via iCal sync after checkout started.
-		const feed = await insertFeed();
-		await insertExternalEvent({
-			feedId: feed.id,
-			startDate: booking.checkInDate,
-			endDate: booking.checkOutDate,
-		});
-		mockStripePaymentIntents(intentFor(booking));
-		const refunds = mockStripeRefunds();
-		const sent = mockResend();
+	it(
+		'refunds automatically, cancels the booking and emails the admin',
+		{
+			timeout: 20_000,
+		},
+		async () => {
+			const booking = await pendingBooking('pi_taken');
+			// An Airbnb reservation arrived via iCal sync after checkout started.
+			const feed = await insertFeed();
+			await insertExternalEvent({
+				feedId: feed.id,
+				startDate: booking.checkInDate,
+				endDate: booking.checkOutDate,
+			});
+			mockStripePaymentIntents(intentFor(booking));
+			const refunds = mockStripeRefunds();
+			const sent = mockResend();
 
-		const error = await trpcError(
-			guest().bookings.confirmPayment({
-				bookingId: booking.id,
-				paymentIntentId: 'pi_taken',
-			}),
-		);
-		expect(error.code).toBe('CONFLICT');
-		expect(refunds).toHaveLength(1);
-		expect(refunds[0].body.get('payment_intent')).toBe('pi_taken');
-		const after = await row(booking.id);
-		expect(after.status).toBe('cancelled');
-		expect(after.paymentStatus).toBe('refunded');
-		await settle();
-		expect(sent.some((e) => e.to.includes(ADMIN.email))).toBe(true);
-		expect(sent.some((e) => e.to.includes(booking.guestEmail))).toBe(true);
-	});
+			const error = await trpcError(
+				guest().bookings.confirmPayment({
+					bookingId: booking.id,
+					paymentIntentId: 'pi_taken',
+				}),
+			);
+			expect(error.code).toBe('CONFLICT');
+			expect(refunds).toHaveLength(1);
+			expect(refunds[0].body.get('payment_intent')).toBe('pi_taken');
+			const after = await row(booking.id);
+			expect(after.status).toBe('cancelled');
+			expect(after.paymentStatus).toBe('refunded');
+			await settle();
+			expect(sent.some((e) => e.to.includes(ADMIN.email))).toBe(true);
+			expect(sent.some((e) => e.to.includes(booking.guestEmail))).toBe(true);
+		},
+	);
 
 	it('the webhook path refunds too, once, and returns 200', async () => {
 		const booking = await pendingBooking('pi_taken_webhook');
@@ -186,51 +192,55 @@ describe('confirmation when the dates were taken meanwhile', () => {
 });
 
 describe('idempotency', () => {
-	it('front-end confirm, webhook and a repeated confirm send one confirmation', {
-		timeout: 30_000,
-	}, async () => {
-		const booking = await pendingBooking('pi_idem');
-		const intent = intentFor(booking);
-		mockStripePaymentIntents(intent);
-		const sent = mockResend();
+	it(
+		'front-end confirm, webhook and a repeated confirm send one confirmation',
+		{
+			timeout: 30_000,
+		},
+		async () => {
+			const booking = await pendingBooking('pi_idem');
+			const intent = intentFor(booking);
+			mockStripePaymentIntents(intent);
+			const sent = mockResend();
 
-		await guest().bookings.confirmPayment({
-			bookingId: booking.id,
-			paymentIntentId: 'pi_idem',
-		});
+			await guest().bookings.confirmPayment({
+				bookingId: booking.id,
+				paymentIntentId: 'pi_idem',
+			});
 
-		const stripe = createStripe('sk_test_x');
-		const payload = JSON.stringify({
-			id: 'evt_idem',
-			object: 'event',
-			type: 'payment_intent.succeeded',
-			data: { object: paymentIntentObject(intent) },
-		});
-		const signature = await stripe.webhooks.generateTestHeaderStringAsync({
-			payload,
-			secret: 'whsec_test',
-		});
-		await fetchWorker(
-			new Request('http://localhost/api/stripe/webhook', {
-				method: 'POST',
-				headers: {
-					'content-type': 'application/json',
-					'stripe-signature': signature,
-				},
-				body: payload,
-			}),
-		);
+			const stripe = createStripe('sk_test_x');
+			const payload = JSON.stringify({
+				id: 'evt_idem',
+				object: 'event',
+				type: 'payment_intent.succeeded',
+				data: { object: paymentIntentObject(intent) },
+			});
+			const signature = await stripe.webhooks.generateTestHeaderStringAsync({
+				payload,
+				secret: 'whsec_test',
+			});
+			await fetchWorker(
+				new Request('http://localhost/api/stripe/webhook', {
+					method: 'POST',
+					headers: {
+						'content-type': 'application/json',
+						'stripe-signature': signature,
+					},
+					body: payload,
+				}),
+			);
 
-		await guest().bookings.confirmPayment({
-			bookingId: booking.id,
-			paymentIntentId: 'pi_idem',
-		});
+			await guest().bookings.confirmPayment({
+				bookingId: booking.id,
+				paymentIntentId: 'pi_idem',
+			});
 
-		await settle();
-		expect((await row(booking.id)).status).toBe('confirmed');
-		expect(sent.filter((e) => e.to.includes(booking.guestEmail))).toHaveLength(
-			1,
-		);
-		expect(sent.filter((e) => e.to.includes(ADMIN.email))).toHaveLength(1);
-	});
+			await settle();
+			expect((await row(booking.id)).status).toBe('confirmed');
+			expect(
+				sent.filter((e) => e.to.includes(booking.guestEmail)),
+			).toHaveLength(1);
+			expect(sent.filter((e) => e.to.includes(ADMIN.email))).toHaveLength(1);
+		},
+	);
 });

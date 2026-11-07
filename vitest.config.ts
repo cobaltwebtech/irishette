@@ -1,5 +1,5 @@
 import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-plugin';
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from 'vite-plus';
 
 // Test config, separate from vite.config.ts: the Start, React and Cloudflare
 // Vite plugins are not loaded here.

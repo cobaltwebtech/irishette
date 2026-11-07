@@ -4,6 +4,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
+
 import { Button } from '@/components/ui/button';
 import {
 	Card,
@@ -86,10 +87,10 @@ function ForgotPasswordPage() {
 
 	if (isSuccess) {
 		return (
-			<div className="flex flex-col flex-auto items-center justify-center bg-background px-4 py-8">
+			<div className="flex flex-auto flex-col items-center justify-center bg-background px-4 py-8">
 				<Card className="w-full max-w-md">
 					<CardHeader className="text-center">
-						<div className="flex items-center justify-center mb-4 mx-auto size-16 bg-primary rounded-full">
+						<div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-primary">
 							<Icon
 								icon="tabler:mail-fast"
 								className="size-10 text-primary-foreground"
@@ -104,7 +105,7 @@ function ForgotPasswordPage() {
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="space-y-4">
-						<p className="text-muted-foreground text-center">
+						<p className="text-center text-muted-foreground">
 							Click the link in your email to reset your password. The link will
 							expire in 15 minutes.
 						</p>
@@ -138,10 +139,10 @@ function ForgotPasswordPage() {
 	}
 
 	return (
-		<div className="flex flex-col flex-auto items-center justify-center bg-background px-4 py-8">
+		<div className="flex flex-auto flex-col items-center justify-center bg-background px-4 py-8">
 			<Card className="w-full max-w-md">
 				<CardHeader className="text-center">
-					<div className="flex items-center justify-center mb-4 mx-auto size-16 bg-primary rounded-full">
+					<div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-primary">
 						<Icon
 							icon="tabler:lock-cog"
 							className="size-10 text-primary-foreground"

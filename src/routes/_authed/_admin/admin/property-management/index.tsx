@@ -7,6 +7,7 @@ import {
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { FlexRender } from '@tanstack/react-table';
 import { useId, useState } from 'react';
+
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import {
 	createAppColumnHelper,
@@ -85,7 +86,7 @@ const columns = columnHelper.columns([
 			<div>
 				<div className="font-medium">{info.getValue()}</div>
 				{info.row.original.description && (
-					<div className="text-sm text-muted-foreground mt-1">
+					<div className="mt-1 text-sm text-muted-foreground">
 						{info.row.original.description}
 					</div>
 				)}
@@ -141,7 +142,7 @@ const columns = columnHelper.columns([
 			<SortableHeader column={column}>Last Updated</SortableHeader>
 		),
 		cell: (info) => (
-			<span className="text-sm hidden sm:inline">
+			<span className="hidden text-sm sm:inline">
 				{new Date(info.getValue()).toLocaleDateString()}
 			</span>
 		),
@@ -218,11 +219,11 @@ function RoomsTable({ table }: { table: DataTable<RoomRow> }) {
 			</ScrollArea>
 
 			{/* Pagination */}
-			<div className="flex items-center justify-between space-x-2 py-4 flex-col sm:flex-row gap-4">
-				<div className="text-sm text-muted-foreground order-2 sm:order-1">
+			<div className="flex flex-col items-center justify-between gap-4 space-x-2 py-4 sm:flex-row">
+				<div className="order-2 text-sm text-muted-foreground sm:order-1">
 					Showing {table.getFilteredRowModel().rows.length} room(s)
 				</div>
-				<div className="space-x-2 order-1 sm:order-2">
+				<div className="order-1 space-x-2 sm:order-2">
 					<Button
 						variant="outline"
 						size="sm"
@@ -332,7 +333,7 @@ function PropertyManagement() {
 						<div>
 							<label
 								htmlFor={roomNameId}
-								className="block text-sm font-medium mb-1"
+								className="mb-1 block text-sm font-medium"
 							>
 								Room Name
 							</label>
@@ -346,7 +347,7 @@ function PropertyManagement() {
 						<div>
 							<label
 								htmlFor={roomSlugId}
-								className="block text-sm font-medium mb-1"
+								className="mb-1 block text-sm font-medium"
 							>
 								Slug
 							</label>
@@ -362,7 +363,7 @@ function PropertyManagement() {
 						<div>
 							<label
 								htmlFor={roomDescriptionId}
-								className="block text-sm font-medium mb-1"
+								className="mb-1 block text-sm font-medium"
 							>
 								Description
 							</label>
@@ -381,7 +382,7 @@ function PropertyManagement() {
 						<div>
 							<label
 								htmlFor={basePriceId}
-								className="block text-sm font-medium mb-1"
+								className="mb-1 block text-sm font-medium"
 							>
 								Base Price ($)
 							</label>
@@ -447,8 +448,8 @@ function PropertyManagement() {
 			{/* Rooms List */}
 			{rooms.length === 0 ? (
 				<Card>
-					<CardContent className="text-center py-8 space-y-4">
-						<Icon icon="tabler:home" className="size-12 mx-auto text-primary" />
+					<CardContent className="space-y-4 py-8 text-center">
+						<Icon icon="tabler:home" className="mx-auto size-12 text-primary" />
 						<h3 className="text-lg font-medium">No rooms found</h3>
 						<p className="text-muted-foreground">
 							Get started by adding your first room.
@@ -462,15 +463,15 @@ function PropertyManagement() {
 			) : (
 				<Card className="max-w-full overflow-hidden">
 					<CardHeader>
-						<div className="flex items-center justify-between flex-col sm:flex-row gap-4">
+						<div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
 							<CardTitle>
 								Rooms ({table.getFilteredRowModel().rows.length})
 							</CardTitle>
-							<div className="flex items-center gap-2 w-full sm:w-auto">
+							<div className="flex w-full items-center gap-2 sm:w-auto">
 								<div className="relative w-full sm:w-[300px]">
 									<Icon
 										icon="tabler:search"
-										className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground size-4"
+										className="absolute top-1/2 left-2 size-4 -translate-y-1/2 transform text-muted-foreground"
 									/>
 									<Input
 										placeholder="Search rooms..."

@@ -2,6 +2,7 @@ import { Icon } from '@iconify/react';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useState } from 'react';
+
 import {
 	createAppColumnHelper,
 	DataTableView,
@@ -37,7 +38,7 @@ const columns = columnHelper.columns([
 			<Link
 				to="/account/booking/$publicId"
 				params={{ publicId: info.row.original.booking.publicId }}
-				className="font-mono text-sm font-semibold text-primary hover:text-primary/80 underline"
+				className="font-mono text-sm font-semibold text-primary underline hover:text-primary/80"
 			>
 				{info.getValue()}
 			</Link>
@@ -149,7 +150,7 @@ function AccountPage() {
 	return (
 		<div className="bg-background">
 			{/* Header */}
-			<div className="bg-primary/5 border-b">
+			<div className="border-b bg-primary/5">
 				<div className="container mx-auto px-4 py-6">
 					<div className="flex items-center justify-between">
 						<div>
@@ -184,7 +185,7 @@ function AccountPage() {
 								<div className="relative">
 									<Icon
 										icon="tabler:search"
-										className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground size-4"
+										className="absolute top-1/2 left-2 size-4 -translate-y-1/2 transform text-muted-foreground"
 									/>
 									<Input
 										placeholder="Search bookings..."
@@ -192,7 +193,7 @@ function AccountPage() {
 										onChange={(event) =>
 											table.setGlobalFilter(String(event.target.value))
 										}
-										className="pl-8 w-[250px]"
+										className="w-[250px] pl-8"
 									/>
 								</div>
 							</div>
@@ -215,12 +216,12 @@ function AccountPage() {
 						<CardContent className="flex flex-col items-center justify-center py-12">
 							<Icon
 								icon="tabler:calendar-question"
-								className="size-16 text-muted-foreground mb-4"
+								className="mb-4 size-16 text-muted-foreground"
 							/>
-							<h3 className="text-xl font-semibold mb-2">
+							<h3 className="mb-2 text-xl font-semibold">
 								No Current Bookings
 							</h3>
-							<p className="text-muted-foreground text-center mb-6 max-w-md">
+							<p className="mb-6 max-w-md text-center text-muted-foreground">
 								You have no current or upcoming bookings. Start exploring our
 								available rooms and make your next reservation!
 							</p>
@@ -244,7 +245,7 @@ function AccountPage() {
 					<Card>
 						<CardHeader>
 							<CardTitle className="flex items-center">
-								<Icon icon="tabler:user-circle" className="size-5 mr-2" />
+								<Icon icon="tabler:user-circle" className="mr-2 size-5" />
 								Account Information
 							</CardTitle>
 						</CardHeader>
@@ -252,25 +253,25 @@ function AccountPage() {
 							<div className="space-y-2">
 								<div>
 									<p className="text-sm text-muted-foreground">Name</p>
-									<p className="text-foreground font-semibold">{user.name}</p>
+									<p className="font-semibold text-foreground">{user.name}</p>
 								</div>
 								<div>
 									<p className="text-sm text-muted-foreground">Email</p>
-									<p className="text-foreground font-semibold">
-										<Icon icon="tabler:mail" className="size-4 inline mr-1" />
+									<p className="font-semibold text-foreground">
+										<Icon icon="tabler:mail" className="mr-1 inline size-4" />
 										{user.email}
 									</p>
 								</div>
 								<div>
 									<p className="text-sm text-muted-foreground">Phone Number</p>
-									<p className="text-foreground font-semibold">
-										<Icon icon="tabler:phone" className="size-4 inline mr-1" />
+									<p className="font-semibold text-foreground">
+										<Icon icon="tabler:phone" className="mr-1 inline size-4" />
 										{user.phoneNumber || 'Not provided'}
 									</p>
 								</div>
 								<div>
 									<p className="text-sm text-muted-foreground">Member Since</p>
-									<p className="text-foreground font-semibold">
+									<p className="font-semibold text-foreground">
 										{new Date(user.createdAt).toLocaleDateString('en-US', {
 											year: 'numeric',
 											month: 'long',
@@ -286,7 +287,7 @@ function AccountPage() {
 					<Card>
 						<CardHeader>
 							<CardTitle className="flex items-center">
-								<Icon icon="tabler:settings" className="size-5 mr-2" />
+								<Icon icon="tabler:settings" className="mr-2 size-5" />
 								Quick Actions
 							</CardTitle>
 						</CardHeader>
@@ -294,7 +295,7 @@ function AccountPage() {
 							<div>
 								<p>Update Profile</p>
 								<Button onClick={() => setIsEditModalOpen(true)}>
-									<Icon icon="tabler:pencil" className="size-4 inline mr-1" />
+									<Icon icon="tabler:pencil" className="mr-1 inline size-4" />
 									Edit Your Information
 								</Button>
 							</div>

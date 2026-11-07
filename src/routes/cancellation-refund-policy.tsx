@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -19,7 +20,7 @@ function CancellationRefundPolicyPage() {
 			{/* Hero Section */}
 			<section className="my-8">
 				<div className="container mx-auto max-w-4xl text-center">
-					<h1 className="text-4xl md:text-5xl font-bold mb-4">
+					<h1 className="mb-4 text-4xl font-bold md:text-5xl">
 						Cancellation and Refund Policy
 					</h1>
 					<p className="text-lg text-muted-foreground">
@@ -35,8 +36,8 @@ function CancellationRefundPolicyPage() {
 						<CardContent>
 							{/* Overview */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">Overview</h2>
-								<p className="text-muted-foreground leading-relaxed">
+								<h2 className="mb-4 text-2xl font-bold">Overview</h2>
+								<p className="leading-relaxed text-muted-foreground">
 									At irishette.com, we understand that plans can change. This
 									Cancellation and Refund Policy outlines the terms and
 									conditions for canceling your reservation and receiving
@@ -47,13 +48,13 @@ function CancellationRefundPolicyPage() {
 
 							{/* Cancellation Timeframes */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">
+								<h2 className="mb-4 text-2xl font-bold">
 									Cancellation Timeframes and Penalties
 								</h2>
 
 								<div className="space-y-6">
-									<div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-										<h3 className="text-xl font-semibold mb-2">
+									<div className="rounded-lg border border-green-200 bg-green-50 p-4">
+										<h3 className="mb-2 text-xl font-semibold">
 											Cancellation More Than 72 Hours Before Check-In
 										</h3>
 										<ul className="space-y-1 text-muted-foreground">
@@ -66,8 +67,8 @@ function CancellationRefundPolicyPage() {
 										</ul>
 									</div>
 
-									<div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-										<h3 className="text-xl font-semibold mb-2">
+									<div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+										<h3 className="mb-2 text-xl font-semibold">
 											Cancellation Between 72-24 Hours Before Check-In
 										</h3>
 										<ul className="space-y-1 text-muted-foreground">
@@ -80,8 +81,8 @@ function CancellationRefundPolicyPage() {
 										</ul>
 									</div>
 
-									<div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-										<h3 className="text-xl font-semibold mb-2">
+									<div className="rounded-lg border border-red-200 bg-red-50 p-4">
+										<h3 className="mb-2 text-xl font-semibold">
 											Cancellation Within 24 Hours of Check-In
 										</h3>
 										<ul className="space-y-1 text-muted-foreground">
@@ -98,14 +99,14 @@ function CancellationRefundPolicyPage() {
 
 							{/* How to Cancel */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">
+								<h2 className="mb-4 text-2xl font-bold">
 									How to Cancel Your Reservation
 								</h2>
-								<p className="text-muted-foreground leading-relaxed mb-3">
+								<p className="mb-3 leading-relaxed text-muted-foreground">
 									Cancellations must be made through one of the following
 									methods:
 								</p>
-								<ol className="list-decimal pl-6 space-y-2 text-muted-foreground">
+								<ol className="list-decimal space-y-2 pl-6 text-muted-foreground">
 									<li>
 										<strong>Online:</strong> Visit our{' '}
 										<Link to="/account" className="text-accent underline">
@@ -118,7 +119,7 @@ function CancellationRefundPolicyPage() {
 										<strong>(123) 456-7890</strong>
 									</li>
 								</ol>
-								<p className="text-muted-foreground leading-relaxed mt-3">
+								<p className="mt-3 leading-relaxed text-muted-foreground">
 									Cancellations are effective based on the date and time we
 									receive your cancellation request, not when you decide to
 									cancel. We recommend canceling as early as possible to avoid
@@ -128,21 +129,21 @@ function CancellationRefundPolicyPage() {
 
 							{/* Refund Processing */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">Refund Processing</h2>
+								<h2 className="mb-4 text-2xl font-bold">Refund Processing</h2>
 
-								<h3 className="text-xl font-semibold mb-3 mt-6">
+								<h3 className="mt-6 mb-3 text-xl font-semibold">
 									Processing Method
 								</h3>
-								<p className="text-muted-foreground leading-relaxed">
+								<p className="leading-relaxed text-muted-foreground">
 									All refunds will be processed to the original payment method
 									used at the time of booking. We do not issue refunds via cash
 									or check under any circumstances.
 								</p>
 
-								<h3 className="text-xl font-semibold mb-3 mt-6">
+								<h3 className="mt-6 mb-3 text-xl font-semibold">
 									Processing Time
 								</h3>
-								<p className="text-muted-foreground leading-relaxed">
+								<p className="leading-relaxed text-muted-foreground">
 									Once your cancellation is confirmed and a refund is approved,
 									please allow <strong>3-5 business days</strong> for the refund
 									to appear on your card account. The exact timing may vary
@@ -152,8 +153,8 @@ function CancellationRefundPolicyPage() {
 
 							{/* No-Show Policy */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">No-Show Policy</h2>
-								<p className="text-muted-foreground leading-relaxed">
+								<h2 className="mb-4 text-2xl font-bold">No-Show Policy</h2>
+								<p className="leading-relaxed text-muted-foreground">
 									Failure to arrive on your scheduled check-in date without
 									prior cancellation will be treated as a cancellation within 24
 									hours of check-in, resulting in forfeiture of your entire
@@ -163,8 +164,8 @@ function CancellationRefundPolicyPage() {
 
 							{/* Early Departure */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">Early Departure</h2>
-								<p className="text-muted-foreground leading-relaxed">
+								<h2 className="mb-4 text-2xl font-bold">Early Departure</h2>
+								<p className="leading-relaxed text-muted-foreground">
 									If you check out or leave the property before your scheduled
 									checkout date, no refund will be given for the remaining days
 									left on your booking. The full booking amount remains due
@@ -174,23 +175,23 @@ function CancellationRefundPolicyPage() {
 
 							{/* Deposits and Payment */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">
+								<h2 className="mb-4 text-2xl font-bold">
 									Deposits and Payment
 								</h2>
 
-								<h3 className="text-xl font-semibold mb-3 mt-6">
+								<h3 className="mt-6 mb-3 text-xl font-semibold">
 									Deposit Application
 								</h3>
-								<p className="text-muted-foreground leading-relaxed">
+								<p className="leading-relaxed text-muted-foreground">
 									If a deposit was collected at the time of booking, that amount
 									will be applied to your booking total as a credit. Any
 									remaining balance will be due at checkout.
 								</p>
 
-								<h3 className="text-xl font-semibold mb-3 mt-6">
+								<h3 className="mt-6 mb-3 text-xl font-semibold">
 									Deposit Refunds
 								</h3>
-								<p className="text-muted-foreground leading-relaxed">
+								<p className="leading-relaxed text-muted-foreground">
 									Deposits are subject to the same cancellation timeframes and
 									penalties outlined above. If you cancel your reservation, the
 									deposit will be refunded according to the applicable penalty
@@ -200,10 +201,10 @@ function CancellationRefundPolicyPage() {
 
 							{/* Violations and Property Damage */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">
+								<h2 className="mb-4 text-2xl font-bold">
 									Violations and Property Damage
 								</h2>
-								<p className="text-muted-foreground leading-relaxed mb-3">
+								<p className="mb-3 leading-relaxed text-muted-foreground">
 									If you violate our{' '}
 									<Link
 										to="/terms-of-service"
@@ -216,10 +217,10 @@ function CancellationRefundPolicyPage() {
 									<strong>no refund will be issued</strong> for any portion of
 									your stay.
 								</p>
-								<p className="text-muted-foreground leading-relaxed mb-3">
+								<p className="mb-3 leading-relaxed text-muted-foreground">
 									This includes but is not limited to:
 								</p>
-								<ul className="list-disc pl-6 space-y-2 text-muted-foreground">
+								<ul className="list-disc space-y-2 pl-6 text-muted-foreground">
 									<li>Violations of property rules and regulations</li>
 									<li>Disruptive or illegal behavior</li>
 									<li>Damage to property or furnishings</li>
@@ -227,7 +228,7 @@ function CancellationRefundPolicyPage() {
 									<li>Smoking in non-smoking areas</li>
 									<li>Any other breach of our Terms of Service</li>
 								</ul>
-								<p className="text-muted-foreground leading-relaxed mt-3">
+								<p className="mt-3 leading-relaxed text-muted-foreground">
 									You will remain responsible for the full booking amount plus
 									any additional charges for damages or cleaning fees.
 								</p>
@@ -235,22 +236,22 @@ function CancellationRefundPolicyPage() {
 
 							{/* Force Majeure */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">
+								<h2 className="mb-4 text-2xl font-bold">
 									Force Majeure and Cancellations by irishette.com
 								</h2>
-								<p className="text-muted-foreground leading-relaxed mb-3">
+								<p className="mb-3 leading-relaxed text-muted-foreground">
 									We reserve the right to cancel any reservation due to
 									circumstances beyond our control, including but not limited
 									to:
 								</p>
-								<ul className="list-disc pl-6 space-y-2 text-muted-foreground">
+								<ul className="list-disc space-y-2 pl-6 text-muted-foreground">
 									<li>Natural disasters</li>
 									<li>Severe weather conditions</li>
 									<li>Property damage or maintenance emergencies</li>
 									<li>Government orders or restrictions</li>
 									<li>Other unforeseen events</li>
 								</ul>
-								<p className="text-muted-foreground leading-relaxed mt-3">
+								<p className="mt-3 leading-relaxed text-muted-foreground">
 									In the event we cancel your reservation, you will receive a{' '}
 									<strong>full refund</strong> of all amounts paid, regardless
 									of the timing of the cancellation.
@@ -259,10 +260,10 @@ function CancellationRefundPolicyPage() {
 
 							{/* Modifications */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">
+								<h2 className="mb-4 text-2xl font-bold">
 									Modifications to Reservations
 								</h2>
-								<p className="text-muted-foreground leading-relaxed">
+								<p className="leading-relaxed text-muted-foreground">
 									Changes to your reservation dates or guest information may be
 									possible subject to availability. Please contact us as early
 									as possible to discuss modifications. Depending on the nature
@@ -272,10 +273,10 @@ function CancellationRefundPolicyPage() {
 
 							{/* Special Circumstances */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">
+								<h2 className="mb-4 text-2xl font-bold">
 									Special Circumstances
 								</h2>
-								<p className="text-muted-foreground leading-relaxed">
+								<p className="leading-relaxed text-muted-foreground">
 									We understand that extraordinary circumstances may arise. If
 									you need to cancel due to a medical emergency, family
 									emergency, or other exceptional situation, please contact us
@@ -286,8 +287,8 @@ function CancellationRefundPolicyPage() {
 
 							{/* Policy Changes */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">Policy Changes</h2>
-								<p className="text-muted-foreground leading-relaxed">
+								<h2 className="mb-4 text-2xl font-bold">Policy Changes</h2>
+								<p className="leading-relaxed text-muted-foreground">
 									We reserve the right to modify this Cancellation and Refund
 									Policy at any time. Changes will be effective immediately upon
 									posting with an updated "Last Updated" date. Your reservation
@@ -298,8 +299,8 @@ function CancellationRefundPolicyPage() {
 
 							{/* Contact Us */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">Contact Us</h2>
-								<p className="text-muted-foreground leading-relaxed mb-3">
+								<h2 className="mb-4 text-2xl font-bold">Contact Us</h2>
+								<p className="mb-3 leading-relaxed text-muted-foreground">
 									If you have questions about this Cancellation and Refund
 									Policy or need assistance with a cancellation, please contact
 									us:
@@ -318,8 +319,8 @@ function CancellationRefundPolicyPage() {
 							</section>
 
 							{/* Acknowledgment */}
-							<section className="mb-8 p-4 bg-muted/30 rounded-lg border border-primary/20">
-								<p className="text-sm text-muted-foreground leading-relaxed">
+							<section className="mb-8 rounded-lg border border-primary/20 bg-muted/30 p-4">
+								<p className="text-sm leading-relaxed text-muted-foreground">
 									By making a booking with irishette.com, you acknowledge that
 									you have read, understood, and agree to this Cancellation and
 									Refund Policy.

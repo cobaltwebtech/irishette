@@ -6,11 +6,11 @@
 	}
 
 	.zoom-container {
-		@apply w-full h-full overflow-hidden;
+		@apply h-full w-full overflow-hidden;
 	}
 
 	.zoom-img {
-		@apply object-cover w-full h-full;
+		@apply h-full w-full object-cover;
 		transform-origin: center center;
 		will-change: transform;
 		/* ensure a predictable baseline */

@@ -1,4 +1,5 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vite-plus/test';
+
 import { caller, insertBooking, insertFeed } from './helpers';
 import { ROSE } from './seed';
 

@@ -5,6 +5,7 @@ import {
 	sqliteTable,
 	text,
 } from 'drizzle-orm/sqlite-core';
+
 import { newId, newPublicId } from '../lib/ids';
 import { user } from './auth-schema';
 import { cancellationPolicies } from './policy-schema';

@@ -1,10 +1,11 @@
+import { TRPCError } from '@trpc/server';
 import {
 	createExecutionContext,
 	waitOnExecutionContext,
 } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
-import { TRPCError } from '@trpc/server';
-import { expect } from 'vitest';
+import { expect } from 'vite-plus/test';
+
 import { createDrizzle } from '@/db/drizzle-init';
 import {
 	bookings,
@@ -19,6 +20,7 @@ import {
 } from '@/integrations/trpc/inner-context';
 import { trpcRouter } from '@/integrations/trpc/router';
 import { newId, newPublicId } from '@/lib/ids';
+
 import worker from './entry';
 import { ADMIN, GUEST, OTHER_GUEST, ROSE } from './seed';
 

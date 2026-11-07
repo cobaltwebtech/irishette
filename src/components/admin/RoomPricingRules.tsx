@@ -2,6 +2,7 @@ import { Icon } from '@iconify/react';
 import { isTRPCClientError } from '@trpc/client';
 import { useId, useState } from 'react';
 import { toast } from 'sonner';
+
 import {
 	createAppColumnHelper,
 	DataTableView,
@@ -294,7 +295,7 @@ export function PricingRulesManagement({
 		<Card>
 			<CardHeader className="flex justify-between gap-12">
 				<div>
-					<CardTitle className="text-lg flex items-center gap-2">
+					<CardTitle className="flex items-center gap-2 text-lg">
 						<Icon icon="tabler:calendar-dollar" className="size-6" />
 						Pricing Rules - {roomName}
 					</CardTitle>
@@ -315,10 +316,10 @@ export function PricingRulesManagement({
 			</CardHeader>
 			<CardContent>
 				{filteredRules.length === 0 ? (
-					<div className="text-center py-8 text-muted-foreground">
+					<div className="py-8 text-center text-muted-foreground">
 						<Icon
 							icon="tabler:calendar-cancel"
-							className="size-12 mx-auto mb-4 text-secondary"
+							className="mx-auto mb-4 size-12 text-secondary"
 						/>
 						<p className="text-lg font-medium">
 							No current pricing rules for room
@@ -545,7 +546,7 @@ function PricingRuleForm({
 	};
 
 	return (
-		<DialogContent className="w-full max-w-2xl max-h-[90vh] overflow-auto">
+		<DialogContent className="max-h-[90vh] w-full max-w-2xl overflow-auto">
 			<DialogHeader>
 				<DialogTitle>
 					{rule ? 'Edit Pricing Rule' : 'Create New Pricing Rule'}
@@ -580,7 +581,7 @@ function PricingRuleForm({
 						</label>
 						<select
 							id={`${formId}-ruleType`}
-							className="w-full h-9 px-3 border border-input bg-background rounded-md"
+							className="h-9 w-full rounded-md border border-input bg-background px-3"
 							value={formData.ruleType}
 							onChange={(e) =>
 								setFormData((prev) => ({

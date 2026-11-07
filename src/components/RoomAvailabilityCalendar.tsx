@@ -2,6 +2,7 @@ import { Icon } from '@iconify/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { DateRange } from 'react-day-picker';
+
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { useTRPC } from '@/integrations/trpc/react';
@@ -135,7 +136,7 @@ export default function RoomAvailabilityCalendar({
 	if (availabilityQuery.isPending) {
 		return (
 			<div className={`${className} p-8 text-center`}>
-				<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+				<div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
 				<p className="text-muted-foreground">Loading availability...</p>
 			</div>
 		);
@@ -144,14 +145,14 @@ export default function RoomAvailabilityCalendar({
 	if (availabilityQuery.isError) {
 		return (
 			<div className={`${className} p-8 text-center`}>
-				<p className="text-destructive mb-4">Error loading calendar</p>
+				<p className="mb-4 text-destructive">Error loading calendar</p>
 				<p className="text-sm text-muted-foreground">
 					{availabilityQuery.error?.message || 'Failed to load availability'}
 				</p>
 				<button
 					type="button"
 					onClick={() => availabilityQuery.refetch()}
-					className="text-primary hover:text-primary/80 underline"
+					className="text-primary underline hover:text-primary/80"
 				>
 					Try again
 				</button>
@@ -203,7 +204,7 @@ export default function RoomAvailabilityCalendar({
 				</div>
 			)}
 			{/* Continue Button (mobile only) */}
-			<div className="block sm:hidden mx-auto w-fit">
+			<div className="mx-auto block w-fit sm:hidden">
 				<Button
 					type="button"
 					size="lg"
@@ -221,24 +222,24 @@ export default function RoomAvailabilityCalendar({
 			<div className="space-y-3">
 				<div className="flex flex-wrap justify-center gap-4 text-sm">
 					<div className="flex items-center gap-2">
-						<div className="size-6 bg-white border border-primary/20 rounded"></div>
+						<div className="size-6 rounded border border-primary/20 bg-white"></div>
 						<span>Available</span>
 					</div>
 					<div className="flex items-center gap-2">
-						<div className="size-6 bg-amber-200 border border-accent rounded"></div>
+						<div className="size-6 rounded border border-accent bg-amber-200"></div>
 						<span>Checkout Only</span>
 					</div>
 					<div className="flex items-center gap-2">
-						<div className="size-6 bg-destructive/40 border border-destructive rounded"></div>
+						<div className="size-6 rounded border border-destructive bg-destructive/40"></div>
 						<span>Unavailable</span>
 					</div>
 					<div className="flex items-center gap-2">
-						<div className="size-6 bg-primary rounded"></div>
+						<div className="size-6 rounded bg-primary"></div>
 						<span>Selected</span>
 					</div>
 				</div>
 
-				<div className="text-muted-foreground text-center text-xs space-y-1">
+				<div className="space-y-1 text-center text-xs text-muted-foreground">
 					<p>
 						Your stay must be between {minNights} and {maxNights} nights
 					</p>

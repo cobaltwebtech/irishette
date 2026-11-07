@@ -1,7 +1,9 @@
 import { eq } from 'drizzle-orm';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
+
 import { bookings } from '@/db/schema-export';
 import { dateInZone } from '@/lib/timezone';
+
 import {
 	bookingInput,
 	caller,

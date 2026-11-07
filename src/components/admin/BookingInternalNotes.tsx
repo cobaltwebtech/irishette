@@ -2,6 +2,7 @@ import { Icon } from '@iconify/react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { toast } from 'sonner';
+
 import { Button } from '@/components/ui/button';
 import {
 	Dialog,
@@ -76,7 +77,7 @@ export function BookingInternalNotes({
 					</Button>
 				</DialogTrigger>
 				{currentNotes ? (
-					<p className="text-sm bg-accent/30 p-3 rounded-md whitespace-pre-wrap">
+					<p className="rounded-md bg-accent/30 p-3 text-sm whitespace-pre-wrap">
 						{currentNotes}
 					</p>
 				) : (
@@ -107,7 +108,7 @@ export function BookingInternalNotes({
 					<p
 						className={`text-xs ${
 							notes.length > 4900
-								? 'text-destructive font-semibold'
+								? 'font-semibold text-destructive'
 								: 'text-muted-foreground'
 						}`}
 					>

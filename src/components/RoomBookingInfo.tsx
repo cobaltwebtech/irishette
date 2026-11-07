@@ -1,6 +1,7 @@
 import { Icon } from '@iconify/react';
 import { Link } from '@tanstack/react-router';
 import type { DateRange } from 'react-day-picker';
+
 import { Button } from '@/components/ui/button';
 import {
 	Card,
@@ -44,7 +45,7 @@ export default function BookingInfo({
 				<p>
 					<Icon
 						icon="tabler:door-enter"
-						className="size-6 inline text-primary"
+						className="inline size-6 text-primary"
 					/>
 					<span className="italic">Check In</span> -{' '}
 					<span className="font-semibold">
@@ -54,7 +55,7 @@ export default function BookingInfo({
 				<p>
 					<Icon
 						icon="tabler:door-exit"
-						className="size-6 inline text-accent-4"
+						className="inline size-6 text-accent-4"
 					/>
 					<span className="italic">Check Out</span> -{' '}
 					<span className="font-semibold">
@@ -67,8 +68,8 @@ export default function BookingInfo({
 
 	const renderPricingBreakdown = () => {
 		return (
-			<div className="mt-4 p-4 bg-muted/50 rounded-md space-y-2 border">
-				<div className="flex justify-between items-center">
+			<div className="mt-4 space-y-2 rounded-md border bg-muted/50 p-4">
+				<div className="flex items-center justify-between">
 					<span className="font-semibold">
 						Room Rate for {nights} night{nights !== 1 ? 's' : ''}*
 					</span>
@@ -88,10 +89,10 @@ export default function BookingInfo({
 
 	const renderEmptyState = () => {
 		return (
-			<div className="text-center py-8 space-y-2">
+			<div className="space-y-2 py-8 text-center">
 				<Icon
 					icon="tabler:calendar-question"
-					className="size-12 text-muted-foreground mx-auto"
+					className="mx-auto size-12 text-muted-foreground"
 				/>
 				<p className="text-muted-foreground">
 					Select your check-in and check-out dates to see pricing and
@@ -105,10 +106,10 @@ export default function BookingInfo({
 	};
 
 	return (
-		<div className={`space-y-6 scroll-mt-24 ${className}`} data-booking-info>
+		<div className={`scroll-mt-24 space-y-6 ${className}`} data-booking-info>
 			<Card>
 				<CardHeader>
-					<CardTitle className="text-2xl text-foreground text-center">
+					<CardTitle className="text-center text-2xl text-foreground">
 						Booking Summary
 					</CardTitle>
 				</CardHeader>
@@ -125,7 +126,7 @@ export default function BookingInfo({
 							<p className="text-sm text-muted-foreground">Selected Dates:</p>
 							{renderDateDisplay()}
 							{renderPricingBreakdown()}
-							<p className="text-sm text-muted-foreground text-center">
+							<p className="text-center text-sm text-muted-foreground">
 								Proceed to payment for your booking of {nights} night
 								{nights !== 1 ? 's' : ''} at the Irishette in the {roomName}.
 							</p>
@@ -139,12 +140,12 @@ export default function BookingInfo({
 					)}
 				</CardContent>
 				<CardFooter>
-					<p className="text-xs text-muted-foreground text-center">
+					<p className="text-center text-xs text-muted-foreground">
 						Be sure to review our{' '}
 						<Link
 							to="/cancellation-refund-policy"
 							target="_blank"
-							className="text-primary hover:text-accent underline"
+							className="text-primary underline hover:text-accent"
 						>
 							Cancellation & Refund Policy
 						</Link>{' '}

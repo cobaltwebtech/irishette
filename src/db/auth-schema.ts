@@ -1,4 +1,5 @@
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+
 import { newId, newPublicId } from '../lib/ids';
 
 // Better Auth tables. Keep in sync with the Better Auth plugins in

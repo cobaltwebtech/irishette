@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { useEffect } from 'react';
+
 import { authClient } from '@/lib/auth-client';
 import { clearSession } from '@/lib/session';
 

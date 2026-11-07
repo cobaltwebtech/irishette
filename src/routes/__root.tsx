@@ -13,6 +13,7 @@ import type { TRPCClient } from '@trpc/client';
 import type { TRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import { ReactLenis } from 'lenis/react';
 import type * as React from 'react';
+
 import { DefaultCatchBoundary } from '@/components/default-catch-boundary';
 import Footer from '@/components/Footer';
 import Header from '@/components/Header';
@@ -21,8 +22,9 @@ import { ScrollRestoration } from '@/components/scroll-restoration';
 import { Toaster } from '@/components/ui/sonner';
 import type { TRPCRouter } from '@/integrations/trpc/router';
 import { type AppSession, sessionQueryOptions } from '@/lib/session';
-import appCss from '@/styles/styles.css?url';
 import { seo } from '@/utils/seo';
+
+import appCss from '@/styles/styles.css?url';
 
 // Router context, created per request in src/router.tsx.
 interface RouterContext {
@@ -106,7 +108,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 				<HeadContent />
 			</head>
 			<body>
-				<div className="min-h-screen flex flex-col">
+				<div className="flex min-h-screen flex-col">
 					<ReactLenis root>
 						<ScrollRestoration />
 						<Header />

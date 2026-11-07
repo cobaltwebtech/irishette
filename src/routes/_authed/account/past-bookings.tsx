@@ -1,6 +1,7 @@
 import { Icon } from '@iconify/react';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
+
 import {
 	createAppColumnHelper,
 	DataTableView,
@@ -35,7 +36,7 @@ const columns = columnHelper.columns([
 			<Link
 				to="/account/booking/$publicId"
 				params={{ publicId: info.row.original.booking.publicId }}
-				className="font-mono text-sm font-semibold text-primary hover:text-primary/80 underline"
+				className="font-mono text-sm font-semibold text-primary underline hover:text-primary/80"
 			>
 				{info.getValue()}
 			</Link>
@@ -143,7 +144,7 @@ function PastBookingsPage() {
 	return (
 		<div className="bg-background">
 			{/* Header */}
-			<div className="bg-primary/5 border-b">
+			<div className="border-b bg-primary/5">
 				<div className="container mx-auto px-4 py-6">
 					<div className="flex items-center justify-between">
 						<div>
@@ -181,7 +182,7 @@ function PastBookingsPage() {
 									<div className="relative">
 										<Icon
 											icon="tabler:search"
-											className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground size-4"
+											className="absolute top-1/2 left-2 size-4 -translate-y-1/2 transform text-muted-foreground"
 										/>
 										<Input
 											placeholder="Search bookings..."
@@ -189,7 +190,7 @@ function PastBookingsPage() {
 											onChange={(event) =>
 												table.setGlobalFilter(String(event.target.value))
 											}
-											className="pl-8 w-[250px]"
+											className="w-[250px] pl-8"
 										/>
 									</div>
 								</div>
@@ -208,10 +209,10 @@ function PastBookingsPage() {
 						<CardContent className="flex flex-col items-center justify-center py-12">
 							<Icon
 								icon="tabler:calendar-check"
-								className="size-16 text-muted-foreground mb-4"
+								className="mb-4 size-16 text-muted-foreground"
 							/>
-							<h3 className="text-xl font-semibold mb-2">No Past Bookings</h3>
-							<p className="text-muted-foreground text-center mb-6 max-w-md">
+							<h3 className="mb-2 text-xl font-semibold">No Past Bookings</h3>
+							<p className="mb-6 max-w-md text-center text-muted-foreground">
 								You don't have any past bookings yet. Once your stay is
 								complete, it will appear here.
 							</p>

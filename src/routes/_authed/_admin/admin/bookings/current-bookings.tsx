@@ -1,6 +1,7 @@
 import { Icon } from '@iconify/react';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
+
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import {
 	createAppColumnHelper,
@@ -29,7 +30,7 @@ const columns = columnHelper.columns([
 			<Link
 				to="/admin/bookings/$publicId"
 				params={{ publicId: info.row.original.booking.publicId }}
-				className="font-mono text-sm font-semibold text-primary hover:text-primary/80 underline"
+				className="font-mono text-sm font-semibold text-primary underline hover:text-primary/80"
 			>
 				{info.getValue()}
 			</Link>
@@ -188,7 +189,7 @@ function AdminBookings() {
 							<div className="relative">
 								<Icon
 									icon="tabler:search"
-									className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground size-4"
+									className="absolute top-1/2 left-2 size-4 -translate-y-1/2 transform text-muted-foreground"
 								/>
 								<Input
 									placeholder="Search bookings..."
@@ -196,7 +197,7 @@ function AdminBookings() {
 									onChange={(event) =>
 										table.setGlobalFilter(String(event.target.value))
 									}
-									className="pl-8 w-[300px]"
+									className="w-[300px] pl-8"
 								/>
 							</div>
 						</div>

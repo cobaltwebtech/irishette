@@ -1,5 +1,6 @@
 import React from 'react';
 import { type CreateEmailOptions, Resend } from 'resend';
+
 import { AdminBookingNotificationEmail } from '@/components/email/AdminBookingNotificationEmail';
 import { BookingConfirmationEmail } from '@/components/email/BookingConfirmationEmail';
 import {
@@ -8,6 +9,7 @@ import {
 } from '@/components/email/NotificationEmail';
 import type { Database } from '@/db/drizzle-init';
 import type { bookings } from '@/db/schema-export';
+
 import { getAdminEmails } from './admin-query';
 
 // All transactional email goes through here. Logs never include email

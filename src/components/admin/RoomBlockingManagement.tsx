@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { isTRPCClientError } from '@trpc/client';
 import { useId, useState } from 'react';
 import { toast } from 'sonner';
+
 import {
 	createAppColumnHelper,
 	DataTableView,
@@ -288,7 +289,7 @@ export function RoomBlockingManagement({
 		<Card>
 			<CardHeader className="flex justify-between gap-12">
 				<div>
-					<CardTitle className="text-lg flex items-center gap-2">
+					<CardTitle className="flex items-center gap-2 text-lg">
 						<Icon icon="tabler:calendar-pause" className="size-6" />
 						Blocked Periods
 					</CardTitle>
@@ -314,15 +315,15 @@ export function RoomBlockingManagement({
 						</div>
 					</div>
 				) : filteredBlockedPeriods.length === 0 ? (
-					<div className="text-center py-8 text-muted-foreground">
+					<div className="py-8 text-center text-muted-foreground">
 						<Icon
 							icon="tabler:calendar-x"
-							className="size-12 text-secondary mx-auto mb-4"
+							className="mx-auto mb-4 size-12 text-secondary"
 						/>
 						<h3 className="text-lg font-medium">
 							No current blocked periods for room
 						</h3>
-						<p className="text-sm mb-4">
+						<p className="mb-4 text-sm">
 							Add blocked dates to prevent bookings during specific periods.
 						</p>
 					</div>
@@ -704,7 +705,7 @@ function DeleteBlockedPeriodDialog({
 					</DialogDescription>
 				</DialogHeader>
 
-				<div className="rounded-lg border p-4 bg-muted/20">
+				<div className="rounded-lg border bg-muted/20 p-4">
 					<div className="space-y-2">
 						<div className="flex justify-between">
 							<span className="text-sm font-medium">Period:</span>

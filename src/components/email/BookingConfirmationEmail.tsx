@@ -85,10 +85,10 @@ export const BookingConfirmationEmail: React.FC<
 									<Link href="https://irishette.com">
 										<Img alt="Irishette Logo" height="150" src="#" />
 									</Link>
-									<Heading as="h1" className="text-4xl text-green-800 mb-2">
+									<Heading as="h1" className="mb-2 text-4xl text-green-800">
 										Irishette Bed & Breakfast
 									</Heading>
-									<Text className="text-lg text-stone-600 mb-0">
+									<Text className="mb-0 text-lg text-stone-600">
 										Your Home Away from Home
 									</Text>
 								</Column>
@@ -96,19 +96,19 @@ export const BookingConfirmationEmail: React.FC<
 						</Section>
 
 						{/* Confirmation Message */}
-						<Section className="mb-[32px] bg-green-50 border border-green-200 rounded-lg p-6">
+						<Section className="mb-[32px] rounded-lg border border-green-200 bg-green-50 p-6">
 							<Row>
 								<Column className="text-center">
 									<Heading
 										as="h2"
-										className="text-2xl font-bold text-green-800 mb-4"
+										className="mb-4 text-2xl font-bold text-green-800"
 									>
 										🎉 Booking Confirmed!
 									</Heading>
-									<Text className="text-lg text-green-700 mb-2">
+									<Text className="mb-2 text-lg text-green-700">
 										Thank you for choosing Irishette Bed & Breakfast
 									</Text>
-									<Text className="text-base text-green-600 mb-4">
+									<Text className="mb-4 text-base text-green-600">
 										Confirmation ID: <strong>{confirmationId}</strong>
 									</Text>
 									<Text className="text-sm text-green-600">
@@ -124,7 +124,7 @@ export const BookingConfirmationEmail: React.FC<
 								<Column>
 									<Heading
 										as="h3"
-										className="text-xl font-bold text-stone-900 mb-4 border-b border-stone-200 pb-2"
+										className="mb-4 border-b border-stone-200 pb-2 text-xl font-bold text-stone-900"
 									>
 										Booking Details
 									</Heading>
@@ -134,32 +134,32 @@ export const BookingConfirmationEmail: React.FC<
 							{/* Room & Dates */}
 							<Row className="mb-4">
 								<Column className="w-1/2 pr-4">
-									<Text className="text-sm font-semibold text-stone-700 mb-1">
+									<Text className="mb-1 text-sm font-semibold text-stone-700">
 										Room
 									</Text>
-									<Text className="text-base text-stone-900 mb-3">
+									<Text className="mb-3 text-base text-stone-900">
 										{roomName}
 									</Text>
 
-									<Text className="text-sm font-semibold text-stone-700 mb-1">
+									<Text className="mb-1 text-sm font-semibold text-stone-700">
 										Guests
 									</Text>
-									<Text className="text-base text-stone-900 mb-3">
+									<Text className="mb-3 text-base text-stone-900">
 										{numberOfGuests} guest{numberOfGuests !== 1 ? 's' : ''}
 									</Text>
 								</Column>
 								<Column className="w-1/2 pl-4">
-									<Text className="text-sm font-semibold text-stone-700 mb-1">
+									<Text className="mb-1 text-sm font-semibold text-stone-700">
 										Check-in
 									</Text>
-									<Text className="text-base text-stone-900 mb-3">
+									<Text className="mb-3 text-base text-stone-900">
 										{formatDate(checkInDate)}
 									</Text>
 
-									<Text className="text-sm font-semibold text-stone-700 mb-1">
+									<Text className="mb-1 text-sm font-semibold text-stone-700">
 										Check-out
 									</Text>
-									<Text className="text-base text-stone-900 mb-3">
+									<Text className="mb-3 text-base text-stone-900">
 										{formatDate(checkOutDate)}
 									</Text>
 								</Column>
@@ -167,7 +167,7 @@ export const BookingConfirmationEmail: React.FC<
 
 							<Row className="mb-4">
 								<Column>
-									<Text className="text-sm font-semibold text-stone-700 mb-1">
+									<Text className="mb-1 text-sm font-semibold text-stone-700">
 										Length of Stay
 									</Text>
 									<Text className="text-base text-stone-900">
@@ -183,7 +183,7 @@ export const BookingConfirmationEmail: React.FC<
 								<Column>
 									<Heading
 										as="h3"
-										className="text-xl font-bold text-stone-900 mb-4 border-b border-stone-200 pb-2"
+										className="mb-4 border-b border-stone-200 pb-2 text-xl font-bold text-stone-900"
 									>
 										Guest Information
 									</Heading>
@@ -191,13 +191,13 @@ export const BookingConfirmationEmail: React.FC<
 							</Row>
 							<Row className="mb-2">
 								<Column className="w-1/2 pr-4">
-									<Text className="text-sm font-semibold text-stone-700 mb-1">
+									<Text className="mb-1 text-sm font-semibold text-stone-700">
 										Name
 									</Text>
 									<Text className="text-base text-stone-900">{guestName}</Text>
 								</Column>
 								<Column className="w-1/2 pl-4">
-									<Text className="text-sm font-semibold text-stone-700 mb-1">
+									<Text className="mb-1 text-sm font-semibold text-stone-700">
 										Email
 									</Text>
 									<Text className="text-base text-stone-900">{guestEmail}</Text>
@@ -206,7 +206,7 @@ export const BookingConfirmationEmail: React.FC<
 							{guestPhone && (
 								<Row className="mb-2">
 									<Column>
-										<Text className="text-sm font-semibold text-stone-700 mb-1">
+										<Text className="mb-1 text-sm font-semibold text-stone-700">
 											Phone
 										</Text>
 										<Text className="text-base text-stone-900">
@@ -218,7 +218,7 @@ export const BookingConfirmationEmail: React.FC<
 							{specialRequests && (
 								<Row className="mb-2">
 									<Column>
-										<Text className="text-sm font-semibold text-stone-700 mb-1">
+										<Text className="mb-1 text-sm font-semibold text-stone-700">
 											Special Requests
 										</Text>
 										<Text className="text-base text-stone-900">
@@ -230,12 +230,12 @@ export const BookingConfirmationEmail: React.FC<
 						</Section>
 
 						{/* Pricing Breakdown */}
-						<Section className="mb-[32px] bg-stone-50 border border-stone-200 rounded-lg p-6">
+						<Section className="mb-[32px] rounded-lg border border-stone-200 bg-stone-50 p-6">
 							<Row>
 								<Column>
 									<Heading
 										as="h3"
-										className="text-xl font-bold text-stone-900 mb-4"
+										className="mb-4 text-xl font-bold text-stone-900"
 									>
 										Payment Summary
 									</Heading>
@@ -299,22 +299,22 @@ export const BookingConfirmationEmail: React.FC<
 						</Section>
 
 						{/* Important Information */}
-						<Section className="mb-[32px] bg-blue-50 border border-blue-200 rounded-lg p-6">
+						<Section className="mb-[32px] rounded-lg border border-blue-200 bg-blue-50 p-6">
 							<Row>
 								<Column>
 									<Heading
 										as="h3"
-										className="text-lg font-bold text-blue-900 mb-3"
+										className="mb-3 text-lg font-bold text-blue-900"
 									>
 										Important Information
 									</Heading>
-									<Text className="text-sm text-blue-800 mb-2">
+									<Text className="mb-2 text-sm text-blue-800">
 										<strong>Check-in:</strong> 3:00 PM - 8:00 PM
 									</Text>
-									<Text className="text-sm text-blue-800 mb-2">
+									<Text className="mb-2 text-sm text-blue-800">
 										<strong>Check-out:</strong> 11:00 AM
 									</Text>
-									<Text className="text-sm text-blue-800 mb-2">
+									<Text className="mb-2 text-sm text-blue-800">
 										<strong>Address:</strong> [Property Address] - Details will
 										be provided closer to your arrival
 									</Text>
@@ -332,12 +332,12 @@ export const BookingConfirmationEmail: React.FC<
 							<Row>
 								<Column>
 									<Button
-										className="box-border w-full max-w-[300px] rounded-[8px] bg-green-800 p-4 font-semibold text-white text-base"
+										className="box-border w-full max-w-[300px] rounded-[8px] bg-green-800 p-4 text-base font-semibold text-white"
 										href={accountUrl}
 									>
 										View Booking Details
 									</Button>
-									<Text className="text-sm text-stone-600 mt-3">
+									<Text className="mt-3 text-sm text-stone-600">
 										Manage your booking and view details in your account
 									</Text>
 								</Column>
@@ -345,7 +345,7 @@ export const BookingConfirmationEmail: React.FC<
 						</Section>
 
 						{/* Footer */}
-						<Section className="my-[24px] py-[24px] text-center border-t border-stone-300">
+						<Section className="my-[24px] border-t border-stone-300 py-[24px] text-center">
 							<Row className="mt-[24px]">
 								<Column className="text-center">
 									<Img

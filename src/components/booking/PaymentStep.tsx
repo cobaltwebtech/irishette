@@ -12,6 +12,7 @@ import { isTRPCClientError } from '@trpc/client';
 import { useLenis } from 'lenis/react';
 import { useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -133,7 +134,7 @@ function PaymentForm() {
 				<div className="space-y-1 text-sm">
 					<Label
 						htmlFor={policiesId}
-						className="flex flex-wrap gap-2 cursor-pointer"
+						className="flex cursor-pointer flex-wrap gap-2"
 					>
 						Policies Acknowledgement
 					</Label>
@@ -146,7 +147,7 @@ function PaymentForm() {
 						<Link
 							to="/cancellation-refund-policy"
 							target="_blank"
-							className="text-accent hover:underline font-medium text-nowrap"
+							className="font-medium text-nowrap text-accent hover:underline"
 						>
 							Cancellation & Refund Policy
 						</Link>
@@ -154,7 +155,7 @@ function PaymentForm() {
 						<Link
 							to="/terms-of-service"
 							target="_blank"
-							className="text-accent hover:underline font-medium text-nowrap"
+							className="font-medium text-nowrap text-accent hover:underline"
 						>
 							Terms of Service
 						</Link>
@@ -162,7 +163,7 @@ function PaymentForm() {
 						<Link
 							to="/privacy-policy"
 							target="_blank"
-							className="text-accent hover:underline font-medium text-nowrap"
+							className="font-medium text-nowrap text-accent hover:underline"
 						>
 							Privacy Policy
 						</Link>
@@ -170,16 +171,16 @@ function PaymentForm() {
 					</p>
 				</div>
 				{policyError && (
-					<p className="text-sm text-destructive ml-7">{policyError}</p>
+					<p className="ml-7 text-sm text-destructive">{policyError}</p>
 				)}
 			</div>
 
 			{errorMessage && (
-				<div className="bg-destructive/10 border border-destructive text-destructive px-4 py-3 rounded-md">
+				<div className="rounded-md border border-destructive bg-destructive/10 px-4 py-3 text-destructive">
 					<div className="flex items-start gap-2">
 						<Icon
 							icon="tabler:alert-circle"
-							className="size-5 shrink-0 mt-0.5"
+							className="mt-0.5 size-5 shrink-0"
 						/>
 						<p className="text-sm">{errorMessage}</p>
 					</div>
@@ -306,10 +307,10 @@ export function PaymentStep() {
 		return (
 			<Card>
 				<CardContent className="py-12">
-					<div className="text-center space-y-4">
+					<div className="space-y-4 text-center">
 						<Icon
 							icon="tabler:loader-2"
-							className="size-8 animate-spin mx-auto text-primary"
+							className="mx-auto size-8 animate-spin text-primary"
 						/>
 						<p className="text-muted-foreground">Preparing payment...</p>
 					</div>
@@ -322,12 +323,12 @@ export function PaymentStep() {
 		return (
 			<Card>
 				<CardContent className="py-12">
-					<div className="text-center space-y-4">
+					<div className="space-y-4 text-center">
 						<Icon
 							icon="tabler:alert-circle"
-							className="size-8 text-destructive mx-auto"
+							className="mx-auto size-8 text-destructive"
 						/>
-						<p className="text-destructive font-semibold">
+						<p className="font-semibold text-destructive">
 							Failed to initialize payment
 						</p>
 						<p className="text-sm text-muted-foreground">
@@ -383,14 +384,14 @@ export function PaymentStep() {
 			</CardHeader>
 			<CardContent className="space-y-6">
 				{/* Total Amount Display */}
-				<div className="p-4 bg-muted rounded-lg border">
-					<div className="flex justify-between items-center">
-						<span className="font-semibold text-lg">Total Amount:</span>
+				<div className="rounded-lg border bg-muted p-4">
+					<div className="flex items-center justify-between">
+						<span className="text-lg font-semibold">Total Amount:</span>
 						<span className="text-2xl font-bold">
 							${booking.pricing?.totalAmount.toFixed(2)}
 						</span>
 					</div>
-					<p className="text-sm text-muted-foreground mt-1">
+					<p className="mt-1 text-sm text-muted-foreground">
 						{booking.pricing?.nights} night
 						{booking.pricing?.nights !== 1 ? 's' : ''}
 					</p>
@@ -402,7 +403,7 @@ export function PaymentStep() {
 				</Elements>
 
 				{/* Security Badge */}
-				<div className="flex items-center justify-center gap-2 text-sm text-muted-foreground pt-4 border-t">
+				<div className="flex items-center justify-center gap-2 border-t pt-4 text-sm text-muted-foreground">
 					<Icon icon="tabler:lock" className="size-4" />
 					<span>Secure payment powered by Stripe</span>
 				</div>

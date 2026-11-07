@@ -1,6 +1,7 @@
 import { applyD1Migrations } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
-import { afterAll, afterEach, beforeAll } from 'vitest';
+import { afterAll, afterEach, beforeAll } from 'vite-plus/test';
+
 import { network } from './network';
 import { seed } from './seed';
 

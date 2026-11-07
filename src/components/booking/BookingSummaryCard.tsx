@@ -1,5 +1,6 @@
 import { Icon } from '@iconify/react';
 import { useNavigate } from '@tanstack/react-router';
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useBookingStore } from '@/stores';
@@ -80,7 +81,7 @@ export function BookingSummaryCard() {
 				{/* Pricing - Use reactive booking.pricing instead of computed summary.pricing */}
 				{booking.pricing && (
 					<div className="border-t pt-4">
-						<div className="flex items-center justify-between mb-2">
+						<div className="mb-2 flex items-center justify-between">
 							<h4 className="font-semibold">Pricing Breakdown</h4>
 							{booking.currentStep !== 'payment' &&
 								booking.currentStep !== 'confirmation' && (
@@ -149,7 +150,7 @@ export function BookingSummaryCard() {
 								</div>
 							)}
 
-							<div className="flex justify-between font-semibold border-t pt-2 mt-2 text-base">
+							<div className="mt-2 flex justify-between border-t pt-2 text-base font-semibold">
 								<span>Total Due (USD)</span>
 								<span>
 									${booking.pricing.totalAmount?.toFixed(2) || '0.00'}
@@ -162,7 +163,7 @@ export function BookingSummaryCard() {
 				{/* Guest Info */}
 				{booking.guestInfo && (
 					<div className="border-t pt-4">
-						<h4 className="font-semibold mb-2">Guest Information</h4>
+						<h4 className="mb-2 font-semibold">Guest Information</h4>
 						<div className="space-y-1 text-sm">
 							<p>{booking.guestInfo.name}</p>
 							<p className="text-muted-foreground">{booking.guestInfo.email}</p>

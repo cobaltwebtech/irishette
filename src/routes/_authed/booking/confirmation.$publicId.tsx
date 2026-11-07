@@ -2,6 +2,7 @@ import { Icon } from '@iconify/react';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -41,12 +42,12 @@ function BookingNotFound() {
 		<div className="container mx-auto max-w-4xl px-4 py-12">
 			<Card>
 				<CardContent className="py-12">
-					<div className="text-center space-y-4">
+					<div className="space-y-4 text-center">
 						<Icon
 							icon="tabler:alert-circle"
-							className="size-8 text-destructive mx-auto"
+							className="mx-auto size-8 text-destructive"
 						/>
-						<h3 className="text-2xl text-destructive font-bold">
+						<h3 className="text-2xl font-bold text-destructive">
 							Booking Not Found
 						</h3>
 						<p className="text-sm text-muted-foreground">
@@ -88,8 +89,8 @@ function BookingConfirmation() {
 
 	return (
 		<section>
-			<div className="bg-muted border-b">
-				<div className="container mx-auto px-4 py-6 text-center space-y-1">
+			<div className="border-b bg-muted">
+				<div className="container mx-auto space-y-1 px-4 py-6 text-center">
 					<p className="animate-bounce text-4xl">🎉</p>
 					<div className="flex items-center justify-center gap-2">
 						<Icon
@@ -121,21 +122,21 @@ function BookingConfirmation() {
 
 			{/* Main Content */}
 			<div className="container mx-auto px-4 py-8">
-				<div className="grid lg:grid-cols-6 gap-8">
+				<div className="grid gap-8 lg:grid-cols-6">
 					{/* Left Column - Booking Details */}
 					<Card className="lg:col-span-4">
 						<CardHeader>
 							<CardTitle>Booking Details</CardTitle>
 						</CardHeader>
 						<CardContent>
-							<div className="grid sm:grid-cols-2 gap-4">
+							<div className="grid gap-4 sm:grid-cols-2">
 								<div>
 									<p className="text-sm font-medium text-muted-foreground">
 										Confirmation ID
 									</p>
 									<Badge
 										variant="secondary"
-										className="font-semibold font-mono tracking-wider text-lg"
+										className="font-mono text-lg font-semibold tracking-wider"
 									>
 										{booking.confirmationId}
 									</Badge>
@@ -241,7 +242,7 @@ function BookingConfirmation() {
 									</>
 								)}
 								<p className="text-lg font-semibold">Total Paid</p>
-								<p className="text-lg font-semibold text-right">
+								<p className="text-right text-lg font-semibold">
 									${booking.totalAmount.toFixed(2)}
 								</p>
 							</div>
@@ -253,7 +254,7 @@ function BookingConfirmation() {
 							<CardTitle>Guest Information</CardTitle>
 						</CardHeader>
 						<CardContent>
-							<div className="grid sm:grid-cols-2 gap-4">
+							<div className="grid gap-4 sm:grid-cols-2">
 								<div>
 									<p className="text-sm font-medium text-muted-foreground">
 										Name
@@ -283,7 +284,7 @@ function BookingConfirmation() {
 							<CardTitle>Special Requests</CardTitle>
 						</CardHeader>
 						<CardContent>
-							<div className="bg-muted p-4 rounded-md text-sm text-muted-foreground">
+							<div className="rounded-md bg-muted p-4 text-sm text-muted-foreground">
 								{booking.specialRequests || 'No special requests provided'}
 							</div>
 						</CardContent>
@@ -294,7 +295,7 @@ function BookingConfirmation() {
 							<CardTitle>Important Information</CardTitle>
 						</CardHeader>
 						<CardContent>
-							<ul className="mx-4 list-disc text-sm text-muted-foreground space-y-2">
+							<ul className="mx-4 list-disc space-y-2 text-sm text-muted-foreground">
 								<li>Check your email for the booking confirmation details</li>
 								<li>
 									Check-in is available from 3:00 PM. Early check-in may be
@@ -326,7 +327,7 @@ function BookingConfirmation() {
 									</Link>
 									.
 								</li>
-								<li className="font-bold text-lg bg-red-200">
+								<li className="bg-red-200 text-lg font-bold">
 									DO WE NEED ADDITIONAL INSTRUCTIONS FOR THE CUSTOMER?
 								</li>
 							</ul>
@@ -341,7 +342,7 @@ function BookingConfirmation() {
 					</Card>
 				</div>
 				{/* Action Buttons */}
-				<div className="mx-auto max-w-lg flex flex-wrap gap-4 pt-8">
+				<div className="mx-auto flex max-w-lg flex-wrap gap-4 pt-8">
 					<Button asChild variant="secondary" className="flex-1">
 						<Link to="/">
 							<Icon icon="tabler:home" className="size-5" />

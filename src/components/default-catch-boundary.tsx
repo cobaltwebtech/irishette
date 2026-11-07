@@ -2,6 +2,7 @@ import { Icon } from '@iconify/react';
 import type { ErrorComponentProps } from '@tanstack/react-router';
 import { Link, rootRouteId, useMatch, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
+
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,11 +30,11 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
 	const hasStack = errorStack.length > 0;
 
 	return (
-		<div className="flex flex-col flex-auto items-center justify-center p-4">
+		<div className="flex flex-auto flex-col items-center justify-center p-4">
 			<Card className="w-full max-w-2xl">
 				<CardHeader>
 					<div className="flex items-center space-x-2">
-						<div className="flex items-center justify-center size-12 rounded-full bg-destructive/30">
+						<div className="flex size-12 items-center justify-center rounded-full bg-destructive/30">
 							<Icon
 								icon="tabler:alert-octagon-filled"
 								className="size-7 text-destructive"
@@ -95,10 +96,10 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
 							</CollapsibleTrigger>
 							<CollapsibleContent className="space-y-2">
 								<div className="rounded-lg bg-destructive/20 p-4">
-									<h4 className="text-sm font-medium mb-2">
+									<h4 className="mb-2 text-sm font-medium">
 										Error Stack Trace:
 									</h4>
-									<pre className="text-xs text-muted-foreground whitespace-pre-wrap wrap-break-word max-h-40 overflow-y-auto">
+									<pre className="max-h-40 overflow-y-auto text-xs wrap-break-word whitespace-pre-wrap text-muted-foreground">
 										{errorStack}
 									</pre>
 								</div>

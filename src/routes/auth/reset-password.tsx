@@ -3,6 +3,7 @@ import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { useEffect, useEffectEvent, useId, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
+
 import { Button } from '@/components/ui/button';
 import {
 	Card,
@@ -152,10 +153,10 @@ function ResetPasswordPage() {
 
 	if (isSuccess) {
 		return (
-			<div className="flex flex-col flex-auto items-center justify-center bg-background px-4 py-8">
+			<div className="flex flex-auto flex-col items-center justify-center bg-background px-4 py-8">
 				<Card className="w-full max-w-md">
 					<CardHeader className="text-center">
-						<div className="flex items-center justify-center mb-4 mx-auto size-16 bg-primary rounded-full">
+						<div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-primary">
 							<Icon
 								icon="tabler:lock-check"
 								className="size-10 text-primary-foreground"
@@ -190,10 +191,10 @@ function ResetPasswordPage() {
 	// Show error state when token is missing or invalid
 	if (!token) {
 		return (
-			<div className="flex flex-col flex-auto items-center justify-center bg-background px-4 py-8">
+			<div className="flex flex-auto flex-col items-center justify-center bg-background px-4 py-8">
 				<Card className="w-full max-w-md">
 					<CardHeader className="text-center">
-						<div className="flex items-center justify-center mb-4 mx-auto size-16 bg-destructive rounded-full">
+						<div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-destructive">
 							<Icon
 								icon="tabler:alert-circle"
 								className="size-10 text-destructive-foreground"
@@ -207,7 +208,7 @@ function ResetPasswordPage() {
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="space-y-4">
-						<p className="text-muted-foreground text-center">
+						<p className="text-center text-muted-foreground">
 							Please request a new password reset link to continue.
 						</p>
 						<Button asChild className="w-full">
@@ -239,10 +240,10 @@ function ResetPasswordPage() {
 
 	// Show password reset form when token is valid
 	return (
-		<div className="flex flex-col flex-auto items-center justify-center bg-background px-4 py-8">
+		<div className="flex flex-auto flex-col items-center justify-center bg-background px-4 py-8">
 			<Card className="w-full max-w-md">
 				<CardHeader className="text-center">
-					<div className="flex items-center justify-center mb-4 mx-auto size-16 bg-primary rounded-full">
+					<div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-primary">
 						<Icon
 							icon="tabler:lock-cog"
 							className="size-10 text-primary-foreground"

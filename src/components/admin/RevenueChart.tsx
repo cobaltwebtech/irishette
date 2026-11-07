@@ -1,5 +1,6 @@
 import { format, parse, startOfMonth, subMonths } from 'date-fns';
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
 	type ChartConfig,
@@ -85,7 +86,7 @@ export function RevenueChart({ data, isLoading }: RevenueChartProps) {
 					</p>
 				</CardHeader>
 				<CardContent>
-					<div className="flex items-center justify-center h-[300px] md:h-[400px] text-muted-foreground">
+					<div className="flex h-[300px] items-center justify-center text-muted-foreground md:h-[400px]">
 						Loading chart data...
 					</div>
 				</CardContent>
@@ -154,12 +155,12 @@ export function RevenueChart({ data, isLoading }: RevenueChartProps) {
 						/>
 					</AreaChart>
 				</ChartContainer>
-				<div className="mt-4 pt-4 border-t">
+				<div className="mt-4 border-t pt-4">
 					<div className="flex items-center justify-between text-sm">
 						<span className="text-muted-foreground">
 							Total Revenue (12 months)
 						</span>
-						<span className="font-semibold text-lg">
+						<span className="text-lg font-semibold">
 							$
 							{totalRevenue.toLocaleString(undefined, {
 								minimumFractionDigits: 2,

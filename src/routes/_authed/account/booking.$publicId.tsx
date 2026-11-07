@@ -2,6 +2,7 @@ import { Icon } from '@iconify/react';
 import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { toast } from 'sonner';
+
 import { CancelBookingButton } from '@/components/booking/CancelBookingButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -40,12 +41,12 @@ export const Route = createFileRoute('/_authed/account/booking/$publicId')({
 function BookingNotFound() {
 	return (
 		<div>
-			<div className="bg-primary/5 border-b">
+			<div className="border-b bg-primary/5">
 				<div className="container mx-auto px-4 py-6">
 					<div className="flex items-center gap-4">
 						<Link
 							to="/account"
-							className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors"
+							className="inline-flex items-center text-muted-foreground transition-colors hover:text-foreground"
 						>
 							← Back to Account
 						</Link>
@@ -58,7 +59,7 @@ function BookingNotFound() {
 						<CardTitle>Booking Not Found</CardTitle>
 					</CardHeader>
 					<CardContent>
-						<p className="text-muted-foreground mb-4">
+						<p className="mb-4 text-muted-foreground">
 							The booking you're looking for could not be found.
 						</p>
 						<Link to="/account">
@@ -110,7 +111,7 @@ function BookingDetailPage() {
 		return (
 			<div className="flex items-center justify-center">
 				<div className="text-center">
-					<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+					<div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
 					<p className="text-muted-foreground">Loading booking details...</p>
 				</div>
 			</div>
@@ -120,7 +121,7 @@ function BookingDetailPage() {
 	return (
 		<section>
 			{/* Header */}
-			<div className="bg-primary/5 border-b">
+			<div className="border-b bg-primary/5">
 				<div className="container mx-auto px-4 py-6">
 					<div className="flex flex-wrap items-center justify-between gap-2">
 						<Button asChild>
@@ -147,20 +148,20 @@ function BookingDetailPage() {
 
 			{/* Main Content */}
 			<div className="container mx-auto px-4 py-8">
-				<div className="grid lg:grid-cols-6 gap-8">
+				<div className="grid gap-8 lg:grid-cols-6">
 					{/* Left Column - Booking Details */}
 					<Card className="lg:col-span-4">
 						<CardHeader>
 							<CardTitle>Stay Details</CardTitle>
 						</CardHeader>
-						<CardContent className="grid sm:grid-cols-2 gap-4">
+						<CardContent className="grid gap-4 sm:grid-cols-2">
 							<div>
 								<p className="text-sm font-medium text-muted-foreground">
 									Confirmation ID
 								</p>
 								<Badge
 									variant="secondary"
-									className="font-semibold font-mono tracking-wider text-lg"
+									className="font-mono text-lg font-semibold tracking-wider"
 								>
 									{booking.booking.confirmationId}
 								</Badge>
@@ -269,12 +270,12 @@ function BookingDetailPage() {
 										</>
 									)}
 								<p className="text-lg font-semibold">Total Paid</p>
-								<p className="text-lg font-semibold text-right">
+								<p className="text-right text-lg font-semibold">
 									${booking.booking.totalAmount.toFixed(2)}
 								</p>
 							</div>
 						</CardContent>
-						<CardFooter className="border-t grid grid-cols-2 ">
+						<CardFooter className="grid grid-cols-2 border-t">
 							<p className="text-sm font-medium text-muted-foreground">
 								Payment Status
 							</p>
@@ -304,7 +305,7 @@ function BookingDetailPage() {
 							</CardTitle>
 						</CardHeader>
 						<CardContent className="space-y-4">
-							<div className="grid sm:grid-cols-2 gap-4">
+							<div className="grid gap-4 sm:grid-cols-2">
 								<div>
 									<p className="text-sm font-medium text-muted-foreground">
 										Name
@@ -331,7 +332,7 @@ function BookingDetailPage() {
 									<p className="text-sm font-medium text-muted-foreground">
 										Special Requests
 									</p>
-									<p className="text-sm bg-muted p-3 rounded-md">
+									<p className="rounded-md bg-muted p-3 text-sm">
 										{booking.booking.specialRequests}
 									</p>
 								</div>
@@ -344,7 +345,7 @@ function BookingDetailPage() {
 							<CardTitle>Special Requests</CardTitle>
 						</CardHeader>
 						<CardContent>
-							<div className="bg-muted p-4 rounded-md text-sm text-muted-foreground">
+							<div className="rounded-md bg-muted p-4 text-sm text-muted-foreground">
 								{booking.booking.specialRequests ||
 									'No special requests provided'}
 							</div>
@@ -387,7 +388,7 @@ function BookingDetailPage() {
 							<CardTitle>Important Information</CardTitle>
 						</CardHeader>
 						<CardContent>
-							<ul className="mx-4 list-disc text-sm text-muted-foreground space-y-2">
+							<ul className="mx-4 list-disc space-y-2 text-sm text-muted-foreground">
 								<li>Check your email for the booking confirmation details</li>
 								<li>
 									Check-in is available from 3:00 PM. Early check-in may be
@@ -419,7 +420,7 @@ function BookingDetailPage() {
 									</Link>
 									.
 								</li>
-								<li className="font-bold text-lg bg-red-200">
+								<li className="bg-red-200 text-lg font-bold">
 									DO WE NEED ADDITIONAL INSTRUCTIONS FOR THE CUSTOMER?
 								</li>
 							</ul>

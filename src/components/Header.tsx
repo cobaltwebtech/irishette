@@ -2,6 +2,7 @@ import { Icon } from '@iconify/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
+
 import { Button } from '@/components/ui/button';
 import { signOut } from '@/lib/auth-client';
 import { clearSession, useSession } from '@/lib/session';
@@ -27,17 +28,17 @@ export default function Header() {
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
 	return (
-		<header className="bg-linear-to-b from-secondary-foreground to-primary sticky top-0 z-50">
+		<header className="sticky top-0 z-50 bg-linear-to-b from-secondary-foreground to-primary">
 			<div className="container mx-auto px-4 py-2">
-				<div className="flex items-center justify-between h-16">
+				<div className="flex h-16 items-center justify-between">
 					{/* Logo/Brand */}
 					<Link
 						to="/"
-						className="text-2xl font-extrabold text-background hover:text-background/80 transition-colors"
+						className="text-2xl font-extrabold text-background transition-colors hover:text-background/80"
 					>
 						Irishette
 						<span className="sr-only">Home</span>
-						<span className="text-xs block"> Logo goes here</span>
+						<span className="block text-xs"> Logo goes here</span>
 					</Link>
 
 					{/* Navigation */}
@@ -47,7 +48,7 @@ export default function Header() {
 								<Link
 									key="rose-room"
 									to="/rooms/rose-room"
-									className="flex flex-nowrap items-center gap-2 text-background hover:text-secondary transition-colors font-semibold [&.active]:text-accent"
+									className="flex flex-nowrap items-center gap-2 font-semibold text-background transition-colors hover:text-secondary [&.active]:text-accent"
 								>
 									<Icon icon="lucide:rose" className="size-5" />
 									Rose Room
@@ -57,7 +58,7 @@ export default function Header() {
 								<Link
 									key="texas-room"
 									to="/rooms/texas-room"
-									className="flex flex-nowrap items-center gap-2 text-background hover:text-secondary transition-colors font-semibold [&.active]:text-accent"
+									className="flex flex-nowrap items-center gap-2 font-semibold text-background transition-colors hover:text-secondary [&.active]:text-accent"
 								>
 									<Icon icon="game-icons:texas" className="size-5" />
 									Texas Room
@@ -67,7 +68,7 @@ export default function Header() {
 								<Link
 									key="contact"
 									to="/contact"
-									className="flex flex-nowrap items-center gap-2 text-background hover:text-secondary transition-colors font-semibold [&.active]:text-accent"
+									className="flex flex-nowrap items-center gap-2 font-semibold text-background transition-colors hover:text-secondary [&.active]:text-accent"
 								>
 									<Icon icon="tabler:message" className="size-5" />
 									Contact Us
@@ -154,7 +155,7 @@ export default function Header() {
 
 				{/* Mobile Menu Dropdown */}
 				<div
-					className={`lg:hidden overflow-hidden transition-all duration-300 ease-in-out border-t border-background/20 ${
+					className={`overflow-hidden border-t border-background/20 transition-all duration-300 ease-in-out lg:hidden ${
 						isMobileMenuOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
 					}`}
 				>
@@ -168,7 +169,7 @@ export default function Header() {
 								<li>
 									<Link
 										to="/rooms/rose-room"
-										className="flex items-center gap-2 text-background hover:text-secondary transition-colors font-semibold [&.active]:text-accent px-4 py-2"
+										className="flex items-center gap-2 px-4 py-2 font-semibold text-background transition-colors hover:text-secondary [&.active]:text-accent"
 										onClick={() => setIsMobileMenuOpen(false)}
 									>
 										<Icon icon="lucide:rose" className="size-5" />
@@ -178,7 +179,7 @@ export default function Header() {
 								<li>
 									<Link
 										to="/rooms/texas-room"
-										className="flex items-center gap-2 text-background hover:text-secondary transition-colors font-semibold [&.active]:text-accent px-4 py-2"
+										className="flex items-center gap-2 px-4 py-2 font-semibold text-background transition-colors hover:text-secondary [&.active]:text-accent"
 										onClick={() => setIsMobileMenuOpen(false)}
 									>
 										<Icon icon="game-icons:texas" className="size-5" />
@@ -188,7 +189,7 @@ export default function Header() {
 								<li>
 									<Link
 										to="/contact"
-										className="flex items-center gap-2 text-background hover:text-secondary transition-colors font-semibold [&.active]:text-accent px-4 py-2"
+										className="flex items-center gap-2 px-4 py-2 font-semibold text-background transition-colors hover:text-secondary [&.active]:text-accent"
 										onClick={() => setIsMobileMenuOpen(false)}
 									>
 										<Icon icon="tabler:message" className="size-5" />

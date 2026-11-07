@@ -1,4 +1,5 @@
 import { useStore } from '@tanstack/react-store';
+
 import {
 	type BookingState,
 	type BookingStep,

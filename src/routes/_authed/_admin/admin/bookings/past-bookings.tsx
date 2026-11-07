@@ -1,6 +1,7 @@
 import { Icon } from '@iconify/react';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
+
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import {
 	createAppColumnHelper,
@@ -30,7 +31,7 @@ const columns = columnHelper.columns([
 			<Link
 				to="/admin/bookings/$publicId"
 				params={{ publicId: info.row.original.booking.publicId }}
-				className="font-mono text-sm font-semibold text-primary hover:text-primary/80 underline"
+				className="font-mono text-sm font-semibold text-primary underline hover:text-primary/80"
 			>
 				{info.getValue()}
 			</Link>
@@ -62,7 +63,7 @@ const columns = columnHelper.columns([
 		cell: (info) => (
 			<div>
 				<div className="font-medium">{info.getValue()}</div>
-				<div className="text-sm text-muted-foreground break-all">
+				<div className="text-sm break-all text-muted-foreground">
 					{info.row.original.booking.guestEmail}
 				</div>
 			</div>
@@ -192,7 +193,7 @@ function PastBookings() {
 							<div className="relative">
 								<Icon
 									icon="tabler:search"
-									className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4"
+									className="absolute top-1/2 left-2 h-4 w-4 -translate-y-1/2 transform text-muted-foreground"
 								/>
 								<Input
 									placeholder="Search past bookings..."
@@ -200,7 +201,7 @@ function PastBookings() {
 									onChange={(event) =>
 										table.setGlobalFilter(String(event.target.value))
 									}
-									className="pl-8 w-[300px]"
+									className="w-[300px] pl-8"
 								/>
 							</div>
 						</div>

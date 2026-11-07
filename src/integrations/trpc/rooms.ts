@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { and, asc, eq, gte, lte, ne, notExists, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
+
 import type { Database } from '@/db/drizzle-init';
 import { room, roomBlockedPeriods, roomPricingRules } from '@/db/schema-export';
 import { findBlockConflicts } from '@/lib/availability';
@@ -23,6 +24,7 @@ import {
 	updateRoomSchema,
 } from '@/lib/room-validation';
 import { todayIn } from '@/lib/timezone';
+
 import { adminProcedure, createTRPCRouter, publicProcedure } from './init';
 
 /**
@@ -128,7 +130,10 @@ export const roomsRouter = createTRPCRouter({
 				.orderBy(asc(room.name))
 				.limit(input.limit)
 				.offset(input.offset),
-			ctx.db.select({ total: sql<number>`count(*)` }).from(room).where(where),
+			ctx.db
+				.select({ total: sql<number>`count(*)` })
+				.from(room)
+				.where(where),
 		]);
 		return {
 			rooms,

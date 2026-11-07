@@ -2,6 +2,7 @@ import { TRPCError } from '@trpc/server';
 import { and, eq, getTableColumns } from 'drizzle-orm';
 import { customAlphabet } from 'nanoid';
 import type Stripe from 'stripe';
+
 import type { Database } from '@/db/drizzle-init';
 import {
 	bookings,
@@ -10,6 +11,7 @@ import {
 	roomPricingRules,
 	user,
 } from '@/db/schema-export';
+
 import {
 	type Conflict,
 	checkAvailability,

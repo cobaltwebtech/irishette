@@ -2,6 +2,7 @@ import { Icon } from '@iconify/react';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
+
 import RoomAvailabilityCalendar from '@/components/RoomAvailabilityCalendar';
 import BookingInfo from '@/components/RoomBookingInfo';
 import { RoomGallery } from '@/components/RoomGallery';
@@ -175,7 +176,7 @@ function RoseRoomPage() {
 	return (
 		<div className="bg-background">
 			{/* Hero Section */}
-			<section className="relative h-[50vh] min-h-[500px] flex items-center justify-center overflow-hidden shadow-lg shadow-foreground/50">
+			<section className="relative flex h-[50vh] min-h-[500px] items-center justify-center overflow-hidden shadow-lg shadow-foreground/50">
 				{/* Background Image */}
 				<div
 					className="absolute inset-0 bg-cover bg-center bg-no-repeat"
@@ -188,17 +189,17 @@ function RoseRoomPage() {
 				<div className="absolute inset-0 bg-black/60" />
 
 				{/* Content */}
-				<div className="relative z-10 container mx-auto max-w-4xl text-center px-4">
-					<div className="flex justify-center mb-4 text-rose-400">
+				<div className="relative z-10 container mx-auto max-w-4xl px-4 text-center">
+					<div className="mb-4 flex justify-center text-rose-400">
 						<Icon icon="lucide:rose" className="size-24" />
 					</div>
-					<h1 className="font-fleur text-4xl md:text-6xl lg:text-7xl font-black mb-6 bg-linear-to-r from-rose-700 via-pink-200 to-rose-700 bg-clip-text text-transparent">
+					<h1 className="mb-6 bg-linear-to-r from-rose-700 via-pink-200 to-rose-700 bg-clip-text font-fleur text-4xl font-black text-transparent md:text-6xl lg:text-7xl">
 						Rose Room
 					</h1>
-					<p className="text-xl md:text-2xl italic text-popover mb-8 font-medium drop-shadow-md max-w-3xl mx-auto">
+					<p className="mx-auto mb-8 max-w-3xl text-xl font-medium text-popover italic drop-shadow-md md:text-2xl">
 						Leave your worries behind in this spacious and tranquil retreat.
 					</p>
-					<div className="flex flex-col sm:flex-row gap-4 justify-center">
+					<div className="flex flex-col justify-center gap-4 sm:flex-row">
 						<Button
 							variant="accent"
 							size="lg"
@@ -236,25 +237,25 @@ function RoseRoomPage() {
 
 			{/* Availability Calendar */}
 			<section
-				className="py-16 px-4 scroll-mt-20 bg-linear-to-b from-rose-200 to-background"
+				className="scroll-mt-20 bg-linear-to-b from-rose-200 to-background px-4 py-16"
 				data-calendar-section
 			>
 				<div className="container mx-auto max-w-5xl">
-					<div className="text-center mb-12">
-						<h2 className="text-3xl font-bold mb-4 flex flex-col items-center justify-center gap-2">
+					<div className="mb-12 text-center">
+						<h2 className="mb-4 flex flex-col items-center justify-center gap-2 text-3xl font-bold">
 							<Icon
 								icon="tabler:calendar-week"
 								className="size-12 text-accent"
 							/>
 							<span>Select Dates to Book Now</span>
 						</h2>
-						<p className="text-muted-foreground text-lg">
+						<p className="text-lg text-muted-foreground">
 							Select your preferred dates to see availability and pricing
 						</p>
 					</div>
 
 					{/* Container for Calendar and Booking Info */}
-					<div className="grid lg:grid-cols-2 gap-8 justify-center">
+					<div className="grid justify-center gap-8 lg:grid-cols-2">
 						{/* Calendar */}
 						<div className="flex justify-center">
 							<div className="w-full max-w-2xl">
@@ -277,7 +278,7 @@ function RoseRoomPage() {
 							roomName="Rose Room"
 						/>
 					</div>
-					<div className="flex flex-col items-center mt-8 gap-4">
+					<div className="mt-8 flex flex-col items-center gap-4">
 						<p>
 							Can't find the dates you need? Check out the Texas Room
 							availability.
@@ -299,15 +300,15 @@ function RoseRoomPage() {
 			</section>
 
 			{/* Photo Gallery */}
-			<section className="py-16 px-4 scroll-mt-20" data-gallery-section>
+			<section className="scroll-mt-20 px-4 py-16" data-gallery-section>
 				<div className="container mx-auto max-w-4xl">
-					<h2 className="text-3xl font-bold text-center mb-12">
+					<h2 className="mb-12 text-center text-3xl font-bold">
 						Rose Room Gallery
 					</h2>
 					<RoomGallery
 						images={roseRoomImages}
 						roomName="Rose Room"
-						className="max-w-4xl mx-auto"
+						className="mx-auto max-w-4xl"
 						mainImageHeight={500}
 						thumbImageHeight={100}
 						thumbsPerView={5}
@@ -316,17 +317,17 @@ function RoseRoomPage() {
 			</section>
 
 			{/* Room Description */}
-			<section className="py-16 px-4">
+			<section className="px-4 py-16">
 				<div className="container mx-auto max-w-4xl">
 					<Card className="border-primary/20">
 						<CardHeader>
-							<CardTitle className="font-fleur text-4xl text-primary text-center">
+							<CardTitle className="text-center font-fleur text-4xl text-primary">
 								Your Private Retreat
 							</CardTitle>
 						</CardHeader>
-						<CardContent className="flex flex-col lg:flex-row gap-8 items-center">
+						<CardContent className="flex flex-col items-center gap-8 lg:flex-row">
 							<div className="space-y-4">
-								<p className="leading-relaxed text-justify">
+								<p className="text-justify leading-relaxed">
 									Your suite offers a private entrance for complete seclusion.
 									Step across your own deck to the main door, which opens into a
 									bright enclosed sun porch. To the left, you'll find a
@@ -334,7 +335,7 @@ function RoseRoomPage() {
 									microwave and an ironing board — plus ample space for your
 									luggage and clothing.
 								</p>
-								<p className="leading-relaxed text-justify">
+								<p className="text-justify leading-relaxed">
 									Straight ahead, the Rose Room awaits, featuring a cozy
 									queen-sized bed in a light-filled space with a large picture
 									window. Enjoy modern comforts including a TV with Prime Video
@@ -352,96 +353,96 @@ function RoseRoomPage() {
 			</section>
 
 			{/* Amenities */}
-			<section className="py-16 px-4 bg-muted/80">
+			<section className="bg-muted/80 px-4 py-16">
 				<div className="container mx-auto max-w-6xl">
-					<h2 className="text-3xl font-bold text-center mb-12">
+					<h2 className="mb-12 text-center text-3xl font-bold">
 						Room Amenities
 					</h2>
 
-					<div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-						<Card className="text-center p-6">
+					<div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+						<Card className="p-6 text-center">
 							<Icon
 								icon="tabler:microwave"
-								className="size-8 text-accent mx-auto mb-4"
+								className="mx-auto mb-4 size-8 text-accent"
 							/>
-							<h3 className="font-semibold mb-2">Kitchenette</h3>
+							<h3 className="mb-2 font-semibold">Kitchenette</h3>
 							<p className="text-sm text-muted-foreground">
 								Coffee maker, refrigerator, microwave
 							</p>
 						</Card>
 
-						<Card className="text-center p-6">
+						<Card className="p-6 text-center">
 							<Icon
 								icon="mingcute:shower-line"
-								className="size-8 text-accent mx-auto mb-4"
+								className="mx-auto mb-4 size-8 text-accent"
 							/>
-							<h3 className="font-semibold mb-2">Walk-in Shower</h3>
+							<h3 className="mb-2 font-semibold">Walk-in Shower</h3>
 							<p className="text-sm text-muted-foreground">
 								Private en-suite bathroom
 							</p>
 						</Card>
 
-						<Card className="text-center p-6">
+						<Card className="p-6 text-center">
 							<Icon
 								icon="tabler:device-tv-old"
-								className="size-8 text-accent mx-auto mb-4"
+								className="mx-auto mb-4 size-8 text-accent"
 							/>
-							<h3 className="font-semibold mb-2">Entertainment</h3>
+							<h3 className="mb-2 font-semibold">Entertainment</h3>
 							<p className="text-sm text-muted-foreground">
 								TV with Prime Video & Netflix
 							</p>
 						</Card>
 
-						<Card className="text-center p-6">
+						<Card className="p-6 text-center">
 							<Icon
 								icon="tabler:wind"
-								className="size-8 text-accent mx-auto mb-4"
+								className="mx-auto mb-4 size-8 text-accent"
 							/>
-							<h3 className="font-semibold mb-2">Climate Control</h3>
+							<h3 className="mb-2 font-semibold">Climate Control</h3>
 							<p className="text-sm text-muted-foreground">
 								Ceiling fan & electric fireplace
 							</p>
 						</Card>
 
-						<Card className="text-center p-6">
+						<Card className="p-6 text-center">
 							<Icon
 								icon="tabler:wifi"
-								className="size-8 text-accent mx-auto mb-4"
+								className="mx-auto mb-4 size-8 text-accent"
 							/>
-							<h3 className="font-semibold mb-2">Work Space</h3>
+							<h3 className="mb-2 font-semibold">Work Space</h3>
 							<p className="text-sm text-muted-foreground">
 								Dedicated area with WiFi
 							</p>
 						</Card>
 
-						<Card className="text-center p-6">
+						<Card className="p-6 text-center">
 							<Icon
 								icon="tabler:car"
-								className="size-8 text-accent mx-auto mb-4"
+								className="mx-auto mb-4 size-8 text-accent"
 							/>
-							<h3 className="font-semibold mb-2">Private Entrance</h3>
+							<h3 className="mb-2 font-semibold">Private Entrance</h3>
 							<p className="text-sm text-muted-foreground">
 								Independent access via deck
 							</p>
 						</Card>
 
-						<Card className="text-center p-6">
+						<Card className="p-6 text-center">
 							<Icon
 								icon="tabler:bed"
-								className="size-8 text-accent mx-auto mb-4"
+								className="mx-auto mb-4 size-8 text-accent"
 							/>
-							<h3 className="font-semibold mb-2">Queen Bed</h3>
+							<h3 className="mb-2 font-semibold">Queen Bed</h3>
 							<p className="text-sm text-muted-foreground">
 								Comfortable sleeping for two
 							</p>
 						</Card>
 
-						<Card className="text-center p-6">
+						<Card className="p-6 text-center">
 							<Icon
 								icon="tabler:bolt"
-								className="size-8 text-accent mx-auto mb-4"
+								className="mx-auto mb-4 size-8 text-accent"
 							/>
-							<h3 className="font-semibold mb-2">Modern Comforts</h3>
+							<h3 className="mb-2 font-semibold">Modern Comforts</h3>
 							<p className="text-sm text-muted-foreground">
 								All essential amenities included
 							</p>
@@ -451,9 +452,9 @@ function RoseRoomPage() {
 			</section>
 
 			{/* Booking CTA */}
-			<section className="py-16 px-4">
+			<section className="px-4 py-16">
 				<div className="container mx-auto max-w-4xl text-center">
-					<Card className="bg-accent/10 border-accent/20">
+					<Card className="border-accent/20 bg-accent/10">
 						<CardHeader>
 							<CardTitle className="text-2xl">Ready to Book?</CardTitle>
 							<CardDescription className="text-base">
@@ -461,11 +462,11 @@ function RoseRoomPage() {
 							</CardDescription>
 						</CardHeader>
 						<CardContent>
-							<p className="text-muted-foreground mb-6">
+							<p className="mb-6 text-muted-foreground">
 								Book your stay directly with us for the best rates and
 								personalized service.
 							</p>
-							<div className="flex flex-col sm:flex-row gap-4 justify-center">
+							<div className="flex flex-col justify-center gap-4 sm:flex-row">
 								<Button
 									variant="accent"
 									size="lg"

@@ -4,6 +4,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -176,10 +177,10 @@ function SignupPage() {
 
 	if (emailSent) {
 		return (
-			<div className="flex flex-col flex-auto items-center justify-center bg-background px-4 py-8">
+			<div className="flex flex-auto flex-col items-center justify-center bg-background px-4 py-8">
 				<Card className="w-full max-w-md">
 					<CardHeader className="text-center">
-						<div className="flex items-center justify-center mb-4 mx-auto size-16 bg-primary rounded-full">
+						<div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-primary">
 							<Icon
 								icon="tabler:mail-fast"
 								className="size-10 text-primary-foreground"
@@ -194,7 +195,7 @@ function SignupPage() {
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="space-y-4">
-						<p className="text-muted-foreground text-center">
+						<p className="text-center text-muted-foreground">
 							{showPasswordSignup
 								? 'Please verify your email address by clicking the link we sent you. The link will expire in 15 minutes.'
 								: 'Click the magic link in your email to complete your signup and sign in to your Irishette account. The link will expire in 15 minutes.'}
@@ -234,10 +235,10 @@ function SignupPage() {
 	}
 
 	return (
-		<div className="flex flex-col flex-auto items-center justify-center bg-background px-4 py-8">
+		<div className="flex flex-auto flex-col items-center justify-center bg-background px-4 py-8">
 			<Card className="w-full max-w-md">
 				<CardHeader className="text-center">
-					<div className="flex items-center justify-center mx-auto mb-4 size-16 bg-primary rounded-full">
+					<div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-primary">
 						<Icon
 							icon="tabler:user-plus"
 							className="size-10 text-primary-foreground"
@@ -403,7 +404,7 @@ function SignupPage() {
 						<Link
 							to="/auth/login"
 							search={{ redirect: search.redirect, error: undefined }}
-							className="hover:underline underline-offset-4 text-accent"
+							className="text-accent underline-offset-4 hover:underline"
 						>
 							Login Here
 						</Link>

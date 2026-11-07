@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
+
 import { escapeText, foldLine, generateIcal } from '@/lib/ical-generate';
 import { parseIcal, unfoldLines } from '@/lib/ical-parse';
 

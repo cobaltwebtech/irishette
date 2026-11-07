@@ -1,8 +1,8 @@
 {
   "name": "irishette",
+  "version": "0.40.0",
   "private": true,
   "type": "module",
-  "version": "0.40.0",
   "scripts": {
     "dev": "varlock run --inject vars -- cf dev",
     "build": "varlock run --inject vars -- cf build",
@@ -29,13 +29,12 @@
     "db:seed:local": "node scripts/d1-local.mjs seed",
     "db:reset:local": "rm -rf .cloudflare/state/v3/d1 && pnpm db:migrate:local && pnpm db:seed:local",
     "db:make-admin:local": "node scripts/d1-local.mjs make-admin",
-    "test": "vitest run",
-    "test:unit": "vitest run --project unit",
-    "test:workers": "vitest run --project workers",
+    "test": "vp test run",
+    "test:unit": "vp test run --project unit",
+    "test:workers": "vp test run --project workers",
     "test:e2e": "playwright test",
     "test:smoke": "node scripts/smoke.mjs"
   },
-  "packageManager": "pnpm@12.18.0",
   "dependencies": {
     "@better-auth/drizzle-adapter": "1.7.18",
     "@better-auth/stripe": "1.7.18",
@@ -107,7 +106,9 @@
     "msw": "^3.0.4",
     "oxc-transform-react": "~0.156.0",
     "typescript": "^7.0.2",
-    "vite": "^8.3.6",
-    "vitest": "^5.1.0"
-  }
+    "vite": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
+  },
+  "packageManager": "pnpm@12.18.0"
 }

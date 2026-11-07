@@ -1,10 +1,12 @@
 import { TRPCError } from '@trpc/server';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
+
 import { room } from '@/db/schema-export';
 import { loadUnavailability } from '@/lib/availability';
 import { addDays, isoDateSchema } from '@/lib/date-range';
 import { todayIn } from '@/lib/timezone';
+
 import { createTRPCRouter, publicProcedure } from './init';
 
 export const availabilityRouter = createTRPCRouter({

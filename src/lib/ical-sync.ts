@@ -1,5 +1,6 @@
 import { and, eq, gt, inArray, lt } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
+
 import {
 	bookings,
 	externalEvents,
@@ -9,6 +10,7 @@ import {
 	icalSyncLog,
 	room,
 } from '@/db/schema-export';
+
 import { holdsDatesCondition } from './availability';
 import { stayOverlapsEvent } from './date-range';
 import type { ServiceDeps } from './deps';
@@ -529,20 +531,19 @@ async function syncFeeds(
 	const settled = await Promise.allSettled(
 		feeds.map((feed) => syncFeed(deps, feed, options)),
 	);
-	return settled.map(
-		(s, i): SyncResult =>
-			s.status === 'fulfilled'
-				? s.value
-				: {
-						feedId: feeds[i].id,
-						roomId: feeds[i].roomId,
-						status: 'error',
-						added: 0,
-						updated: 0,
-						removed: 0,
-						conflicts: 0,
-						error: shortError(s.reason),
-					},
+	return settled.map((s, i): SyncResult =>
+		s.status === 'fulfilled'
+			? s.value
+			: {
+					feedId: feeds[i].id,
+					roomId: feeds[i].roomId,
+					status: 'error',
+					added: 0,
+					updated: 0,
+					removed: 0,
+					conflicts: 0,
+					error: shortError(s.reason),
+				},
 	);
 }
 

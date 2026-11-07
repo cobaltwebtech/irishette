@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 
 const STORAGE_KEY = 'irishette-booking-draft';
 
@@ -86,7 +86,10 @@ describe('booking store', () => {
 		first.bookingActions.setDates('2030-07-01', '2030-07-04');
 		first.bookingActions.setBookingId('booking-1', 'pub0000000000001');
 		expect(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')).toMatchObject(
-			{ roomId: 'room-1', bookingPublicId: 'pub0000000000001' },
+			{
+				roomId: 'room-1',
+				bookingPublicId: 'pub0000000000001',
+			},
 		);
 
 		const second = await loadStore();

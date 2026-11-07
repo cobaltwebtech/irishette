@@ -1,6 +1,7 @@
 import { Icon } from '@iconify/react';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
+
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import {
 	createAppColumnHelper,
@@ -137,7 +138,7 @@ function AdminGuests() {
 							<div className="relative">
 								<Icon
 									icon="tabler:search"
-									className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground size-5"
+									className="absolute top-1/2 left-2 size-5 -translate-y-1/2 transform text-muted-foreground"
 								/>
 								<Input
 									placeholder="Search guests..."
@@ -145,7 +146,7 @@ function AdminGuests() {
 									onChange={(event) =>
 										table.setGlobalFilter(String(event.target.value))
 									}
-									className="pl-8 w-[300px]"
+									className="w-[300px] pl-8"
 								/>
 							</div>
 						</div>

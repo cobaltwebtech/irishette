@@ -2,6 +2,7 @@ import { Icon } from '@iconify/react';
 import { useMutation, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { toast } from 'sonner';
+
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { BookingInternalNotes } from '@/components/admin/BookingInternalNotes';
 import { CancelBookingButton } from '@/components/booking/CancelBookingButton';
@@ -60,7 +61,7 @@ function BookingNotFound() {
 					<CardTitle>Booking Not Found</CardTitle>
 				</CardHeader>
 				<CardContent>
-					<p className="text-muted-foreground mb-4">
+					<p className="mb-4 text-muted-foreground">
 						The booking you're looking for could not be found.
 					</p>
 					<Link to="/admin/bookings/current-bookings">
@@ -149,20 +150,20 @@ function AdminBookingDetailPage() {
 			</div>
 
 			{/* Main Content */}
-			<div className="grid lg:grid-cols-6 gap-8">
+			<div className="grid gap-8 lg:grid-cols-6">
 				{/* Left Column - Booking Details */}
 				<Card className="lg:col-span-4">
 					<CardHeader>
 						<CardTitle>Booking Details</CardTitle>
 					</CardHeader>
-					<CardContent className="grid sm:grid-cols-2 gap-4">
+					<CardContent className="grid gap-4 sm:grid-cols-2">
 						<div>
 							<p className="text-sm font-medium text-muted-foreground">
 								Confirmation ID
 							</p>
 							<Badge
 								variant="secondary"
-								className="font-semibold font-mono tracking-wider text-lg"
+								className="font-mono text-lg font-semibold tracking-wider"
 							>
 								{booking.booking.confirmationId}
 							</Badge>
@@ -270,12 +271,12 @@ function AdminBookingDetailPage() {
 									</>
 								)}
 							<p className="text-lg font-semibold">Total Paid</p>
-							<p className="text-lg font-semibold text-right">
+							<p className="text-right text-lg font-semibold">
 								${booking.booking.totalAmount.toFixed(2)}
 							</p>
 						</div>
 					</CardContent>
-					<CardFooter className="border-t grid grid-cols-2 ">
+					<CardFooter className="grid grid-cols-2 border-t">
 						<p className="text-sm font-medium text-muted-foreground">
 							Payment Status
 						</p>
@@ -303,7 +304,7 @@ function AdminBookingDetailPage() {
 						<CardTitle className="flex items-center gap-2">
 							Guest Information
 							{bookingCount > 1 && (
-								<Badge className="text-xs bg-accent-4">
+								<Badge className="bg-accent-4 text-xs">
 									<Icon
 										icon="tabler:star-filled"
 										className="size-4 text-accent"
@@ -314,7 +315,7 @@ function AdminBookingDetailPage() {
 						</CardTitle>
 					</CardHeader>
 					<CardContent className="space-y-4">
-						<div className="grid sm:grid-cols-2 gap-4">
+						<div className="grid gap-4 sm:grid-cols-2">
 							<div>
 								<p className="text-sm font-medium text-muted-foreground">
 									Name
@@ -328,7 +329,7 @@ function AdminBookingDetailPage() {
 								<p className="font-semibold">{booking.booking.guestEmail}</p>
 							</div>
 						</div>
-						<div className="grid sm:grid-cols-2 gap-4">
+						<div className="grid gap-4 sm:grid-cols-2">
 							<div>
 								<p className="text-sm font-medium text-muted-foreground">
 									Account Email
@@ -354,7 +355,7 @@ function AdminBookingDetailPage() {
 					</CardHeader>
 					<CardContent className="space-y-4">
 						{booking.booking.stripePaymentIntentId && (
-							<Button className="w-full h-auto" asChild>
+							<Button className="h-auto w-full" asChild>
 								<a
 									href={`https://dashboard.stripe.com/acct_1RwOD0B1s28979kR/payments/${booking.booking.stripePaymentIntentId}`}
 									target="_blank"
@@ -362,7 +363,7 @@ function AdminBookingDetailPage() {
 									className="inline-flex items-center"
 								>
 									<Icon icon="tabler:external-link" className="size-6" />
-									<span className="text-wrap text-center">
+									<span className="text-center text-wrap">
 										View Payment at Stripe
 									</span>
 								</a>
@@ -372,7 +373,7 @@ function AdminBookingDetailPage() {
 							onClick={handleResendEmail}
 							disabled={isResendingEmail}
 							variant="secondary"
-							className="w-full h-auto"
+							className="h-auto w-full"
 						>
 							<Icon icon="tabler:mail-forward" className="size-6" />
 							<span className="text-wrap">
@@ -394,7 +395,7 @@ function AdminBookingDetailPage() {
 						<CardTitle>Special Requests</CardTitle>
 					</CardHeader>
 					<CardContent>
-						<div className="bg-muted p-4 rounded-md text-sm text-muted-foreground">
+						<div className="rounded-md bg-muted p-4 text-sm text-muted-foreground">
 							{booking.booking.specialRequests ||
 								'No special requests provided by guest'}
 						</div>
@@ -424,7 +425,7 @@ function AdminBookingDetailPage() {
 						<CardTitle>Admin Information</CardTitle>
 					</CardHeader>
 					<CardContent className="space-y-4">
-						<div className="grid sm:grid-cols-2 gap-4">
+						<div className="grid gap-4 sm:grid-cols-2">
 							<div>
 								<p className="text-sm font-medium text-muted-foreground">
 									Internal Booking ID
@@ -440,7 +441,7 @@ function AdminBookingDetailPage() {
 								</p>
 							</div>
 						</div>
-						<div className="grid sm:grid-cols-2 gap-4">
+						<div className="grid gap-4 sm:grid-cols-2">
 							<div>
 								<p className="text-sm font-medium text-muted-foreground">
 									Created At
@@ -458,7 +459,7 @@ function AdminBookingDetailPage() {
 								</p>
 							</div>
 						</div>
-						<div className="grid sm:grid-cols-2 gap-4">
+						<div className="grid gap-4 sm:grid-cols-2">
 							<div>
 								<p className="text-sm font-medium text-muted-foreground">
 									Stripe Customer ID

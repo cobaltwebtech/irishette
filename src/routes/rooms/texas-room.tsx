@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { Image } from '@unpic/react';
 import { useEffect, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
+
 import RoomAvailabilityCalendar from '@/components/RoomAvailabilityCalendar';
 import BookingInfo from '@/components/RoomBookingInfo';
 import { RoomGallery } from '@/components/RoomGallery';
@@ -167,7 +168,7 @@ function TexasRoomPage() {
 	return (
 		<div className="bg-background">
 			{/* Hero Section */}
-			<section className="relative h-[50vh] min-h-[500px] flex items-center justify-center overflow-hidden shadow-lg shadow-foreground/50">
+			<section className="relative flex h-[50vh] min-h-[500px] items-center justify-center overflow-hidden shadow-lg shadow-foreground/50">
 				{/* Background Image */}
 				<div
 					className="absolute inset-0 bg-cover bg-center bg-no-repeat"
@@ -180,17 +181,17 @@ function TexasRoomPage() {
 				<div className="absolute inset-0 bg-black/60" />
 
 				{/* Content */}
-				<div className="relative z-10 container mx-auto max-w-4xl text-center px-4">
-					<div className="flex justify-center mb-4 text-blue-500">
+				<div className="relative z-10 container mx-auto max-w-4xl px-4 text-center">
+					<div className="mb-4 flex justify-center text-blue-500">
 						<Icon icon="game-icons:texas" className="size-24" />
 					</div>
-					<h1 className="font-rye text-4xl md:text-6xl lg:text-7xl font-black mb-6 bg-linear-to-br from-blue-500 from-30% via-white to-red-500 to-70% bg-clip-text text-transparent">
+					<h1 className="mb-6 bg-linear-to-br from-blue-500 from-30% via-white to-red-500 to-70% bg-clip-text font-rye text-4xl font-black text-transparent md:text-6xl lg:text-7xl">
 						Texas Room
 					</h1>
-					<p className="text-xl md:text-2xl italic text-popover mb-8 font-medium drop-shadow-md max-w-3xl mx-auto">
+					<p className="mx-auto mb-8 max-w-3xl text-xl font-medium text-popover italic drop-shadow-md md:text-2xl">
 						Experience true Texas charm in this spacious and inviting retreat.
 					</p>
-					<div className="flex flex-col sm:flex-row gap-4 justify-center">
+					<div className="flex flex-col justify-center gap-4 sm:flex-row">
 						<Button
 							variant="accent"
 							size="lg"
@@ -228,24 +229,24 @@ function TexasRoomPage() {
 
 			{/* Availability Calendar */}
 			<section
-				className="py-16 px-4 scroll-mt-20 bg-linear-to-b from-blue-200 to-background"
+				className="scroll-mt-20 bg-linear-to-b from-blue-200 to-background px-4 py-16"
 				data-calendar-section
 			>
 				<div className="container mx-auto max-w-5xl">
-					<div className="text-center mb-12">
-						<h2 className="text-3xl font-bold mb-4 flex flex-col items-center justify-center gap-2">
+					<div className="mb-12 text-center">
+						<h2 className="mb-4 flex flex-col items-center justify-center gap-2 text-3xl font-bold">
 							<Icon
 								icon="tabler:calendar-week"
 								className="size-12 text-accent"
 							/>
 							<span>Select Dates to Book Now</span>
 						</h2>
-						<p className="text-muted-foreground text-lg">
+						<p className="text-lg text-muted-foreground">
 							Select your preferred dates to see availability and pricing
 						</p>
 					</div>
 
-					<div className="grid lg:grid-cols-2 gap-8 justify-center">
+					<div className="grid justify-center gap-8 lg:grid-cols-2">
 						{/* Calendar */}
 						<RoomAvailabilityCalendar
 							roomSlug="texas-room"
@@ -265,7 +266,7 @@ function TexasRoomPage() {
 						/>
 					</div>
 				</div>
-				<div className="flex flex-col items-center mt-8 gap-4">
+				<div className="mt-8 flex flex-col items-center gap-4">
 					<p>
 						Can't find the dates you need? Check out the Rose Room availability.
 					</p>
@@ -285,15 +286,15 @@ function TexasRoomPage() {
 			</section>
 
 			{/* Photo Gallery */}
-			<section className="py-16 px-4 scroll-mt-20" data-gallery-section>
+			<section className="scroll-mt-20 px-4 py-16" data-gallery-section>
 				<div className="container mx-auto max-w-4xl">
-					<h2 className="text-3xl font-bold text-center mb-12">
+					<h2 className="mb-12 text-center text-3xl font-bold">
 						Texas Room Gallery
 					</h2>
 					<RoomGallery
 						images={texasRoomImages}
 						roomName="Texas Room"
-						className="max-w-4xl mx-auto"
+						className="mx-auto max-w-4xl"
 						mainImageHeight={500}
 						thumbImageHeight={100}
 						thumbsPerView={5}
@@ -302,23 +303,23 @@ function TexasRoomPage() {
 			</section>
 
 			{/* Room Description */}
-			<section className="py-16 px-4">
+			<section className="px-4 py-16">
 				<div className="container mx-auto max-w-4xl">
 					<Card className="border-accent/20">
 						<CardHeader>
-							<CardTitle className="font-rye text-3xl text-primary text-center">
+							<CardTitle className="text-center font-rye text-3xl text-primary">
 								Your Texas Getaway
 							</CardTitle>
 						</CardHeader>
-						<CardContent className="flex flex-col lg:flex-row gap-8 items-center">
+						<CardContent className="flex flex-col items-center gap-8 lg:flex-row">
 							<div className="space-y-4">
-								<p className="leading-relaxed text-justify">
+								<p className="text-justify leading-relaxed">
 									The Texas Room offers a private entrance for a peaceful,
 									independent stay. Inside you'll find a convenient kitchenette
 									with a coffee maker, refrigerator, and microwave—plus plenty
 									of space for your belongings.
 								</p>
-								<p className="leading-relaxed text-justify">
+								<p className="text-justify leading-relaxed">
 									The Texas Room reflects the spirit of the Lone Star State with
 									its warm décor and distinctive touches. Relax in a cozy
 									king-sized bed in a light-filled space, and enjoy modern
@@ -339,30 +340,30 @@ function TexasRoomPage() {
 			</section>
 
 			{/* Amenities */}
-			<section className="py-16 px-4 bg-muted/80">
+			<section className="bg-muted/80 px-4 py-16">
 				<div className="container mx-auto max-w-6xl">
-					<h2 className="text-3xl font-bold text-center mb-12">
+					<h2 className="mb-12 text-center text-3xl font-bold">
 						Room Amenities
 					</h2>
 
-					<div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-						<Card className="text-center p-6">
+					<div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+						<Card className="p-6 text-center">
 							<Icon
 								icon="tabler:coffee"
-								className="size-8 text-accent mx-auto mb-4"
+								className="mx-auto mb-4 size-8 text-accent"
 							/>
-							<h3 className="font-semibold mb-2">Kitchenette</h3>
+							<h3 className="mb-2 font-semibold">Kitchenette</h3>
 							<p className="text-sm text-muted-foreground">
 								Coffee maker, refrigerator, microwave
 							</p>
 						</Card>
 
-						<Card className="text-center p-6">
+						<Card className="p-6 text-center">
 							<Icon
 								icon="tabler:bath"
-								className="size-8 text-accent mx-auto mb-4"
+								className="mx-auto mb-4 size-8 text-accent"
 							/>
-							<h3 className="font-semibold mb-2">Clawfoot Tub</h3>
+							<h3 className="mb-2 font-semibold">Clawfoot Tub</h3>
 							<p className="text-sm text-muted-foreground">
 								Antique bathtub
 								<br />
@@ -370,67 +371,67 @@ function TexasRoomPage() {
 							</p>
 						</Card>
 
-						<Card className="text-center p-6">
+						<Card className="p-6 text-center">
 							<Icon
 								icon="tabler:device-tv-old"
-								className="size-8 text-accent mx-auto mb-4"
+								className="mx-auto mb-4 size-8 text-accent"
 							/>
-							<h3 className="font-semibold mb-2">Entertainment</h3>
+							<h3 className="mb-2 font-semibold">Entertainment</h3>
 							<p className="text-sm text-muted-foreground">
 								TV with Prime Video & Netflix
 							</p>
 						</Card>
 
-						<Card className="text-center p-6">
+						<Card className="p-6 text-center">
 							<Icon
 								icon="tabler:wind"
-								className="size-8 text-accent mx-auto mb-4"
+								className="mx-auto mb-4 size-8 text-accent"
 							/>
-							<h3 className="font-semibold mb-2">Climate Control</h3>
+							<h3 className="mb-2 font-semibold">Climate Control</h3>
 							<p className="text-sm text-muted-foreground">
 								Ceiling fan & electric fireplace
 							</p>
 						</Card>
 
-						<Card className="text-center p-6">
+						<Card className="p-6 text-center">
 							<Icon
 								icon="tabler:wifi"
-								className="size-8 text-accent mx-auto mb-4"
+								className="mx-auto mb-4 size-8 text-accent"
 							/>
-							<h3 className="font-semibold mb-2">Work Space</h3>
+							<h3 className="mb-2 font-semibold">Work Space</h3>
 							<p className="text-sm text-muted-foreground">
 								Dedicated area with WiFi
 							</p>
 						</Card>
 
-						<Card className="text-center p-6">
+						<Card className="p-6 text-center">
 							<Icon
 								icon="tabler:car-suv"
-								className="size-8 text-accent mx-auto mb-4"
+								className="mx-auto mb-4 size-8 text-accent"
 							/>
-							<h3 className="font-semibold mb-2">Private Entrance</h3>
+							<h3 className="mb-2 font-semibold">Private Entrance</h3>
 							<p className="text-sm text-muted-foreground">
 								Independent access from your vehicle to the room
 							</p>
 						</Card>
 
-						<Card className="text-center p-6">
+						<Card className="p-6 text-center">
 							<Icon
 								icon="material-symbols:bed-outline-rounded"
-								className="size-8 text-accent mx-auto mb-4"
+								className="mx-auto mb-4 size-8 text-accent"
 							/>
-							<h3 className="font-semibold mb-2">King Bed</h3>
+							<h3 className="mb-2 font-semibold">King Bed</h3>
 							<p className="text-sm text-muted-foreground">
 								Spacious sleeping for two
 							</p>
 						</Card>
 
-						<Card className="text-center p-6">
+						<Card className="p-6 text-center">
 							<Icon
 								icon="game-icons:texas"
-								className="size-8 text-accent mx-auto mb-4"
+								className="mx-auto mb-4 size-8 text-accent"
 							/>
-							<h3 className="font-semibold mb-2">Texas Charm</h3>
+							<h3 className="mb-2 font-semibold">Texas Charm</h3>
 							<p className="text-sm text-muted-foreground">
 								Warm décor & distinctive touches with a Texas vibe
 							</p>
@@ -440,16 +441,16 @@ function TexasRoomPage() {
 			</section>
 
 			{/* Special Features */}
-			<section className="py-16 px-4">
+			<section className="px-4 py-16">
 				<div className="container mx-auto max-w-4xl">
-					<Card className="bg-accent/10 border-accent/20">
+					<Card className="border-accent/20 bg-accent/10">
 						<CardHeader>
-							<CardTitle className="text-2xl text-center">
+							<CardTitle className="text-center text-2xl">
 								Texas Room Special Features (need to update these images)
 							</CardTitle>
 						</CardHeader>
 						<CardContent>
-							<div className="grid md:grid-cols-2 gap-6">
+							<div className="grid gap-6 md:grid-cols-2">
 								<div className="space-y-2">
 									4
 									<Image
@@ -459,7 +460,7 @@ function TexasRoomPage() {
 										height={400}
 										className="mx-auto rounded-lg"
 									/>
-									<h3 className="text-center font-semibold text-lg mb-2 text-accent">
+									<h3 className="mb-2 text-center text-lg font-semibold text-accent">
 										Antique Clawfoot Tub
 									</h3>
 									<p className="text-center text-muted-foreground">
@@ -476,7 +477,7 @@ function TexasRoomPage() {
 										height={400}
 										className="mx-auto rounded-lg"
 									/>
-									<h3 className="text-center font-semibold text-lg mb-2 text-accent">
+									<h3 className="mb-2 text-center text-lg font-semibold text-accent">
 										Texas-Themed Décor
 									</h3>
 									<p className="text-center text-muted-foreground">
@@ -486,7 +487,7 @@ function TexasRoomPage() {
 									</p>
 								</div>
 							</div>
-							<div className="mt-6 p-4 bg-accent/20 rounded-lg">
+							<div className="mt-6 rounded-lg bg-accent/20 p-4">
 								<p className="text-sm font-medium">
 									<strong>Please Note:</strong> The Texas Room features a
 									beautiful antique clawfoot tub but does not have a walk-in
@@ -499,9 +500,9 @@ function TexasRoomPage() {
 			</section>
 
 			{/* Booking CTA */}
-			<section className="py-16 px-4">
+			<section className="px-4 py-16">
 				<div className="container mx-auto max-w-4xl text-center">
-					<Card className="bg-accent/10 border-accent/20">
+					<Card className="border-accent/20 bg-accent/10">
 						<CardHeader>
 							<CardTitle className="text-2xl">
 								Ready to Experience Texas Charm?
@@ -511,11 +512,11 @@ function TexasRoomPage() {
 							</CardDescription>
 						</CardHeader>
 						<CardContent>
-							<p className="text-muted-foreground mb-6">
+							<p className="mb-6 text-muted-foreground">
 								Book your stay directly with us for the best rates and
 								personalized service.
 							</p>
-							<div className="flex flex-col sm:flex-row gap-4 justify-center">
+							<div className="flex flex-col justify-center gap-4 sm:flex-row">
 								<Button
 									variant="accent"
 									size="lg"

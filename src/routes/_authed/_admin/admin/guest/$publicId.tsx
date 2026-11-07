@@ -1,6 +1,7 @@
 import { Icon } from '@iconify/react';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
+
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import {
 	createAppColumnHelper,
@@ -35,7 +36,7 @@ const columns = columnHelper.columns([
 			<Link
 				to="/admin/bookings/$publicId"
 				params={{ publicId: info.row.original.publicId }}
-				className="font-mono text-sm font-semibold text-primary hover:text-primary/80 underline"
+				className="font-mono text-sm font-semibold text-primary underline hover:text-primary/80"
 			>
 				{info.getValue()}
 			</Link>
@@ -139,11 +140,11 @@ function GuestNotFound() {
 	return (
 		<div className="container mx-auto px-4 py-8">
 			<div className="text-center">
-				<h2 className="text-2xl font-bold mb-4">Guest Not Found</h2>
-				<p className="text-muted-foreground mb-4">
+				<h2 className="mb-4 text-2xl font-bold">Guest Not Found</h2>
+				<p className="mb-4 text-muted-foreground">
 					The guest you're looking for could not be found.
 				</p>
-				<div className="flex gap-2 justify-center">
+				<div className="flex justify-center gap-2">
 					<Link to="/admin/guest">
 						<Button variant="outline">Back to Guests</Button>
 					</Link>
@@ -208,7 +209,7 @@ function AdminGuestDetail() {
 				</Link>
 			</div>
 
-			<div className="grid lg:grid-cols-3 gap-6 mb-8">
+			<div className="mb-8 grid gap-6 lg:grid-cols-3">
 				{/* Guest Information Card */}
 				<Card className="lg:col-span-1">
 					<CardHeader>
@@ -260,7 +261,7 @@ function AdminGuestDetail() {
 								<p className="text-sm font-medium text-muted-foreground">
 									Stripe Customer ID
 								</p>
-								<p className="gap-2 font-mono text-primary break-all">
+								<p className="gap-2 font-mono break-all text-primary">
 									<a
 										href={`https://dashboard.stripe.com/customers/${user.stripeCustomerId}`}
 										rel="noopener noreferrer"
@@ -277,7 +278,7 @@ function AdminGuestDetail() {
 				</Card>
 
 				{/* Statistics Cards */}
-				<div className="lg:col-span-2 grid sm:grid-cols-2 md:grid-cols-3 gap-4">
+				<div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:col-span-2">
 					<Card>
 						<CardHeader className="pb-3">
 							<CardDescription>Total Bookings</CardDescription>
@@ -350,7 +351,7 @@ function AdminGuestDetail() {
 				</CardHeader>
 				<CardContent>
 					{bookings.length === 0 ? (
-						<div className="text-center py-8 text-muted-foreground">
+						<div className="py-8 text-center text-muted-foreground">
 							No bookings found for this guest.
 						</div>
 					) : (

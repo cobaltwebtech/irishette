@@ -7,6 +7,7 @@ import {
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { RoomBlockingManagement } from '@/components/admin/RoomBlockingManagement';
 import { RoomCalendarIntegration } from '@/components/admin/RoomCalendarIntegration';
@@ -115,8 +116,8 @@ function RoomNotFound() {
 	return (
 		<div className="container mx-auto px-4 py-8">
 			<div className="text-center">
-				<h2 className="text-2xl font-bold mb-4">Room Not Found</h2>
-				<p className="text-muted-foreground mb-4">
+				<h2 className="mb-4 text-2xl font-bold">Room Not Found</h2>
+				<p className="mb-4 text-muted-foreground">
 					The room you're looking for could not be found.
 				</p>
 				<Link to="/admin/property-management">
@@ -307,7 +308,7 @@ function EditRoom() {
 						disabled={updateRoomMutation.isPending}
 					>
 						{updateRoomMutation.isPending ? (
-							<Icon icon="tabler:loader-2" className="animate-spin size-4" />
+							<Icon icon="tabler:loader-2" className="size-4 animate-spin" />
 						) : (
 							<Icon icon="tabler:device-floppy" />
 						)}
@@ -315,7 +316,7 @@ function EditRoom() {
 					</Button>
 					<Badge
 						variant={room.status === 'active' ? 'default' : 'secondary'}
-						className="capitalize text-lg px-4 py-1"
+						className="px-4 py-1 text-lg capitalize"
 					>
 						{room.status}
 					</Badge>
@@ -323,7 +324,7 @@ function EditRoom() {
 			</div>
 
 			{/* Room Details */}
-			<div className="grid lg:grid-cols-3 gap-8">
+			<div className="grid gap-8 lg:grid-cols-3">
 				<RoomDetails
 					name={formData.name}
 					slug={formData.slug}
