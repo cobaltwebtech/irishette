@@ -157,6 +157,13 @@ async function handleCheckoutCompleted(
 ): Promise<void> {
 	const session = event.data.object as Stripe.Checkout.Session;
 
+	// Not one of our booking sessions (e.g. `stripe trigger`, another
+	// integration on the account): acknowledge so Stripe does not retry.
+	if (!session.metadata?.booking_id) {
+		console.log('Ignoring checkout session without booking_id:', session.id);
+		return;
+	}
+
 	try {
 		console.log('Processing checkout completion:', session.id);
 
@@ -300,6 +307,11 @@ async function handleCheckoutExpired(
 	paymentService: PaymentService,
 ): Promise<void> {
 	const session = event.data.object as Stripe.Checkout.Session;
+
+	if (!session.metadata?.booking_id) {
+		console.log('Ignoring checkout session without booking_id:', session.id);
+		return;
+	}
 
 	try {
 		console.log('Processing checkout expiration:', session.id);
