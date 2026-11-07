@@ -30,7 +30,9 @@ let files;
 try {
 	files = [...walk(ASSETS_DIR)].filter((f) => TEXT_EXT.test(f));
 } catch {
-	console.error(`check-client-bundle: ${ASSETS_DIR} not found. Run a build first.`);
+	console.error(
+		`check-client-bundle: ${ASSETS_DIR} not found. Run a build first.`,
+	);
 	process.exit(2);
 }
 
@@ -42,7 +44,10 @@ for (const file of files) {
 		// `get BETTER_AUTH_SECRET(){return fn('BETTER_AUTH_SECRET')}`. It reads
 		// from an empty object in the browser, so it carries a name, not a value.
 		const withoutKnownGetter = contents.replaceAll(
-			new RegExp(`get ${name}\\(\\)\\{return [\\w$]+\\([\`'"]${name}[\`'"]\\)\\}`, 'g'),
+			new RegExp(
+				`get ${name}\\(\\)\\{return [\\w$]+\\([\`'"]${name}[\`'"]\\)\\}`,
+				'g',
+			),
 			'',
 		);
 		if (withoutKnownGetter.includes(name)) hits.push(`${file}: ${name}`);

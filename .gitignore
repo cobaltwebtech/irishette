@@ -19,3 +19,10 @@ todos.json
 .wrangler
 db-copy
 .cloudflare
+# Test output
+.vitest
+coverage
+playwright-report
+test-results
+blob-report
+playwright/.cache

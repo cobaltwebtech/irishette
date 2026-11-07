@@ -1,7 +1,7 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import superjson from 'superjson';
 import { ZodError, z } from 'zod';
-import type { TRPCContext } from './context';
+import type { TRPCContext } from './inner-context';
 
 /**
  * Reads a structured field from a TRPCError cause. tRPC copies the properties

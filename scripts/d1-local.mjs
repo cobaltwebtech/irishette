@@ -36,14 +36,22 @@ const [command, ...rest] = process.argv.slice(2);
 
 switch (command) {
 	case 'migrate':
-		cf(['d1', 'migrations', 'apply', DATABASE_ID, '--dir', './drizzle', ...LOCAL]);
+		cf([
+			'd1',
+			'migrations',
+			'apply',
+			DATABASE_ID,
+			'--dir',
+			'./drizzle',
+			...LOCAL,
+		]);
 		break;
 	case 'seed':
 		raw(readFileSync('scripts/seed-local.sql', 'utf8'));
 		break;
 	case 'make-admin': {
 		const email = rest[0]?.trim();
-		if (!email || !email.includes('@')) {
+		if (!email?.includes('@')) {
 			console.error('Usage: pnpm db:make-admin:local <email>');
 			process.exit(1);
 		}
