@@ -1,7 +1,6 @@
 import { TRPCError } from '@trpc/server';
 import { and, between, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { createDrizzle } from '@/db/drizzle-init';
 import { bookings, room, user } from '@/db/schema-export';
 import { getAdminUsers } from '@/lib/admin-query';
 import {
@@ -10,6 +9,7 @@ import {
 	sendAdminBookingNotification,
 	sendBookingConfirmationEmail,
 } from '@/lib/email-service';
+import { publicIdSchema } from '@/lib/ids';
 import { PaymentService } from '@/lib/payment-service';
 import {
 	calculateBookingSchema,
@@ -43,7 +43,7 @@ export const bookingsRouter = createTRPCRouter({
 		)
 		.query(async ({ ctx, input }) => {
 			const paymentService = new PaymentService({
-				DB: ctx.db,
+				DB: ctx.env.DB,
 				STRIPE_SECRET_KEY: ctx.env.STRIPE_SECRET_KEY,
 				STRIPE_TRPC_WEBHOOK_SECRET: ctx.env.STRIPE_TRPC_WEBHOOK_SECRET,
 				BETTER_AUTH_URL: ctx.env.BETTER_AUTH_URL,
@@ -64,6 +64,7 @@ export const bookingsRouter = createTRPCRouter({
 				};
 			} catch (error) {
 				console.error('Failed to check room availability:', error);
+				if (error instanceof TRPCError) throw error;
 				throw new TRPCError({
 					code: 'BAD_REQUEST',
 					message:
@@ -75,13 +76,14 @@ export const bookingsRouter = createTRPCRouter({
 		}),
 
 	/**
-	 * Calculate booking pricing
+	 * Calculate booking pricing (read-only, so a query: cacheable and
+	 * usable with queryOptions).
 	 */
 	calculateBooking: publicProcedure
 		.input(calculateBookingSchema)
-		.mutation(async ({ ctx, input }) => {
+		.query(async ({ ctx, input }) => {
 			const paymentService = new PaymentService({
-				DB: ctx.db,
+				DB: ctx.env.DB,
 				STRIPE_SECRET_KEY: ctx.env.STRIPE_SECRET_KEY,
 				STRIPE_TRPC_WEBHOOK_SECRET: ctx.env.STRIPE_TRPC_WEBHOOK_SECRET,
 				BETTER_AUTH_URL: ctx.env.BETTER_AUTH_URL,
@@ -98,6 +100,7 @@ export const bookingsRouter = createTRPCRouter({
 				return pricing;
 			} catch (error) {
 				console.error('Failed to calculate booking price:', error);
+				if (error instanceof TRPCError) throw error;
 				throw new TRPCError({
 					code: 'BAD_REQUEST',
 					message:
@@ -115,7 +118,7 @@ export const bookingsRouter = createTRPCRouter({
 		.input(createBookingSchema)
 		.mutation(async ({ ctx, input }) => {
 			const paymentService = new PaymentService({
-				DB: ctx.db,
+				DB: ctx.env.DB,
 				STRIPE_SECRET_KEY: ctx.env.STRIPE_SECRET_KEY,
 				STRIPE_TRPC_WEBHOOK_SECRET: ctx.env.STRIPE_TRPC_WEBHOOK_SECRET,
 				BETTER_AUTH_URL: ctx.env.BETTER_AUTH_URL,
@@ -126,14 +129,14 @@ export const bookingsRouter = createTRPCRouter({
 				const userId = ctx.user.id;
 
 				// Create temporary booking
-				const bookingId = await paymentService.createTemporaryBooking(
-					input,
-					userId,
-				);
+				// bookingId drives the payment steps; publicId is for URLs.
+				const { bookingId, publicId } =
+					await paymentService.createTemporaryBooking(input, userId);
 
-				return { bookingId, success: true };
+				return { bookingId, publicId, success: true };
 			} catch (error) {
 				console.error('Failed to create booking:', error);
+				if (error instanceof TRPCError) throw error;
 				throw new TRPCError({
 					code: 'BAD_REQUEST',
 					message:
@@ -152,9 +155,9 @@ export const bookingsRouter = createTRPCRouter({
 	createCheckoutSession: protectedProcedure
 		.input(createCheckoutSessionSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 			const paymentService = new PaymentService({
-				DB: ctx.db,
+				DB: ctx.env.DB,
 				STRIPE_SECRET_KEY: ctx.env.STRIPE_SECRET_KEY,
 				STRIPE_TRPC_WEBHOOK_SECRET: ctx.env.STRIPE_TRPC_WEBHOOK_SECRET,
 				BETTER_AUTH_URL: ctx.env.BETTER_AUTH_URL,
@@ -196,6 +199,7 @@ export const bookingsRouter = createTRPCRouter({
 				return checkout;
 			} catch (error) {
 				console.error('Failed to create checkout session:', error);
+				if (error instanceof TRPCError) throw error;
 				throw new TRPCError({
 					code: 'BAD_REQUEST',
 					message:
@@ -216,9 +220,9 @@ export const bookingsRouter = createTRPCRouter({
 			}),
 		)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 			const paymentService = new PaymentService({
-				DB: ctx.db,
+				DB: ctx.env.DB,
 				STRIPE_SECRET_KEY: ctx.env.STRIPE_SECRET_KEY,
 				STRIPE_TRPC_WEBHOOK_SECRET: ctx.env.STRIPE_TRPC_WEBHOOK_SECRET,
 				BETTER_AUTH_URL: ctx.env.BETTER_AUTH_URL,
@@ -262,6 +266,7 @@ export const bookingsRouter = createTRPCRouter({
 				};
 			} catch (error) {
 				console.error('Failed to create payment intent:', error);
+				if (error instanceof TRPCError) throw error;
 				throw new TRPCError({
 					code: 'BAD_REQUEST',
 					message:
@@ -283,9 +288,9 @@ export const bookingsRouter = createTRPCRouter({
 			}),
 		)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 			const paymentService = new PaymentService({
-				DB: ctx.db,
+				DB: ctx.env.DB,
 				STRIPE_SECRET_KEY: ctx.env.STRIPE_SECRET_KEY,
 				STRIPE_TRPC_WEBHOOK_SECRET: ctx.env.STRIPE_TRPC_WEBHOOK_SECRET,
 				BETTER_AUTH_URL: ctx.env.BETTER_AUTH_URL,
@@ -316,6 +321,7 @@ export const bookingsRouter = createTRPCRouter({
 				return result;
 			} catch (error) {
 				console.error('Failed to refresh booking:', error);
+				if (error instanceof TRPCError) throw error;
 				throw new TRPCError({
 					code: 'BAD_REQUEST',
 					message:
@@ -337,9 +343,9 @@ export const bookingsRouter = createTRPCRouter({
 			}),
 		)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 			const paymentService = new PaymentService({
-				DB: ctx.db,
+				DB: ctx.env.DB,
 				STRIPE_SECRET_KEY: ctx.env.STRIPE_SECRET_KEY,
 				STRIPE_TRPC_WEBHOOK_SECRET: ctx.env.STRIPE_TRPC_WEBHOOK_SECRET,
 				BETTER_AUTH_URL: ctx.env.BETTER_AUTH_URL,
@@ -402,7 +408,7 @@ export const bookingsRouter = createTRPCRouter({
 						// Wait 2 seconds to avoid Resend rate limit (2 requests/second)
 						await new Promise((resolve) => setTimeout(resolve, 2000));
 
-						const adminEmails = await getAdminUsers(ctx.db);
+						const adminEmails = await getAdminUsers(ctx.env.DB);
 
 						if (adminEmails.length > 0) {
 							const adminEmailData: AdminNotificationEmailData = {
@@ -437,6 +443,7 @@ export const bookingsRouter = createTRPCRouter({
 				return { success: true };
 			} catch (error) {
 				console.error('Failed to confirm payment:', error);
+				if (error instanceof TRPCError) throw error;
 				throw new TRPCError({
 					code: 'BAD_REQUEST',
 					message:
@@ -453,13 +460,13 @@ export const bookingsRouter = createTRPCRouter({
 	getBooking: protectedProcedure
 		.input(
 			z.object({
-				bookingId: z.string(),
+				publicId: publicIdSchema,
 			}),
 		)
 		.query(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 			const paymentService = new PaymentService({
-				DB: ctx.db,
+				DB: ctx.env.DB,
 				STRIPE_SECRET_KEY: ctx.env.STRIPE_SECRET_KEY,
 				STRIPE_TRPC_WEBHOOK_SECRET: ctx.env.STRIPE_TRPC_WEBHOOK_SECRET,
 				BETTER_AUTH_URL: ctx.env.BETTER_AUTH_URL,
@@ -470,14 +477,15 @@ export const bookingsRouter = createTRPCRouter({
 				const userId = ctx.user.id;
 				const isAdmin = ctx.user.role === 'admin';
 
-				// Build where conditions - admins can see any booking, users only their own
-				const whereConditions = [eq(bookings.id, input.bookingId)];
+				// Resolve the public id. Admins can see any booking, users only
+				// their own; anything else is NOT_FOUND (no existence leak).
+				const whereConditions = [eq(bookings.publicId, input.publicId)];
 				if (!isAdmin) {
 					whereConditions.push(eq(bookings.userId, userId));
 				}
 
 				const bookingResult = await db
-					.select()
+					.select({ id: bookings.id })
 					.from(bookings)
 					.where(and(...whereConditions));
 
@@ -487,21 +495,20 @@ export const bookingsRouter = createTRPCRouter({
 						message: 'Booking not found',
 					});
 				}
+				const bookingId = bookingResult[0].id;
 
-				// If admin, include user data
+				// Admins also get the guest (with publicId for /admin/guest links).
+				// Both shapes include `user` so the client sees one output type.
 				if (isAdmin) {
-					const bookingDetails =
-						await paymentService.getBookingWithPaymentAndUser(input.bookingId);
-					return bookingDetails;
-				} else {
-					// Regular user access, no user data included
-					const bookingDetails = await paymentService.getBookingWithPayment(
-						input.bookingId,
-					);
-					return bookingDetails;
+					return await paymentService.getBookingWithPaymentAndUser(bookingId);
 				}
+				return {
+					...(await paymentService.getBookingWithPayment(bookingId)),
+					user: null,
+				};
 			} catch (error) {
 				console.error('Failed to get booking:', error);
+				if (error instanceof TRPCError) throw error;
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message:
@@ -524,7 +531,7 @@ export const bookingsRouter = createTRPCRouter({
 			}),
 		)
 		.query(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			try {
 				// Use authenticated user's ID from session
@@ -555,6 +562,7 @@ export const bookingsRouter = createTRPCRouter({
 				return userBookings;
 			} catch (error) {
 				console.error('Failed to get user bookings:', error);
+				if (error instanceof TRPCError) throw error;
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message: 'Failed to get bookings',
@@ -568,7 +576,7 @@ export const bookingsRouter = createTRPCRouter({
 	updateBooking: protectedProcedure
 		.input(updateBookingSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			try {
 				// Use authenticated user's ID from session
@@ -613,6 +621,7 @@ export const bookingsRouter = createTRPCRouter({
 				return { success: true };
 			} catch (error) {
 				console.error('Failed to update booking:', error);
+				if (error instanceof TRPCError) throw error;
 				throw new TRPCError({
 					code: 'BAD_REQUEST',
 					message:
@@ -627,7 +636,7 @@ export const bookingsRouter = createTRPCRouter({
 	cancelBooking: protectedProcedure
 		.input(cancelBookingSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			try {
 				// Use authenticated user's ID from session
@@ -672,6 +681,7 @@ export const bookingsRouter = createTRPCRouter({
 				return { success: true };
 			} catch (error) {
 				console.error('Failed to cancel booking:', error);
+				if (error instanceof TRPCError) throw error;
 				throw new TRPCError({
 					code: 'BAD_REQUEST',
 					message:
@@ -700,7 +710,7 @@ export const bookingsRouter = createTRPCRouter({
 			}),
 		)
 		.query(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			try {
 				const conditions = [];
@@ -745,6 +755,7 @@ export const bookingsRouter = createTRPCRouter({
 				return allBookings;
 			} catch (error) {
 				console.error('Failed to get admin bookings:', error);
+				if (error instanceof TRPCError) throw error;
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message: 'Failed to get bookings',
@@ -756,7 +767,7 @@ export const bookingsRouter = createTRPCRouter({
 	 * Admin: Get booking statistics
 	 */
 	adminGetStats: adminProcedure.query(async ({ ctx }) => {
-		const db = createDrizzle(ctx.db);
+		const db = ctx.db;
 
 		try {
 			const allBookings = await db.select().from(bookings);
@@ -777,6 +788,7 @@ export const bookingsRouter = createTRPCRouter({
 			return stats;
 		} catch (error) {
 			console.error('Failed to get booking stats:', error);
+			if (error instanceof TRPCError) throw error;
 			throw new TRPCError({
 				code: 'INTERNAL_SERVER_ERROR',
 				message: 'Failed to get booking statistics',
@@ -794,9 +806,9 @@ export const bookingsRouter = createTRPCRouter({
 			}),
 		)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 			const paymentService = new PaymentService({
-				DB: ctx.db,
+				DB: ctx.env.DB,
 				STRIPE_SECRET_KEY: ctx.env.STRIPE_SECRET_KEY,
 				STRIPE_TRPC_WEBHOOK_SECRET: ctx.env.STRIPE_TRPC_WEBHOOK_SECRET,
 				BETTER_AUTH_URL: ctx.env.BETTER_AUTH_URL,
@@ -896,7 +908,7 @@ export const bookingsRouter = createTRPCRouter({
 			}),
 		)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			try {
 				// Verify booking exists
@@ -949,7 +961,7 @@ export const bookingsRouter = createTRPCRouter({
 			}),
 		)
 		.query(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			try {
 				// Calculate start date (X months ago) and end date (today)
@@ -1009,6 +1021,7 @@ export const bookingsRouter = createTRPCRouter({
 				return monthlyData;
 			} catch (error) {
 				console.error('Failed to get monthly booking stats:', error);
+				if (error instanceof TRPCError) throw error;
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message: 'Failed to get monthly booking statistics',

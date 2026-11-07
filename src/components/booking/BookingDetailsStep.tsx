@@ -1,19 +1,31 @@
 import { Icon } from '@iconify/react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from '@tanstack/react-router';
 import { useEffect, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { trpcClient } from '@/integrations/tanstack-query/root-provider';
-import { authClient, useSession } from '@/lib/auth-client';
+import { useTRPC } from '@/integrations/trpc/react';
+import { authClient } from '@/lib/auth-client';
+import { refreshSession, useSession } from '@/lib/session';
 import { useBookingStore } from '@/stores';
 import { bookingActions, bookingStore } from '@/stores/booking-store';
 import { parseISODateString } from '@/utils/booking-utils';
 
 export function BookingDetailsStep() {
 	const booking = useBookingStore();
-	const { data: session } = useSession();
+	const session = useSession();
+	const trpc = useTRPC();
+	const queryClient = useQueryClient();
+	const router = useRouter();
+	const updatePhoneNumber = useMutation(
+		trpc.users.updatePhoneNumber.mutationOptions(),
+	);
+	const createBooking = useMutation(
+		trpc.bookings.createBooking.mutationOptions(),
+	);
 	const nameId = useId();
 	const emailId = useId();
 	const phoneId = useId();
@@ -27,12 +39,10 @@ export function BookingDetailsStep() {
 	const [guestEmail, setGuestEmail] = useState(
 		() => session?.user?.email || booking.guestInfo?.email || '',
 	);
-	const [guestPhone, setGuestPhone] = useState(() => {
+	const [guestPhone, setGuestPhone] = useState(
 		// Prioritize session phone, then booking phone
-		const sessionPhone = (session?.user as { phoneNumber?: string })
-			?.phoneNumber;
-		return sessionPhone || booking.guestInfo?.phone || '';
-	});
+		() => session?.user.phoneNumber || booking.guestInfo?.phone || '',
+	);
 	const [numberOfGuests, setNumberOfGuests] = useState(booking.guestCount || 1);
 	const [specialRequests, setSpecialRequests] = useState(
 		() => booking.guestInfo?.specialRequests || '',
@@ -93,13 +103,17 @@ export function BookingDetailsStep() {
 			return;
 		}
 
+		// Whether the session user (name/phone) changed and must be refetched
+		let profileUpdated = false;
+
 		// Update user's name in Better Auth if it's different and user is logged in
 		if (session?.user && guestName.trim() !== session.user.name) {
 			try {
-				await authClient.updateUser({
+				const { error } = await authClient.updateUser({
 					name: guestName.trim(),
 				});
-				console.log('User name updated in Better Auth:', guestName.trim());
+				if (error) throw error;
+				profileUpdated = true;
 			} catch (error) {
 				console.warn('Failed to update user name in Better Auth:', error);
 				// Don't block the booking flow if user update fails
@@ -110,17 +124,24 @@ export function BookingDetailsStep() {
 		if (
 			session?.user &&
 			guestPhone.trim() &&
-			guestPhone.trim() !==
-				(session.user as { phoneNumber?: string })?.phoneNumber
+			guestPhone.trim() !== session.user.phoneNumber
 		) {
 			try {
-				await trpcClient.users.updatePhoneNumber.mutate({
+				await updatePhoneNumber.mutateAsync({
 					phoneNumber: guestPhone.trim(),
 				});
-				console.log('User phone number updated via tRPC:', guestPhone.trim());
+				profileUpdated = true;
 			} catch (error) {
 				console.warn('Failed to update user phone number via tRPC:', error);
 				// Don't block the booking flow if user update fails
+			}
+		}
+
+		if (profileUpdated) {
+			try {
+				await refreshSession(queryClient, router);
+			} catch (error) {
+				console.warn('Failed to refresh session after profile update:', error);
 			}
 		}
 
@@ -146,26 +167,19 @@ export function BookingDetailsStep() {
 				throw new Error('Missing required booking information');
 			}
 
-			console.log('Calculating precise pricing with fees and taxes...');
-			console.log('Request data:', {
-				roomId: booking.roomId,
-				checkInDate: booking.checkInDate,
-				checkOutDate: booking.checkOutDate,
-				guestCount: numberOfGuests,
-			});
-
-			// Always calculate precise pricing using PaymentService, don't use estimated pricing
-			const pricingData = await trpcClient.bookings.calculateBooking.mutate({
-				roomId: booking.roomId,
-				checkInDate: booking.checkInDate,
-				checkOutDate: booking.checkOutDate,
-				guestCount: numberOfGuests,
-			});
-
-			console.log('Raw response data (handleContinue):', pricingData);
-
-			// Handle TRPC response format which might be nested under result.data
-			console.log('Extracted pricing data (handleContinue):', pricingData);
+			// Always calculate precise pricing using PaymentService, don't use
+			// estimated pricing (staleTime 0: never reuse a cached result)
+			const pricingData = await queryClient.fetchQuery(
+				trpc.bookings.calculateBooking.queryOptions(
+					{
+						roomId: booking.roomId,
+						checkInDate: booking.checkInDate,
+						checkOutDate: booking.checkOutDate,
+						guestCount: numberOfGuests,
+					},
+					{ staleTime: 0 },
+				),
+			);
 
 			// Validate that we have the expected data structure
 			if (
@@ -186,8 +200,6 @@ export function BookingDetailsStep() {
 				return;
 			}
 
-			console.log('Received pricing data:', pricingData);
-
 			// Update the booking store with the detailed pricing
 			booking.actions.setPricing({
 				basePrice: pricingData.baseAmount / pricingData.numberOfNights, // Per night rate
@@ -201,8 +213,6 @@ export function BookingDetailsStep() {
 				appliedRules: pricingData.appliedRules || [],
 				taxBreakdown: pricingData.taxBreakdown,
 			});
-
-			console.log('Updated pricing with detailed breakdown:', pricingData);
 		} catch (error) {
 			console.error('Failed to calculate detailed pricing:', error);
 			console.log('Current booking pricing fallback:', booking.pricing);
@@ -301,17 +311,16 @@ export function BookingDetailsStep() {
 			};
 
 			// Create booking via tRPC
-			console.log('Creating booking...', bookingData);
-			const createBookingResult =
-				await trpcClient.bookings.createBooking.mutate(bookingData);
-			console.log('Booking created:', createBookingResult);
+			const createBookingResult = await createBooking.mutateAsync(bookingData);
 
-			if (!createBookingResult?.bookingId) {
+			if (!createBookingResult?.bookingId || !createBookingResult.publicId) {
 				throw new Error('No booking ID returned from server');
 			}
 
-			const bookingId = createBookingResult.bookingId;
-			booking.actions.setBookingId(bookingId);
+			booking.actions.setBookingId(
+				createBookingResult.bookingId,
+				createBookingResult.publicId,
+			);
 
 			// Move to payment step for in-app checkout
 			booking.actions.setStep('payment');

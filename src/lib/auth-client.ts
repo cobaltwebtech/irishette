@@ -30,7 +30,6 @@ export const {
 	signIn,
 	signOut,
 	revokeSessions,
-	useSession,
 	signUp,
 	$Infer,
 	updateUser,

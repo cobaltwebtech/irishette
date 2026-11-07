@@ -4,12 +4,13 @@ import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { authClient, useSession } from '@/lib/auth-client';
+import { authClient } from '@/lib/auth-client';
+import { useSession } from '@/lib/session';
 import { useBookingStore } from '@/stores';
 
 export function AuthenticationStep() {
 	const booking = useBookingStore();
-	const { data: session } = useSession();
+	const session = useSession();
 	const [email, setEmail] = useState('');
 	const [emailSent, setEmailSent] = useState(false);
 	const [isLoading, setIsLoading] = useState(false);

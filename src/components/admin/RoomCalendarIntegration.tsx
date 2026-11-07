@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { trpcClient } from '@/integrations/tanstack-query/root-provider';
+import { useTRPC } from '@/integrations/trpc/react';
 
 // Types
 type CalendarProvider = 'airbnb' | 'expedia';
@@ -54,6 +54,13 @@ export function RoomCalendarIntegration({
 	onRoomUpdate,
 }: RoomCalendarIntegrationProps) {
 	const icalUrlId = useId();
+	const trpc = useTRPC();
+	const updateIcalUrlsMutation = useMutation(
+		trpc.rooms.updateIcalUrls.mutationOptions(),
+	);
+	const syncCalendarMutation = useMutation(
+		trpc.rooms.syncCalendar.mutationOptions(),
+	);
 
 	// Calendar management state
 	const [editingCalendar, setEditingCalendar] = useState<{
@@ -94,7 +101,7 @@ export function RoomCalendarIntegration({
 		if (!editingCalendar) return;
 
 		try {
-			await trpcClient.rooms.updateIcalUrls.mutate({
+			await updateIcalUrlsMutation.mutateAsync({
 				roomId: room.id,
 				airbnbIcalUrl:
 					editingCalendar.provider === 'airbnb' ? newIcalUrl : undefined,
@@ -122,33 +129,34 @@ export function RoomCalendarIntegration({
 	};
 
 	// Test iCal URL mutation
-	const testIcalUrlMutation = useMutation({
-		mutationFn: (url: string) => trpcClient.rooms.testIcalUrl.mutate({ url }),
-		onSuccess: (data) => {
-			setTestResult(data || { success: true, error: undefined });
-		},
-		onError: (error) => {
-			setTestResult({
-				success: false,
-				error: error instanceof Error ? error.message : 'Unknown error',
-			});
-		},
-		onSettled: () => {
-			setTestingUrl(null);
-		},
-	});
+	const testIcalUrlMutation = useMutation(
+		trpc.rooms.testIcalUrl.mutationOptions({
+			onSuccess: (data) => {
+				setTestResult(data || { success: true, error: undefined });
+			},
+			onError: (error) => {
+				setTestResult({
+					success: false,
+					error: error instanceof Error ? error.message : 'Unknown error',
+				});
+			},
+			onSettled: () => {
+				setTestingUrl(null);
+			},
+		}),
+	);
 
 	const handleTestIcalUrl = async (url: string) => {
 		if (!url) return;
 
 		setTestingUrl(url);
 		setTestResult(null);
-		testIcalUrlMutation.mutate(url);
+		testIcalUrlMutation.mutate({ url });
 	};
 
 	const handleSyncCalendar = async (provider: CalendarProvider) => {
 		try {
-			await trpcClient.rooms.syncCalendar.mutate({
+			await syncCalendarMutation.mutateAsync({
 				roomId: room.id,
 				platform: provider,
 			});
@@ -173,7 +181,7 @@ export function RoomCalendarIntegration({
 
 	const handleRemoveIcalUrl = async (provider: CalendarProvider) => {
 		try {
-			await trpcClient.rooms.updateIcalUrls.mutate({
+			await updateIcalUrlsMutation.mutateAsync({
 				roomId: room.id,
 				airbnbIcalUrl: provider === 'airbnb' ? null : undefined,
 				expediaIcalUrl: provider === 'expedia' ? null : undefined,

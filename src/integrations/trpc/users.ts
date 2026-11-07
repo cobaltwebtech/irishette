@@ -1,8 +1,8 @@
 import { TRPCError } from '@trpc/server';
 import { and, count, eq, ne } from 'drizzle-orm';
 import { z } from 'zod';
-import { createDrizzle } from '@/db/drizzle-init';
 import { bookings, user } from '@/db/schema-export';
+import { publicIdSchema } from '@/lib/ids';
 import { adminProcedure, createTRPCRouter, protectedProcedure } from './init';
 
 export const usersRouter = createTRPCRouter({
@@ -17,7 +17,7 @@ export const usersRouter = createTRPCRouter({
 			}),
 		)
 		.query(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			try {
 				// Get all users with role 'user' with their booking count (excluding pending bookings)
@@ -25,6 +25,7 @@ export const usersRouter = createTRPCRouter({
 					.select({
 						user: {
 							id: user.id,
+							publicId: user.publicId,
 							name: user.name,
 							email: user.email,
 							createdAt: user.createdAt,
@@ -59,6 +60,7 @@ export const usersRouter = createTRPCRouter({
 				};
 			} catch (error) {
 				console.error('Failed to get guests:', error);
+				if (error instanceof TRPCError) throw error;
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message: 'Failed to get guest list',
@@ -72,18 +74,18 @@ export const usersRouter = createTRPCRouter({
 	adminGetGuestDetails: adminProcedure
 		.input(
 			z.object({
-				userId: z.string(),
+				publicId: publicIdSchema,
 			}),
 		)
 		.query(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			try {
 				// Get user details
 				const userResult = await db
 					.select()
 					.from(user)
-					.where(eq(user.id, input.userId));
+					.where(eq(user.publicId, input.publicId));
 
 				if (!userResult[0]) {
 					throw new TRPCError({
@@ -98,7 +100,7 @@ export const usersRouter = createTRPCRouter({
 					.from(bookings)
 					.where(
 						and(
-							eq(bookings.userId, input.userId),
+							eq(bookings.userId, userResult[0].id),
 							ne(bookings.status, 'pending'),
 						),
 					)
@@ -110,6 +112,7 @@ export const usersRouter = createTRPCRouter({
 				};
 			} catch (error) {
 				console.error('Failed to get guest details:', error);
+				if (error instanceof TRPCError) throw error;
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message:
@@ -132,7 +135,7 @@ export const usersRouter = createTRPCRouter({
 			}),
 		)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			try {
 				// Use authenticated user's ID from session
@@ -153,6 +156,7 @@ export const usersRouter = createTRPCRouter({
 				};
 			} catch (error) {
 				console.error('Failed to update phone number:', error);
+				if (error instanceof TRPCError) throw error;
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message:
@@ -178,7 +182,7 @@ export const usersRouter = createTRPCRouter({
 			}),
 		)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			try {
 				// Use authenticated user's ID from session
@@ -213,6 +217,7 @@ export const usersRouter = createTRPCRouter({
 				};
 			} catch (error) {
 				console.error('Failed to update profile:', error);
+				if (error instanceof TRPCError) throw error;
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
 					message:

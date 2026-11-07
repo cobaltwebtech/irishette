@@ -1,7 +1,6 @@
 import { Icon } from '@iconify/react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { useState } from 'react';
 import { toast } from 'sonner';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { BookingInternalNotes } from '@/components/admin/BookingInternalNotes';
@@ -15,10 +14,12 @@ import {
 	CardHeader,
 	CardTitle,
 } from '@/components/ui/card';
-import { trpc, trpcClient } from '@/integrations/tanstack-query/root-provider';
-import { requireAdmin } from '@/utils/auth-check';
+import { orNotFound } from '@/integrations/trpc/errors';
+import { useTRPC } from '@/integrations/trpc/react';
 
-export const Route = createFileRoute('/admin/bookings/$bookingId')({
+export const Route = createFileRoute(
+	'/_authed/_admin/admin/bookings/$publicId',
+)({
 	head: () => ({
 		meta: [
 			{
@@ -26,122 +27,92 @@ export const Route = createFileRoute('/admin/bookings/$bookingId')({
 			},
 		],
 	}),
-	beforeLoad: async ({ location }) => {
-		// Check user is authenticated and has admin role
-		const session = await requireAdmin(location);
-
-		// Return session data to be available in component during SSR
-		return { session };
+	// Auth: the _admin layout. The booking is preloaded for SSR; the guest
+	// details (repeat-guest badge) depend on the booking's user publicId.
+	loader: async ({ context, params }) => {
+		const booking = await orNotFound(
+			context.queryClient.ensureQueryData(
+				context.trpc.bookings.getBooking.queryOptions({
+					publicId: params.publicId,
+				}),
+			),
+		);
+		if (booking.user) {
+			// prefetchQuery never throws: guest details are optional here, a
+			// failure only hides the repeat-guest badge (as before).
+			await context.queryClient.prefetchQuery(
+				context.trpc.users.adminGetGuestDetails.queryOptions({
+					publicId: booking.user.publicId,
+				}),
+			);
+		}
 	},
+	notFoundComponent: BookingNotFound,
 	component: AdminBookingDetailPage,
 });
 
+function BookingNotFound() {
+	return (
+		<AdminLayout title="Booking Not Found">
+			<Card>
+				<CardHeader>
+					<CardTitle>Booking Not Found</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<p className="text-muted-foreground mb-4">
+						The booking you're looking for could not be found.
+					</p>
+					<Link to="/admin/bookings/current-bookings">
+						<Button>Back to Bookings</Button>
+					</Link>
+				</CardContent>
+			</Card>
+		</AdminLayout>
+	);
+}
+
 function AdminBookingDetailPage() {
-	const params = Route.useParams() as { bookingId: string };
-	const bookingId = params.bookingId;
-	const [isResendingEmail, setIsResendingEmail] = useState(false);
+	const { publicId } = Route.useParams();
+	const trpc = useTRPC();
 
-	// Use tRPC query to fetch booking details (admin version)
-	const {
-		data: booking,
-		isLoading,
-		error,
-	} = useQuery(
-		trpc.bookings.getBooking.queryOptions(
-			{
-				bookingId: bookingId,
-			},
-			{
-				enabled: !!bookingId,
-				retry: false,
-				staleTime: 5 * 60 * 1000,
-			},
-		),
+	const { data: booking } = useSuspenseQuery(
+		trpc.bookings.getBooking.queryOptions({ publicId }),
 	);
 
-	// Fetch guest details to get booking count for repeat guest badge
-	const { data: guestData, isLoading: isLoadingGuestData } = useQuery(
+	// Guest details for the repeat-guest badge. Admin results always carry
+	// `user`; the type allows null (non-admin shape), hence `enabled`.
+	const guestPublicId = booking.user?.publicId;
+	const { data: guestData } = useQuery(
 		trpc.users.adminGetGuestDetails.queryOptions(
-			{
-				userId: booking?.booking?.userId || '',
-			},
-			{
-				enabled: !!booking?.booking?.userId,
-				retry: false,
-				staleTime: 5 * 60 * 1000,
-			},
+			{ publicId: guestPublicId ?? '' },
+			{ enabled: !!guestPublicId },
 		),
 	);
 
-	// Handle resending confirmation email (admin can resend for any booking)
-	const handleResendEmail = async () => {
-		if (!booking?.booking) return;
+	// Admin can resend for any booking (takes the internal booking id).
+	const resendEmail = useMutation(
+		trpc.bookings.resendConfirmationEmail.mutationOptions({
+			onSuccess: (result) => {
+				toast.success('Email sent successfully!', {
+					description:
+						result.message || 'Confirmation email has been sent to the guest.',
+				});
+			},
+			onError: (error) => {
+				console.error('Failed to resend confirmation email:', error);
+				toast.error('Failed to send email', {
+					description:
+						error.message ||
+						'Unable to send confirmation email. Please try again.',
+				});
+			},
+		}),
+	);
+	const isResendingEmail = resendEmail.isPending;
 
-		setIsResendingEmail(true);
-
-		try {
-			console.log(
-				'Admin resending confirmation email for booking:',
-				booking.booking.id,
-			);
-
-			// Use tRPC endpoint to resend confirmation email
-			const result = await trpcClient.bookings.resendConfirmationEmail.mutate({
-				bookingId: booking.booking.id,
-				// Don't pass userId for admin access
-			});
-
-			toast.success('Email sent successfully!', {
-				description:
-					result.message || 'Confirmation email has been sent to the guest.',
-			});
-		} catch (error) {
-			console.error('Failed to resend confirmation email:', error);
-			toast.error('Failed to send email', {
-				description:
-					error instanceof Error
-						? error.message
-						: 'Unable to send confirmation email. Please try again.',
-			});
-		} finally {
-			setIsResendingEmail(false);
-		}
+	const handleResendEmail = () => {
+		resendEmail.mutate({ bookingId: booking.booking.id });
 	};
-
-	// Early return for loading state
-	if (isLoading || !booking || !booking.booking || !booking.room) {
-		return null;
-	}
-
-	if (error) {
-		return (
-			<AdminLayout title="Booking Error">
-				<Card>
-					<CardHeader>
-						<CardTitle>Error</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<p className="text-red-600 mb-4">
-							{error instanceof Error
-								? error.message
-								: 'Failed to load booking details'}
-						</p>
-						<div className="flex gap-2">
-							<Button
-								variant="outline"
-								onClick={() => window.location.reload()}
-							>
-								Try Again
-							</Button>
-							<Link to="/admin/bookings/current-bookings">
-								<Button>Back to Bookings</Button>
-							</Link>
-						</div>
-					</CardContent>
-				</Card>
-			</AdminLayout>
-		);
-	}
 
 	const bookingCount = guestData?.bookings?.length || 0;
 
@@ -330,7 +301,7 @@ function AdminBookingDetailPage() {
 					<CardHeader>
 						<CardTitle className="flex items-center gap-2">
 							Guest Information
-							{!isLoadingGuestData && bookingCount > 1 && (
+							{bookingCount > 1 && (
 								<Badge className="text-xs bg-accent-4">
 									<Icon
 										icon="tabler:star-filled"
@@ -361,10 +332,7 @@ function AdminBookingDetailPage() {
 								<p className="text-sm font-medium text-muted-foreground">
 									Account Email
 								</p>
-								<p className="font-semibold">
-									{(booking as typeof booking & { user?: { email: string } })
-										.user?.email || 'N/A'}
-								</p>
+								<p className="font-semibold">{booking.user?.email || 'N/A'}</p>
 							</div>
 							{booking.booking.guestPhone && (
 								<div>
@@ -468,7 +436,9 @@ function AdminBookingDetailPage() {
 								<p className="text-sm font-medium text-muted-foreground">
 									User ID
 								</p>
-								<p className="font-mono text-sm">{booking.booking.userId}</p>
+								<p className="font-mono text-sm">
+									{booking.user?.publicId ?? 'N/A'}
+								</p>
 							</div>
 						</div>
 						<div className="grid sm:grid-cols-2 gap-4">

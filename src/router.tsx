@@ -1,38 +1,49 @@
+import { QueryClient } from '@tanstack/react-query';
 import { createRouter } from '@tanstack/react-router';
 import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query';
-import * as TanstackQuery from './integrations/tanstack-query/root-provider';
-
-// Import the generated route tree
+import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
+import { makeTRPCClient } from '@/integrations/trpc/client';
+import { TRPCProvider } from '@/integrations/trpc/react';
+import type { TRPCRouter } from '@/integrations/trpc/router';
 import { routeTree } from './routeTree.gen';
 
-// Create a new router instance
+/**
+ * Called once per SSR request and once in the browser. Everything with state
+ * (QueryClient, tRPC client) is created here, never at module scope, so one
+ * request's cache can never be dehydrated into another user's page.
+ */
 export const getRouter = () => {
-	const rqContext = TanstackQuery.getContext();
+	const queryClient = new QueryClient({
+		defaultOptions: {
+			queries: {
+				staleTime: 60_000,
+				retry: 1,
+				refetchOnWindowFocus: false,
+			},
+		},
+	});
+	const trpcClient = makeTRPCClient();
+	const trpc = createTRPCOptionsProxy<TRPCRouter>({
+		client: trpcClient,
+		queryClient,
+	});
 
 	const router = createRouter({
 		routeTree,
-		context: {
-			...rqContext,
-			// auth will initially be undefined
-			// We'll pass the actual auth state from the App component
-			// biome-ignore lint/style/noNonNullAssertion: Better Auth typed in __root.tsx
-			auth: undefined!,
-		},
+		context: { queryClient, trpc, trpcClient },
 		defaultPreload: 'intent',
-		// biome-ignore lint/correctness/noComponentHookFactories: created once per router instance and needs this router's queryClient; revisited in upgrade Phase 5b
-		Wrap: (props: { children: React.ReactNode }) => {
-			return (
-				<TanstackQuery.Provider queryClient={rqContext.queryClient}>
-					{props.children}
-				</TanstackQuery.Provider>
-			);
-		},
+		// Let TanStack Query own data freshness for preloads.
+		defaultPreloadStaleTime: 0,
+		// biome-ignore lint/correctness/noComponentHookFactories: Wrap must close over this router's per-request clients
+		Wrap: ({ children }: { children: React.ReactNode }) => (
+			<TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
+				{children}
+			</TRPCProvider>
+		),
 	});
 
-	setupRouterSsrQueryIntegration({
-		router,
-		queryClient: rqContext.queryClient,
-	});
+	// Provides the QueryClientProvider and SSR dehydration/hydration.
+	setupRouterSsrQueryIntegration({ router, queryClient });
 
 	return router;
 };

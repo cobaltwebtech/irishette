@@ -310,11 +310,11 @@ export async function scheduledBookingCleanup(env: ScheduledEnv) {
  * This function will be called by the cron triggers
  */
 export async function handleScheduledEvent(
-	event: ScheduledEvent,
+	controller: ScheduledController,
 	env: ScheduledEnv,
 	_ctx: ExecutionContext,
 ): Promise<void> {
-	const cron = event.cron;
+	const cron = controller.cron;
 
 	console.log(`⏰ Scheduled event triggered: ${cron}`);
 

@@ -1,0 +1,372 @@
+import { Icon } from '@iconify/react';
+import { useSuspenseQuery } from '@tanstack/react-query';
+import { createFileRoute, Link } from '@tanstack/react-router';
+import { AdminLayout } from '@/components/admin/AdminLayout';
+import {
+	createAppColumnHelper,
+	DataTableView,
+	PaginationControls,
+	SortableHeader,
+	useAppTable,
+} from '@/components/data-table';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from '@/components/ui/card';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { orNotFound } from '@/integrations/trpc/errors';
+import { useTRPC } from '@/integrations/trpc/react';
+import type { RouterOutputs } from '@/integrations/trpc/types';
+
+type BookingRow =
+	RouterOutputs['users']['adminGetGuestDetails']['bookings'][number];
+
+const columnHelper = createAppColumnHelper<BookingRow>();
+
+const columns = columnHelper.columns([
+	columnHelper.accessor('confirmationId', {
+		header: 'Confirmation ID',
+		cell: (info) => (
+			<Link
+				to="/admin/bookings/$publicId"
+				params={{ publicId: info.row.original.publicId }}
+				className="font-mono text-sm font-semibold text-primary hover:text-primary/80 underline"
+			>
+				{info.getValue()}
+			</Link>
+		),
+	}),
+	columnHelper.accessor('checkInDate', {
+		header: ({ column }) => (
+			<SortableHeader column={column}>Check-in</SortableHeader>
+		),
+		cell: (info) => (
+			<div>
+				<div>
+					{new Date(`${info.getValue()}T00:00:00`).toLocaleDateString()}
+				</div>
+				<div className="text-sm text-muted-foreground">
+					to{' '}
+					{new Date(
+						`${info.row.original.checkOutDate}T00:00:00`,
+					).toLocaleDateString()}
+				</div>
+			</div>
+		),
+	}),
+	columnHelper.accessor('numberOfNights', {
+		header: 'Nights',
+		cell: (info) =>
+			`${info.getValue()} night${info.getValue() !== 1 ? 's' : ''}`,
+	}),
+	columnHelper.accessor('numberOfGuests', {
+		header: 'Guests',
+		cell: (info) => info.getValue(),
+	}),
+	columnHelper.accessor('status', {
+		header: 'Status',
+		cell: (info) => (
+			<Badge
+				variant={
+					info.getValue() === 'confirmed'
+						? 'default'
+						: info.getValue() === 'cancelled'
+							? 'destructive'
+							: info.getValue() === 'completed'
+								? 'default'
+								: 'secondary'
+				}
+			>
+				{info.getValue()}
+			</Badge>
+		),
+	}),
+	columnHelper.accessor('paymentStatus', {
+		header: 'Payment',
+		cell: (info) => (
+			<Badge
+				variant={
+					info.getValue() === 'paid'
+						? 'default'
+						: info.getValue() === 'failed'
+							? 'destructive'
+							: info.getValue() === 'refunded'
+								? 'secondary'
+								: 'secondary'
+				}
+			>
+				{info.getValue()}
+			</Badge>
+		),
+	}),
+	columnHelper.accessor('totalAmount', {
+		header: ({ column }) => (
+			<SortableHeader column={column}>Amount</SortableHeader>
+		),
+		cell: (info) => (
+			<span className="font-medium">${info.getValue().toFixed(2)}</span>
+		),
+	}),
+]);
+
+export const Route = createFileRoute('/_authed/_admin/admin/guest/$publicId')({
+	head: () => ({
+		meta: [
+			{
+				title: 'Guest Details | Irishette.com',
+			},
+		],
+	}),
+	// Auth: the _admin layout. Guest details are preloaded for SSR.
+	loader: ({ context, params }) =>
+		orNotFound(
+			context.queryClient.ensureQueryData(
+				context.trpc.users.adminGetGuestDetails.queryOptions({
+					publicId: params.publicId,
+				}),
+			),
+		),
+	notFoundComponent: GuestNotFound,
+	component: AdminGuestDetail,
+});
+
+function GuestNotFound() {
+	return (
+		<div className="container mx-auto px-4 py-8">
+			<div className="text-center">
+				<h2 className="text-2xl font-bold mb-4">Guest Not Found</h2>
+				<p className="text-muted-foreground mb-4">
+					The guest you're looking for could not be found.
+				</p>
+				<div className="flex gap-2 justify-center">
+					<Link to="/admin/guest">
+						<Button variant="outline">Back to Guests</Button>
+					</Link>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function AdminGuestDetail() {
+	const { publicId } = Route.useParams();
+	const trpc = useTRPC();
+
+	const { data: guestData } = useSuspenseQuery(
+		trpc.users.adminGetGuestDetails.queryOptions({ publicId }),
+	);
+
+	const { user, bookings } = guestData;
+
+	const table = useAppTable({
+		data: bookings,
+		columns,
+		initialState: {
+			sorting: [{ id: 'checkInDate', desc: true }],
+			pagination: { pageIndex: 0, pageSize: 10 },
+		},
+	});
+
+	// Statistics
+	const today = new Date();
+	today.setHours(0, 0, 0, 0); // Reset time to start of day for accurate comparison
+
+	const totalBookings = bookings.length;
+
+	// A booking is completed if it's confirmed and checkout date is in the past
+	const completedBookings = bookings.filter((b) => {
+		const checkOutDate = new Date(`${b.checkOutDate}T00:00:00`);
+		return b.status === 'confirmed' && checkOutDate < today;
+	}).length;
+
+	const cancelledBookings = bookings.filter(
+		(b) => b.status === 'cancelled',
+	).length;
+
+	const totalSpent = bookings
+		.filter((b) => b.paymentStatus === 'paid')
+		.reduce((sum, b) => sum + b.totalAmount, 0);
+
+	// Current & Upcoming bookings: confirmed with checkout date today or in the future
+	const currentUpcomingBookings = bookings.filter((b) => {
+		const checkOutDate = new Date(`${b.checkOutDate}T00:00:00`);
+		return b.status === 'confirmed' && checkOutDate >= today;
+	}).length;
+
+	return (
+		<AdminLayout title={`Guest: ${user.name}`}>
+			<div className="mb-6">
+				<Link to="/admin/guest">
+					<Button variant="outline" size="sm">
+						← Back to Guests
+					</Button>
+				</Link>
+			</div>
+
+			<div className="grid lg:grid-cols-3 gap-6 mb-8">
+				{/* Guest Information Card */}
+				<Card className="lg:col-span-1">
+					<CardHeader>
+						<CardTitle className="flex items-center gap-2">
+							Guest Information
+						</CardTitle>
+					</CardHeader>
+					<CardContent className="space-y-4">
+						<div>
+							<p className="text-sm font-medium text-muted-foreground">Name</p>
+							<p className="font-semibold">{user.name}</p>
+						</div>
+						<div>
+							<p className="text-sm font-medium text-muted-foreground">Email</p>
+							<a
+								href={`mailto:${user.email}`}
+								className="font-semibold text-primary hover:underline"
+							>
+								{user.email}
+							</a>
+						</div>
+						{user.phoneNumber && (
+							<div>
+								<p className="text-sm font-medium text-muted-foreground">
+									Phone
+								</p>
+								<a
+									href={`tel:${user.phoneNumber}`}
+									className="font-semibold text-primary hover:underline"
+								>
+									{user.phoneNumber}
+								</a>
+							</div>
+						)}
+						<div>
+							<p className="text-sm font-medium text-muted-foreground">
+								Member Since
+							</p>
+							<p className="font-semibold">
+								{new Date(user.createdAt).toLocaleDateString('en-US', {
+									year: 'numeric',
+									month: 'long',
+									day: 'numeric',
+								})}
+							</p>
+						</div>
+						{user.stripeCustomerId && (
+							<div>
+								<p className="text-sm font-medium text-muted-foreground">
+									Stripe Customer ID
+								</p>
+								<p className="gap-2 font-mono text-primary break-all">
+									<a
+										href={`https://dashboard.stripe.com/customers/${user.stripeCustomerId}`}
+										rel="noopener noreferrer"
+										target="_blank"
+										className="flex gap-2 hover:underline"
+									>
+										{user.stripeCustomerId}
+										<Icon icon="tabler:external-link" className="size-5" />
+									</a>
+								</p>
+							</div>
+						)}
+					</CardContent>
+				</Card>
+
+				{/* Statistics Cards */}
+				<div className="lg:col-span-2 grid sm:grid-cols-2 md:grid-cols-3 gap-4">
+					<Card>
+						<CardHeader className="pb-3">
+							<CardDescription>Total Bookings</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<div className="text-3xl font-bold">{totalBookings}</div>
+						</CardContent>
+					</Card>
+					<Card>
+						<CardHeader className="pb-3">
+							<CardDescription>Current & Upcoming</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<div className="text-3xl font-bold text-blue-600">
+								{currentUpcomingBookings}
+							</div>
+						</CardContent>
+					</Card>
+					<Card>
+						<CardHeader className="pb-3">
+							<CardDescription>Completed</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<div className="text-3xl font-bold text-green-600">
+								{completedBookings}
+							</div>
+						</CardContent>
+					</Card>
+					<Card>
+						<CardHeader className="pb-3">
+							<CardDescription>Cancelled</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<div className="text-3xl font-bold text-red-600">
+								{cancelledBookings}
+							</div>
+						</CardContent>
+					</Card>
+					<Card>
+						<CardHeader className="pb-3">
+							<CardDescription>Total Spent</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<div className="text-3xl font-bold">${totalSpent.toFixed(2)}</div>
+						</CardContent>
+					</Card>
+					<Card>
+						<CardHeader className="pb-3">
+							<CardDescription>Avg. Booking</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<div className="text-3xl font-bold">
+								$
+								{totalBookings
+									? (totalSpent / totalBookings).toFixed(2)
+									: '0.00'}
+							</div>
+						</CardContent>
+					</Card>
+				</div>
+			</div>
+
+			{/* Bookings History */}
+			<Card>
+				<CardHeader>
+					<CardTitle className="flex items-center gap-2">
+						Booking History ({bookings.length})
+					</CardTitle>
+					<CardDescription>All bookings made by this guest</CardDescription>
+				</CardHeader>
+				<CardContent>
+					{bookings.length === 0 ? (
+						<div className="text-center py-8 text-muted-foreground">
+							No bookings found for this guest.
+						</div>
+					) : (
+						<>
+							<ScrollArea className="w-full">
+								<DataTableView
+									table={table}
+									emptyMessage="No bookings found."
+								/>
+								<ScrollBar orientation="horizontal" />
+							</ScrollArea>
+							<PaginationControls table={table} noun="bookings" />
+						</>
+					)}
+				</CardContent>
+			</Card>
+		</AdminLayout>
+	);
+}

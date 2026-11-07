@@ -13,7 +13,7 @@ import {
 	DialogTrigger,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { trpcClient } from '@/integrations/tanstack-query/root-provider';
+import { useTRPC } from '@/integrations/trpc/react';
 
 interface BookingInternalNotesProps {
 	bookingId: string;
@@ -24,11 +24,11 @@ export function BookingInternalNotes({
 	bookingId,
 	currentNotes,
 }: BookingInternalNotesProps) {
+	const trpc = useTRPC();
 	const queryClient = useQueryClient();
 	const notesId = useId();
 	const [open, setOpen] = useState(false);
 	const [notes, setNotes] = useState(currentNotes || '');
-	const [isSaving, setIsSaving] = useState(false);
 
 	// Reset notes when dialog opens
 	const handleOpenChange = (isOpen: boolean) => {
@@ -39,39 +39,31 @@ export function BookingInternalNotes({
 	};
 
 	// Mutation to update internal notes
-	const updateNotesMutation = useMutation({
-		mutationFn: async (internalNotes: string) => {
-			return await trpcClient.bookings.adminUpdateInternalNotes.mutate({
-				bookingId,
-				internalNotes,
-			});
-		},
-		onSuccess: async () => {
-			// Invalidate the booking query to refetch updated data
-			await queryClient.invalidateQueries({
-				queryKey: [['bookings', 'getBooking']],
-			});
-			toast.success('Internal notes updated successfully!');
-			setOpen(false);
-		},
-		onError: (error) => {
-			console.error('Failed to update internal notes:', error);
-			toast.error('Failed to update notes', {
-				description:
-					error instanceof Error
-						? error.message
-						: 'Unable to update internal notes. Please try again.',
-			});
-		},
-	});
+	const updateNotesMutation = useMutation(
+		trpc.bookings.adminUpdateInternalNotes.mutationOptions({
+			onSuccess: async () => {
+				// Refetch the booking so the updated notes show up
+				await queryClient.invalidateQueries(
+					trpc.bookings.getBooking.pathFilter(),
+				);
+				toast.success('Internal notes updated successfully!');
+				setOpen(false);
+			},
+			onError: (error) => {
+				console.error('Failed to update internal notes:', error);
+				toast.error('Failed to update notes', {
+					description:
+						error.message ||
+						'Unable to update internal notes. Please try again.',
+				});
+			},
+		}),
+	);
+	// Stays true until onSuccess (including the refetch) has finished.
+	const isSaving = updateNotesMutation.isPending;
 
-	const handleSave = async () => {
-		setIsSaving(true);
-		try {
-			await updateNotesMutation.mutateAsync(notes);
-		} finally {
-			setIsSaving(false);
-		}
+	const handleSave = () => {
+		updateNotesMutation.mutate({ bookingId, internalNotes: notes });
 	};
 
 	return (

@@ -9,9 +9,12 @@ import { BookingSummaryCard } from '@/components/booking/BookingSummaryCard';
 import { PaymentStep } from '@/components/booking/PaymentStep';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { trpc, trpcClient } from '@/integrations/tanstack-query/root-provider';
-import { useSession } from '@/lib/auth-client';
+import { useTRPC } from '@/integrations/trpc/react';
+import type { RouterOutputs } from '@/integrations/trpc/types';
+import { useSession } from '@/lib/session';
 import { type BookingStep, useBookingStore } from '@/stores';
+
+type BookingPricing = RouterOutputs['bookings']['calculateBooking'];
 
 export const Route = createFileRoute('/booking/')({
 	head: () => ({
@@ -39,7 +42,8 @@ function useIsClient() {
 }
 
 function BookingFlow() {
-	const { data: session } = useSession();
+	const session = useSession();
+	const trpc = useTRPC();
 	const booking = useBookingStore();
 	const isClient = useIsClient();
 	const navigate = useNavigate();
@@ -56,93 +60,54 @@ function BookingFlow() {
 		),
 	);
 
-	// Use TanStack Query to fetch pricing (instead of mutation + useEffect)
-	const { data: pricingData } = useQuery({
-		queryKey: [
-			'booking-pricing',
-			booking.roomId,
-			booking.checkInDate,
-			booking.checkOutDate,
-			booking.guestCount,
-		],
-		queryFn: async () => {
-			if (!booking.roomId || !booking.checkInDate || !booking.checkOutDate) {
-				return null;
-			}
-
-			console.log('Calculating precise pricing for booking summary...');
-
-			return await trpcClient.bookings.calculateBooking.mutate({
-				roomId: booking.roomId,
-				checkInDate: booking.checkInDate,
-				checkOutDate: booking.checkOutDate,
+	// Precise pricing for the booking summary (recalculated when inputs change)
+	const { data: pricingData } = useQuery(
+		trpc.bookings.calculateBooking.queryOptions(
+			{
+				roomId: booking.roomId ?? '',
+				checkInDate: booking.checkInDate ?? '',
+				checkOutDate: booking.checkOutDate ?? '',
 				guestCount: booking.guestCount || 1,
-			});
-		},
-		enabled:
-			isClient &&
-			!!booking.roomId &&
-			!!booking.checkInDate &&
-			!!booking.checkOutDate,
-		staleTime: 1000, // 1 second - recalculate if data changes
-	});
+			},
+			{
+				enabled:
+					isClient &&
+					!!booking.roomId &&
+					!!booking.checkInDate &&
+					!!booking.checkOutDate,
+				staleTime: 1000, // 1 second - recalculate if data changes
+			},
+		),
+	);
 
 	// Event handler for updating pricing in store (non-reactive)
-	const onPricingDataFetched = useEffectEvent(
-		(pricingData: {
-			baseAmount: number;
-			feesAmount: number;
-			taxAmount: number;
-			totalAmount: number;
-			numberOfNights: number;
-			appliedRules: Array<{
-				id: string;
-				name: string;
-				ruleType: string;
-				value: number;
-				appliedAmount: number;
-			}>;
-			taxBreakdown: {
-				stateTaxRate: number;
-				cityTaxRate: number;
-				stateTaxAmount: number;
-				cityTaxAmount: number;
-				totalTaxAmount: number;
-				taxableAmount: number;
-			};
-		}) => {
-			// Validate that we have the expected data structure
-			if (
-				!pricingData.baseAmount ||
-				!pricingData.feesAmount ||
-				!pricingData.taxAmount ||
-				!pricingData.numberOfNights ||
-				!pricingData.totalAmount
-			) {
-				console.error('Invalid pricing data structure:', pricingData);
-				return;
-			}
+	const onPricingDataFetched = useEffectEvent((pricingData: BookingPricing) => {
+		// Validate that we have the expected data structure
+		if (
+			!pricingData.baseAmount ||
+			!pricingData.feesAmount ||
+			!pricingData.taxAmount ||
+			!pricingData.numberOfNights ||
+			!pricingData.totalAmount
+		) {
+			console.error('Invalid pricing data structure:', pricingData);
+			return;
+		}
 
-			console.log(
-				'Updating booking summary with precise pricing:',
-				pricingData,
-			);
-
-			// Update the booking store with the precise pricing
-			booking.actions.setPricing({
-				basePrice: pricingData.baseAmount / pricingData.numberOfNights,
-				nights: pricingData.numberOfNights,
-				subtotal: pricingData.baseAmount,
-				taxes: pricingData.taxAmount,
-				fees: pricingData.feesAmount,
-				totalAmount: pricingData.totalAmount,
-				currency: 'USD',
-				// Include enhanced pricing information
-				appliedRules: pricingData.appliedRules,
-				taxBreakdown: pricingData.taxBreakdown,
-			});
-		},
-	);
+		// Update the booking store with the precise pricing
+		booking.actions.setPricing({
+			basePrice: pricingData.baseAmount / pricingData.numberOfNights,
+			nights: pricingData.numberOfNights,
+			subtotal: pricingData.baseAmount,
+			taxes: pricingData.taxAmount,
+			fees: pricingData.feesAmount,
+			totalAmount: pricingData.totalAmount,
+			currency: 'USD',
+			// Include enhanced pricing information
+			appliedRules: pricingData.appliedRules,
+			taxBreakdown: pricingData.taxBreakdown,
+		});
+	});
 
 	// Event handler for navigation after authentication (non-reactive)
 	const onAuthenticated = useEffectEvent(() => {

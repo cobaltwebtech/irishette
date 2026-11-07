@@ -1,6 +1,6 @@
+import { TRPCError } from '@trpc/server';
 import { and, eq, getTableColumns, gte, inArray, lte } from 'drizzle-orm';
 import { z } from 'zod';
-import { createDrizzle } from '@/db/drizzle-init';
 import { room, roomBlockedPeriods, roomPricingRules } from '@/db/schema-export';
 import {
 	getActiveFeed,
@@ -21,6 +21,7 @@ import {
 	getPricingRulesSchema,
 	getRoomSchema,
 	getRoomsSchema,
+	roomIdSchema,
 	syncCalendarSchema,
 	updateBlockedPeriodSchema,
 	updatePricingRuleSchema,
@@ -41,7 +42,7 @@ export const roomsRouter = createTRPCRouter({
 
 	// Get all rooms with pagination and filtering
 	list: publicProcedure.input(getRoomsSchema).query(async ({ ctx, input }) => {
-		const db = createDrizzle(ctx.db);
+		const db = ctx.db;
 
 		// Build query conditions
 		const conditions = [];
@@ -86,15 +87,19 @@ export const roomsRouter = createTRPCRouter({
 
 	// Get single room by ID
 	get: publicProcedure.input(getRoomSchema).query(async ({ ctx, input }) => {
-		const db = createDrizzle(ctx.db);
+		const db = ctx.db;
 
 		const result = await db
 			.select(publicRoomColumns)
 			.from(room)
-			.where(eq(room.id, input.id));
+			.where(
+				'publicId' in input
+					? eq(room.publicId, input.publicId)
+					: eq(room.id, input.id),
+			);
 
 		if (!result[0]) {
-			throw new Error('Room not found');
+			throw new TRPCError({ code: 'NOT_FOUND', message: 'Room not found' });
 		}
 
 		return result[0];
@@ -104,7 +109,7 @@ export const roomsRouter = createTRPCRouter({
 	create: adminProcedure
 		.input(createRoomSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			const now = new Date();
 
@@ -133,7 +138,7 @@ export const roomsRouter = createTRPCRouter({
 	update: adminProcedure
 		.input(updateRoomSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			const { id, airbnbIcalUrl, expediaIcalUrl, ...updateData } = input;
 
@@ -163,9 +168,9 @@ export const roomsRouter = createTRPCRouter({
 
 	// Archive room (admin only - replaces delete - preserves data for historical bookings)
 	archive: adminProcedure
-		.input(getRoomSchema)
+		.input(roomIdSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			const result = await db
 				.update(room)
@@ -186,9 +191,9 @@ export const roomsRouter = createTRPCRouter({
 
 	// Activate room (admin only)
 	activate: adminProcedure
-		.input(getRoomSchema)
+		.input(roomIdSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			const result = await db
 				.update(room)
@@ -209,9 +214,9 @@ export const roomsRouter = createTRPCRouter({
 
 	// Deactivate room (admin only - temporarily unavailable)
 	deactivate: adminProcedure
-		.input(getRoomSchema)
+		.input(roomIdSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			const result = await db
 				.update(room)
@@ -246,7 +251,7 @@ export const roomsRouter = createTRPCRouter({
 	bulkAvailability: publicProcedure
 		.input(bulkAvailabilitySchema)
 		.query(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			// Build query conditions - only check active rooms for availability
 			const conditions = [eq(room.status, 'active')];
@@ -281,7 +286,7 @@ export const roomsRouter = createTRPCRouter({
 	syncCalendar: adminProcedure
 		.input(syncCalendarSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			// Get room to sync
 			const result = await db
@@ -303,7 +308,7 @@ export const roomsRouter = createTRPCRouter({
 			}
 
 			// Use iCal service to perform the actual sync
-			const icalServiceInstance = new iCalService(ctx.db);
+			const icalServiceInstance = new iCalService(ctx.env.DB);
 			const syncResult = await icalServiceInstance.syncExternalCalendar(
 				input.roomId,
 				input.platform,
@@ -328,7 +333,7 @@ export const roomsRouter = createTRPCRouter({
 			}),
 		)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			// Verify room exists
 			const roomResult = await db
@@ -378,7 +383,7 @@ export const roomsRouter = createTRPCRouter({
 			}),
 		)
 		.query(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			const roomResult = await db
 				.select({
@@ -474,7 +479,7 @@ export const roomsRouter = createTRPCRouter({
 	getPricingRules: adminProcedure
 		.input(getPricingRulesSchema)
 		.query(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			const conditions = [eq(roomPricingRules.roomId, input.roomId)];
 
@@ -508,7 +513,7 @@ export const roomsRouter = createTRPCRouter({
 	createPricingRule: adminProcedure
 		.input(createPricingRuleSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			// Validate that dates are not in the past
 			const today = new Date();
@@ -571,7 +576,7 @@ export const roomsRouter = createTRPCRouter({
 	updatePricingRule: adminProcedure
 		.input(updatePricingRuleSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			const { id, ...updateData } = input;
 
@@ -652,7 +657,7 @@ export const roomsRouter = createTRPCRouter({
 	deletePricingRule: adminProcedure
 		.input(deletePricingRuleSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			const result = await db
 				.delete(roomPricingRules)
@@ -677,7 +682,7 @@ export const roomsRouter = createTRPCRouter({
 			}),
 		)
 		.query(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			// Get room data
 			const roomResult = await db
@@ -793,7 +798,7 @@ export const roomsRouter = createTRPCRouter({
 	getBlockedPeriods: adminProcedure
 		.input(getBlockedPeriodsSchema)
 		.query(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			// Build query conditions
 			const conditions = [];
@@ -828,7 +833,7 @@ export const roomsRouter = createTRPCRouter({
 	getBlockedPeriod: adminProcedure
 		.input(getBlockedPeriodSchema)
 		.query(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			const result = await db
 				.select()
@@ -846,7 +851,7 @@ export const roomsRouter = createTRPCRouter({
 	createBlockedPeriod: adminProcedure
 		.input(createBlockedPeriodSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			// Check if room exists
 			const roomExists = await db
@@ -895,7 +900,7 @@ export const roomsRouter = createTRPCRouter({
 	updateBlockedPeriod: adminProcedure
 		.input(updateBlockedPeriodSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			// Check if blocked period exists
 			const existing = await db
@@ -961,7 +966,7 @@ export const roomsRouter = createTRPCRouter({
 	deleteBlockedPeriod: adminProcedure
 		.input(deleteBlockedPeriodSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			// Check if blocked period exists
 			const existing = await db
@@ -989,10 +994,10 @@ export const roomsRouter = createTRPCRouter({
 			}),
 		)
 		.query(async ({ ctx, input }) => {
-			const icalService = new iCalService(ctx.db);
+			const icalService = new iCalService(ctx.env.DB);
 
 			// Check if room exists
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 			const roomExists = await db
 				.select()
 				.from(room)

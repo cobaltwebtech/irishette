@@ -6,7 +6,7 @@ import {
 	SidebarProvider,
 	SidebarTrigger,
 } from '@/components/ui/sidebar';
-import { useSession } from '@/lib/auth-client';
+import { useSession } from '@/lib/session';
 
 interface AdminLayoutProps {
 	children: React.ReactNode;
@@ -14,9 +14,8 @@ interface AdminLayoutProps {
 }
 
 export function AdminLayout({ children, title }: AdminLayoutProps) {
-	// Auth is handled at route level with beforeLoad
-	// Session is guaranteed to exist and user is guaranteed to be admin
-	const { data: session } = useSession();
+	// Auth is enforced by the _authed/_admin layout route.
+	const session = useSession();
 
 	// Load sidebar state from localStorage with lazy initialization
 	// Check for SSR - localStorage is only available in the browser

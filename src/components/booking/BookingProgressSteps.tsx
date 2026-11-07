@@ -1,11 +1,11 @@
 import { Icon } from '@iconify/react';
-import { useSession } from '@/lib/auth-client';
+import { useSession } from '@/lib/session';
 import { type BookingStep, useBookingStore } from '@/stores';
 import type { BookingStepItem } from '@/utils/booking-utils';
 
 export function BookingProgressSteps() {
 	const booking = useBookingStore();
-	const { data: session } = useSession();
+	const session = useSession();
 
 	const steps: BookingStepItem[] = [
 		{ step: 'auth', label: 'Sign In', completed: !!session?.user },

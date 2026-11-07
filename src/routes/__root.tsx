@@ -9,6 +9,8 @@ import {
 	useRouterState,
 } from '@tanstack/react-router';
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
+import type { TRPCClient } from '@trpc/client';
+import type { TRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import { ReactLenis } from 'lenis/react';
 import type * as React from 'react';
 import { DefaultCatchBoundary } from '@/components/default-catch-boundary';
@@ -17,17 +19,39 @@ import Header from '@/components/Header';
 import { NotFound } from '@/components/not-found';
 import { ScrollRestoration } from '@/components/scroll-restoration';
 import { Toaster } from '@/components/ui/sonner';
-import type { useSession } from '@/lib/auth-client';
+import type { TRPCRouter } from '@/integrations/trpc/router';
+import { type AppSession, sessionQueryOptions } from '@/lib/session';
 import appCss from '@/styles/styles.css?url';
 import { seo } from '@/utils/seo';
 
-// Define the router context interface
+// Router context, created per request in src/router.tsx.
 interface RouterContext {
 	queryClient: QueryClient;
-	auth: ReturnType<typeof useSession> | undefined;
+	trpc: TRPCOptionsProxy<TRPCRouter>;
+	trpcClient: TRPCClient<TRPCRouter>;
 }
 
 export const Route = createRootRouteWithContext<RouterContext>()({
+	// Load the session once per SSR request. It is dehydrated with the page, so
+	// client navigations read it from the cache (no server call) until it goes
+	// stale. Child routes read `context.session`.
+	beforeLoad: async ({ context }) => {
+		let session: AppSession;
+		try {
+			session = await context.queryClient.ensureQueryData({
+				...sessionQueryOptions(),
+				// Return the cached value now; refetch in the background if stale.
+				revalidateIfStale: true,
+			});
+		} catch (error) {
+			// Treat a failed session lookup as signed out rather than failing
+			// every page. tRPC procedures still enforce auth on the server.
+			console.error('Session lookup failed:', error);
+			session = null;
+			context.queryClient.setQueryData(sessionQueryOptions().queryKey, null);
+		}
+		return { session };
+	},
 	head: () => ({
 		meta: [
 			{

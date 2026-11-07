@@ -1,14 +1,13 @@
 import { Icon } from '@iconify/react';
-import {
-	createColumnHelper,
-	flexRender,
-	getCoreRowModel,
-	getSortedRowModel,
-	type SortingState,
-	useReactTable,
-} from '@tanstack/react-table';
-import { useId, useMemo, useState } from 'react';
+import { useId, useState } from 'react';
 import { toast } from 'sonner';
+import {
+	createAppColumnHelper,
+	DataTableView,
+	PaginationControls,
+	SortableHeader,
+	useAppTable,
+} from '@/components/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -34,14 +33,6 @@ import {
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from '@/components/ui/table';
 import type {
 	CreatePricingRule,
 	RoomPricingRule,
@@ -94,117 +85,80 @@ function parseValidationErrors(errorMessage: string): string {
 	return 'Please check your input and try again';
 }
 
-interface PricingRulesManagementProps {
-	roomId: string;
-	roomName: string;
-	basePrice: number;
-	pricingRules: RoomPricingRule[];
-	onCreateRule: (rule: CreatePricingRule) => Promise<void>;
-	onUpdateRule: (rule: UpdatePricingRule) => Promise<void>;
-	onDeleteRule: (ruleId: string) => Promise<void>;
-}
+const formatRuleValue = (rule: RoomPricingRule) => {
+	switch (rule.ruleType) {
+		case 'surcharge_rate':
+			return `+${(rule.value * 100).toFixed(1)}%`;
+		case 'fixed_amount':
+			return `+$${rule.value.toFixed(2)}`;
+		case 'absolute_price':
+			return `$${rule.value.toFixed(2)}`;
+		default:
+			return rule.value.toString();
+	}
+};
 
-export function PricingRulesManagement({
-	roomId,
-	roomName,
+const calculateEffectivePrice = (rule: RoomPricingRule, basePrice: number) => {
+	switch (rule.ruleType) {
+		case 'surcharge_rate':
+			return basePrice + basePrice * rule.value;
+		case 'fixed_amount':
+			return basePrice + rule.value;
+		case 'absolute_price':
+			return rule.value;
+		default:
+			return basePrice;
+	}
+};
+
+const getRuleTypeLabel = (ruleType: string) => {
+	switch (ruleType) {
+		case 'surcharge_rate':
+			return 'Surcharge %';
+		case 'fixed_amount':
+			return 'Fixed Amount';
+		case 'absolute_price':
+			return 'Absolute Price';
+		default:
+			return ruleType;
+	}
+};
+
+const getRuleBadgeVariant = (ruleType: string) => {
+	switch (ruleType) {
+		case 'surcharge_rate':
+			return 'default';
+		case 'fixed_amount':
+			return 'secondary';
+		case 'absolute_price':
+			return 'destructive';
+		default:
+			return 'outline';
+	}
+};
+
+const formatDateRange = (startDate: string, endDate: string) => {
+	// Parse dates without timezone issues by treating them as local dates
+	const start = new Date(`${startDate}T00:00:00`).toLocaleDateString();
+	const end = new Date(`${endDate}T00:00:00`).toLocaleDateString();
+	return `${start} - ${end}`;
+};
+
+const columnHelper = createAppColumnHelper<RoomPricingRule>();
+
+function makeColumns({
 	basePrice,
-	pricingRules,
-	onCreateRule,
-	onUpdateRule,
-	onDeleteRule,
-}: PricingRulesManagementProps) {
-	const [isCreating, setIsCreating] = useState(false);
-	const [editingRule, setEditingRule] = useState<RoomPricingRule | null>(null);
-	const [deletingRule, setDeletingRule] = useState<RoomPricingRule | null>(
-		null,
-	);
-	const [sorting, setSorting] = useState<SortingState>([
-		{ id: 'startDate', desc: false },
-	]);
-
-	const formatRuleValue = (rule: RoomPricingRule) => {
-		switch (rule.ruleType) {
-			case 'surcharge_rate':
-				return `+${(rule.value * 100).toFixed(1)}%`;
-			case 'fixed_amount':
-				return `+$${rule.value.toFixed(2)}`;
-			case 'absolute_price':
-				return `$${rule.value.toFixed(2)}`;
-			default:
-				return rule.value.toString();
-		}
-	};
-
-	const calculateEffectivePrice = (rule: RoomPricingRule) => {
-		switch (rule.ruleType) {
-			case 'surcharge_rate':
-				return basePrice + basePrice * rule.value;
-			case 'fixed_amount':
-				return basePrice + rule.value;
-			case 'absolute_price':
-				return rule.value;
-			default:
-				return basePrice;
-		}
-	};
-
-	const getRuleTypeLabel = (ruleType: string) => {
-		switch (ruleType) {
-			case 'surcharge_rate':
-				return 'Surcharge %';
-			case 'fixed_amount':
-				return 'Fixed Amount';
-			case 'absolute_price':
-				return 'Absolute Price';
-			default:
-				return ruleType;
-		}
-	};
-
-	const getRuleBadgeVariant = (ruleType: string) => {
-		switch (ruleType) {
-			case 'surcharge_rate':
-				return 'default';
-			case 'fixed_amount':
-				return 'secondary';
-			case 'absolute_price':
-				return 'destructive';
-			default:
-				return 'outline';
-		}
-	};
-
-	const formatDateRange = (startDate: string, endDate: string) => {
-		// Parse dates without timezone issues by treating them as local dates
-		const start = new Date(`${startDate}T00:00:00`).toLocaleDateString();
-		const end = new Date(`${endDate}T00:00:00`).toLocaleDateString();
-		return `${start} - ${end}`;
-	};
-
-	// Filter pricing rules to show only current and future rules
-	const filteredRules = useMemo(() => {
-		return pricingRules.filter((rule) => {
-			const endDate = new Date(`${rule.endDate}T00:00:00`);
-			const today = new Date();
-			today.setHours(0, 0, 0, 0); // Reset time to start of day
-			return endDate >= today;
-		});
-	}, [pricingRules]);
-
-	// Create columns using the column helper
-	const columnHelper = createColumnHelper<RoomPricingRule>();
-
-	const columns = [
+	onEdit,
+	onDelete,
+}: {
+	basePrice: number;
+	onEdit: (rule: RoomPricingRule) => void;
+	onDelete: (rule: RoomPricingRule) => void;
+}) {
+	return columnHelper.columns([
 		columnHelper.accessor('startDate', {
 			header: ({ column }) => (
-				<Button
-					variant="ghost"
-					onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-					className="h-8 px-2"
-				>
-					Date Range
-					<Icon icon="tabler:arrows-up-down" />
-				</Button>
+				<SortableHeader column={column}>Date Range</SortableHeader>
 			),
 			cell: (info) => (
 				<span className="text-sm">
@@ -235,7 +189,7 @@ export function PricingRulesManagement({
 			header: 'Effective Price',
 			cell: (info) => (
 				<span className="font-semibold">
-					${calculateEffectivePrice(info.row.original).toFixed(2)}
+					${calculateEffectivePrice(info.row.original, basePrice).toFixed(2)}
 				</span>
 			),
 		}),
@@ -260,13 +214,13 @@ export function PricingRulesManagement({
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">
 						<DropdownMenuLabel>Actions</DropdownMenuLabel>
-						<DropdownMenuItem onClick={() => setEditingRule(info.row.original)}>
+						<DropdownMenuItem onClick={() => onEdit(info.row.original)}>
 							<Icon icon="tabler:pencil" />
 							Edit
 						</DropdownMenuItem>
 						<DropdownMenuSeparator />
 						<DropdownMenuItem
-							onClick={() => setDeletingRule(info.row.original)}
+							onClick={() => onDelete(info.row.original)}
 							className="text-destructive"
 						>
 							<Icon icon="tabler:trash" />
@@ -276,16 +230,52 @@ export function PricingRulesManagement({
 				</DropdownMenu>
 			),
 		}),
-	];
+	]);
+}
 
-	const table = useReactTable({
+interface PricingRulesManagementProps {
+	roomId: string;
+	roomName: string;
+	basePrice: number;
+	pricingRules: RoomPricingRule[];
+	onCreateRule: (rule: CreatePricingRule) => Promise<void>;
+	onUpdateRule: (rule: UpdatePricingRule) => Promise<void>;
+	onDeleteRule: (ruleId: string) => Promise<void>;
+}
+
+export function PricingRulesManagement({
+	roomId,
+	roomName,
+	basePrice,
+	pricingRules,
+	onCreateRule,
+	onUpdateRule,
+	onDeleteRule,
+}: PricingRulesManagementProps) {
+	const [isCreating, setIsCreating] = useState(false);
+	const [editingRule, setEditingRule] = useState<RoomPricingRule | null>(null);
+	const [deletingRule, setDeletingRule] = useState<RoomPricingRule | null>(
+		null,
+	);
+
+	// Only current and future rules are displayed
+	const today = new Date();
+	today.setHours(0, 0, 0, 0); // Reset time to start of day
+	const filteredRules = pricingRules.filter(
+		(rule) => new Date(`${rule.endDate}T00:00:00`) >= today,
+	);
+
+	const columns = makeColumns({
+		basePrice,
+		onEdit: setEditingRule,
+		onDelete: setDeletingRule,
+	});
+
+	const table = useAppTable({
 		data: filteredRules,
 		columns,
-		onSortingChange: setSorting,
-		getCoreRowModel: getCoreRowModel(),
-		getSortedRowModel: getSortedRowModel(),
-		state: {
-			sorting,
+		initialState: {
+			sorting: [{ id: 'startDate', desc: false }],
 		},
 	});
 
@@ -327,49 +317,13 @@ export function PricingRulesManagement({
 						</p>
 					</div>
 				) : (
-					<Table>
-						<TableHeader>
-							{table.getHeaderGroups().map((headerGroup) => (
-								<TableRow key={headerGroup.id}>
-									{headerGroup.headers.map((header) => (
-										<TableHead key={header.id}>
-											{header.isPlaceholder
-												? null
-												: flexRender(
-														header.column.columnDef.header,
-														header.getContext(),
-													)}
-										</TableHead>
-									))}
-								</TableRow>
-							))}
-						</TableHeader>
-						<TableBody>
-							{table.getRowModel().rows?.length ? (
-								table.getRowModel().rows.map((row) => (
-									<TableRow key={row.id}>
-										{row.getVisibleCells().map((cell) => (
-											<TableCell key={cell.id}>
-												{flexRender(
-													cell.column.columnDef.cell,
-													cell.getContext(),
-												)}
-											</TableCell>
-										))}
-									</TableRow>
-								))
-							) : (
-								<TableRow>
-									<TableCell
-										colSpan={columns.length}
-										className="h-24 text-center"
-									>
-										No pricing rules found.
-									</TableCell>
-								</TableRow>
-							)}
-						</TableBody>
-					</Table>
+					<>
+						<DataTableView
+							table={table}
+							emptyMessage="No pricing rules found."
+						/>
+						<PaginationControls table={table} noun="rules" />
+					</>
 				)}
 
 				{(isCreating || editingRule) && (

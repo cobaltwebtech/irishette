@@ -1,5 +1,6 @@
 import { Icon } from '@iconify/react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from '@tanstack/react-router';
 import { useId, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -13,8 +14,9 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { trpcClient } from '@/integrations/tanstack-query/root-provider';
+import { useTRPC } from '@/integrations/trpc/react';
 import { updateUser } from '@/lib/auth-client';
+import { refreshSession } from '@/lib/session';
 
 interface EditProfileModalProps {
 	open: boolean;
@@ -33,6 +35,8 @@ export function EditProfileModal({
 	user,
 }: EditProfileModalProps) {
 	const queryClient = useQueryClient();
+	const router = useRouter();
+	const trpc = useTRPC();
 	const nameId = useId();
 	const emailId = useId();
 	const phoneId = useId();
@@ -46,26 +50,21 @@ export function EditProfileModal({
 	}>({});
 
 	// tRPC mutation for updating profile in database
-	const updateProfileMutation = useMutation({
-		mutationFn: async (data: {
-			userId: string;
-			name?: string;
-			email?: string;
-			phoneNumber?: string;
-		}) => {
-			return await trpcClient.users.updateProfile.mutate(data);
-		},
-		onSuccess: async () => {
-			// Invalidate queries to refetch updated data
-			await queryClient.invalidateQueries({ queryKey: ['session'] });
-			toast.success('Profile updated successfully!');
-			onOpenChange(false);
-		},
-		onError: (error) => {
-			console.error('Failed to update profile:', error);
-			toast.error('Failed to update profile. Please try again.');
-		},
-	});
+	const updateProfileMutation = useMutation(
+		trpc.users.updateProfile.mutationOptions({
+			onSuccess: async () => {
+				// Refetch the session so the header and account page show the
+				// new values (re-runs route guards/loaders).
+				await refreshSession(queryClient, router);
+				toast.success('Profile updated successfully!');
+				onOpenChange(false);
+			},
+			onError: (error) => {
+				console.error('Failed to update profile:', error);
+				toast.error('Failed to update profile. Please try again.');
+			},
+		}),
+	);
 
 	// Better Auth mutation for updating user (this updates the session)
 	const updateBetterAuthUser = useMutation({
@@ -112,13 +111,10 @@ export function EditProfileModal({
 		try {
 			// Update via tRPC (updates database)
 			const updateData: {
-				userId: string;
 				name?: string;
 				email?: string;
 				phoneNumber?: string;
-			} = {
-				userId: user.id,
-			};
+			} = {};
 
 			if (name !== user.name) {
 				updateData.name = name;

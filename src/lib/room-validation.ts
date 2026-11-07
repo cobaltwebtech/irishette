@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { publicIdSchema } from '@/lib/ids';
 
 // Room status enum
 export const roomStatusSchema = z.enum(['active', 'inactive', 'archived']);
@@ -52,10 +53,14 @@ export const updateRoomSchema = roomSchema.partial().extend({
 	id: z.string(),
 });
 
-// Room query schemas
-export const getRoomSchema = z.object({
-	id: z.string(),
-});
+// Admin room mutations (archive / activate / deactivate) by internal id
+export const roomIdSchema = z.object({ id: z.string().min(1) });
+
+// Room query schemas: by internal id (booking flow) or publicId (admin routes)
+export const getRoomSchema = z.union([
+	z.object({ id: z.string().min(1) }),
+	z.object({ publicId: publicIdSchema }),
+]);
 
 export const getRoomsSchema = z.object({
 	limit: z.number().min(1).max(100).default(10),

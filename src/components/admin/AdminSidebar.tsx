@@ -1,6 +1,6 @@
 import { Icon } from '@iconify/react';
 import { useQuery } from '@tanstack/react-query';
-import { type ComponentProps, useMemo } from 'react';
+import type { ComponentProps } from 'react';
 
 import { AdminNavigation } from '@/components/admin/AdminNavigation';
 import { AdminUser } from '@/components/admin/AdminUser';
@@ -14,7 +14,7 @@ import {
 	SidebarMenuItem,
 	SidebarRail,
 } from '@/components/ui/sidebar';
-import { trpc } from '@/integrations/tanstack-query/root-provider';
+import { useTRPC } from '@/integrations/trpc/react';
 
 export function AdminSidebar({
 	user,
@@ -25,7 +25,10 @@ export function AdminSidebar({
 		email: string;
 	};
 }) {
-	// Fetch rooms for the Property menu
+	const trpc = useTRPC();
+
+	// Fetch rooms for the Property menu (same input as the property
+	// management page, so they share one cache entry)
 	const { data: roomsData } = useQuery(
 		trpc.rooms.list.queryOptions({
 			limit: 100,
@@ -35,63 +38,60 @@ export function AdminSidebar({
 	const rooms = roomsData?.rooms || [];
 
 	// Navigation data with dynamic room items
-	const navMainData = useMemo(
-		() => [
-			{
-				title: 'Dashboard',
-				url: '/admin',
-				icon: 'tabler:table-dashed',
-				items: [
-					{
-						title: 'Overview',
-						url: '/admin',
-					},
-				],
-			},
-			{
-				title: 'Bookings',
-				url: '/admin/bookings',
-				icon: 'tabler:calendar-week',
-				items: [
-					{
-						title: 'Current Bookings',
-						url: '/admin/bookings/current-bookings',
-					},
-					{
-						title: 'Past Bookings',
-						url: '/admin/bookings/past-bookings',
-					},
-				],
-			},
-			{
-				title: 'Guests',
-				url: '/admin/guest',
-				icon: 'tabler:users-group',
-				items: [
-					{
-						title: 'All Guests',
-						url: '/admin/guest',
-					},
-				],
-			},
-			{
-				title: 'Property',
-				url: '/admin/property-management',
-				icon: 'tabler:home-edit',
-				items: [
-					...rooms.map((room) => ({
-						title: room.name,
-						url: `/admin/property-management/${room.id}`,
-					})),
-					{
-						title: 'All Rooms',
-						url: '/admin/property-management',
-					},
-				],
-			},
-		],
-		[rooms],
-	);
+	const navMainData = [
+		{
+			title: 'Dashboard',
+			url: '/admin',
+			icon: 'tabler:table-dashed',
+			items: [
+				{
+					title: 'Overview',
+					url: '/admin',
+				},
+			],
+		},
+		{
+			title: 'Bookings',
+			url: '/admin/bookings',
+			icon: 'tabler:calendar-week',
+			items: [
+				{
+					title: 'Current Bookings',
+					url: '/admin/bookings/current-bookings',
+				},
+				{
+					title: 'Past Bookings',
+					url: '/admin/bookings/past-bookings',
+				},
+			],
+		},
+		{
+			title: 'Guests',
+			url: '/admin/guest',
+			icon: 'tabler:users-group',
+			items: [
+				{
+					title: 'All Guests',
+					url: '/admin/guest',
+				},
+			],
+		},
+		{
+			title: 'Property',
+			url: '/admin/property-management',
+			icon: 'tabler:home-edit',
+			items: [
+				...rooms.map((room) => ({
+					title: room.name,
+					url: `/admin/property-management/${room.publicId}`,
+				})),
+				{
+					title: 'All Rooms',
+					url: '/admin/property-management',
+				},
+			],
+		},
+	];
 
 	return (
 		<Sidebar collapsible="icon" {...props}>

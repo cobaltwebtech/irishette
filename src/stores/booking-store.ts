@@ -60,8 +60,10 @@ export interface BookingState {
 	// Flow control
 	currentStep: BookingStep;
 
-	// Booking ID once created
+	// Booking IDs once created: internal id for the payment steps, public id
+	// for URLs (/booking/confirmation/$publicId).
 	bookingId: string | null;
+	bookingPublicId: string | null;
 
 	// Error handling
 	error: string | null;
@@ -86,6 +88,7 @@ const initialState: BookingState = {
 	guestInfo: null,
 	currentStep: 'dates',
 	bookingId: null,
+	bookingPublicId: null,
 	error: null,
 	isLoading: false,
 	createdAt: null,
@@ -200,10 +203,11 @@ export const bookingActions = {
 	},
 
 	// Set booking ID after creation
-	setBookingId: (bookingId: string) => {
+	setBookingId: (bookingId: string, bookingPublicId: string) => {
 		bookingStore.setState((state) => ({
 			...state,
 			bookingId,
+			bookingPublicId,
 			updatedAt: new Date().toISOString(),
 		}));
 	},

@@ -1,7 +1,6 @@
 import { Icon } from '@iconify/react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { useState } from 'react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,10 +11,10 @@ import {
 	CardHeader,
 	CardTitle,
 } from '@/components/ui/card';
-import { trpc, trpcClient } from '@/integrations/tanstack-query/root-provider';
-import { requireAuth } from '@/utils/auth-check';
+import { orNotFound } from '@/integrations/trpc/errors';
+import { useTRPC } from '@/integrations/trpc/react';
 
-export const Route = createFileRoute('/account/booking/$bookingId')({
+export const Route = createFileRoute('/_authed/account/booking/$publicId')({
 	head: () => ({
 		meta: [
 			{
@@ -23,166 +22,87 @@ export const Route = createFileRoute('/account/booking/$bookingId')({
 			},
 		],
 	}),
-	beforeLoad: async ({ location }) => {
-		// Check the user is authenticated before rendering the page
-		const session = await requireAuth(location);
-
-		// Return session data to be available in component during SSR
-		return { session };
-	},
-	loader: async ({ params }) => {
-		// Pre-fetch booking details before component renders
-		const booking = await trpcClient.bookings.getBooking.query({
-			bookingId: params.bookingId,
-		});
-
-		return { booking };
-	},
+	// Auth: the _authed layout. Data: preloaded into the per-request
+	// QueryClient (in-process on SSR) and read with useSuspenseQuery below.
+	loader: ({ context, params }) =>
+		orNotFound(
+			context.queryClient.ensureQueryData(
+				context.trpc.bookings.getBooking.queryOptions({
+					publicId: params.publicId,
+				}),
+			),
+		),
+	notFoundComponent: BookingNotFound,
 	component: BookingDetailPage,
 });
 
+function BookingNotFound() {
+	return (
+		<div>
+			<div className="bg-primary/5 border-b">
+				<div className="container mx-auto px-4 py-6">
+					<div className="flex items-center gap-4">
+						<Link
+							to="/account"
+							className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors"
+						>
+							← Back to Account
+						</Link>
+					</div>
+				</div>
+			</div>
+			<div className="container mx-auto px-4 py-8">
+				<Card>
+					<CardHeader>
+						<CardTitle>Booking Not Found</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<p className="text-muted-foreground mb-4">
+							The booking you're looking for could not be found.
+						</p>
+						<Link to="/account">
+							<Button>Back to Account</Button>
+						</Link>
+					</CardContent>
+				</Card>
+			</div>
+		</div>
+	);
+}
+
 function BookingDetailPage() {
-	const params = Route.useParams() as { bookingId: string };
-	const bookingId = params.bookingId;
-	const [isResendingEmail, setIsResendingEmail] = useState(false);
+	const { publicId } = Route.useParams();
+	const trpc = useTRPC();
 
-	// Get pre-loaded data from loader
-	const loaderData = Route.useLoaderData();
+	const { data: booking } = useSuspenseQuery(
+		trpc.bookings.getBooking.queryOptions({ publicId }),
+	);
 
-	// Use query with initialData from loader for live updates
-	const bookingQuery = useQuery({
-		...trpc.bookings.getBooking.queryOptions({
-			bookingId: bookingId,
+	const resendEmail = useMutation(
+		trpc.bookings.resendConfirmationEmail.mutationOptions({
+			onSuccess: (result) => {
+				toast.success('Email sent successfully!', {
+					description:
+						result.message ||
+						'Confirmation email has been sent to your email address.',
+				});
+			},
+			onError: (error) => {
+				console.error('Failed to resend confirmation email:', error);
+				toast.error('Failed to send email', {
+					description:
+						error.message ||
+						'Unable to send confirmation email. Please try again.',
+				});
+			},
 		}),
-		initialData: loaderData.booking,
-		retry: false,
-		staleTime: 5 * 60 * 1000,
-	});
-
-	const booking = bookingQuery.data;
+	);
+	const isResendingEmail = resendEmail.isPending;
 
 	// Handle resending confirmation email
-	const handleResendEmail = async () => {
-		if (!booking?.booking) return;
-
-		setIsResendingEmail(true);
-
-		try {
-			console.log(
-				'Resending confirmation email for booking:',
-				booking.booking.id,
-			);
-
-			// Use tRPC endpoint to resend confirmation email
-			const result = await trpcClient.bookings.resendConfirmationEmail.mutate({
-				bookingId: booking.booking.id,
-			});
-
-			toast.success('Email sent successfully!', {
-				description:
-					result.message ||
-					'Confirmation email has been sent to your email address.',
-			});
-		} catch (error) {
-			console.error('Failed to resend confirmation email:', error);
-			toast.error('Failed to send email', {
-				description:
-					error instanceof Error
-						? error.message
-						: 'Unable to send confirmation email. Please try again.',
-			});
-		} finally {
-			setIsResendingEmail(false);
-		}
+	const handleResendEmail = () => {
+		resendEmail.mutate({ bookingId: booking.booking.id });
 	};
-
-	// Early returns for various states
-	if (bookingQuery.isLoading) {
-		return (
-			<div className="flex items-center justify-center">
-				<div className="text-center">
-					<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-					<p className="text-muted-foreground">Loading booking details...</p>
-				</div>
-			</div>
-		);
-	}
-
-	if (bookingQuery.error || (!bookingQuery.isLoading && !booking)) {
-		return (
-			<div>
-				<div className="bg-primary/5 border-b">
-					<div className="container mx-auto px-4 py-6">
-						<div className="flex items-center gap-4">
-							<Link
-								to="/account"
-								className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors"
-							>
-								← Back to Account
-							</Link>
-						</div>
-					</div>
-				</div>
-				<div className="container mx-auto px-4 py-8">
-					<Card>
-						<CardHeader>
-							<CardTitle>Error</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<p className="text-red-600 mb-4">
-								{bookingQuery.error?.message || 'Booking not found'}
-							</p>
-							<div className="flex gap-2">
-								<Button
-									variant="outline"
-									onClick={() => bookingQuery.refetch()}
-								>
-									Try Again
-								</Button>
-								<Link to="/account">
-									<Button>Back to Account</Button>
-								</Link>
-							</div>
-						</CardContent>
-					</Card>
-				</div>
-			</div>
-		);
-	}
-
-	if (!booking) {
-		return (
-			<div>
-				<div className="bg-primary/5 border-b">
-					<div className="container mx-auto px-4 py-6">
-						<div className="flex items-center gap-4">
-							<Link
-								to="/account"
-								className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors"
-							>
-								← Back to Account
-							</Link>
-						</div>
-					</div>
-				</div>
-				<div className="container mx-auto px-4 py-8">
-					<Card>
-						<CardHeader>
-							<CardTitle>Booking Not Found</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<p className="text-muted-foreground mb-4">
-								The booking you're looking for could not be found.
-							</p>
-							<Link to="/account">
-								<Button>Back to Account</Button>
-							</Link>
-						</CardContent>
-					</Card>
-				</div>
-			</div>
-		);
-	}
 
 	// Final safety check - should not be needed but prevents runtime errors
 	if (!booking?.booking || !booking.room) {

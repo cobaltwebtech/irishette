@@ -1,14 +1,13 @@
 import { Icon } from '@iconify/react';
-import {
-	createColumnHelper,
-	flexRender,
-	getCoreRowModel,
-	getSortedRowModel,
-	type SortingState,
-	useReactTable,
-} from '@tanstack/react-table';
-import { useId, useMemo, useState } from 'react';
+import { useId, useState } from 'react';
 import { toast } from 'sonner';
+import {
+	createAppColumnHelper,
+	DataTableView,
+	PaginationControls,
+	SortableHeader,
+	useAppTable,
+} from '@/components/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -35,14 +34,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from '@/components/ui/table';
 import type {
 	CreateBlockedPeriod,
 	RoomBlockedPeriod,
@@ -76,94 +67,26 @@ function parseValidationErrors(errorMessage: string): string {
 	}
 }
 
-interface RoomBlockingManagementProps {
-	roomId: string;
-	onCreateBlockedPeriod: (period: CreateBlockedPeriod) => Promise<void>;
-	onUpdateBlockedPeriod: (period: UpdateBlockedPeriod) => Promise<void>;
-	onDeleteBlockedPeriod: (periodId: string) => Promise<void>;
-	blockedPeriods: RoomBlockedPeriod[];
-	isLoading?: boolean;
-}
+// Helper function to format date range
+const formatDateRange = (startDate: string, endDate: string) => {
+	const start = formatDateString(startDate);
+	const end = formatDateString(endDate);
+	return `${start} - ${end}`;
+};
 
-export function RoomBlockingManagement({
-	roomId,
-	onCreateBlockedPeriod,
-	onUpdateBlockedPeriod,
-	onDeleteBlockedPeriod,
-	blockedPeriods,
-	isLoading = false,
-}: RoomBlockingManagementProps) {
-	const [showCreateDialog, setShowCreateDialog] = useState(false);
-	const [editingPeriod, setEditingPeriod] = useState<RoomBlockedPeriod | null>(
-		null,
-	);
-	const [deletingPeriod, setDeletingPeriod] =
-		useState<RoomBlockedPeriod | null>(null);
-	const [sorting, setSorting] = useState<SortingState>([
-		{ id: 'startDate', desc: false },
-	]);
+const columnHelper = createAppColumnHelper<RoomBlockedPeriod>();
 
-	const handleCreatePeriod = async (period: CreateBlockedPeriod) => {
-		try {
-			await onCreateBlockedPeriod(period);
-			setShowCreateDialog(false);
-		} catch (error) {
-			console.error('Error creating blocked period:', error);
-			// Error handling is done in the parent component
-		}
-	};
-
-	const handleUpdatePeriod = async (period: UpdateBlockedPeriod) => {
-		try {
-			await onUpdateBlockedPeriod(period);
-			setEditingPeriod(null);
-		} catch (error) {
-			console.error('Error updating blocked period:', error);
-			// Error handling is done in the parent component
-		}
-	};
-
-	const handleDeletePeriod = async (periodId: string) => {
-		try {
-			await onDeleteBlockedPeriod(periodId);
-			setDeletingPeriod(null);
-		} catch (error) {
-			console.error('Error deleting blocked period:', error);
-			// Error handling is done in the parent component
-		}
-	};
-
-	// Filter blocked periods to show only current and future periods
-	const filteredBlockedPeriods = useMemo(() => {
-		return blockedPeriods.filter((period) => {
-			const endDate = new Date(`${period.endDate}T23:59:59`);
-			const today = new Date();
-			today.setHours(0, 0, 0, 0); // Reset time to start of day
-			return endDate >= today;
-		});
-	}, [blockedPeriods]);
-
-	// Helper function to format date range
-	const formatDateRange = (startDate: string, endDate: string) => {
-		const start = formatDateString(startDate);
-		const end = formatDateString(endDate);
-		return `${start} - ${end}`;
-	};
-
-	// Create columns using the column helper
-	const columnHelper = createColumnHelper<RoomBlockedPeriod>();
-
-	const columns = [
+function makeColumns({
+	onEdit,
+	onDelete,
+}: {
+	onEdit: (period: RoomBlockedPeriod) => void;
+	onDelete: (period: RoomBlockedPeriod) => void;
+}) {
+	return columnHelper.columns([
 		columnHelper.accessor('startDate', {
 			header: ({ column }) => (
-				<Button
-					variant="ghost"
-					onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-					className="h-8 px-2"
-				>
-					Date Range
-					<Icon icon="tabler:arrows-up-down" />
-				</Button>
+				<SortableHeader column={column}>Date Range</SortableHeader>
 			),
 			cell: (info) => (
 				<span className="text-sm">
@@ -217,15 +140,13 @@ export function RoomBlockingManagement({
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">
 						<DropdownMenuLabel>Actions</DropdownMenuLabel>
-						<DropdownMenuItem
-							onClick={() => setEditingPeriod(info.row.original)}
-						>
+						<DropdownMenuItem onClick={() => onEdit(info.row.original)}>
 							<Icon icon="tabler:pencil" />
 							Edit
 						</DropdownMenuItem>
 						<DropdownMenuSeparator />
 						<DropdownMenuItem
-							onClick={() => setDeletingPeriod(info.row.original)}
+							onClick={() => onDelete(info.row.original)}
 							className="text-destructive"
 						>
 							<Icon icon="tabler:trash" />
@@ -235,16 +156,80 @@ export function RoomBlockingManagement({
 				</DropdownMenu>
 			),
 		}),
-	];
+	]);
+}
 
-	const table = useReactTable({
+interface RoomBlockingManagementProps {
+	roomId: string;
+	onCreateBlockedPeriod: (period: CreateBlockedPeriod) => Promise<void>;
+	onUpdateBlockedPeriod: (period: UpdateBlockedPeriod) => Promise<void>;
+	onDeleteBlockedPeriod: (periodId: string) => Promise<void>;
+	blockedPeriods: RoomBlockedPeriod[];
+	isLoading?: boolean;
+}
+
+export function RoomBlockingManagement({
+	roomId,
+	onCreateBlockedPeriod,
+	onUpdateBlockedPeriod,
+	onDeleteBlockedPeriod,
+	blockedPeriods,
+	isLoading = false,
+}: RoomBlockingManagementProps) {
+	const [showCreateDialog, setShowCreateDialog] = useState(false);
+	const [editingPeriod, setEditingPeriod] = useState<RoomBlockedPeriod | null>(
+		null,
+	);
+	const [deletingPeriod, setDeletingPeriod] =
+		useState<RoomBlockedPeriod | null>(null);
+
+	const handleCreatePeriod = async (period: CreateBlockedPeriod) => {
+		try {
+			await onCreateBlockedPeriod(period);
+			setShowCreateDialog(false);
+		} catch (error) {
+			console.error('Error creating blocked period:', error);
+			// Error handling is done in the parent component
+		}
+	};
+
+	const handleUpdatePeriod = async (period: UpdateBlockedPeriod) => {
+		try {
+			await onUpdateBlockedPeriod(period);
+			setEditingPeriod(null);
+		} catch (error) {
+			console.error('Error updating blocked period:', error);
+			// Error handling is done in the parent component
+		}
+	};
+
+	const handleDeletePeriod = async (periodId: string) => {
+		try {
+			await onDeleteBlockedPeriod(periodId);
+			setDeletingPeriod(null);
+		} catch (error) {
+			console.error('Error deleting blocked period:', error);
+			// Error handling is done in the parent component
+		}
+	};
+
+	// Filter blocked periods to show only current and future periods
+	const today = new Date();
+	today.setHours(0, 0, 0, 0); // Reset time to start of day
+	const filteredBlockedPeriods = blockedPeriods.filter(
+		(period) => new Date(`${period.endDate}T23:59:59`) >= today,
+	);
+
+	const columns = makeColumns({
+		onEdit: setEditingPeriod,
+		onDelete: setDeletingPeriod,
+	});
+
+	const table = useAppTable({
 		data: filteredBlockedPeriods,
 		columns,
-		onSortingChange: setSorting,
-		getCoreRowModel: getCoreRowModel(),
-		getSortedRowModel: getSortedRowModel(),
-		state: {
-			sorting,
+		initialState: {
+			sorting: [{ id: 'startDate', desc: false }],
 		},
 	});
 
@@ -291,49 +276,13 @@ export function RoomBlockingManagement({
 						</p>
 					</div>
 				) : (
-					<Table>
-						<TableHeader>
-							{table.getHeaderGroups().map((headerGroup) => (
-								<TableRow key={headerGroup.id}>
-									{headerGroup.headers.map((header) => (
-										<TableHead key={header.id}>
-											{header.isPlaceholder
-												? null
-												: flexRender(
-														header.column.columnDef.header,
-														header.getContext(),
-													)}
-										</TableHead>
-									))}
-								</TableRow>
-							))}
-						</TableHeader>
-						<TableBody>
-							{table.getRowModel().rows?.length ? (
-								table.getRowModel().rows.map((row) => (
-									<TableRow key={row.id}>
-										{row.getVisibleCells().map((cell) => (
-											<TableCell key={cell.id}>
-												{flexRender(
-													cell.column.columnDef.cell,
-													cell.getContext(),
-												)}
-											</TableCell>
-										))}
-									</TableRow>
-								))
-							) : (
-								<TableRow>
-									<TableCell
-										colSpan={columns.length}
-										className="h-24 text-center"
-									>
-										No blocked periods found.
-									</TableCell>
-								</TableRow>
-							)}
-						</TableBody>
-					</Table>
+					<>
+						<DataTableView
+							table={table}
+							emptyMessage="No blocked periods found."
+						/>
+						<PaginationControls table={table} noun="blocked periods" />
+					</>
 				)}
 			</CardContent>
 

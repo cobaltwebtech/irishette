@@ -1,29 +1,36 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import superjson from 'superjson';
-import type { auth } from '@/lib/auth';
+import { ZodError, z } from 'zod';
+import type { TRPCContext } from './context';
 
-// Define the session type from Better Auth
-type Session = Awaited<
-	ReturnType<Awaited<ReturnType<typeof auth>>['api']['getSession']>
->;
-
-export type TRPCContext = {
-	db: D1Database;
-	env: {
-		STRIPE_SECRET_KEY: string;
-		STRIPE_PUBLISHABLE_KEY: string;
-		STRIPE_TRPC_WEBHOOK_SECRET: string;
-		BETTER_AUTH_URL: string;
-		RESEND_API_KEY: string;
-	};
-	// Session can be null for unauthenticated requests
-	session: Session | null;
-	// Request headers for any additional auth needs
-	headers: Headers;
-};
+/**
+ * Reads a structured field from a TRPCError cause. tRPC copies the properties
+ * of a plain-object `cause` onto the error it wraps it in, so
+ * `throw new TRPCError({ code: 'CONFLICT', cause: { conflict } })` arrives here
+ * as `error.cause.conflict`.
+ */
+function causeField(cause: unknown, key: 'conflict' | 'conflicts'): unknown {
+	if (cause && typeof cause === 'object' && key in cause) {
+		return (cause as Record<string, unknown>)[key] ?? null;
+	}
+	return null;
+}
 
 const t = initTRPC.context<TRPCContext>().create({
 	transformer: superjson,
+	errorFormatter({ shape, error }) {
+		return {
+			...shape,
+			data: {
+				...shape.data,
+				// Field-level input errors for forms: { formErrors, fieldErrors }.
+				zodError:
+					error.cause instanceof ZodError ? z.flattenError(error.cause) : null,
+				conflict: causeField(error.cause, 'conflict'),
+				conflicts: causeField(error.cause, 'conflicts'),
+			},
+		};
+	},
 });
 
 export const createTRPCRouter = t.router;
@@ -49,7 +56,7 @@ export const publicProcedure = t.procedure;
  */
 export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
 	// Check if session exists and has a user
-	if (!ctx.session?.user) {
+	if (!ctx.session || !ctx.user) {
 		throw new TRPCError({
 			code: 'UNAUTHORIZED',
 			message: 'You must be logged in to access this resource',
@@ -62,7 +69,7 @@ export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
 			...ctx,
 			// Now TypeScript knows session and user are non-nullable
 			session: ctx.session,
-			user: ctx.session.user,
+			user: ctx.user,
 		},
 	});
 });

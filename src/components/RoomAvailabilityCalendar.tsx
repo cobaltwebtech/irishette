@@ -1,10 +1,10 @@
 import { Icon } from '@iconify/react';
-import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import { trpc, trpcClient } from '@/integrations/tanstack-query/root-provider';
+import { useTRPC } from '@/integrations/trpc/react';
 
 interface Room {
 	id: string;
@@ -41,6 +41,62 @@ interface RoomAvailabilityCalendarProps {
 	maxNights?: number;
 }
 
+// Helper function to create local dates
+function createDate(dateString: string) {
+	const [year, month, day] = dateString.split('-').map(Number);
+	return new Date(year, month - 1, day); // month is 0-indexed in JavaScript Date
+}
+
+// Derive the calendar modifiers (available / checkout-only / unavailable)
+function getCalendarDates(calendar: CalendarDay[] | undefined) {
+	if (!calendar) {
+		return {
+			availableDates: [],
+			checkoutOnlyDates: [],
+			unavailableDates: [],
+		};
+	}
+
+	// Find dates that are blocked but can be used as checkout dates
+	// These are dates where a booking starts (check-in day for someone else)
+	const checkoutDates = new Set<string>();
+
+	// Look through all blocked dates to find check-in dates
+	for (const day of calendar) {
+		// If this date is blocked and has booking info
+		if ((!day.available || day.blocked) && day.booking) {
+			// The check-in date of this booking can be used as a checkout date
+			// by someone who books the night before
+			checkoutDates.add(day.booking.checkInDate);
+		}
+	}
+
+	return {
+		// Available dates (excluding checkout-only dates)
+		availableDates: calendar
+			.filter((day) => day.available && !day.blocked)
+			.map((day) => createDate(day.date)),
+
+		// Checkout-only dates: dates that are blocked but can be used as checkout dates
+		checkoutOnlyDates: Array.from(checkoutDates).map((dateStr) =>
+			createDate(dateStr),
+		),
+
+		// All unavailable dates (excluding checkout-only dates for visual distinction)
+		unavailableDates: calendar
+			.filter((day) => {
+				if (!day.available || day.blocked) {
+					// Exclude checkout-only dates from unavailable visual styling
+					const isCheckoutOnly =
+						day.booking && day.date === day.booking.checkInDate;
+					return !isCheckoutOnly;
+				}
+				return false;
+			})
+			.map((day) => createDate(day.date)),
+	};
+}
+
 export default function RoomAvailabilityCalendar({
 	roomSlug,
 	onDateRangeSelect,
@@ -49,28 +105,26 @@ export default function RoomAvailabilityCalendar({
 	minNights = 1,
 	maxNights = 30,
 }: RoomAvailabilityCalendarProps) {
+	const trpc = useTRPC();
+	const queryClient = useQueryClient();
 	const [dateRange, setDateRange] = useState<DateRange | undefined>(
 		selectedDateRange,
 	);
 
 	// Calculate date range for the API call (10 months from today)
-	const dateParams = useMemo(() => {
-		const today = new Date();
-		const startDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-		const endDate = new Date();
-		endDate.setMonth(today.getMonth() + 10);
-		const endDateStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
-
-		return {
-			roomSlug,
-			startDate,
-			endDate: endDateStr,
-		};
-	}, [roomSlug]);
+	const today = new Date();
+	const startDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+	const endDate = new Date();
+	endDate.setMonth(today.getMonth() + 10);
+	const endDateStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
 
 	// Fetch availability data using tRPC
 	const availabilityQuery = useQuery(
-		trpc.availability.getBySlug.queryOptions(dateParams),
+		trpc.availability.getBySlug.queryOptions({
+			roomSlug,
+			startDate,
+			endDate: endDateStr,
+		}),
 	);
 
 	// Calculate total price and nights for the selected range
@@ -95,12 +149,14 @@ export default function RoomAvailabilityCalendar({
 			const checkOutDate = `${range.to.getFullYear()}-${String(range.to.getMonth() + 1).padStart(2, '0')}-${String(range.to.getDate()).padStart(2, '0')}`;
 
 			// Use tRPC to calculate pricing with dynamic rules
-			const pricing = await trpcClient.rooms.calculatePricing.query({
-				roomId: room.id,
-				checkInDate,
-				checkOutDate,
-				guestCount: 2, // Default guest count
-			});
+			const pricing = await queryClient.fetchQuery(
+				trpc.rooms.calculatePricing.queryOptions({
+					roomId: room.id,
+					checkInDate,
+					checkOutDate,
+					guestCount: 2, // Default guest count
+				}),
+			);
 
 			// For the room selection page, we return the baseAmount which includes
 			// the base price plus any applied pricing rules
@@ -173,69 +229,7 @@ export default function RoomAvailabilityCalendar({
 
 	// Calculate derived data from query results
 	const { availableDates, checkoutOnlyDates, unavailableDates } =
-		useMemo(() => {
-			if (!availabilityQuery.data?.calendar) {
-				return {
-					availableDates: [],
-					checkoutOnlyDates: [],
-					unavailableDates: [],
-				};
-			}
-
-			const calendar = availabilityQuery.data.calendar;
-
-			// Helper function to create local dates
-			const createDate = (dateString: string) => {
-				const [year, month, day] = dateString.split('-').map(Number);
-				return new Date(year, month - 1, day); // month is 0-indexed in JavaScript Date
-			};
-
-			// Find dates that are blocked but can be used as checkout dates
-			// These are dates where a booking starts (check-in day for someone else)
-			const findCheckoutOnlyDates = () => {
-				const checkoutDates = new Set<string>();
-
-				// Look through all blocked dates to find check-in dates
-				for (let i = 0; i < calendar.length; i++) {
-					const day = calendar[i];
-
-					// If this date is blocked and has booking info
-					if ((!day.available || day.blocked) && day.booking) {
-						// The check-in date of this booking can be used as a checkout date
-						// by someone who books the night before
-						const checkInDate = day.booking.checkInDate;
-						checkoutDates.add(checkInDate);
-					}
-				}
-
-				return Array.from(checkoutDates).map((dateStr) => createDate(dateStr));
-			};
-
-			const checkoutOnly = findCheckoutOnlyDates();
-
-			return {
-				// Available dates (excluding checkout-only dates)
-				availableDates: calendar
-					.filter((day: CalendarDay) => day.available && !day.blocked)
-					.map((day: CalendarDay) => createDate(day.date)),
-
-				// Checkout-only dates: dates that are blocked but can be used as checkout dates
-				checkoutOnlyDates: checkoutOnly,
-
-				// All unavailable dates (excluding checkout-only dates for visual distinction)
-				unavailableDates: calendar
-					.filter((day: CalendarDay) => {
-						if (!day.available || day.blocked) {
-							// Exclude checkout-only dates from unavailable visual styling
-							const isCheckoutOnly =
-								day.booking && day.date === day.booking.checkInDate;
-							return !isCheckoutOnly;
-						}
-						return false;
-					})
-					.map((day: CalendarDay) => createDate(day.date)),
-			};
-		}, [availabilityQuery.data?.calendar]);
+		getCalendarDates(availabilityQuery.data?.calendar);
 
 	if (availabilityQuery.isPending) {
 		return (

@@ -1,104 +1,81 @@
 import { Icon } from '@iconify/react';
-import { useQuery } from '@tanstack/react-query';
+import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { trpc } from '@/integrations/tanstack-query/root-provider';
+import { orNotFound } from '@/integrations/trpc/errors';
+import { useTRPC } from '@/integrations/trpc/react';
 import { bookingActions } from '@/stores';
-import { requireAuth } from '@/utils/auth-check';
 import { parseISODateString } from '@/utils/booking-utils';
 
-export const Route = createFileRoute('/booking/confirmation/$bookingId')({
-	head: () => ({
-		meta: [
-			{
-				title: 'Booking Confirmed | Irishette.com',
-			},
-		],
-	}),
-	beforeLoad: async ({ location }) => {
-		// Check the user is authenticated before rendering the page
-		const session = await requireAuth(location);
-
-		// Return session data to be available in component during SSR
-		return { session };
+export const Route = createFileRoute('/_authed/booking/confirmation/$publicId')(
+	{
+		head: () => ({
+			meta: [
+				{
+					title: 'Booking Confirmed | Irishette.com',
+				},
+			],
+		}),
+		// Auth: the _authed layout. Data: preloaded into the per-request
+		// QueryClient and read with useSuspenseQuery below.
+		loader: ({ context, params }) =>
+			orNotFound(
+				context.queryClient.ensureQueryData(
+					context.trpc.bookings.getBooking.queryOptions({
+						publicId: params.publicId,
+					}),
+				),
+			),
+		notFoundComponent: BookingNotFound,
+		component: BookingConfirmation,
 	},
-	component: BookingConfirmation,
-});
+);
 
-function BookingConfirmation() {
-	const { bookingId } = Route.useParams();
+function BookingNotFound() {
 	const navigate = useNavigate();
 
-	// Fetch fresh booking data from database
-	const {
-		data: bookingData,
-		isLoading,
-		error,
-	} = useQuery(
-		trpc.bookings.getBooking.queryOptions(
-			{ bookingId },
-			{
-				staleTime: 0, // Always fetch fresh data
-				refetchOnWindowFocus: false,
-			},
-		),
+	return (
+		<div className="container mx-auto max-w-4xl px-4 py-12">
+			<Card>
+				<CardContent className="py-12">
+					<div className="text-center space-y-4">
+						<Icon
+							icon="tabler:alert-circle"
+							className="size-8 text-destructive mx-auto"
+						/>
+						<h3 className="text-2xl text-destructive font-bold">
+							Booking Not Found
+						</h3>
+						<p className="text-sm text-muted-foreground">
+							The booking you're looking for doesn't exist or you don't have
+							permission to view it.
+						</p>
+						<Button onClick={() => navigate({ to: '/account' })} size="lg">
+							<Icon icon="tabler:home" className="size-6" />
+							Go to Account
+						</Button>
+					</div>
+				</CardContent>
+			</Card>
+		</div>
+	);
+}
+
+function BookingConfirmation() {
+	const { publicId } = Route.useParams();
+	const trpc = useTRPC();
+
+	const { data: bookingData } = useSuspenseQuery(
+		trpc.bookings.getBooking.queryOptions({ publicId }),
 	);
 
 	// Clear the booking store when component mounts
 	useEffect(() => {
 		bookingActions.reset();
 	}, []);
-
-	// Handle loading state
-	if (isLoading) {
-		return (
-			<div className="container mx-auto max-w-4xl px-4 py-12">
-				<Card>
-					<CardContent className="py-12">
-						<div className="text-center space-y-4">
-							<Icon
-								icon="tabler:loader-2"
-								className="size-8 animate-spin mx-auto text-primary"
-							/>
-							<p className="text-muted-foreground">Loading confirmation...</p>
-						</div>
-					</CardContent>
-				</Card>
-			</div>
-		);
-	}
-
-	// Handle error state
-	if (error || !bookingData?.booking) {
-		return (
-			<div className="container mx-auto max-w-4xl px-4 py-12">
-				<Card>
-					<CardContent className="py-12">
-						<div className="text-center space-y-4">
-							<Icon
-								icon="tabler:alert-circle"
-								className="size-8 text-destructive mx-auto"
-							/>
-							<h3 className="text-2xl text-destructive font-bold">
-								Booking Not Found
-							</h3>
-							<p className="text-sm text-muted-foreground">
-								The booking you're looking for doesn't exist or you don't have
-								permission to view it.
-							</p>
-							<Button onClick={() => navigate({ to: '/account' })} size="lg">
-								<Icon icon="tabler:home" className="size-6" />
-								Go to Account
-							</Button>
-						</div>
-					</CardContent>
-				</Card>
-			</div>
-		);
-	}
 
 	const { booking, room: roomData } = bookingData;
 

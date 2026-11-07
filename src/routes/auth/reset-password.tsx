@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password';
 import { authClient } from '@/lib/auth-client';
 import { passwordSchema } from '@/lib/auth-validation';
-import { requireNoSession } from '@/utils/auth-check';
+import { redirectIfSignedIn } from '@/lib/redirect';
 
 export const Route = createFileRoute('/auth/reset-password')({
 	head: () => ({
@@ -32,10 +32,9 @@ export const Route = createFileRoute('/auth/reset-password')({
 			error: (search.error as string) || undefined,
 		};
 	},
-	beforeLoad: async () => {
-		// Prevent logged-in users from accessing this route
-		// They should use account settings to change password
-		await requireNoSession('/account');
+	// Signed-in users change their password from account settings instead.
+	beforeLoad: ({ context }) => {
+		redirectIfSignedIn(context.session, undefined);
 	},
 	component: ResetPasswordPage,
 });

@@ -10,13 +10,12 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as CancellationRefundPolicyRouteImport } from './routes/cancellation-refund-policy'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as TermsOfServiceRouteImport } from './routes/terms-of-service'
-import { Route as AccountIndexRouteImport } from './routes/account/index'
-import { Route as AccountPastBookingsRouteImport } from './routes/account/past-bookings'
-import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AuthedAdminRouteImport } from './routes/_authed/_admin'
 import { Route as AuthForgotPasswordRouteImport } from './routes/auth/forgot-password'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthLogoutRouteImport } from './routes/auth/logout'
@@ -25,23 +24,30 @@ import { Route as AuthSignupRouteImport } from './routes/auth/signup'
 import { Route as BookingIndexRouteImport } from './routes/booking/index'
 import { Route as RoomsRoseRoomRouteImport } from './routes/rooms/rose-room'
 import { Route as RoomsTexasRoomRouteImport } from './routes/rooms/texas-room'
-import { Route as AccountBookingBookingIdRouteImport } from './routes/account/booking.$bookingId'
-import { Route as AdminBookingsBookingIdRouteImport } from './routes/admin/bookings/$bookingId'
-import { Route as AdminBookingsCurrentBookingsRouteImport } from './routes/admin/bookings/current-bookings'
-import { Route as AdminBookingsPastBookingsRouteImport } from './routes/admin/bookings/past-bookings'
-import { Route as AdminGuestIndexRouteImport } from './routes/admin/guest/index'
-import { Route as AdminGuestUserIdRouteImport } from './routes/admin/guest/$userId'
-import { Route as AdminPropertyManagementIndexRouteImport } from './routes/admin/property-management/index'
-import { Route as AdminPropertyManagementRoomIdRouteImport } from './routes/admin/property-management/$roomId'
+import { Route as AuthedAccountIndexRouteImport } from './routes/_authed/account/index'
+import { Route as AuthedAccountPastBookingsRouteImport } from './routes/_authed/account/past-bookings'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth.$'
 import { Route as ApiIcalSplatRouteImport } from './routes/api/ical.$'
 import { Route as ApiStripeSplatRouteImport } from './routes/api/stripe.$'
 import { Route as ApiTrpcSplatRouteImport } from './routes/api/trpc.$'
-import { Route as BookingConfirmationBookingIdRouteImport } from './routes/booking/confirmation.$bookingId'
+import { Route as AuthedAdminAdminIndexRouteImport } from './routes/_authed/_admin/admin/index'
+import { Route as AuthedAccountBookingPublicIdRouteImport } from './routes/_authed/account/booking.$publicId'
+import { Route as AuthedBookingConfirmationPublicIdRouteImport } from './routes/_authed/booking/confirmation.$publicId'
+import { Route as AuthedAdminAdminBookingsPublicIdRouteImport } from './routes/_authed/_admin/admin/bookings/$publicId'
+import { Route as AuthedAdminAdminBookingsCurrentBookingsRouteImport } from './routes/_authed/_admin/admin/bookings/current-bookings'
+import { Route as AuthedAdminAdminBookingsPastBookingsRouteImport } from './routes/_authed/_admin/admin/bookings/past-bookings'
+import { Route as AuthedAdminAdminGuestIndexRouteImport } from './routes/_authed/_admin/admin/guest/index'
+import { Route as AuthedAdminAdminGuestPublicIdRouteImport } from './routes/_authed/_admin/admin/guest/$publicId'
+import { Route as AuthedAdminAdminPropertyManagementIndexRouteImport } from './routes/_authed/_admin/admin/property-management/index'
+import { Route as AuthedAdminAdminPropertyManagementPublicIdRouteImport } from './routes/_authed/_admin/admin/property-management/$publicId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthedRoute = AuthedRouteImport.update({
+  id: '/_authed',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CancellationRefundPolicyRoute =
@@ -65,20 +71,9 @@ const TermsOfServiceRoute = TermsOfServiceRouteImport.update({
   path: '/terms-of-service',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AccountIndexRoute = AccountIndexRouteImport.update({
-  id: '/account/',
-  path: '/account/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AccountPastBookingsRoute = AccountPastBookingsRouteImport.update({
-  id: '/account/past-bookings',
-  path: '/account/past-bookings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminIndexRoute = AdminIndexRouteImport.update({
-  id: '/admin/',
-  path: '/admin/',
-  getParentRoute: () => rootRouteImport,
+const AuthedAdminRoute = AuthedAdminRouteImport.update({
+  id: '/_admin',
+  getParentRoute: () => AuthedRoute,
 } as any)
 const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
   id: '/auth/forgot-password',
@@ -120,49 +115,16 @@ const RoomsTexasRoomRoute = RoomsTexasRoomRouteImport.update({
   path: '/rooms/texas-room',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AccountBookingBookingIdRoute = AccountBookingBookingIdRouteImport.update({
-  id: '/account/booking/$bookingId',
-  path: '/account/booking/$bookingId',
-  getParentRoute: () => rootRouteImport,
+const AuthedAccountIndexRoute = AuthedAccountIndexRouteImport.update({
+  id: '/account/',
+  path: '/account/',
+  getParentRoute: () => AuthedRoute,
 } as any)
-const AdminBookingsBookingIdRoute = AdminBookingsBookingIdRouteImport.update({
-  id: '/admin/bookings/$bookingId',
-  path: '/admin/bookings/$bookingId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminBookingsCurrentBookingsRoute =
-  AdminBookingsCurrentBookingsRouteImport.update({
-    id: '/admin/bookings/current-bookings',
-    path: '/admin/bookings/current-bookings',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const AdminBookingsPastBookingsRoute =
-  AdminBookingsPastBookingsRouteImport.update({
-    id: '/admin/bookings/past-bookings',
-    path: '/admin/bookings/past-bookings',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const AdminGuestIndexRoute = AdminGuestIndexRouteImport.update({
-  id: '/admin/guest/',
-  path: '/admin/guest/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminGuestUserIdRoute = AdminGuestUserIdRouteImport.update({
-  id: '/admin/guest/$userId',
-  path: '/admin/guest/$userId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminPropertyManagementIndexRoute =
-  AdminPropertyManagementIndexRouteImport.update({
-    id: '/admin/property-management/',
-    path: '/admin/property-management/',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const AdminPropertyManagementRoomIdRoute =
-  AdminPropertyManagementRoomIdRouteImport.update({
-    id: '/admin/property-management/$roomId',
-    path: '/admin/property-management/$roomId',
-    getParentRoute: () => rootRouteImport,
+const AuthedAccountPastBookingsRoute =
+  AuthedAccountPastBookingsRouteImport.update({
+    id: '/account/past-bookings',
+    path: '/account/past-bookings',
+    getParentRoute: () => AuthedRoute,
   } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
@@ -184,11 +146,64 @@ const ApiTrpcSplatRoute = ApiTrpcSplatRouteImport.update({
   path: '/api/trpc/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BookingConfirmationBookingIdRoute =
-  BookingConfirmationBookingIdRouteImport.update({
-    id: '/booking/confirmation/$bookingId',
-    path: '/booking/confirmation/$bookingId',
-    getParentRoute: () => rootRouteImport,
+const AuthedAdminAdminIndexRoute = AuthedAdminAdminIndexRouteImport.update({
+  id: '/admin/',
+  path: '/admin/',
+  getParentRoute: () => AuthedAdminRoute,
+} as any)
+const AuthedAccountBookingPublicIdRoute =
+  AuthedAccountBookingPublicIdRouteImport.update({
+    id: '/account/booking/$publicId',
+    path: '/account/booking/$publicId',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedBookingConfirmationPublicIdRoute =
+  AuthedBookingConfirmationPublicIdRouteImport.update({
+    id: '/booking/confirmation/$publicId',
+    path: '/booking/confirmation/$publicId',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedAdminAdminBookingsPublicIdRoute =
+  AuthedAdminAdminBookingsPublicIdRouteImport.update({
+    id: '/admin/bookings/$publicId',
+    path: '/admin/bookings/$publicId',
+    getParentRoute: () => AuthedAdminRoute,
+  } as any)
+const AuthedAdminAdminBookingsCurrentBookingsRoute =
+  AuthedAdminAdminBookingsCurrentBookingsRouteImport.update({
+    id: '/admin/bookings/current-bookings',
+    path: '/admin/bookings/current-bookings',
+    getParentRoute: () => AuthedAdminRoute,
+  } as any)
+const AuthedAdminAdminBookingsPastBookingsRoute =
+  AuthedAdminAdminBookingsPastBookingsRouteImport.update({
+    id: '/admin/bookings/past-bookings',
+    path: '/admin/bookings/past-bookings',
+    getParentRoute: () => AuthedAdminRoute,
+  } as any)
+const AuthedAdminAdminGuestIndexRoute =
+  AuthedAdminAdminGuestIndexRouteImport.update({
+    id: '/admin/guest/',
+    path: '/admin/guest/',
+    getParentRoute: () => AuthedAdminRoute,
+  } as any)
+const AuthedAdminAdminGuestPublicIdRoute =
+  AuthedAdminAdminGuestPublicIdRouteImport.update({
+    id: '/admin/guest/$publicId',
+    path: '/admin/guest/$publicId',
+    getParentRoute: () => AuthedAdminRoute,
+  } as any)
+const AuthedAdminAdminPropertyManagementIndexRoute =
+  AuthedAdminAdminPropertyManagementIndexRouteImport.update({
+    id: '/admin/property-management/',
+    path: '/admin/property-management/',
+    getParentRoute: () => AuthedAdminRoute,
+  } as any)
+const AuthedAdminAdminPropertyManagementPublicIdRoute =
+  AuthedAdminAdminPropertyManagementPublicIdRouteImport.update({
+    id: '/admin/property-management/$publicId',
+    path: '/admin/property-management/$publicId',
+    getParentRoute: () => AuthedAdminRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -197,7 +212,6 @@ export interface FileRoutesByFullPath {
   '/contact': typeof ContactRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/terms-of-service': typeof TermsOfServiceRoute
-  '/account/past-bookings': typeof AccountPastBookingsRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/logout': typeof AuthLogoutRoute
@@ -205,22 +219,23 @@ export interface FileRoutesByFullPath {
   '/auth/signup': typeof AuthSignupRoute
   '/rooms/rose-room': typeof RoomsRoseRoomRoute
   '/rooms/texas-room': typeof RoomsTexasRoomRoute
-  '/account/': typeof AccountIndexRoute
-  '/admin/': typeof AdminIndexRoute
   '/booking/': typeof BookingIndexRoute
-  '/account/booking/$bookingId': typeof AccountBookingBookingIdRoute
-  '/admin/bookings/$bookingId': typeof AdminBookingsBookingIdRoute
-  '/admin/bookings/current-bookings': typeof AdminBookingsCurrentBookingsRoute
-  '/admin/bookings/past-bookings': typeof AdminBookingsPastBookingsRoute
-  '/admin/guest/$userId': typeof AdminGuestUserIdRoute
-  '/admin/property-management/$roomId': typeof AdminPropertyManagementRoomIdRoute
+  '/account/past-bookings': typeof AuthedAccountPastBookingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/ical/$': typeof ApiIcalSplatRoute
   '/api/stripe/$': typeof ApiStripeSplatRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
-  '/booking/confirmation/$bookingId': typeof BookingConfirmationBookingIdRoute
-  '/admin/guest/': typeof AdminGuestIndexRoute
-  '/admin/property-management/': typeof AdminPropertyManagementIndexRoute
+  '/account/': typeof AuthedAccountIndexRoute
+  '/account/booking/$publicId': typeof AuthedAccountBookingPublicIdRoute
+  '/booking/confirmation/$publicId': typeof AuthedBookingConfirmationPublicIdRoute
+  '/admin/': typeof AuthedAdminAdminIndexRoute
+  '/admin/bookings/$publicId': typeof AuthedAdminAdminBookingsPublicIdRoute
+  '/admin/bookings/current-bookings': typeof AuthedAdminAdminBookingsCurrentBookingsRoute
+  '/admin/bookings/past-bookings': typeof AuthedAdminAdminBookingsPastBookingsRoute
+  '/admin/guest/$publicId': typeof AuthedAdminAdminGuestPublicIdRoute
+  '/admin/property-management/$publicId': typeof AuthedAdminAdminPropertyManagementPublicIdRoute
+  '/admin/guest/': typeof AuthedAdminAdminGuestIndexRoute
+  '/admin/property-management/': typeof AuthedAdminAdminPropertyManagementIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -228,7 +243,6 @@ export interface FileRoutesByTo {
   '/contact': typeof ContactRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/terms-of-service': typeof TermsOfServiceRoute
-  '/account/past-bookings': typeof AccountPastBookingsRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/logout': typeof AuthLogoutRoute
@@ -236,31 +250,33 @@ export interface FileRoutesByTo {
   '/auth/signup': typeof AuthSignupRoute
   '/rooms/rose-room': typeof RoomsRoseRoomRoute
   '/rooms/texas-room': typeof RoomsTexasRoomRoute
-  '/account': typeof AccountIndexRoute
-  '/admin': typeof AdminIndexRoute
   '/booking': typeof BookingIndexRoute
-  '/account/booking/$bookingId': typeof AccountBookingBookingIdRoute
-  '/admin/bookings/$bookingId': typeof AdminBookingsBookingIdRoute
-  '/admin/bookings/current-bookings': typeof AdminBookingsCurrentBookingsRoute
-  '/admin/bookings/past-bookings': typeof AdminBookingsPastBookingsRoute
-  '/admin/guest/$userId': typeof AdminGuestUserIdRoute
-  '/admin/property-management/$roomId': typeof AdminPropertyManagementRoomIdRoute
+  '/account/past-bookings': typeof AuthedAccountPastBookingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/ical/$': typeof ApiIcalSplatRoute
   '/api/stripe/$': typeof ApiStripeSplatRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
-  '/booking/confirmation/$bookingId': typeof BookingConfirmationBookingIdRoute
-  '/admin/guest': typeof AdminGuestIndexRoute
-  '/admin/property-management': typeof AdminPropertyManagementIndexRoute
+  '/account': typeof AuthedAccountIndexRoute
+  '/account/booking/$publicId': typeof AuthedAccountBookingPublicIdRoute
+  '/booking/confirmation/$publicId': typeof AuthedBookingConfirmationPublicIdRoute
+  '/admin': typeof AuthedAdminAdminIndexRoute
+  '/admin/bookings/$publicId': typeof AuthedAdminAdminBookingsPublicIdRoute
+  '/admin/bookings/current-bookings': typeof AuthedAdminAdminBookingsCurrentBookingsRoute
+  '/admin/bookings/past-bookings': typeof AuthedAdminAdminBookingsPastBookingsRoute
+  '/admin/guest/$publicId': typeof AuthedAdminAdminGuestPublicIdRoute
+  '/admin/property-management/$publicId': typeof AuthedAdminAdminPropertyManagementPublicIdRoute
+  '/admin/guest': typeof AuthedAdminAdminGuestIndexRoute
+  '/admin/property-management': typeof AuthedAdminAdminPropertyManagementIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authed': typeof AuthedRouteWithChildren
   '/cancellation-refund-policy': typeof CancellationRefundPolicyRoute
   '/contact': typeof ContactRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/terms-of-service': typeof TermsOfServiceRoute
-  '/account/past-bookings': typeof AccountPastBookingsRoute
+  '/_authed/_admin': typeof AuthedAdminRouteWithChildren
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/logout': typeof AuthLogoutRoute
@@ -268,22 +284,23 @@ export interface FileRoutesById {
   '/auth/signup': typeof AuthSignupRoute
   '/rooms/rose-room': typeof RoomsRoseRoomRoute
   '/rooms/texas-room': typeof RoomsTexasRoomRoute
-  '/account/': typeof AccountIndexRoute
-  '/admin/': typeof AdminIndexRoute
   '/booking/': typeof BookingIndexRoute
-  '/account/booking/$bookingId': typeof AccountBookingBookingIdRoute
-  '/admin/bookings/$bookingId': typeof AdminBookingsBookingIdRoute
-  '/admin/bookings/current-bookings': typeof AdminBookingsCurrentBookingsRoute
-  '/admin/bookings/past-bookings': typeof AdminBookingsPastBookingsRoute
-  '/admin/guest/$userId': typeof AdminGuestUserIdRoute
-  '/admin/property-management/$roomId': typeof AdminPropertyManagementRoomIdRoute
+  '/_authed/account/past-bookings': typeof AuthedAccountPastBookingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/ical/$': typeof ApiIcalSplatRoute
   '/api/stripe/$': typeof ApiStripeSplatRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
-  '/booking/confirmation/$bookingId': typeof BookingConfirmationBookingIdRoute
-  '/admin/guest/': typeof AdminGuestIndexRoute
-  '/admin/property-management/': typeof AdminPropertyManagementIndexRoute
+  '/_authed/account/': typeof AuthedAccountIndexRoute
+  '/_authed/account/booking/$publicId': typeof AuthedAccountBookingPublicIdRoute
+  '/_authed/booking/confirmation/$publicId': typeof AuthedBookingConfirmationPublicIdRoute
+  '/_authed/_admin/admin/': typeof AuthedAdminAdminIndexRoute
+  '/_authed/_admin/admin/bookings/$publicId': typeof AuthedAdminAdminBookingsPublicIdRoute
+  '/_authed/_admin/admin/bookings/current-bookings': typeof AuthedAdminAdminBookingsCurrentBookingsRoute
+  '/_authed/_admin/admin/bookings/past-bookings': typeof AuthedAdminAdminBookingsPastBookingsRoute
+  '/_authed/_admin/admin/guest/$publicId': typeof AuthedAdminAdminGuestPublicIdRoute
+  '/_authed/_admin/admin/property-management/$publicId': typeof AuthedAdminAdminPropertyManagementPublicIdRoute
+  '/_authed/_admin/admin/guest/': typeof AuthedAdminAdminGuestIndexRoute
+  '/_authed/_admin/admin/property-management/': typeof AuthedAdminAdminPropertyManagementIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -293,7 +310,6 @@ export interface FileRouteTypes {
     | '/contact'
     | '/privacy-policy'
     | '/terms-of-service'
-    | '/account/past-bookings'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/logout'
@@ -301,20 +317,21 @@ export interface FileRouteTypes {
     | '/auth/signup'
     | '/rooms/rose-room'
     | '/rooms/texas-room'
-    | '/account/'
-    | '/admin/'
     | '/booking/'
-    | '/account/booking/$bookingId'
-    | '/admin/bookings/$bookingId'
-    | '/admin/bookings/current-bookings'
-    | '/admin/bookings/past-bookings'
-    | '/admin/guest/$userId'
-    | '/admin/property-management/$roomId'
+    | '/account/past-bookings'
     | '/api/auth/$'
     | '/api/ical/$'
     | '/api/stripe/$'
     | '/api/trpc/$'
-    | '/booking/confirmation/$bookingId'
+    | '/account/'
+    | '/account/booking/$publicId'
+    | '/booking/confirmation/$publicId'
+    | '/admin/'
+    | '/admin/bookings/$publicId'
+    | '/admin/bookings/current-bookings'
+    | '/admin/bookings/past-bookings'
+    | '/admin/guest/$publicId'
+    | '/admin/property-management/$publicId'
     | '/admin/guest/'
     | '/admin/property-management/'
   fileRoutesByTo: FileRoutesByTo
@@ -324,7 +341,6 @@ export interface FileRouteTypes {
     | '/contact'
     | '/privacy-policy'
     | '/terms-of-service'
-    | '/account/past-bookings'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/logout'
@@ -332,30 +348,32 @@ export interface FileRouteTypes {
     | '/auth/signup'
     | '/rooms/rose-room'
     | '/rooms/texas-room'
-    | '/account'
-    | '/admin'
     | '/booking'
-    | '/account/booking/$bookingId'
-    | '/admin/bookings/$bookingId'
-    | '/admin/bookings/current-bookings'
-    | '/admin/bookings/past-bookings'
-    | '/admin/guest/$userId'
-    | '/admin/property-management/$roomId'
+    | '/account/past-bookings'
     | '/api/auth/$'
     | '/api/ical/$'
     | '/api/stripe/$'
     | '/api/trpc/$'
-    | '/booking/confirmation/$bookingId'
+    | '/account'
+    | '/account/booking/$publicId'
+    | '/booking/confirmation/$publicId'
+    | '/admin'
+    | '/admin/bookings/$publicId'
+    | '/admin/bookings/current-bookings'
+    | '/admin/bookings/past-bookings'
+    | '/admin/guest/$publicId'
+    | '/admin/property-management/$publicId'
     | '/admin/guest'
     | '/admin/property-management'
   id:
     | '__root__'
     | '/'
+    | '/_authed'
     | '/cancellation-refund-policy'
     | '/contact'
     | '/privacy-policy'
     | '/terms-of-service'
-    | '/account/past-bookings'
+    | '/_authed/_admin'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/logout'
@@ -363,31 +381,32 @@ export interface FileRouteTypes {
     | '/auth/signup'
     | '/rooms/rose-room'
     | '/rooms/texas-room'
-    | '/account/'
-    | '/admin/'
     | '/booking/'
-    | '/account/booking/$bookingId'
-    | '/admin/bookings/$bookingId'
-    | '/admin/bookings/current-bookings'
-    | '/admin/bookings/past-bookings'
-    | '/admin/guest/$userId'
-    | '/admin/property-management/$roomId'
+    | '/_authed/account/past-bookings'
     | '/api/auth/$'
     | '/api/ical/$'
     | '/api/stripe/$'
     | '/api/trpc/$'
-    | '/booking/confirmation/$bookingId'
-    | '/admin/guest/'
-    | '/admin/property-management/'
+    | '/_authed/account/'
+    | '/_authed/account/booking/$publicId'
+    | '/_authed/booking/confirmation/$publicId'
+    | '/_authed/_admin/admin/'
+    | '/_authed/_admin/admin/bookings/$publicId'
+    | '/_authed/_admin/admin/bookings/current-bookings'
+    | '/_authed/_admin/admin/bookings/past-bookings'
+    | '/_authed/_admin/admin/guest/$publicId'
+    | '/_authed/_admin/admin/property-management/$publicId'
+    | '/_authed/_admin/admin/guest/'
+    | '/_authed/_admin/admin/property-management/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthedRoute: typeof AuthedRouteWithChildren
   CancellationRefundPolicyRoute: typeof CancellationRefundPolicyRoute
   ContactRoute: typeof ContactRoute
   PrivacyPolicyRoute: typeof PrivacyPolicyRoute
   TermsOfServiceRoute: typeof TermsOfServiceRoute
-  AccountPastBookingsRoute: typeof AccountPastBookingsRoute
   AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthLogoutRoute: typeof AuthLogoutRoute
@@ -395,22 +414,11 @@ export interface RootRouteChildren {
   AuthSignupRoute: typeof AuthSignupRoute
   RoomsRoseRoomRoute: typeof RoomsRoseRoomRoute
   RoomsTexasRoomRoute: typeof RoomsTexasRoomRoute
-  AccountIndexRoute: typeof AccountIndexRoute
-  AdminIndexRoute: typeof AdminIndexRoute
   BookingIndexRoute: typeof BookingIndexRoute
-  AccountBookingBookingIdRoute: typeof AccountBookingBookingIdRoute
-  AdminBookingsBookingIdRoute: typeof AdminBookingsBookingIdRoute
-  AdminBookingsCurrentBookingsRoute: typeof AdminBookingsCurrentBookingsRoute
-  AdminBookingsPastBookingsRoute: typeof AdminBookingsPastBookingsRoute
-  AdminGuestUserIdRoute: typeof AdminGuestUserIdRoute
-  AdminPropertyManagementRoomIdRoute: typeof AdminPropertyManagementRoomIdRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiIcalSplatRoute: typeof ApiIcalSplatRoute
   ApiStripeSplatRoute: typeof ApiStripeSplatRoute
   ApiTrpcSplatRoute: typeof ApiTrpcSplatRoute
-  BookingConfirmationBookingIdRoute: typeof BookingConfirmationBookingIdRoute
-  AdminGuestIndexRoute: typeof AdminGuestIndexRoute
-  AdminPropertyManagementIndexRoute: typeof AdminPropertyManagementIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -420,6 +428,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authed': {
+      id: '/_authed'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cancellation-refund-policy': {
@@ -450,26 +465,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermsOfServiceRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/account/': {
-      id: '/account/'
-      path: '/account'
-      fullPath: '/account/'
-      preLoaderRoute: typeof AccountIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/account/past-bookings': {
-      id: '/account/past-bookings'
-      path: '/account/past-bookings'
-      fullPath: '/account/past-bookings'
-      preLoaderRoute: typeof AccountPastBookingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/': {
-      id: '/admin/'
-      path: '/admin'
-      fullPath: '/admin/'
-      preLoaderRoute: typeof AdminIndexRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authed/_admin': {
+      id: '/_authed/_admin'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthedAdminRouteImport
+      parentRoute: typeof AuthedRoute
     }
     '/auth/forgot-password': {
       id: '/auth/forgot-password'
@@ -527,61 +528,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RoomsTexasRoomRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/account/booking/$bookingId': {
-      id: '/account/booking/$bookingId'
-      path: '/account/booking/$bookingId'
-      fullPath: '/account/booking/$bookingId'
-      preLoaderRoute: typeof AccountBookingBookingIdRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authed/account/': {
+      id: '/_authed/account/'
+      path: '/account'
+      fullPath: '/account/'
+      preLoaderRoute: typeof AuthedAccountIndexRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/admin/bookings/$bookingId': {
-      id: '/admin/bookings/$bookingId'
-      path: '/admin/bookings/$bookingId'
-      fullPath: '/admin/bookings/$bookingId'
-      preLoaderRoute: typeof AdminBookingsBookingIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/bookings/current-bookings': {
-      id: '/admin/bookings/current-bookings'
-      path: '/admin/bookings/current-bookings'
-      fullPath: '/admin/bookings/current-bookings'
-      preLoaderRoute: typeof AdminBookingsCurrentBookingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/bookings/past-bookings': {
-      id: '/admin/bookings/past-bookings'
-      path: '/admin/bookings/past-bookings'
-      fullPath: '/admin/bookings/past-bookings'
-      preLoaderRoute: typeof AdminBookingsPastBookingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/guest/': {
-      id: '/admin/guest/'
-      path: '/admin/guest'
-      fullPath: '/admin/guest/'
-      preLoaderRoute: typeof AdminGuestIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/guest/$userId': {
-      id: '/admin/guest/$userId'
-      path: '/admin/guest/$userId'
-      fullPath: '/admin/guest/$userId'
-      preLoaderRoute: typeof AdminGuestUserIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/property-management/': {
-      id: '/admin/property-management/'
-      path: '/admin/property-management'
-      fullPath: '/admin/property-management/'
-      preLoaderRoute: typeof AdminPropertyManagementIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/property-management/$roomId': {
-      id: '/admin/property-management/$roomId'
-      path: '/admin/property-management/$roomId'
-      fullPath: '/admin/property-management/$roomId'
-      preLoaderRoute: typeof AdminPropertyManagementRoomIdRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authed/account/past-bookings': {
+      id: '/_authed/account/past-bookings'
+      path: '/account/past-bookings'
+      fullPath: '/account/past-bookings'
+      preLoaderRoute: typeof AuthedAccountPastBookingsRouteImport
+      parentRoute: typeof AuthedRoute
     }
     '/api/auth/$': {
       id: '/api/auth/$'
@@ -611,23 +570,136 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiTrpcSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/booking/confirmation/$bookingId': {
-      id: '/booking/confirmation/$bookingId'
-      path: '/booking/confirmation/$bookingId'
-      fullPath: '/booking/confirmation/$bookingId'
-      preLoaderRoute: typeof BookingConfirmationBookingIdRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authed/_admin/admin/': {
+      id: '/_authed/_admin/admin/'
+      path: '/admin'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AuthedAdminAdminIndexRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/account/booking/$publicId': {
+      id: '/_authed/account/booking/$publicId'
+      path: '/account/booking/$publicId'
+      fullPath: '/account/booking/$publicId'
+      preLoaderRoute: typeof AuthedAccountBookingPublicIdRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/booking/confirmation/$publicId': {
+      id: '/_authed/booking/confirmation/$publicId'
+      path: '/booking/confirmation/$publicId'
+      fullPath: '/booking/confirmation/$publicId'
+      preLoaderRoute: typeof AuthedBookingConfirmationPublicIdRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/_admin/admin/bookings/$publicId': {
+      id: '/_authed/_admin/admin/bookings/$publicId'
+      path: '/admin/bookings/$publicId'
+      fullPath: '/admin/bookings/$publicId'
+      preLoaderRoute: typeof AuthedAdminAdminBookingsPublicIdRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/_admin/admin/bookings/current-bookings': {
+      id: '/_authed/_admin/admin/bookings/current-bookings'
+      path: '/admin/bookings/current-bookings'
+      fullPath: '/admin/bookings/current-bookings'
+      preLoaderRoute: typeof AuthedAdminAdminBookingsCurrentBookingsRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/_admin/admin/bookings/past-bookings': {
+      id: '/_authed/_admin/admin/bookings/past-bookings'
+      path: '/admin/bookings/past-bookings'
+      fullPath: '/admin/bookings/past-bookings'
+      preLoaderRoute: typeof AuthedAdminAdminBookingsPastBookingsRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/_admin/admin/guest/': {
+      id: '/_authed/_admin/admin/guest/'
+      path: '/admin/guest'
+      fullPath: '/admin/guest/'
+      preLoaderRoute: typeof AuthedAdminAdminGuestIndexRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/_admin/admin/guest/$publicId': {
+      id: '/_authed/_admin/admin/guest/$publicId'
+      path: '/admin/guest/$publicId'
+      fullPath: '/admin/guest/$publicId'
+      preLoaderRoute: typeof AuthedAdminAdminGuestPublicIdRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/_admin/admin/property-management/': {
+      id: '/_authed/_admin/admin/property-management/'
+      path: '/admin/property-management'
+      fullPath: '/admin/property-management/'
+      preLoaderRoute: typeof AuthedAdminAdminPropertyManagementIndexRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/_admin/admin/property-management/$publicId': {
+      id: '/_authed/_admin/admin/property-management/$publicId'
+      path: '/admin/property-management/$publicId'
+      fullPath: '/admin/property-management/$publicId'
+      preLoaderRoute: typeof AuthedAdminAdminPropertyManagementPublicIdRouteImport
+      parentRoute: typeof AuthedAdminRoute
     }
   }
 }
 
+interface AuthedAdminRouteChildren {
+  AuthedAdminAdminIndexRoute: typeof AuthedAdminAdminIndexRoute
+  AuthedAdminAdminBookingsPublicIdRoute: typeof AuthedAdminAdminBookingsPublicIdRoute
+  AuthedAdminAdminBookingsCurrentBookingsRoute: typeof AuthedAdminAdminBookingsCurrentBookingsRoute
+  AuthedAdminAdminBookingsPastBookingsRoute: typeof AuthedAdminAdminBookingsPastBookingsRoute
+  AuthedAdminAdminGuestPublicIdRoute: typeof AuthedAdminAdminGuestPublicIdRoute
+  AuthedAdminAdminPropertyManagementPublicIdRoute: typeof AuthedAdminAdminPropertyManagementPublicIdRoute
+  AuthedAdminAdminGuestIndexRoute: typeof AuthedAdminAdminGuestIndexRoute
+  AuthedAdminAdminPropertyManagementIndexRoute: typeof AuthedAdminAdminPropertyManagementIndexRoute
+}
+
+const AuthedAdminRouteChildren: AuthedAdminRouteChildren = {
+  AuthedAdminAdminIndexRoute: AuthedAdminAdminIndexRoute,
+  AuthedAdminAdminBookingsPublicIdRoute: AuthedAdminAdminBookingsPublicIdRoute,
+  AuthedAdminAdminBookingsCurrentBookingsRoute:
+    AuthedAdminAdminBookingsCurrentBookingsRoute,
+  AuthedAdminAdminBookingsPastBookingsRoute:
+    AuthedAdminAdminBookingsPastBookingsRoute,
+  AuthedAdminAdminGuestPublicIdRoute: AuthedAdminAdminGuestPublicIdRoute,
+  AuthedAdminAdminPropertyManagementPublicIdRoute:
+    AuthedAdminAdminPropertyManagementPublicIdRoute,
+  AuthedAdminAdminGuestIndexRoute: AuthedAdminAdminGuestIndexRoute,
+  AuthedAdminAdminPropertyManagementIndexRoute:
+    AuthedAdminAdminPropertyManagementIndexRoute,
+}
+
+const AuthedAdminRouteWithChildren = AuthedAdminRoute._addFileChildren(
+  AuthedAdminRouteChildren,
+)
+
+interface AuthedRouteChildren {
+  AuthedAdminRoute: typeof AuthedAdminRouteWithChildren
+  AuthedAccountPastBookingsRoute: typeof AuthedAccountPastBookingsRoute
+  AuthedAccountIndexRoute: typeof AuthedAccountIndexRoute
+  AuthedAccountBookingPublicIdRoute: typeof AuthedAccountBookingPublicIdRoute
+  AuthedBookingConfirmationPublicIdRoute: typeof AuthedBookingConfirmationPublicIdRoute
+}
+
+const AuthedRouteChildren: AuthedRouteChildren = {
+  AuthedAdminRoute: AuthedAdminRouteWithChildren,
+  AuthedAccountPastBookingsRoute: AuthedAccountPastBookingsRoute,
+  AuthedAccountIndexRoute: AuthedAccountIndexRoute,
+  AuthedAccountBookingPublicIdRoute: AuthedAccountBookingPublicIdRoute,
+  AuthedBookingConfirmationPublicIdRoute:
+    AuthedBookingConfirmationPublicIdRoute,
+}
+
+const AuthedRouteWithChildren =
+  AuthedRoute._addFileChildren(AuthedRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthedRoute: AuthedRouteWithChildren,
   CancellationRefundPolicyRoute: CancellationRefundPolicyRoute,
   ContactRoute: ContactRoute,
   PrivacyPolicyRoute: PrivacyPolicyRoute,
   TermsOfServiceRoute: TermsOfServiceRoute,
-  AccountPastBookingsRoute: AccountPastBookingsRoute,
   AuthForgotPasswordRoute: AuthForgotPasswordRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthLogoutRoute: AuthLogoutRoute,
@@ -635,22 +707,11 @@ const rootRouteChildren: RootRouteChildren = {
   AuthSignupRoute: AuthSignupRoute,
   RoomsRoseRoomRoute: RoomsRoseRoomRoute,
   RoomsTexasRoomRoute: RoomsTexasRoomRoute,
-  AccountIndexRoute: AccountIndexRoute,
-  AdminIndexRoute: AdminIndexRoute,
   BookingIndexRoute: BookingIndexRoute,
-  AccountBookingBookingIdRoute: AccountBookingBookingIdRoute,
-  AdminBookingsBookingIdRoute: AdminBookingsBookingIdRoute,
-  AdminBookingsCurrentBookingsRoute: AdminBookingsCurrentBookingsRoute,
-  AdminBookingsPastBookingsRoute: AdminBookingsPastBookingsRoute,
-  AdminGuestUserIdRoute: AdminGuestUserIdRoute,
-  AdminPropertyManagementRoomIdRoute: AdminPropertyManagementRoomIdRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiIcalSplatRoute: ApiIcalSplatRoute,
   ApiStripeSplatRoute: ApiStripeSplatRoute,
   ApiTrpcSplatRoute: ApiTrpcSplatRoute,
-  BookingConfirmationBookingIdRoute: BookingConfirmationBookingIdRoute,
-  AdminGuestIndexRoute: AdminGuestIndexRoute,
-  AdminPropertyManagementIndexRoute: AdminPropertyManagementIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -3,6 +3,7 @@ import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import {
 	Card,
@@ -15,7 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { authClient } from '@/lib/auth-client';
-import { requireNoSession } from '@/utils/auth-check';
+import { redirectIfSignedIn, redirectSearchParam } from '@/lib/redirect';
 
 export const Route = createFileRoute('/auth/forgot-password')({
 	head: () => ({
@@ -25,14 +26,10 @@ export const Route = createFileRoute('/auth/forgot-password')({
 			},
 		],
 	}),
-	beforeLoad: async ({ search }) => {
-		// Prevent logged-in users from accessing this route
-		await requireNoSession(search.redirect);
-	},
-	validateSearch: (search: Record<string, unknown>) => {
-		return {
-			redirect: (search.redirect as string) || undefined,
-		};
+	validateSearch: z.object({ redirect: redirectSearchParam }),
+	// Signed-in users skip this page.
+	beforeLoad: ({ context, search }) => {
+		redirectIfSignedIn(context.session, search.redirect);
 	},
 	component: ForgotPasswordPage,
 });

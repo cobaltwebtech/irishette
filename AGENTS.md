@@ -201,7 +201,7 @@ Skills are installed in **`.agents/skills/`** (locked in `skills-lock.json`; `.c
 
 Not applicable here (do not use): `cargo-fallow` (Rust), `fallow-codex-onboarding` (Codex-specific).
 
-Also see `.claude/agents/` for `shadcn-ui-builder` and `tanstack-server-functions` agent prompts (TanStack server function conventions: Zod `inputValidator`, `z.infer` types, composed middleware).
+Also see `.claude/agents/` for `shadcn-ui-builder` and `tanstack-server-functions` agent prompts (TanStack server function conventions: Zod schema passed to `.validator()`, composed middleware).
 
 ### TanStack skills (live in `node_modules`, not `.agents/skills/`)
 

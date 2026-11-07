@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { trpcClient } from '@/integrations/tanstack-query/root-provider';
+import { useTRPC } from '@/integrations/trpc/react';
 import { useBookingStore } from '@/stores';
 
 // Initialize Stripe outside component to avoid recreating
@@ -39,17 +39,10 @@ function PaymentForm() {
 	const [acceptedPolicies, setAcceptedPolicies] = useState(false);
 	const [policyError, setPolicyError] = useState<string | null>(null);
 
-	const confirmPaymentMutation = useMutation({
-		mutationFn: async (paymentIntentId: string) => {
-			if (!booking.bookingId) {
-				throw new Error('No booking ID found');
-			}
-			return await trpcClient.bookings.confirmPayment.mutate({
-				bookingId: booking.bookingId,
-				paymentIntentId,
-			});
-		},
-	});
+	const trpc = useTRPC();
+	const confirmPaymentMutation = useMutation(
+		trpc.bookings.confirmPayment.mutationOptions(),
+	);
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -81,14 +74,20 @@ function PaymentForm() {
 				toast.error(error.message || 'Payment failed');
 			} else if (paymentIntent && paymentIntent.status === 'succeeded') {
 				// Payment succeeded, confirm with backend
-				await confirmPaymentMutation.mutateAsync(paymentIntent.id);
+				if (!booking.bookingId) {
+					throw new Error('No booking ID found');
+				}
+				await confirmPaymentMutation.mutateAsync({
+					bookingId: booking.bookingId,
+					paymentIntentId: paymentIntent.id,
+				});
 
-				// Navigate to confirmation page with bookingId
+				// Navigate to confirmation page with the booking's public id
 				toast.success('Payment successful!');
-				if (booking.bookingId) {
+				if (booking.bookingPublicId) {
 					navigate({
-						to: '/booking/confirmation/$bookingId',
-						params: { bookingId: booking.bookingId },
+						to: '/booking/confirmation/$publicId',
+						params: { publicId: booking.bookingPublicId },
 						search: { step: undefined },
 					});
 				}
@@ -209,7 +208,15 @@ function PaymentForm() {
 // Main payment step component
 export function PaymentStep() {
 	const booking = useBookingStore();
+	const trpc = useTRPC();
 	const lenis = useLenis();
+	// mutateAsync is stable across renders, so it is safe as an effect dependency
+	const { mutateAsync: refreshBooking } = useMutation(
+		trpc.bookings.refreshBooking.mutationOptions(),
+	);
+	const { mutateAsync: createPaymentIntent } = useMutation(
+		trpc.bookings.createPaymentIntent.mutationOptions(),
+	);
 	const [clientSecret, setClientSecret] = useState<string | null>(null);
 	const [stripePublishableKey, setStripePublishableKey] = useState<
 		string | null
@@ -233,11 +240,9 @@ export function PaymentStep() {
 
 				// First, check if booking needs refresh (handles expired sessions gracefully)
 				try {
-					const refreshResult = await trpcClient.bookings.refreshBooking.mutate(
-						{
-							bookingId: booking.bookingId,
-						},
-					);
+					const refreshResult = await refreshBooking({
+						bookingId: booking.bookingId,
+					});
 
 					if (refreshResult.refreshed) {
 						toast.success(
@@ -260,7 +265,7 @@ export function PaymentStep() {
 				}
 
 				// Proceed with payment intent creation
-				const result = await trpcClient.bookings.createPaymentIntent.mutate({
+				const result = await createPaymentIntent({
 					bookingId: booking.bookingId,
 				});
 
@@ -276,7 +281,7 @@ export function PaymentStep() {
 		};
 
 		initializePayment();
-	}, [booking.bookingId, booking.actions]);
+	}, [booking.bookingId, booking.actions, refreshBooking, createPaymentIntent]);
 
 	if (isLoading) {
 		return (

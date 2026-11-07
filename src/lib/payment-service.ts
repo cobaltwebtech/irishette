@@ -1,4 +1,4 @@
-import { and, eq, gte, lte } from 'drizzle-orm';
+import { and, eq, getTableColumns, gte, lte } from 'drizzle-orm';
 import { customAlphabet } from 'nanoid';
 import type Stripe from 'stripe';
 import { createDrizzle } from '@/db/drizzle-init';
@@ -10,12 +10,16 @@ import {
 	user,
 } from '@/db/schema-export';
 import { getExternalEventsInRange } from './ical-feeds';
-import { newId } from './ids';
+import { newId, newPublicId } from './ids';
 import type {
 	CreateBookingInput,
 	CreateCheckoutSessionInput,
 } from './payment-validation';
 import { createStripe } from './stripe';
+
+// Room columns returned with a booking: never the secret iCal export token.
+const { icalExportToken: _icalExportToken, ...bookingRoomColumns } =
+	getTableColumns(room);
 
 // Create a custom nanoid generator for confirmation IDs using only uppercase alphanumeric characters
 const generateConfirmationId = customAlphabet(
@@ -310,8 +314,9 @@ export class PaymentService {
 	async createTemporaryBooking(
 		bookingData: CreateBookingInput,
 		userId: string,
-	): Promise<string> {
+	): Promise<{ bookingId: string; publicId: string }> {
 		const bookingId = newId();
+		const publicId = newPublicId();
 
 		// Use the comprehensive availability checking system
 		try {
@@ -401,6 +406,7 @@ export class PaymentService {
 
 		await this.db.insert(bookings).values({
 			id: bookingId,
+			publicId,
 			userId,
 			roomId: bookingData.roomId,
 			confirmationId: generateConfirmationId(),
@@ -422,7 +428,7 @@ export class PaymentService {
 			expiresAt: expiresAt,
 		});
 
-		return bookingId;
+		return { bookingId, publicId };
 	}
 
 	/**
@@ -751,7 +757,7 @@ export class PaymentService {
 		const bookingResult = await this.db
 			.select({
 				booking: bookings,
-				room: room,
+				room: bookingRoomColumns,
 			})
 			.from(bookings)
 			.innerJoin(room, eq(bookings.roomId, room.id))
@@ -783,9 +789,10 @@ export class PaymentService {
 		const bookingResult = await this.db
 			.select({
 				booking: bookings,
-				room: room,
+				room: bookingRoomColumns,
 				user: {
 					id: user.id,
+					publicId: user.publicId,
 					email: user.email,
 					name: user.name,
 				},

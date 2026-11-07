@@ -19,7 +19,7 @@ import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password';
 import { authClient, signUp } from '@/lib/auth-client';
 import { emailSchema, registerSchema } from '@/lib/auth-validation';
-import { requireNoSession } from '@/utils/auth-check';
+import { redirectIfSignedIn, redirectSearchParam } from '@/lib/redirect';
 
 export const Route = createFileRoute('/auth/signup')({
 	head: () => ({
@@ -29,15 +29,10 @@ export const Route = createFileRoute('/auth/signup')({
 			},
 		],
 	}),
-	beforeLoad: async ({ search }) => {
-		// Prevent logged-in users from accessing signup page
-		// Redirect to /account or the specified redirect param
-		await requireNoSession(search.redirect);
-	},
-	validateSearch: (search: Record<string, unknown>) => {
-		return {
-			redirect: (search.redirect as string) || undefined,
-		};
+	validateSearch: z.object({ redirect: redirectSearchParam }),
+	// Signed-in users skip the signup page.
+	beforeLoad: ({ context, search }) => {
+		redirectIfSignedIn(context.session, search.redirect);
 	},
 	component: SignupPage,
 });

@@ -1,13 +1,28 @@
 import { Icon } from '@iconify/react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { signOut, useSession } from '@/lib/auth-client';
+import { signOut } from '@/lib/auth-client';
+import { clearSession, useSession } from '@/lib/session';
 import { useBookingStore } from '@/stores';
 
 export default function Header() {
-	const { data: session, isPending } = useSession();
+	const session = useSession();
 	const router = useRouter();
+	const queryClient = useQueryClient();
+
+	const handleLogout = async () => {
+		try {
+			await signOut();
+		} catch (error) {
+			console.error('Logout error:', error);
+		}
+		setIsMobileMenuOpen(false);
+		// Drop the cached session and user data, re-run guards, go home.
+		await clearSession(queryClient, router);
+		await router.navigate({ to: '/' });
+	};
 	const booking = useBookingStore();
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -63,10 +78,7 @@ export default function Header() {
 
 					{/* Auth Section */}
 					<div className="flex items-center space-x-2">
-						{isPending ? (
-							// Loading state
-							<div className="text-background">Loading...</div>
-						) : session ? (
+						{session ? (
 							// Authenticated user menu
 							<div className="flex items-center space-x-2">
 								{/* Continue Booking Button - Shows if there's an active booking in progress */}
@@ -99,23 +111,13 @@ export default function Header() {
 										</Link>
 									</Button>
 								)}
-								<Button
-									className="hidden lg:flex"
-									onClick={async () => {
-										try {
-											await signOut();
-											router.navigate({ to: '/' });
-										} catch (error) {
-											console.error('Logout error:', error);
-										}
-									}}
-								>
+								<Button className="hidden lg:flex" onClick={handleLogout}>
 									<Icon icon="tabler:logout" className="size-4" />
 									Logout
 								</Button>
 							</div>
 						) : (
-							// Unauthenticated user - always show this if not pending and no session
+							// Unauthenticated user
 							<>
 								{/* Continue Booking Button - Shows if there's an active booking in progress */}
 								{booking.hasActiveBooking() && (
@@ -195,18 +197,7 @@ export default function Header() {
 								</li>
 								{session && (
 									<li className="flex justify-end">
-										<Button
-											variant="destructive"
-											onClick={async () => {
-												try {
-													await signOut();
-													setIsMobileMenuOpen(false);
-													router.navigate({ to: '/' });
-												} catch (error) {
-													console.error('Logout error:', error);
-												}
-											}}
-										>
+										<Button variant="destructive" onClick={handleLogout}>
 											<Icon icon="tabler:logout" className="size-4" />
 											Logout
 										</Button>

@@ -1,8 +1,10 @@
 import { Icon } from '@iconify/react';
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
+import { useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { useEffect, useEffectEvent, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { z } from 'zod';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -17,7 +19,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password';
 import { authClient, signIn } from '@/lib/auth-client';
-import { requireNoSession } from '@/utils/auth-check';
+import {
+	DEFAULT_AUTH_REDIRECT,
+	redirectIfSignedIn,
+	redirectSearchParam,
+} from '@/lib/redirect';
+import { refreshSession } from '@/lib/session';
 
 export const Route = createFileRoute('/auth/login')({
 	head: () => ({
@@ -27,15 +34,13 @@ export const Route = createFileRoute('/auth/login')({
 			},
 		],
 	}),
-	beforeLoad: async ({ search }) => {
-		// Prevent logged-in users from accessing this route
-		await requireNoSession(search.redirect);
-	},
-	validateSearch: (search: Record<string, unknown>) => {
-		return {
-			redirect: (search.redirect as string) || undefined,
-			error: (search.error as string) || undefined,
-		};
+	validateSearch: z.object({
+		redirect: redirectSearchParam,
+		error: z.string().optional().catch(undefined),
+	}),
+	// Signed-in users skip the login page.
+	beforeLoad: ({ context, search }) => {
+		redirectIfSignedIn(context.session, search.redirect);
 	},
 	component: LoginPage,
 });
@@ -53,6 +58,7 @@ function LoginPage() {
 	const passwordInputId = useId();
 
 	const router = useRouter();
+	const queryClient = useQueryClient();
 	const search = Route.useSearch();
 
 	// Error message mapping for Better Auth errors
@@ -180,8 +186,9 @@ function LoginPage() {
 
 			if (response && !response.error) {
 				toast.success('Login successful!');
-				// Use router.history.push to preserve the full URL
-				router.history.push(search.redirect || '/account');
+				await refreshSession(queryClient, router);
+				// history.push keeps the full (already sanitized) path + search.
+				router.history.push(search.redirect ?? DEFAULT_AUTH_REDIRECT);
 				return;
 			}
 

@@ -1,6 +1,5 @@
 import { and, eq, gte, inArray, lte } from 'drizzle-orm';
 import { z } from 'zod';
-import { createDrizzle } from '@/db/drizzle-init';
 import {
 	bookings,
 	icalSyncLog,
@@ -48,7 +47,7 @@ export const availabilityRouter = createTRPCRouter({
 	checkRoom: publicProcedure
 		.input(checkAvailabilitySchema)
 		.query(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			// Validate date range
 			const startDate = new Date(input.startDate);
@@ -124,7 +123,7 @@ export const availabilityRouter = createTRPCRouter({
 	checkBulk: publicProcedure
 		.input(bulkAvailabilitySchema)
 		.query(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			// Validate date range
 			const startDate = new Date(input.startDate);
@@ -196,7 +195,7 @@ export const availabilityRouter = createTRPCRouter({
 	syncCalendar: adminProcedure
 		.input(syncCalendarSchema)
 		.mutation(async ({ ctx, input }) => {
-			const icalService = new iCalService(ctx.db);
+			const icalService = new iCalService(ctx.env.DB);
 
 			const result = await icalService.syncExternalCalendar(
 				input.roomId,
@@ -220,8 +219,8 @@ export const availabilityRouter = createTRPCRouter({
 	syncAllCalendars: adminProcedure
 		.input(syncAllCalendarsSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
-			const icalService = new iCalService(ctx.db);
+			const db = ctx.db;
+			const icalService = new iCalService(ctx.env.DB);
 
 			// Get rooms to sync
 			const conditions = [eq(room.isActive, true)];
@@ -291,7 +290,7 @@ export const availabilityRouter = createTRPCRouter({
 			}),
 		)
 		.query(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			// Validate room exists
 			const roomResult = await db
@@ -417,7 +416,7 @@ export const availabilityRouter = createTRPCRouter({
 			}),
 		)
 		.query(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			const conditions = [];
 			if (input.roomId) {
@@ -473,7 +472,7 @@ export const availabilityRouter = createTRPCRouter({
 			}),
 		)
 		.query(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
+			const db = ctx.db;
 
 			// Find room by slug
 			const roomResult = await db
