@@ -160,9 +160,14 @@ stripe listen --print-secret
 ### Test
 
 ```bash
-# Delivery + signature verification (no booking metadata, so no booking changes)
-stripe trigger payment_intent.succeeded
-stripe trigger payment_intent.payment_failed
+# Delivery + signature verification (no booking metadata, so no booking changes).
+# The CLI's payment_intent fixture still sends payment_method_types, which
+# 2026-10-28.endive rejects; swap it for automatic payment methods:
+PI_FIX=(--remove payment_intent:payment_method_types
+  --add 'payment_intent:automatic_payment_methods[enabled]=true'
+  --add 'payment_intent:automatic_payment_methods[allow_redirects]=never')
+stripe trigger payment_intent.succeeded "${PI_FIX[@]}"
+stripe trigger payment_intent.payment_failed "${PI_FIX[@]}"
 stripe trigger checkout.session.completed
 
 # A bad signature must be rejected with 400
@@ -188,5 +193,7 @@ should change to `confirmed`.
 | `must specify events to forward using --events, --all-snapshot, or --all-thin` | Newer CLI; add one of those flags (see above). |
 | Listener shows `[400]`, log says signature verification failed | `.env.local` has a dashboard secret instead of the CLI secret, or `pnpm dev` was not restarted. |
 | Events forwarded but nothing happens to bookings | `stripe trigger` events have no `booking_id` metadata; use a real checkout. |
+| `stripe trigger payment_intent.*` fails with ``The `payment_method_types` parameter is no longer supported`` | Use the `PI_FIX` overrides above. |
+| Listener shows `[500]` for a triggered event | The handler threw; a test event without `booking_id` metadata must be acknowledged with 200, not fail. Check the dev server log. |
 | `Connection refused` in the listener | `pnpm dev` is not running on port 3000. |
 | Events from the wrong account | Run `stripe login` again and pick the sandbox; check with `stripe config --list`. |
