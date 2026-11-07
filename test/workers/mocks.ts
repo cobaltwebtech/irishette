@@ -154,10 +154,12 @@ export function mockFeed(
 }
 
 export function calendarResponse(body: string, headers: HeadersInit = {}) {
-	return new HttpResponse(body, {
-		status: 200,
-		headers: { 'Content-Type': 'text/calendar; charset=utf-8', ...headers },
+	// Headers (not object spread) so array-form HeadersInit also works.
+	const merged = new Headers({
+		'Content-Type': 'text/calendar; charset=utf-8',
 	});
+	for (const [name, value] of new Headers(headers)) merged.set(name, value);
+	return new HttpResponse(body, { status: 200, headers: merged });
 }
 
 /** Builds a VCALENDAR from VEVENT property blocks (CRLF line endings). */

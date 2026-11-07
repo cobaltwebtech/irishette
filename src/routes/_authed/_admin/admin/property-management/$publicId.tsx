@@ -180,8 +180,8 @@ function EditRoom() {
 		trpc.rooms.update.mutationOptions({
 			onSuccess: () => {
 				// Room name/status also appear in the rooms list and admin sidebar
-				queryClient.invalidateQueries(trpc.rooms.get.pathFilter());
-				queryClient.invalidateQueries(trpc.rooms.list.pathFilter());
+				void queryClient.invalidateQueries(trpc.rooms.get.pathFilter());
+				void queryClient.invalidateQueries(trpc.rooms.list.pathFilter());
 				toast.success('Room updated successfully!', {
 					description: `${formData.name} has been updated with the latest settings.`,
 					duration: 4000,
@@ -214,7 +214,9 @@ function EditRoom() {
 	const createPricingRuleMutation = useMutation(
 		trpc.rooms.createPricingRule.mutationOptions({
 			onSuccess: () => {
-				queryClient.invalidateQueries(trpc.rooms.getPricingRules.pathFilter());
+				void queryClient.invalidateQueries(
+					trpc.rooms.getPricingRules.pathFilter(),
+				);
 			},
 		}),
 	);
@@ -222,7 +224,9 @@ function EditRoom() {
 	const updatePricingRuleMutation = useMutation(
 		trpc.rooms.updatePricingRule.mutationOptions({
 			onSuccess: () => {
-				queryClient.invalidateQueries(trpc.rooms.getPricingRules.pathFilter());
+				void queryClient.invalidateQueries(
+					trpc.rooms.getPricingRules.pathFilter(),
+				);
 			},
 		}),
 	);
@@ -230,7 +234,9 @@ function EditRoom() {
 	const deletePricingRuleMutation = useMutation(
 		trpc.rooms.deletePricingRule.mutationOptions({
 			onSuccess: () => {
-				queryClient.invalidateQueries(trpc.rooms.getPricingRules.pathFilter());
+				void queryClient.invalidateQueries(
+					trpc.rooms.getPricingRules.pathFilter(),
+				);
 			},
 		}),
 	);
@@ -253,7 +259,7 @@ function EditRoom() {
 	const createBlockedPeriodMutation = useMutation(
 		trpc.rooms.createBlockedPeriod.mutationOptions({
 			onSuccess: () => {
-				queryClient.invalidateQueries(
+				void queryClient.invalidateQueries(
 					trpc.rooms.getBlockedPeriods.pathFilter(),
 				);
 			},
@@ -263,7 +269,7 @@ function EditRoom() {
 	const updateBlockedPeriodMutation = useMutation(
 		trpc.rooms.updateBlockedPeriod.mutationOptions({
 			onSuccess: () => {
-				queryClient.invalidateQueries(
+				void queryClient.invalidateQueries(
 					trpc.rooms.getBlockedPeriods.pathFilter(),
 				);
 			},
@@ -273,7 +279,7 @@ function EditRoom() {
 	const deleteBlockedPeriodMutation = useMutation(
 		trpc.rooms.deleteBlockedPeriod.mutationOptions({
 			onSuccess: () => {
-				queryClient.invalidateQueries(
+				void queryClient.invalidateQueries(
 					trpc.rooms.getBlockedPeriods.pathFilter(),
 				);
 			},

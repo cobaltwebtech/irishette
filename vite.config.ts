@@ -22,7 +22,7 @@ const config = defineConfig({
 			'worker-configuration.d.ts',
 			'.tanstack',
 			'**/dist',
-			// Keep Oxfmt scoped like Biome was: not docs, agent files, generated
+			// Keep Oxfmt scoped to code: not docs, agent files, generated
 			// output, migrations or root config/manifest files.
 			'.agents',
 			'.claude',
@@ -51,7 +51,15 @@ const config = defineConfig({
 			'playwright.config.ts',
 		],
 		jsPlugins: [{ name: 'vite-plus', specifier: 'vite-plus/oxlint-plugin' }],
-		rules: { 'vite-plus/prefer-vite-plus-imports': 'error' },
+		rules: {
+			'vite-plus/prefer-vite-plus-imports': 'error',
+			'unicorn/no-document-cookie': 'error',
+			// Known follow-ups, not blockers: `new Date()` during render (16 sites)
+			// and setState in effects (3). The React Compiler skips these
+			// components. Promote to 'error' once they are refactored.
+			'react/purity': 'warn',
+			'react/set-state-in-effect': 'warn',
+		},
 		options: { typeAware: true, typeCheck: true },
 	},
 	// `cf dev` does not forward --port, so pin it here.

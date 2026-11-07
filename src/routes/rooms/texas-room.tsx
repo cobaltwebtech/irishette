@@ -162,7 +162,7 @@ function TexasRoomPage() {
 		booking.actions.setStep('auth');
 
 		// Navigate to booking flow route
-		navigate({ to: '/booking' });
+		void navigate({ to: '/booking' });
 		console.log('Starting booking process with data:', booking.summary);
 	};
 	return (

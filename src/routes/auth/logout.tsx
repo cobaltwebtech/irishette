@@ -24,7 +24,7 @@ function LogoutPage() {
 
 	useEffect(() => {
 		let cancelled = false;
-		(async () => {
+		void (async () => {
 			try {
 				await authClient.signOut();
 			} catch (error) {

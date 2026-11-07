@@ -173,7 +173,7 @@ function BookingFlow() {
 	// Show button if no active booking
 	if (!booking.hasActiveBooking()) {
 		const handleNavigateToRooms = () => {
-			navigate({ to: '/' }).then(() => {
+			void navigate({ to: '/' }).then(() => {
 				// Wait a brief moment for the page to render
 				setTimeout(() => {
 					const roomsSection = document.querySelector('[data-rooms-section]');

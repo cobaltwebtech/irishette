@@ -108,7 +108,7 @@ function LoginPage() {
 						(redirectUrl.search ? redirectUrl.search : '');
 
 					// Update the URL to remove error and clean redirect
-					router.navigate({
+					void router.navigate({
 						to: '/auth/login',
 						search: { redirect: cleanRedirect, error: undefined },
 						replace: true,

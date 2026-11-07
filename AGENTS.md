@@ -21,14 +21,14 @@ Irishette is a room-booking site (rooms, availability, bookings, payments, admin
 | Env / secrets | **Varlock** (`.env.schema` contract, generated `varlock.d.ts`, local encryption). Cloudflare config via `cf` + `cloudflare.config.ts`; no Wrangler config, no Varlock Cloudflare/Vite integrations (see [Secrets and environment](#secrets-and-environment-varlock)) |
 | UI | Tailwind CSS v4, shadcn/ui (new-york, Stone) + Radix, `sonner` toasts |
 | Validation | Zod v4 |
-| Lint / format | **Biome** 2.x |
+| Toolchain | **Vite+** (`vite-plus`, `vp` CLI): Oxlint (type-aware) + Oxfmt + Vitest 5 behind `vp check` / `vp test`. Config lives in `vite.config.ts` (`lint`, `fmt` blocks). `vite` is an alias of `@voidzero-dev/vite-plus-core` (see [Vite+ notes](#vite-notes)). Biome is removed. |
 | Code review / dead code | **Fallow** (global CLI) |
 
 Path alias: `@/*` -> `src/*`. TypeScript is `strict` with `noUnusedLocals` / `noUnusedParameters`.
 
 ## Commands
 
-Always run project tools through `pnpm` (Biome, drizzle-kit, tsc, `cf`, Varlock are **not** guaranteed on the global PATH; use `pnpm exec <tool>` for ad-hoc calls). Wrangler is not a dependency; see [CLI tools](#cli-tools).
+Always run project tools through `pnpm` (`vp`, drizzle-kit, tsc, `cf`, Varlock are **not** guaranteed on the global PATH; use `pnpm exec <tool>` for ad-hoc calls). Wrangler is not a dependency; see [CLI tools](#cli-tools).
 
 ```bash
 pnpm install                 # install deps
@@ -53,28 +53,37 @@ pnpm env:scan                # varlock scan: fail if sensitive values appear in 
 pnpm env:types               # varlock codegen: regenerate varlock.d.ts from .env.schema
 pnpm check:bundle            # after a build: fail if secret variable names appear in client assets
 
-pnpm biome check --write     # lint + format + organize imports (preferred before finishing)
-pnpm lint                    # biome lint (read-only)
-pnpm format                  # biome format --write
-pnpm typecheck               # cf workers types && tsc --noEmit (Vite does not type check)
-pnpm vitest run              # tests (Vitest is installed; there are currently no test files)
+pnpm check                   # vp check: Oxfmt check + Oxlint + type-aware type check (read-only; preferred gate before finishing)
+pnpm check:fix               # vp check --fix: format, sort imports/Tailwind classes, apply safe lint fixes
+pnpm lint                    # vp lint
+pnpm format                  # vp fmt (writes)
+pnpm typecheck               # cf workers types && tsc --noEmit (also covers e2e); `vp check` type-checks too but does not regenerate Worker types
+pnpm test                    # vp test run (unit + workers projects)
 ```
 
 Notes:
-- `README.md` mentions ESLint/Prettier/`pnpm check`/`pnpm start`; that is stale. Biome is the only linter/formatter.
+- `README.md` mentions ESLint/Prettier/`pnpm check`/`pnpm start`; that is stale. Vite+ (Oxlint + Oxfmt) is the only linter/formatter.
 - `src/routeTree.gen.ts`, `varlock.d.ts` and `.cloudflare/types/` (Worker `Env` types) are generated. Never hand-edit them. `.cloudflare/` is gitignored; `varlock.d.ts` is committed.
 - `docs/CLAUDE.md` is an older, partially stale overview. Prefer this file when they conflict.
 
-## Code style (Biome)
+## Code style (Vite+: Oxlint + Oxfmt)
 
-Config is `biome.json`. It formats and lints only `src/**`, `.vscode/*` and `vite.config.ts`.
+Config is the `fmt` and `lint` blocks in `vite.config.ts`. Oxfmt is scoped to code (it ignores docs, `.agents`, `drizzle/`, root manifests and generated files); Oxlint runs on the same tree.
 
-- **Tabs** for indentation, **single quotes** for JS/TS.
-- `recommended` lint rules; organize-imports is on (run `pnpm biome check --write` to fix import order).
-- Do not add ESLint, Prettier, or their config files.
-- Do not reformat unrelated files; keep diffs focused. Run Biome only on files you changed when practical: `pnpm biome check --write <paths>`.
-- Biome upgrade path is `pnpm up:biome` (updates and runs `biome migrate --write`).
+- **Tabs** for indentation, **single quotes** for JS/TS (CSS keeps double quotes), print width 80.
+- Oxfmt sorts imports (`@/` is internal) and Tailwind classes (in `class`/`className` and `cn`/`cva`/`clsx` calls, using `src/styles/styles.css`). Run `pnpm check:fix` to apply; do not hand-sort.
+- Lint: Oxlint with the `typescript`, `unicorn`, `oxc`, `react`, `jsx-a11y` plugins, `correctness` as errors, plus type-aware rules (`typeAware`/`typeCheck`). `react/purity` and `react/set-state-in-effect` are warnings (known follow-ups); do not add new violations.
+- Suppress with `// oxlint-disable-next-line <rule> -- <reason>` and always give a reason.
+- Fire-and-forget promises need `void` (`typescript/no-floating-promises`).
+- Do not add ESLint, Prettier or Biome, or their config files. Do not reformat unrelated files; run `pnpm check:fix` and review the diff.
+- `vp dev`/`vp build`/`vp test` are Vite+ built-ins. `vp run <script>` (or `pnpm <script>`) runs a `package.json` script. This repo's dev/build/deploy go through `cf`, not `vp dev`/`vp build`.
 - Use `import type` for type-only imports and the `@/` alias for cross-directory imports.
+
+### Vite+ notes
+
+- `pnpm-workspace.yaml` aliases `vite` to `@voidzero-dev/vite-plus-core` via a catalog + `overrides`, and `vitest` is pinned to the version bundled in `vite-plus`. Keep `vite-plus`, the `vite` alias and `vitest` in lockstep; upgrade with `vp migrate`/the Vite+ upgrade guide, not by bumping one of them alone.
+- Imports in config files (`vite.config.ts`, `vitest.config.ts`) come from `vite-plus`; tests import from `vite-plus/test`.
+- Keep `@vitejs/plugin-react` ^6.1+ and a pinned `oxc-transform-react` (inside the plugin's peer range).
 
 ## Architecture map
 
@@ -166,7 +175,7 @@ Variables: public `BETTER_AUTH_URL`, `STRIPE_PUBLISHABLE_KEY`, `VITE_TURNSTILE_P
 | `cf` (Cloudflare CLI, beta) | `pnpm exec cf ...` (also installed as a project dependency) | **Default for everything Cloudflare**: dev, build, deploy, D1, KV, types, `cf cli search`, `cf schema`. Config lives in `cloudflare.config.ts`. Run `cf <cmd> --help` before guessing flags. |
 | Wrangler | `pnpm dlx wrangler ...` (not a dependency) | Only where `cf` has no equivalent: `wrangler secret put <NAME> --name irishette` (interactive) and `pnpm tail`. There is no `wrangler.jsonc`; do not run Wrangler config, dev, build or types commands. |
 | Stripe CLI | `stripe ...` (global, `/opt/homebrew/bin/stripe`) | `stripe listen --forward-to localhost:3000/api/...` for webhooks, `stripe trigger`, test-mode inspection |
-| Biome | `pnpm biome ...` | Lint/format |
+| Vite+ (`vp`) | `pnpm check`, `pnpm exec vp ...` | Lint, format, type check, tests |
 | Fallow | `fallow ...` (global) | Dead code, duplication, architecture, audit/review (see below) |
 | drizzle-kit | `pnpm drizzle-kit ...` | Migration generation |
 | shadcn | `pnpm dlx shadcn@latest add <component>` | Add UI components (also available via the `shadcn` MCP in `.mcp.json`) |
@@ -238,7 +247,7 @@ Rules:
 
 After any non-trivial change (new feature, refactor, deletion, dependency change), run in this order and fix what you introduced:
 
-1. `pnpm biome check --write <changed paths>`
+1. `pnpm check:fix`, then `pnpm check` (must exit 0)
 2. `pnpm typecheck` (regenerates Worker types, then `tsc --noEmit`)
 3. `pnpm build`, then `pnpm check:bundle`
 4. If you touched env or secrets: `pnpm env:scan` (and `pnpm env:check`, after telling the user it triggers Touch ID)
@@ -248,7 +257,7 @@ Do not claim a task is done until these pass, or state clearly which step failed
 
 ## Fallow (code review after building)
 
-Fallow is installed **globally** (`fallow`). Load the `fallow` and `fallow-review` skills for the full rules. Fallow does not replace Biome (style) or `tsc` (types); it covers dead code, duplication, circular dependencies, complexity, and architecture.
+Fallow is installed **globally** (`fallow`). Load the `fallow` and `fallow-review` skills for the full rules. Fallow does not replace Oxlint/Oxfmt (style) or `tsc` (types); it covers dead code, duplication, circular dependencies, complexity, and architecture.
 
 Agent rules (from the skills):
 - Always use `--format json --quiet`; parse stdout as JSON; keep stderr separate (no `2>&1`).

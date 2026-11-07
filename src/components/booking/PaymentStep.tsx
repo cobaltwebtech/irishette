@@ -89,13 +89,13 @@ function PaymentForm() {
 				toast.success('Payment successful!');
 				const publicId = booking.bookingPublicId ?? confirmed.publicId;
 				if (publicId) {
-					navigate({
+					void navigate({
 						to: '/booking/confirmation/$publicId',
 						params: { publicId },
 						search: { step: undefined },
 					});
 				} else {
-					navigate({ to: '/account' });
+					void navigate({ to: '/account' });
 				}
 			}
 		} catch (error) {
@@ -300,7 +300,7 @@ export function PaymentStep() {
 			}
 		};
 
-		initializePayment();
+		void initializePayment();
 	}, [booking.bookingId, booking.actions, refreshBooking, createPaymentIntent]);
 
 	if (isLoading) {

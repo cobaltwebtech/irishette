@@ -272,7 +272,7 @@ function PropertyManagement() {
 	const createRoomMutation = useMutation(
 		trpc.rooms.create.mutationOptions({
 			onSuccess: () => {
-				queryClient.invalidateQueries(trpc.rooms.list.pathFilter());
+				void queryClient.invalidateQueries(trpc.rooms.list.pathFilter());
 				setEditMode('none');
 			},
 			onError: (error) => {

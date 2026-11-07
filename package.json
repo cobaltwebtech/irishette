@@ -16,10 +16,11 @@
     "types": "cf workers types",
     "typecheck": "cf workers types && tsc --noEmit && tsc --noEmit -p e2e",
     "tail": "pnpm dlx wrangler tail irishette",
-    "lint": "biome lint",
-    "format": "biome format --write",
+    "check": "vp check",
+    "check:fix": "vp check --fix",
+    "lint": "vp lint",
+    "format": "vp fmt",
     "clean": "rm -rf dist .tanstack src/routeTree.gen.ts",
-    "up:biome": "pnpm up @biomejs/biome@latest && pnpm biome migrate --write",
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",
     "db:studio": "drizzle-kit studio",
@@ -90,7 +91,6 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.6.6",
     "@cloudflare/vite-plugin": "2.0.0-beta.v.12",
     "@cloudflare/vitest-plugin": "^1.6.0",
     "@libsql/client": "^0.18.0",

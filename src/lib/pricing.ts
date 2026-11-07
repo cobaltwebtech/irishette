@@ -23,6 +23,7 @@ export interface PricingRoom {
 export interface PricingRule {
 	id: string;
 	name: string;
+	// oxlint-disable-next-line typescript/no-redundant-type-constituents -- keeps the known literals visible for autocomplete
 	ruleType: PricingRuleType | string;
 	value: number;
 	startDate: IsoDate; // inclusive

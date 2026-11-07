@@ -91,7 +91,7 @@ function SidebarProvider({
 			const openState =
 				typeof value === 'function' ? value(openProp ?? _open) : value;
 			const cookieValue = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
-			//biome-ignore lint/suspicious/noDocumentCookie: setting the cookie for sidebar state
+			// oxlint-disable-next-line unicorn/no-document-cookie -- setting the cookie for sidebar state
 			document.cookie = cookieValue;
 		},
 		[setOpenProp, openProp, _open],

@@ -86,9 +86,7 @@ export function CancelBookingButton({
 						: 'No refund was due.',
 			});
 			setOpen(false);
-			await Promise.all([
-				queryClient.invalidateQueries(trpc.bookings.pathFilter()),
-			]);
+			await queryClient.invalidateQueries(trpc.bookings.pathFilter());
 		} catch (error) {
 			toast.error('Could not cancel the booking', {
 				description: error instanceof Error ? error.message : undefined,

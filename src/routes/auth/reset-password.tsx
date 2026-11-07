@@ -81,7 +81,7 @@ function ResetPasswordPage() {
 		if (search.error) {
 			showErrorToast(search.error);
 			// Clean up URL by removing error param
-			router.navigate({
+			void router.navigate({
 				to: '/auth/reset-password',
 				search: { token: undefined, error: undefined },
 				replace: true,

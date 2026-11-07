@@ -36,7 +36,7 @@ export const getRouter = () => {
 		defaultPreload: 'intent',
 		// Let TanStack Query own data freshness for preloads.
 		defaultPreloadStaleTime: 0,
-		// biome-ignore lint/correctness/noComponentHookFactories: Wrap must close over this router's per-request clients
+		// Wrap must close over this router's per-request clients (a component defined inside a function on purpose).
 		Wrap: ({ children }: { children: React.ReactNode }) => (
 			<TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
 				{children}
