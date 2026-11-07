@@ -1,6 +1,6 @@
 import { and, eq, gte, lte } from 'drizzle-orm';
 import { customAlphabet, nanoid } from 'nanoid';
-import Stripe from 'stripe';
+import type Stripe from 'stripe';
 import { createDrizzle } from '@/db/drizzle-init';
 import {
 	bookings,
@@ -14,6 +14,7 @@ import type {
 	CreateBookingInput,
 	CreateCheckoutSessionInput,
 } from './payment-validation';
+import { createStripe } from './stripe';
 
 // Create a custom nanoid generator for confirmation IDs using only uppercase alphanumeric characters
 const generateConfirmationId = customAlphabet(
@@ -47,9 +48,7 @@ export class PaymentService {
 
 	constructor(env: PaymentEnv) {
 		this.db = createDrizzle(env.DB);
-		this.stripe = new Stripe(env.STRIPE_SECRET_KEY, {
-			apiVersion: '2026-04-22.dahlia',
-		});
+		this.stripe = createStripe(env.STRIPE_SECRET_KEY);
 	}
 
 	/**
@@ -515,10 +514,7 @@ export class PaymentService {
 		const cityTaxAmount = booking.baseAmount * roomData.cityTaxRate;
 
 		// Create line items for Stripe
-		// TODO(upgrade Phase 4): revert to Stripe.Checkout.SessionCreateParams.LineItem[] on stripe 23.
-		const lineItems: NonNullable<
-			Stripe.Checkout.SessionCreateParams['line_items']
-		> = [
+		const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
 			{
 				price_data: {
 					currency: 'usd',
@@ -600,7 +596,9 @@ export class PaymentService {
 		// Create Stripe checkout session
 		const session = await this.stripe.checkout.sessions.create({
 			customer: customer.stripeCustomerId || undefined,
-			payment_method_types: ['card'],
+			// Card only (same as before); payment_method_types was removed in
+			// API version 2026-10-28.endive.
+			allowed_payment_method_types: ['card'],
 			line_items: lineItems,
 			mode: 'payment',
 			success_url: input.successUrl,

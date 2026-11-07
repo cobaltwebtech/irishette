@@ -6,21 +6,29 @@ import { admin, captcha, magicLink, phoneNumber } from 'better-auth/plugins';
 import { tanstackStartCookies } from 'better-auth/tanstack-start';
 import { drizzle } from 'drizzle-orm/d1';
 import { Resend } from 'resend';
-import Stripe from 'stripe';
 import { MagicLinkEmail } from '@/components/email/MagicLinkEmail';
 import { PasswordReset } from '@/components/email/PasswordReset';
 import * as authSchema from '@/db/auth-schema';
+import { newId } from '@/lib/ids';
+import { createStripe } from '@/lib/stripe';
 
 // Initialize Drizzle with the Cloudflare D1 database
 export const createDrizzle = (db: D1Database) =>
 	drizzle(db, { schema: authSchema });
 
+// Built once per isolate: Better Auth 1.7 validates its schema on creation and
+// caches per instance, so rebuilding it on every call repeats that work.
+let authInstance: ReturnType<typeof createAuth> | undefined;
+
 // Create Better Auth instance and connect to Cloudflare D1 database
 export const auth = async () => {
+	authInstance ??= createAuth();
+	return authInstance;
+};
+
+function createAuth() {
 	// Initialize Stripe with environment variables
-	const stripeClient = new Stripe(env.STRIPE_SECRET_KEY, {
-		apiVersion: '2026-04-22.dahlia',
-	});
+	const stripeClient = createStripe(env.STRIPE_SECRET_KEY);
 
 	// Initialize Resend for email service
 	const resend = new Resend(env.RESEND_API_KEY);
@@ -43,6 +51,10 @@ export const auth = async () => {
 			enabled: true,
 		},
 		advanced: {
+			database: {
+				// UUIDv7 primary keys for all Better Auth tables.
+				generateId: () => newId(),
+			},
 			ipAddress: {
 				// Cloudflare specific header for rate limiting
 				ipAddressHeaders: ['cf-connecting-ip'],
@@ -112,6 +124,6 @@ export const auth = async () => {
 			tanstackStartCookies(), // Handle cookies for TanStack Start. Needs to be last in array.
 		],
 	});
-};
+}
 
 export type Auth = ReturnType<typeof auth>;

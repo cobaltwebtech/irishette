@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { createFileRoute } from '@tanstack/react-router';
-import Stripe from 'stripe';
+import type Stripe from 'stripe';
 import { getAdminUsers } from '@/lib/admin-query';
 import {
 	type AdminNotificationEmailData,
@@ -10,6 +10,7 @@ import {
 } from '@/lib/email-service';
 import { PaymentService } from '@/lib/payment-service';
 import { stripeWebhookSchema } from '@/lib/payment-validation';
+import { createStripe } from '@/lib/stripe';
 
 // Server route for Stripe webhook
 export const Route = createFileRoute('/api/stripe/$')({
@@ -54,7 +55,7 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
 		}
 
 		// Initialize Stripe for webhook signature verification
-		const stripe = new Stripe(env.STRIPE_SECRET_KEY);
+		const stripe = createStripe(env.STRIPE_SECRET_KEY);
 
 		// Verify the webhook signature (CRITICAL: Prevents spoofing and replay attacks)
 		// Stripe's signature includes timestamp to prevent replay attacks
