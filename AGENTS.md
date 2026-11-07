@@ -9,7 +9,7 @@ Irishette is a room-booking site (rooms, availability, bookings, payments, admin
 | Concern | Choice |
 |---|---|
 | Package manager | **pnpm** (never npm/yarn; never commit `package-lock.json`/`yarn.lock`) |
-| Framework | TanStack Start (React 19, Vite 8, React Compiler via `babel-plugin-react-compiler`) |
+| Framework | TanStack Start (React 19, Vite 8, React Compiler via the Rust port `oxc-transform-react`, enabled with `react({ compiler })` in `@vitejs/plugin-react`; no Babel. Pin `oxc-transform-react` inside the plugin's peer range) |
 | Routing / data | TanStack Router (file-based), TanStack Query, TanStack Table, TanStack Store |
 | API | tRPC v11 (`src/integrations/trpc/`) served through TanStack Start server routes in `src/routes/api/` |
 | Auth | Better Auth + `@better-auth/stripe` + Drizzle adapter (`src/lib/auth.ts`) |
