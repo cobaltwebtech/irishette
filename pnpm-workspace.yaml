@@ -13,13 +13,12 @@ permissions:
     skills: true
   "@trpc/tanstack-react-query":
     skills: true
-catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@1.5.0
-  vitest: 5.1.0
-  vite-plus: 1.5.0
 overrides:
-  vite@*: "catalog:"
-  vitest@*: "catalog:"
+  # Vite+ requires every `vite` consumer (Cloudflare plugin, TanStack Start,
+  # Tailwind, plugin-react, Vitest) to resolve its core build. Keep these three
+  # versions in lockstep with `vite-plus` in package.json; upgrade with `vp migrate`.
+  vite@*: npm:@voidzero-dev/vite-plus-core@1.5.0
+  vitest@*: 5.1.0
 peerDependencyRules:
   allowAny:
     - vite
