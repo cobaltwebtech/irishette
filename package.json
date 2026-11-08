@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "varlock run --inject vars -- cf dev",
     "build": "varlock run --inject vars -- cf build",
-    "preview": "varlock run --inject vars -- vite preview",
+    "preview": "varlock run --inject vars -- vp preview",
     "deploy": "varlock run --inject vars -- cf deploy",
     "deploy:dry": "varlock run --inject vars -- cf deploy --dry-run",
     "env:check": "varlock load --agent",

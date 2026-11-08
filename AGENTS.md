@@ -34,7 +34,7 @@ Always run project tools through `pnpm` (`vp`, drizzle-kit, tsc, `cf`, Varlock a
 pnpm install                 # install deps
 pnpm dev                     # varlock run --inject vars -> cf dev (Vite on :3000, local D1/KV). Asks the user for Touch ID/password to decrypt secrets.
 pnpm build                   # varlock run --inject vars -> cf build (output in .cloudflare/output/)
-pnpm preview                 # varlock run --inject vars -> vite preview
+pnpm preview                 # varlock run --inject vars -> vp preview
 pnpm run deploy              # varlock run --inject vars -> cf deploy  (ASK THE USER FIRST). Must be `pnpm run deploy`: bare `pnpm deploy` is a pnpm built-in.
 pnpm deploy:dry              # same, with --dry-run
 pnpm clean                   # removes dist, .tanstack, src/routeTree.gen.ts
