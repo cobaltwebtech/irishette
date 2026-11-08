@@ -74,6 +74,20 @@ const config = defineConfig({
 	resolve: {
 		tsconfigPaths: true,
 	},
+	build: {
+		rolldownOptions: {
+			// The Vite+ core (not stock Vite 8) warns that `vite:css-post` emits no
+			// sourcemap for `styles.css?url` (Tailwind) in the server build. That
+			// import only resolves to a URL string there, so the missing CSS map is
+			// harmless. Drop only this exact warning; all other logs still print.
+			onLog(level, log, handler) {
+				if (log.code === 'SOURCEMAP_BROKEN' && log.plugin === 'vite:css-post') {
+					return;
+				}
+				handler(level, log);
+			},
+		},
+	},
 	plugins: lazyPlugins(() => [
 		cloudflare({
 			viteEnvironment: {
