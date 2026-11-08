@@ -17,6 +17,7 @@ import type { ServiceDeps } from './deps';
 import { sendAdminAlert } from './email-service';
 import { type ImportedEvent, parseIcal } from './ical-parse';
 import { newId } from './ids';
+import { SITE_NAME, SITE_URL } from './site';
 import { todayIn } from './timezone';
 
 // Import sync for iCal feeds (plan 7b). One run per feed:
@@ -53,7 +54,7 @@ export interface SyncResult {
 
 type Feed = typeof icalFeeds.$inferSelect;
 
-const USER_AGENT = 'Irishette Calendar Sync/2.0 (+https://irishette.com)';
+const USER_AGENT = `${SITE_NAME} Calendar Sync/2.0 (+${SITE_URL})`;
 const DEFAULT_TIMEOUT_MS = 10_000;
 /** Feeds synced this recently are skipped by the pre-payment sync. */
 const CHECKOUT_FRESH_MS = 2 * 60_000;

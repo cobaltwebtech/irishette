@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/card';
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
+import { CHECK_OUT_TIME_LABEL } from '@/lib/site';
 
 export const Route = createFileRoute('/_authed/account/booking/$publicId')({
 	head: () => ({
@@ -202,7 +203,9 @@ function BookingDetailPage() {
 										day: 'numeric',
 									})}
 								</p>
-								<p className="text-sm text-muted-foreground">Before 11:00 AM</p>
+								<p className="text-sm text-muted-foreground">
+									Before {CHECK_OUT_TIME_LABEL}
+								</p>
 							</div>
 							<div>
 								<p className="text-sm font-medium text-muted-foreground">
@@ -395,8 +398,8 @@ function BookingDetailPage() {
 									available upon request.
 								</li>
 								<li>
-									Check-out is by 11:00 AM. Late check-out may be available upon
-									request.
+									Check-out is by {CHECK_OUT_TIME_LABEL}. Late check-out may be
+									available upon request.
 								</li>
 								<li>
 									If you need to cancel your booking please review our{' '}

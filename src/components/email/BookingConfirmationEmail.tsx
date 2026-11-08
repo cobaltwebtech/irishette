@@ -32,6 +32,12 @@ interface BookingConfirmationEmailProps {
 	feesAmount: number;
 	totalAmount: number;
 	accountUrl: string;
+	/** Public site URL (src/lib/site.ts SITE_URL). */
+	siteUrl: string;
+	/** Contact address shown in the footer (src/lib/site.ts CONTACT_EMAIL). */
+	contactEmail: string;
+	/** Check-out time label, e.g. "11:00 AM" (src/lib/site.ts). */
+	checkOutTime: string;
 }
 
 export const BookingConfirmationEmail: React.FC<
@@ -52,6 +58,9 @@ export const BookingConfirmationEmail: React.FC<
 	feesAmount,
 	totalAmount,
 	accountUrl,
+	siteUrl,
+	contactEmail,
+	checkOutTime,
 }) => {
 	const formatDate = (dateString: string) => {
 		return new Date(dateString).toLocaleDateString('en-US', {
@@ -82,7 +91,7 @@ export const BookingConfirmationEmail: React.FC<
 						<Section className="my-[20px] px-[32px] py-[20px]">
 							<Row>
 								<Column align="center">
-									<Link href="https://irishette.com">
+									<Link href={siteUrl}>
 										<Img alt="Irishette Logo" height="150" src="#" />
 									</Link>
 									<Heading as="h1" className="mb-2 text-4xl text-green-800">
@@ -312,7 +321,7 @@ export const BookingConfirmationEmail: React.FC<
 										<strong>Check-in:</strong> 3:00 PM - 8:00 PM
 									</Text>
 									<Text className="mb-2 text-sm text-blue-800">
-										<strong>Check-out:</strong> 11:00 AM
+										<strong>Check-out:</strong> {checkOutTime}
 									</Text>
 									<Text className="mb-2 text-sm text-blue-800">
 										<strong>Address:</strong> [Property Address] - Details will
@@ -372,9 +381,7 @@ export const BookingConfirmationEmail: React.FC<
 										Irishette Bed & Breakfast
 									</Text>
 									<Text className="mt-[4px] mb-0 text-[12px] leading-[24px] font-semibold text-stone-500">
-										<Link href="mailto:info@irishette.com">
-											info@irishette.com
-										</Link>
+										<Link href={`mailto:${contactEmail}`}>{contactEmail}</Link>
 									</Text>
 								</Column>
 							</Row>

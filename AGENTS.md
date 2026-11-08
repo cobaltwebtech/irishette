@@ -80,7 +80,7 @@ Notes:
 
 ## Code style (Vite+: Oxlint + Oxfmt)
 
-Config is the `fmt` and `lint` blocks in `vite.config.ts`. Oxfmt is scoped to code (it ignores docs, `.agents`, `drizzle/`, root manifests and generated files); Oxlint runs on the same tree.
+Config is the `fmt` and `lint` blocks in `vite.config.ts`. Oxfmt is scoped to code (it ignores docs, `.agents`, `drizzle/`, root manifests and generated files); Oxlint runs on the same tree. Oxlint and `tsconfig.json` also exclude `.agents/` and `.claude/` (installed skills ship example `.tsx` files).
 
 - **Tabs** for indentation, **single quotes** for JS/TS (CSS keeps double quotes), print width 80.
 - Oxfmt sorts imports (`@/` is internal) and Tailwind classes (in `class`/`className` and `cn`/`cva`/`clsx` calls, using `src/styles/styles.css`). Run `pnpm check:fix` to apply; do not hand-sort.
@@ -112,7 +112,7 @@ src/routes/              File-based routes: _authed.tsx (signed-in layout) -> _a
 src/routes/api/          Server routes: auth.$ (Better Auth), trpc.$ (tRPC), stripe.$ (webhook), ical.$ (iCal export feed)
 src/integrations/trpc/   init.ts (public/protected/admin procedures, errorFormatter), context.ts + inner-context.ts (per-request context), router.ts, routers: bookings, rooms, availability, ical, policies, users
 src/core/functions/      TanStack Start server functions (auth-server.ts: getSessionFn)
-src/lib/                 Services and validation: auth, auth-client, session (useSession), booking-service, availability, pricing, date-range, cancellation-policy, email-service, stripe(-webhook), ical-sync/-parse/-generate/-export, scheduled-tasks, deps (ServiceDeps), ids, *-validation (Zod)
+src/lib/                 Services and validation: auth, auth-client, session (useSession), booking-service, availability, pricing, date-range, cancellation-policy, email-service, stripe(-webhook), ical-sync/-parse/-generate/-export, scheduled-tasks, deps (ServiceDeps), ids, site (domain, contact details, email senders, check-in/out times), *-validation (Zod)
 src/db/                  Drizzle schemas (auth-, booking-, room-, policy-), schema-export.ts, drizzle-init.ts (createDrizzle, Database type)
 src/components/          UI (ui/ = shadcn, admin/, booking/, email/, data-table/)
 src/stores/              TanStack Store booking state
@@ -124,6 +124,7 @@ db-copy/                 Local DB dumps (gitignored; never commit or edit)
 ```
 
 Conventions:
+- Site constants (domain, contact email/phone, Resend senders, `CHECK_IN_TIME`/`CHECK_OUT_TIME`, display helpers) live in `src/lib/site.ts`. Do not hardcode them elsewhere (the legal pages are the one exception). Email templates (`src/components/email/`, a Fallow zone that imports only `email`) get them as props from `email-service.ts`. The domain, senders and phone change at go-live.
 - Server-only env access uses `import { env } from 'cloudflare:workers'` (see `src/lib/auth.ts`). Do not use `process.env` for Worker secrets, and never import server-only modules into client code.
 - tRPC: use `publicProcedure` / `protectedProcedure` / `adminProcedure` from `src/integrations/trpc/init.ts` (admin checks are server-side, in `adminProcedure`); validate every input with Zod (schemas live in `src/lib/*-validation.ts`); register new routers in `src/integrations/trpc/router.ts`. Public procedures must never return feed URLs, internal booking ids or guest data.
 - Server services take `ServiceDeps` (`src/lib/deps.ts`: `db`, `env`, `stripe`, `waitUntil`). The tRPC context satisfies it (one Drizzle and one Stripe client per request); webhook and cron handlers build one with `createServiceDeps`. Do not create extra Drizzle/Stripe clients in procedures.
@@ -239,6 +240,8 @@ Skills are installed in **`.agents/skills/`** (locked in `skills-lock.json`; `.c
 | Reviewing a diff/PR | `fallow-review` |
 | Fallow install/config/CI/agent hooks | `fallow-setup` |
 | Fallow Cloud runtime coverage | `fallow-cloud-setup` (only if the user asks) |
+| shadcn/ui components, CLI (`info`, `add --dry-run --diff`, `docs`), styling/composition rules | `shadcn` (from `shadcn/ui`; run the CLI as `pnpm dlx shadcn@latest`) |
+| Radix UI -> Base UI migration of the shadcn wrappers and their consumers | `migrate-radix-to-base` (from `shadcn/ui`; one component per commit, reports in `.migration/`) |
 
 Not applicable here (do not use): `cargo-fallow` (Rust), `fallow-codex-onboarding` (Codex-specific).
 

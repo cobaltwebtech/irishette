@@ -13,14 +13,19 @@ import type { Database } from '@/db/drizzle-init';
 import type { bookings } from '@/db/schema-export';
 
 import { getAdminEmails } from './admin-query';
+import {
+	CHECK_OUT_TIME_LABEL,
+	CONTACT_EMAIL,
+	EMAIL_FROM_ADMIN,
+	EMAIL_FROM_AUTH,
+	EMAIL_FROM_BOOKINGS,
+	SITE_URL,
+} from './site';
 
 // All transactional email goes through here. Logs never include email
 // addresses or guest details: only the kind of email and the booking's
-// confirmation id.
-
-const FROM_BOOKINGS = 'Irishette Dev <bookings@contact.cobaltweb.tech>';
-const FROM_ADMIN = 'Irishette <admin@contact.cobaltweb.tech>';
-const FROM_AUTH = 'Irishette <auth@contact.cobaltweb.tech>';
+// confirmation id. Senders and contact details live in src/lib/site.ts
+// (they change at go-live).
 
 export interface EmailEnv {
 	RESEND_API_KEY: string;
@@ -48,7 +53,7 @@ function guestConfirmation(
 	baseUrl: string,
 ): CreateEmailOptions {
 	return {
-		from: FROM_BOOKINGS,
+		from: EMAIL_FROM_BOOKINGS,
 		to: [booking.guestEmail],
 		subject: `Booking Confirmed - ${booking.confirmationId} | Irishette Bed & Breakfast`,
 		react: React.createElement(BookingConfirmationEmail, {
@@ -67,6 +72,9 @@ function guestConfirmation(
 			feesAmount: booking.feesAmount ?? 0,
 			totalAmount: booking.totalAmount,
 			accountUrl: `${baseUrl}/account`,
+			siteUrl: SITE_URL,
+			contactEmail: CONTACT_EMAIL,
+			checkOutTime: CHECK_OUT_TIME_LABEL,
 		}),
 	};
 }
@@ -78,7 +86,7 @@ function adminBookingNotification(
 	baseUrl: string,
 ): CreateEmailOptions {
 	return {
-		from: FROM_ADMIN,
+		from: EMAIL_FROM_ADMIN,
 		to: adminEmails,
 		subject: `New Booking Alert: ${booking.confirmationId} - ${booking.guestName}`,
 		react: React.createElement(AdminBookingNotificationEmail, {
@@ -203,7 +211,7 @@ export async function sendCancellationEmails(
 	];
 	const emails = [
 		notification(
-			FROM_BOOKINGS,
+			EMAIL_FROM_BOOKINGS,
 			[booking.guestEmail],
 			`Booking Cancelled - ${booking.confirmationId} | Irishette Bed & Breakfast`,
 			{
@@ -228,7 +236,7 @@ export async function sendCancellationEmails(
 	if (adminEmails.length > 0) {
 		emails.push(
 			notification(
-				FROM_ADMIN,
+				EMAIL_FROM_ADMIN,
 				adminEmails,
 				`Booking Cancelled: ${booking.confirmationId} (${info.cancelledBy})`,
 				{
@@ -272,7 +280,7 @@ export async function sendAdminAlert(
 		env,
 		`admin alert: ${alert.subject}`,
 		[
-			notification(FROM_ADMIN, adminEmails, alert.subject, {
+			notification(EMAIL_FROM_ADMIN, adminEmails, alert.subject, {
 				preview: alert.subject,
 				heading: alert.heading,
 				paragraphs: alert.paragraphs,
@@ -313,10 +321,13 @@ export function sendPasswordResetEmail(
 	url: string,
 ): Promise<void> {
 	return sendAuthEmail(env, 'password reset', {
-		from: FROM_AUTH,
+		from: EMAIL_FROM_AUTH,
 		to: [to],
 		subject: 'Password Reset',
-		react: React.createElement(PasswordReset, { url }),
+		react: React.createElement(PasswordReset, {
+			url,
+			contactEmail: CONTACT_EMAIL,
+		}),
 	});
 }
 
@@ -326,10 +337,13 @@ export function sendMagicLinkEmail(
 	url: string,
 ): Promise<void> {
 	return sendAuthEmail(env, 'magic link', {
-		from: FROM_AUTH,
+		from: EMAIL_FROM_AUTH,
 		to: [to],
 		subject: 'Login to Irishette',
-		react: React.createElement(MagicLinkEmail, { url }),
+		react: React.createElement(MagicLinkEmail, {
+			url,
+			contactEmail: CONTACT_EMAIL,
+		}),
 	});
 }
 
@@ -341,7 +355,7 @@ export function sendVerificationEmail(
 	return sendAuthEmail(
 		env,
 		'email verification',
-		notification(FROM_AUTH, [to], 'Verify your email | Irishette', {
+		notification(EMAIL_FROM_AUTH, [to], 'Verify your email | Irishette', {
 			preview: 'Verify your email address',
 			heading: 'Verify your email',
 			paragraphs: [
@@ -363,14 +377,19 @@ export function sendChangeEmailConfirmation(
 	return sendAuthEmail(
 		env,
 		'email change confirmation',
-		notification(FROM_AUTH, [to], 'Confirm your email change | Irishette', {
-			preview: 'Confirm your new email address',
-			heading: 'Confirm your email change',
-			paragraphs: [
-				`Someone asked to change the email on your Irishette account to ${newEmail}.`,
-				'If this was you, confirm below. If not, ignore this email and your account stays unchanged.',
-			],
-			button: { label: 'Confirm change', href: url },
-		}),
+		notification(
+			EMAIL_FROM_AUTH,
+			[to],
+			'Confirm your email change | Irishette',
+			{
+				preview: 'Confirm your new email address',
+				heading: 'Confirm your email change',
+				paragraphs: [
+					`Someone asked to change the email on your Irishette account to ${newEmail}.`,
+					'If this was you, confirm below. If not, ignore this email and your account stays unchanged.',
+				],
+				button: { label: 'Confirm change', href: url },
+			},
+		),
 	);
 }

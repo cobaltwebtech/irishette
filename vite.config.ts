@@ -49,6 +49,9 @@ const config = defineConfig({
 			'.cloudflare/**',
 			// Typed by e2e/tsconfig.json (root tsconfig excludes it).
 			'playwright.config.ts',
+			// Installed agent skills (vendored; some ship example .tsx assets).
+			'.agents/**',
+			'.claude/**',
 		],
 		jsPlugins: [{ name: 'vite-plus', specifier: 'vite-plus/oxlint-plugin' }],
 		rules: {

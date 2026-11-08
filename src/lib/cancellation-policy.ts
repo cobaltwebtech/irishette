@@ -7,7 +7,8 @@ import { z } from 'zod';
 
 import type { IsoDate } from './date-range';
 import { roundCents } from './pricing';
-import { PROPERTY_TIMEZONE, zonedTimeToUtc } from './timezone';
+import { CHECK_IN_TIME, PROPERTY_TIMEZONE } from './site';
+import { zonedTimeToUtc } from './timezone';
 
 export interface CancellationTier {
 	/** Applies when cancelling at least this many hours before check-in. */
@@ -30,7 +31,7 @@ export interface CancellationPolicy {
 export const DEFAULT_CANCELLATION_POLICY: CancellationPolicy = {
 	id: null,
 	name: 'Standard policy',
-	checkInTime: '16:00',
+	checkInTime: CHECK_IN_TIME,
 	timezone: PROPERTY_TIMEZONE,
 	tiers: [
 		{ minHoursBefore: 72, refundPercent: 100 },

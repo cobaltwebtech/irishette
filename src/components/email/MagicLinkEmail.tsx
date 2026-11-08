@@ -18,9 +18,14 @@ import {
 
 interface MagicLinkEmailProps {
 	url: string;
+	/** Contact address shown in the footer (src/lib/site.ts CONTACT_EMAIL). */
+	contactEmail: string;
 }
 
-export const MagicLinkEmail: React.FC<MagicLinkEmailProps> = ({ url }) => {
+export const MagicLinkEmail: React.FC<MagicLinkEmailProps> = ({
+	url,
+	contactEmail,
+}) => {
 	return (
 		<Html>
 			<Head />
@@ -118,9 +123,7 @@ export const MagicLinkEmail: React.FC<MagicLinkEmailProps> = ({ url }) => {
 										Irishette Bed & Breakfast
 									</Text>
 									<Text className="mt-[4px] mb-0 text-[12px] leading-[24px] font-semibold text-stone-500">
-										<Link href="mailto:info@irishette.com">
-											info@irishette.com
-										</Link>
+										<Link href={`mailto:${contactEmail}`}>{contactEmail}</Link>
 									</Text>
 								</Column>
 							</Row>

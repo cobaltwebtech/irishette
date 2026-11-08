@@ -12,6 +12,12 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+	CHECK_OUT_TIME_LABEL,
+	CONTACT_EMAIL,
+	CONTACT_PHONE,
+	CONTACT_PHONE_HREF,
+} from '@/lib/site';
 
 export const Route = createFileRoute('/contact')({
 	head: () => ({
@@ -100,10 +106,10 @@ function ContactPage() {
 													For general inquiries and booking questions
 												</p>
 												<a
-													href="mailto:info@irishette.com"
+													href={`mailto:${CONTACT_EMAIL}`}
 													className="font-medium text-accent hover:text-accent/80"
 												>
-													info@irishette.com
+													{CONTACT_EMAIL}
 												</a>
 											</div>
 										</div>
@@ -123,10 +129,10 @@ function ContactPage() {
 													Speak directly with our friendly staff
 												</p>
 												<a
-													href="tel:+1234567890"
+													href={CONTACT_PHONE_HREF}
 													className="font-medium text-accent hover:text-accent/80"
 												>
-													(123) 456-7890
+													{CONTACT_PHONE}
 												</a>
 											</div>
 										</div>
@@ -268,7 +274,7 @@ function ContactPage() {
 									<p className="text-muted-foreground">
 										Check-in: 3:00 PM - 8:00 PM
 										<br />
-										Check-out: 11:00 AM
+										Check-out: {CHECK_OUT_TIME_LABEL}
 									</p>
 								</div>
 								<div>
@@ -287,10 +293,10 @@ function ContactPage() {
 									For immediate assistance with existing reservations, please
 									call us directly at{' '}
 									<a
-										href="tel:+1234567890"
+										href={CONTACT_PHONE_HREF}
 										className="font-medium text-accent hover:text-accent/80"
 									>
-										(123) 456-7890
+										{CONTACT_PHONE}
 									</a>
 								</p>
 							</div>

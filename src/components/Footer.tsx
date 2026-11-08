@@ -1,6 +1,8 @@
 import { Icon } from '@iconify/react';
 import { Link } from '@tanstack/react-router';
 
+import { CONTACT_PHONE, CONTACT_PHONE_HREF } from '@/lib/site';
+
 export default function Footer() {
 	return (
 		<footer className="mt-auto border-t border-border bg-muted">
@@ -61,11 +63,11 @@ export default function Footer() {
 								Send a Message
 							</Link>
 							<a
-								href="tel:+1234567890"
+								href={CONTACT_PHONE_HREF}
 								className="flex items-start gap-2 transition-colors hover:text-accent"
 							>
 								<Icon icon="tabler:phone" className="size-5" />
-								(123) 456-7890
+								{CONTACT_PHONE}
 							</a>
 							<div className="flex items-start gap-2">
 								<Icon icon="tabler:map-pin" className="size-5" />

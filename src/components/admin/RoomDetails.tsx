@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { SITE_URL } from '@/lib/site';
 
 interface RoomDetailsProps {
 	name: string;
@@ -124,7 +125,7 @@ export function RoomDetails({
 						<div>
 							Public URL:{' '}
 							<span className="font-mono font-semibold">
-								https://www.irishette.com/rooms/{slug}
+								{SITE_URL}/rooms/{slug}
 							</span>
 						</div>
 					</div>

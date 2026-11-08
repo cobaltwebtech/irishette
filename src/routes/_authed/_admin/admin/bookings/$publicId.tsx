@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/card';
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
+import { CHECK_OUT_TIME_LABEL } from '@/lib/site';
 
 export const Route = createFileRoute(
 	'/_authed/_admin/admin/bookings/$publicId',
@@ -202,7 +203,9 @@ function AdminBookingDetailPage() {
 									day: 'numeric',
 								})}
 							</p>
-							<p className="text-sm text-muted-foreground">Before 11:00 AM</p>
+							<p className="text-sm text-muted-foreground">
+								Before {CHECK_OUT_TIME_LABEL}
+							</p>
 						</div>
 						<div>
 							<p className="text-sm font-medium text-muted-foreground">

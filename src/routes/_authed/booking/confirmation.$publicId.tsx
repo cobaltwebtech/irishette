@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
+import { CHECK_OUT_TIME_LABEL } from '@/lib/site';
 import { bookingActions } from '@/stores';
 import { parseISODateString } from '@/utils/booking-utils';
 
@@ -180,7 +181,7 @@ function BookingConfirmation() {
 										})}
 									</p>
 									<p className="text-sm text-muted-foreground">
-										Before 11:00 AM
+										Before {CHECK_OUT_TIME_LABEL}
 									</p>
 								</div>
 								<div>
@@ -302,8 +303,8 @@ function BookingConfirmation() {
 									available upon request.
 								</li>
 								<li>
-									Check-out is by 11:00 AM. Late check-out may be available upon
-									request.
+									Check-out is by {CHECK_OUT_TIME_LABEL}. Late check-out may be
+									available upon request.
 								</li>
 								<li>
 									If you need to cancel your booking please review our{' '}
