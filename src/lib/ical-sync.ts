@@ -18,6 +18,7 @@ import { sendAdminAlert } from './email-service';
 import { fetchFeed, readFeedText } from './ical-fetch';
 import { type ImportedEvent, parseIcal } from './ical-parse';
 import { newId } from './ids';
+import { createInboxItem } from './inbox-service';
 import { SITE_NAME, SITE_URL } from './site';
 import { todayIn } from './timezone';
 
@@ -458,12 +459,38 @@ async function roomLabel(deps: ServiceDeps, roomId: string) {
 	return row ?? { name: 'Room', publicId: '' };
 }
 
+/** First 16 hex chars of SHA-256: a stable key for a set of conflicts. */
+async function shortHash(value: string): Promise<string> {
+	const digest = await crypto.subtle.digest(
+		'SHA-256',
+		new TextEncoder().encode(value),
+	);
+	return [...new Uint8Array(digest).slice(0, 8)]
+		.map((b) => b.toString(16).padStart(2, '0'))
+		.join('');
+}
+
 async function alertFeedProblem(
 	deps: ServiceDeps,
 	feed: Feed,
 	message: string,
 ) {
 	const r = await roomLabel(deps, feed.roomId);
+	await createInboxItem(deps, {
+		kind: 'ical_sync_failed',
+		title: `Calendar sync problem: ${r.name} (${feed.label ?? feed.source})`,
+		summary: `The latest import was not applied: ${message}`,
+		details: {
+			roomName: r.name,
+			roomPublicId: r.publicId,
+			feedSource: feed.source,
+			feedLabel: feed.label,
+			problem: message,
+		},
+		// One item per feed per day (the alert fires when a healthy feed
+		// starts failing).
+		dedupeKey: `ical_sync_failed:${feed.id}:${todayIn()}`,
+	});
 	await sendAdminAlert(deps.db, deps.env, {
 		subject: `Calendar sync problem: ${r.name} (${feed.source})`,
 		heading: 'A calendar feed stopped syncing',
@@ -488,6 +515,40 @@ async function alertConflicts(
 	conflicts: Awaited<ReturnType<typeof findEventConflicts>>,
 ) {
 	const r = await roomLabel(deps, feed.roomId);
+	const conflictSet = conflicts
+		.map(
+			(c) => `${c.booking.id}:${c.event.uid}:${c.event.start}:${c.event.end}`,
+		)
+		.sort()
+		.join(',');
+	await createInboxItem(
+		deps,
+		{
+			kind: 'ical_conflict',
+			title: `Double booking: ${r.name} (${feed.label ?? feed.source})`,
+			summary: `${conflicts.length === 1 ? 'An imported reservation overlaps' : `${conflicts.length} imported reservations overlap`} ${conflicts.map((c) => c.booking.confirmationId).join(', ')}.`,
+			details: {
+				roomName: r.name,
+				roomPublicId: r.publicId,
+				feedSource: feed.source,
+				feedLabel: feed.label,
+				conflicts: conflicts.map((c) => ({
+					confirmationId: c.booking.confirmationId,
+					bookingPublicId: c.booking.publicId,
+					bookingStatus: c.booking.status,
+					checkInDate: c.booking.checkInDate,
+					checkOutDate: c.booking.checkOutDate,
+					eventStart: c.event.start,
+					eventEnd: c.event.end,
+				})),
+			},
+			bookingId: conflicts[0].booking.id,
+			dedupeKey: `ical_conflict:${feed.id}:${await shortHash(conflictSet)}`,
+		},
+		// Every sync finds the same conflict again: resurface at most daily
+		// (like the alert email's 24-hour idempotency).
+		{ resurfaceAfterSeconds: 24 * 60 * 60 },
+	);
 	await sendAdminAlert(deps.db, deps.env, {
 		subject: `Double booking: ${r.name} (${feed.source})`,
 		heading: 'An imported reservation overlaps a booking',

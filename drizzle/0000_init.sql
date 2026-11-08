@@ -131,6 +131,34 @@ CREATE TABLE `payment_transactions` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `payment_transactions_stripe_payment_intent_id_unique` ON `payment_transactions` (`stripe_payment_intent_id`);--> statement-breakpoint
+CREATE TABLE `admin_inbox_items` (
+	`id` text PRIMARY KEY NOT NULL,
+	`public_id` text NOT NULL,
+	`source` text NOT NULL,
+	`kind` text NOT NULL,
+	`title` text NOT NULL,
+	`summary` text NOT NULL,
+	`details` text NOT NULL,
+	`status` text DEFAULT 'new' NOT NULL,
+	`read_at` integer,
+	`archived_at` integer,
+	`booking_id` text,
+	`user_id` text,
+	`dedupe_key` text,
+	`occurrences` integer DEFAULT 1 NOT NULL,
+	`surfaced_at` integer NOT NULL,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	FOREIGN KEY (`booking_id`) REFERENCES `bookings`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `admin_inbox_items_public_id_unique` ON `admin_inbox_items` (`public_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `admin_inbox_items_dedupe_key_unique` ON `admin_inbox_items` (`dedupe_key`);--> statement-breakpoint
+CREATE INDEX `admin_inbox_status_surfaced_idx` ON `admin_inbox_items` (`status`,`surfaced_at`,`public_id`);--> statement-breakpoint
+CREATE INDEX `admin_inbox_source_status_surfaced_idx` ON `admin_inbox_items` (`source`,`status`,`surfaced_at`);--> statement-breakpoint
+CREATE INDEX `admin_inbox_booking_idx` ON `admin_inbox_items` (`booking_id`,`surfaced_at`);--> statement-breakpoint
+CREATE INDEX `admin_inbox_user_idx` ON `admin_inbox_items` (`user_id`,`surfaced_at`);--> statement-breakpoint
 CREATE TABLE `cancellation_policies` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { bookings } from '@/db/schema-export';
 import { createStripe } from '@/lib/stripe';
 
-import { db, fetchWorker, insertBooking } from './helpers';
+import { db, fetchWorker, inboxItemsOfKind, insertBooking } from './helpers';
 import {
 	mockResend,
 	mockStripePaymentIntents,
@@ -206,5 +206,58 @@ describe('charge.refunded', () => {
 		});
 		await fetchWorker(await signedRequest(charge(25000)));
 		expect((await bookingStatus(booking.id)).paymentStatus).toBe('refunded');
+	});
+});
+
+describe('refund.failed', () => {
+	it('alerts the admins and adds one inbox item (replays update it)', async () => {
+		const booking = await insertBooking({
+			checkInDate: '2037-04-10',
+			checkOutDate: '2037-04-12',
+			stripePaymentIntentId: 'pi_refund_fails',
+		});
+		const sent = mockResend();
+		const event = {
+			id: 'evt_refund_failed',
+			object: 'event',
+			type: 'refund.failed',
+			livemode: false,
+			data: {
+				object: {
+					id: 're_fails_1',
+					object: 'refund',
+					amount: 12500,
+					currency: 'usd',
+					status: 'failed',
+					failure_reason: 'expired_or_canceled_card',
+					payment_intent: 'pi_refund_fails',
+				},
+			},
+		};
+		expect((await fetchWorker(await signedRequest(event))).status).toBe(200);
+		expect(sent.filter((e) => e.to.includes(ADMIN.email))).toHaveLength(1);
+
+		const [item] = await inboxItemsOfKind('refund_failed');
+		expect(item).toMatchObject({
+			source: 'stripe',
+			status: 'new',
+			bookingId: booking.id,
+			userId: GUEST.id,
+			dedupeKey: 'refund_failed:re_fails_1',
+			occurrences: 1,
+		});
+		expect(item.details).toMatchObject({
+			refundId: 're_fails_1',
+			amount: 125,
+			failureReason: 'expired_or_canceled_card',
+			confirmationId: booking.confirmationId,
+			livemode: false,
+		});
+
+		// A replay updates the same item (no duplicate).
+		await fetchWorker(await signedRequest(event));
+		const items = await inboxItemsOfKind('refund_failed');
+		expect(items).toHaveLength(1);
+		expect(items[0].occurrences).toBe(2);
 	});
 });

@@ -4,6 +4,7 @@ import type { ComponentProps } from 'react';
 
 import { AdminNavigation } from '@/components/admin/AdminNavigation';
 import { AdminUser } from '@/components/admin/AdminUser';
+import { useUnreadCount } from '@/components/admin/inbox/use-inbox';
 import {
 	Sidebar,
 	SidebarContent,
@@ -36,6 +37,8 @@ export function AdminSidebar({
 	);
 
 	const rooms = roomsData?.rooms || [];
+	// Cached; refreshed every 5 minutes, on focus and after status changes.
+	const unread = useUnreadCount();
 
 	// Navigation data with dynamic room items
 	const navMainData = [
@@ -47,6 +50,18 @@ export function AdminSidebar({
 				{
 					title: 'Overview',
 					url: '/admin',
+				},
+			],
+		},
+		{
+			title: 'Notifications',
+			url: '/admin/inbox',
+			icon: 'tabler:bell',
+			badge: unread,
+			items: [
+				{
+					title: 'All Notifications',
+					url: '/admin/inbox',
 				},
 			],
 		},

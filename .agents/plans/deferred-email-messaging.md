@@ -8,6 +8,8 @@ Read `AGENTS.md` first if this plan is picked up. Re-verify everything marked **
 
 ## 1. What this would add
 
+**Already done (plan 02 Phase 4, 2026-11-08):** contact form messages are stored as admin notifications (`admin_inbox_items`, source `guest`, kind `contact_form`) with a `mailto:` reply button. This plan would add threads, dashboard replies and inbound mail on top of that (`docs/CONTACT_FORM.md`, `docs/ADMIN_INBOX.md`).
+
 A small ticketing system inside the admin dashboard:
 - Contact form messages are stored in D1 and shown in the admin inbox (not only emailed).
 - Admins reply from the dashboard. The reply is emailed to the guest and stored in a thread.

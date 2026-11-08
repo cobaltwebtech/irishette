@@ -8,9 +8,15 @@ import type Stripe from 'stripe';
 
 import { bookings } from '@/db/schema-export';
 
+type Booking = typeof bookings.$inferSelect;
+
 import { confirmBookingPayment } from './booking-service';
 import { createServiceDeps, inBackground, type ServiceDeps } from './deps';
 import { sendAdminAlert } from './email-service';
+import {
+	createInboxItemInBackground,
+	type NewInboxItem,
+} from './inbox-service';
 
 // Stripe webhook for the booking flow: POST /api/stripe/webhook.
 // (Better Auth's Stripe plugin has its own endpoint under /api/auth.)
@@ -77,10 +83,10 @@ async function dispatch(deps: ServiceDeps, event: Stripe.Event) {
 		case 'charge.refunded':
 			return onChargeRefunded(deps, event.data.object);
 		case 'refund.failed':
-			return onRefundFailed(deps, event.data.object);
+			return onRefundFailed(deps, event.data.object, event.livemode);
 		case 'refund.updated':
 			if (event.data.object.status === 'failed') {
-				return onRefundFailed(deps, event.data.object);
+				return onRefundFailed(deps, event.data.object, event.livemode);
 			}
 			return;
 		default:
@@ -161,7 +167,39 @@ async function onChargeRefunded(deps: ServiceDeps, charge: Stripe.Charge) {
 	);
 }
 
-async function onRefundFailed(deps: ServiceDeps, refund: Stripe.Refund) {
+/** The admin inbox item for a failed refund (dedupe: one per refund). */
+function refundFailedInboxItem(
+	refund: Stripe.Refund,
+	paymentIntentId: string | null,
+	booking: Pick<Booking, 'id' | 'userId' | 'confirmationId'> | undefined,
+	livemode: boolean,
+): NewInboxItem<'refund_failed'> {
+	const amount = refund.amount / 100;
+	const reason = refund.failure_reason ? ` (${refund.failure_reason})` : '';
+	return {
+		kind: 'refund_failed',
+		title: `Refund failed${booking ? `: ${booking.confirmationId}` : ''}`,
+		summary: `Stripe could not complete a refund of $${amount.toFixed(2)}${reason}. Check the payment in Stripe and contact the guest.`,
+		details: {
+			refundId: refund.id,
+			amount,
+			currency: refund.currency,
+			paymentIntentId,
+			confirmationId: booking?.confirmationId ?? null,
+			failureReason: refund.failure_reason ?? null,
+			livemode,
+		},
+		bookingId: booking?.id ?? null,
+		userId: booking?.userId ?? null,
+		dedupeKey: `refund_failed:${refund.id}`,
+	};
+}
+
+async function onRefundFailed(
+	deps: ServiceDeps,
+	refund: Stripe.Refund,
+	livemode: boolean,
+) {
 	const intentId =
 		typeof refund.payment_intent === 'string'
 			? refund.payment_intent
@@ -169,6 +207,10 @@ async function onRefundFailed(deps: ServiceDeps, refund: Stripe.Refund) {
 	const booking = intentId ? await findBooking(deps, intentId) : undefined;
 	console.error(
 		`Refund ${refund.id} failed${booking ? ` for booking ${booking.confirmationId}` : ''}`,
+	);
+	createInboxItemInBackground(
+		deps,
+		refundFailedInboxItem(refund, intentId ?? null, booking, livemode),
 	);
 	inBackground(deps, `refund failed ${refund.id}`, () =>
 		sendAdminAlert(deps.db, deps.env, {

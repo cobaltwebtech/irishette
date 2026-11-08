@@ -1,7 +1,10 @@
 import { Icon } from '@iconify/react';
 import { createFileRoute } from '@tanstack/react-router';
-import { useId } from 'react';
+import { type ComponentProps, type FormEvent, useId, useState } from 'react';
+import { z } from 'zod';
 
+import { AuthError } from '@/components/auth/AuthCard';
+import { TurnstileField, useTurnstile } from '@/components/auth/TurnstileField';
 import { Button } from '@/components/ui/button';
 import {
 	Card,
@@ -12,6 +15,11 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { submitContactFn } from '@/core/functions/contact';
+import type { ContactResult } from '@/lib/contact-service';
+import { contactSchema } from '@/lib/contact-validation';
+import { useSession } from '@/lib/session';
 import {
 	CHECK_OUT_TIME_LABEL,
 	CONTACT_EMAIL,
@@ -20,6 +28,10 @@ import {
 } from '@/lib/site';
 
 export const Route = createFileRoute('/contact')({
+	// ?booking=ABC123 prefills the confirmation ID ("Contact support" links).
+	validateSearch: z.object({
+		booking: z.string().trim().max(20).optional().catch(undefined),
+	}),
 	head: () => ({
 		meta: [
 			{
@@ -36,19 +48,6 @@ export const Route = createFileRoute('/contact')({
 });
 
 function ContactPage() {
-	const firstNameId = useId();
-	const lastNameId = useId();
-	const emailId = useId();
-	const phoneId = useId();
-	const subjectId = useId();
-	const messageId = useId();
-
-	const handleSubmit = (e: React.FormEvent) => {
-		e.preventDefault();
-		// TODO: Integrate with Resend email service
-		console.log('Contact form submitted - TODO: Implement Resend integration');
-	};
-
 	return (
 		<div className="bg-background">
 			{/* Hero Section */}
@@ -174,81 +173,7 @@ function ContactPage() {
 									</CardDescription>
 								</CardHeader>
 								<CardContent>
-									<form onSubmit={handleSubmit} className="space-y-6">
-										<div className="grid gap-4 md:grid-cols-2">
-											<div className="space-y-2">
-												<Label htmlFor={firstNameId}>First Name *</Label>
-												<Input
-													id={firstNameId}
-													name="firstName"
-													required
-													placeholder="Your first name"
-												/>
-											</div>
-											<div className="space-y-2">
-												<Label htmlFor={lastNameId}>Last Name *</Label>
-												<Input
-													id={lastNameId}
-													name="lastName"
-													required
-													placeholder="Your last name"
-												/>
-											</div>
-										</div>
-
-										<div className="space-y-2">
-											<Label htmlFor={emailId}>Email Address *</Label>
-											<Input
-												id={emailId}
-												name="email"
-												type="email"
-												required
-												placeholder="your.email@example.com"
-											/>
-										</div>
-
-										<div className="space-y-2">
-											<Label htmlFor={phoneId}>Phone Number</Label>
-											<Input
-												id={phoneId}
-												name="phone"
-												type="tel"
-												placeholder="(123) 456-7890"
-											/>
-										</div>
-
-										<div className="space-y-2">
-											<Label htmlFor={subjectId}>Subject *</Label>
-											<Input
-												id={subjectId}
-												name="subject"
-												required
-												placeholder="What can we help you with?"
-											/>
-										</div>
-
-										<div className="space-y-2">
-											<Label htmlFor={messageId}>Message *</Label>
-											<textarea
-												id={messageId}
-												name="message"
-												required
-												rows={5}
-												className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-												placeholder="Tell us more about your inquiry..."
-											/>
-										</div>
-
-										<div className="space-y-4">
-											<Button type="submit" className="w-full" size="lg">
-												<Icon icon="tabler:send" className="size-5" />
-												Send Message
-											</Button>
-											<p className="text-center text-sm text-muted-foreground">
-												* Required fields. We typically respond within 24 hours.
-											</p>
-										</div>
-									</form>
+									<ContactForm />
 								</CardContent>
 							</Card>
 						</div>
@@ -304,6 +229,219 @@ function ContactPage() {
 					</Card>
 				</div>
 			</section>
+		</div>
+	);
+}
+
+type ContactField = keyof z.infer<typeof contactSchema>;
+type FieldErrors = Partial<Record<ContactField, string>>;
+
+const RESULT_MESSAGES: Record<
+	Exclude<ContactResult, { ok: true }>['reason'],
+	string
+> = {
+	turnstile: 'The security check failed. Please try again.',
+	unavailable: `We could not run the security check right now. Please try again, or email us directly at ${CONTACT_EMAIL}.`,
+	send_failed: `Your message could not be sent. Please email us directly at ${CONTACT_EMAIL}.`,
+};
+
+/** Message for a thrown server function error (rate limit, network, ...). */
+function thrownMessage(error: unknown) {
+	if (error instanceof Error && error.message.startsWith('Too many requests')) {
+		return error.message;
+	}
+	return `Something went wrong. Please try again, or email us directly at ${CONTACT_EMAIL}.`;
+}
+
+/**
+ * The contact form: emails the admins (CONTACT_EMAIL) and shows up in the
+ * admin dashboard's notifications, where they reply by email. Nothing is sent
+ * to the guest. Signed-in guests get their name, email and phone prefilled.
+ */
+function ContactForm() {
+	const session = useSession();
+	const { booking } = Route.useSearch();
+	const turnstile = useTurnstile();
+	const [isLoading, setIsLoading] = useState(false);
+	const [error, setError] = useState('');
+	const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+	const [sent, setSent] = useState(false);
+	const user = session?.user;
+
+	async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setError('');
+		const form = new FormData(event.currentTarget);
+		const parsed = contactSchema.safeParse({
+			name: form.get('name'),
+			email: form.get('email'),
+			phone: form.get('phone'),
+			subject: form.get('subject'),
+			message: form.get('message'),
+			bookingConfirmationId: form.get('bookingConfirmationId'),
+			turnstileToken: turnstile.token,
+		});
+		if (!parsed.success) {
+			const errors: FieldErrors = {};
+			for (const issue of parsed.error.issues) {
+				const field = issue.path[0] as ContactField;
+				errors[field] ??= issue.message;
+			}
+			setFieldErrors(errors);
+			if (errors.turnstileToken) setError(errors.turnstileToken);
+			return;
+		}
+		setFieldErrors({});
+		setIsLoading(true);
+		try {
+			const result = await submitContactFn({ data: parsed.data });
+			if (result.ok) setSent(true);
+			else setError(RESULT_MESSAGES[result.reason]);
+		} catch (submitError) {
+			setError(thrownMessage(submitError));
+		} finally {
+			setIsLoading(false);
+			// Tokens are single-use: get a fresh one for the next attempt.
+			turnstile.reset();
+		}
+	}
+
+	if (sent) return <ContactSent onAgain={() => setSent(false)} />;
+
+	return (
+		<form onSubmit={handleSubmit} noValidate className="space-y-6">
+			<ContactInput
+				name="name"
+				label="Name *"
+				defaultValue={user?.name ?? ''}
+				autoComplete="name"
+				placeholder="Your name"
+				error={fieldErrors.name}
+			/>
+			<div className="grid gap-4 md:grid-cols-2">
+				<ContactInput
+					name="email"
+					label="Email Address *"
+					type="email"
+					defaultValue={user?.email ?? ''}
+					autoComplete="email"
+					placeholder="your.email@example.com"
+					error={fieldErrors.email}
+				/>
+				<ContactInput
+					name="phone"
+					label="Phone Number"
+					type="tel"
+					defaultValue={user?.phoneNumber ?? ''}
+					autoComplete="tel"
+					placeholder="(123) 456-7890"
+					error={fieldErrors.phone}
+				/>
+			</div>
+			<ContactInput
+				name="subject"
+				label="Subject *"
+				placeholder="What can we help you with?"
+				error={fieldErrors.subject}
+			/>
+			<ContactInput
+				name="bookingConfirmationId"
+				label="Booking Confirmation ID"
+				defaultValue={booking ?? ''}
+				placeholder="Optional, e.g. ABC123"
+				error={fieldErrors.bookingConfirmationId}
+			/>
+			<ContactTextarea error={fieldErrors.message} />
+			<TurnstileField widgetRef={turnstile.ref} onToken={turnstile.setToken} />
+			<AuthError message={error} />
+			<div className="space-y-4">
+				<Button type="submit" className="w-full" size="lg" disabled={isLoading}>
+					<Icon
+						icon={isLoading ? 'tabler:loader-2' : 'tabler:send'}
+						className={isLoading ? 'size-5 animate-spin' : 'size-5'}
+					/>
+					{isLoading ? 'Sending...' : 'Send Message'}
+				</Button>
+				<p className="text-center text-sm text-muted-foreground">
+					* Required fields. We typically respond within 24 hours.
+				</p>
+			</div>
+		</form>
+	);
+}
+
+function ContactSent({ onAgain }: { onAgain: () => void }) {
+	return (
+		<div className="space-y-4 py-6 text-center">
+			<Icon
+				icon="tabler:circle-check"
+				className="mx-auto size-12 text-accent"
+			/>
+			<output className="block space-y-2">
+				<span className="block text-xl font-semibold">
+					Thanks, your message is on its way
+				</span>
+				<span className="block text-muted-foreground">
+					We'll reply by email, usually within 24 hours.
+				</span>
+			</output>
+			<Button variant="outline" onClick={onAgain}>
+				Send another message
+			</Button>
+		</div>
+	);
+}
+
+function FieldError({ id, message }: { id: string; message?: string }) {
+	if (!message) return null;
+	return (
+		<p id={id} className="text-sm text-destructive">
+			{message}
+		</p>
+	);
+}
+
+function ContactInput({
+	label,
+	error,
+	...props
+}: ComponentProps<typeof Input> & {
+	name: string;
+	label: string;
+	error?: string;
+}) {
+	const id = useId();
+	const errorId = `${id}-error`;
+	return (
+		<div className="space-y-2">
+			<Label htmlFor={id}>{label}</Label>
+			<Input
+				id={id}
+				aria-invalid={error ? true : undefined}
+				aria-describedby={error ? errorId : undefined}
+				{...props}
+			/>
+			<FieldError id={errorId} message={error} />
+		</div>
+	);
+}
+
+function ContactTextarea({ error }: { error?: string }) {
+	const id = useId();
+	const errorId = `${id}-error`;
+	return (
+		<div className="space-y-2">
+			<Label htmlFor={id}>Message *</Label>
+			<Textarea
+				id={id}
+				name="message"
+				rows={5}
+				className="min-h-30"
+				placeholder="Tell us more about your inquiry..."
+				aria-invalid={error ? true : undefined}
+				aria-describedby={error ? errorId : undefined}
+			/>
+			<FieldError id={errorId} message={error} />
 		</div>
 	);
 }

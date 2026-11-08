@@ -13,11 +13,13 @@ import {
 	type ReactTable,
 	type RowData,
 	rowPaginationFeature,
+	rowSelectionFeature,
 	rowSortingFeature,
 	sortFn_alphanumeric,
 	sortFn_basic,
 	sortFn_datetime,
 	sortFn_text,
+	type TableFeatures,
 	tableFeatures,
 } from '@tanstack/react-table';
 import type { ReactNode } from 'react';
@@ -70,6 +72,19 @@ export const { useAppTable, createAppColumnHelper } = createTableHook({
 	features: dataTableFeatures,
 });
 
+/**
+ * Tables whose rows are paged, filtered and sorted on the server (manual
+ * mode): only row selection runs in the browser. `useServerTable({ data,
+ * columns, getRowId, state: { rowSelection }, onRowSelectionChange })` and
+ * `createServerColumnHelper<Row>()`.
+ */
+const serverTableFeatures = tableFeatures({ rowSelectionFeature });
+
+export const {
+	useAppTable: useServerTable,
+	createAppColumnHelper: createServerColumnHelper,
+} = createTableHook({ features: serverTableFeatures });
+
 // The components below read table state through methods (getIsSorted,
 // getRowModel, ...). The React Compiler cannot see those reads and could
 // reuse stale output for a stable column/header object, so they opt out.
@@ -104,13 +119,16 @@ export function SortableHeader<TData extends RowData, TValue extends CellData>({
 }
 
 /** shadcn table body for a TanStack table, with an empty-state row. */
-export function DataTableView<TData extends RowData>({
+export function DataTableView<
+	TFeatures extends TableFeatures,
+	TData extends RowData,
+>({
 	table,
 	emptyMessage = 'No results.',
 	onRowClick,
 	rowClassName,
 }: {
-	table: DataTable<TData>;
+	table: ReactTable<TFeatures, TData>;
 	emptyMessage?: ReactNode;
 	onRowClick?: (row: TData) => void;
 	/** Extra classes per row (e.g. to highlight one). */

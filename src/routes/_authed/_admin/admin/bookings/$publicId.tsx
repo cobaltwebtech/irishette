@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { BookingInternalNotes } from '@/components/admin/BookingInternalNotes';
+import { NotificationsPanel } from '@/components/admin/inbox/NotificationsPanel';
 import { CancelBookingButton } from '@/components/booking/CancelBookingButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -421,6 +422,11 @@ function AdminBookingDetailPage() {
 						/>
 					</CardContent>
 				</Card>
+
+				<NotificationsPanel
+					className="lg:col-span-full"
+					bookingPublicId={booking.booking.publicId}
+				/>
 
 				{/* Admin Information */}
 				<Card className="lg:col-span-full">

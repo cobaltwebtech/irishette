@@ -208,7 +208,16 @@ createServerFn({ method: 'POST' })
 
 Both set the HTTP status with `setResponseStatus` and throw, and pass
 `context.user` (the `SessionUser` shape) to the handler. Today no server
-function needs them (`getSessionFn` is the only one); the rule is for new ones.
+function needs them; the rule is for new ones.
+
+Public server functions (no private data, on purpose without these):
+- `getSessionFn` (`src/core/functions/auth-server.ts`): the caller's own
+  session or null.
+- `submitContactFn` (`src/core/functions/contact.ts`): the contact form. It
+  reads nothing private and is protected by `rateLimitFnMiddleware`
+  (`API_RATE_LIMITER`, scope `contact.submit`, keyed by IP; 429 with
+  `Retry-After`) and Turnstile Siteverify in the handler
+  (`src/lib/turnstile.ts`, fails closed). See `CONTACT_FORM.md`.
 
 ## tRPC
 

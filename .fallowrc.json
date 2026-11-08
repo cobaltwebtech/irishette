@@ -56,6 +56,9 @@
           "src/lib/cancellation-policy-store.ts",
           "src/lib/rate-limit.ts",
           "src/lib/server-auth.ts",
+          "src/lib/inbox-service.ts",
+          "src/lib/contact-service.ts",
+          "src/lib/turnstile.ts",
           "src/db/**",
           "src/server.ts",
           "src/integrations/trpc/init.ts",
@@ -68,7 +71,8 @@
           "src/integrations/trpc/users.ts",
           "src/integrations/trpc/ical.ts",
           "src/integrations/trpc/policies.ts",
-          "src/integrations/trpc/availability.ts"
+          "src/integrations/trpc/availability.ts",
+          "src/integrations/trpc/inbox.ts"
         ]
       },
       {

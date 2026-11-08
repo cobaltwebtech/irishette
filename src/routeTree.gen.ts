@@ -40,6 +40,8 @@ import { Route as AuthedAdminAdminBookingsCurrentBookingsRouteImport } from './r
 import { Route as AuthedAdminAdminBookingsPastBookingsRouteImport } from './routes/_authed/_admin/admin/bookings/past-bookings'
 import { Route as AuthedAdminAdminGuestIndexRouteImport } from './routes/_authed/_admin/admin/guest/index'
 import { Route as AuthedAdminAdminGuestPublicIdRouteImport } from './routes/_authed/_admin/admin/guest/$publicId'
+import { Route as AuthedAdminAdminInboxIndexRouteImport } from './routes/_authed/_admin/admin/inbox/index'
+import { Route as AuthedAdminAdminInboxPublicIdRouteImport } from './routes/_authed/_admin/admin/inbox/$publicId'
 import { Route as AuthedAdminAdminPropertyManagementIndexRouteImport } from './routes/_authed/_admin/admin/property-management/index'
 import { Route as AuthedAdminAdminPropertyManagementPublicIdRouteImport } from './routes/_authed/_admin/admin/property-management/$publicId'
 
@@ -206,6 +208,18 @@ const AuthedAdminAdminGuestPublicIdRoute =
     path: '/admin/guest/$publicId',
     getParentRoute: () => AuthedAdminRoute,
   } as any)
+const AuthedAdminAdminInboxIndexRoute =
+  AuthedAdminAdminInboxIndexRouteImport.update({
+    id: '/admin/inbox/',
+    path: '/admin/inbox/',
+    getParentRoute: () => AuthedAdminRoute,
+  } as any)
+const AuthedAdminAdminInboxPublicIdRoute =
+  AuthedAdminAdminInboxPublicIdRouteImport.update({
+    id: '/admin/inbox/$publicId',
+    path: '/admin/inbox/$publicId',
+    getParentRoute: () => AuthedAdminRoute,
+  } as any)
 const AuthedAdminAdminPropertyManagementIndexRoute =
   AuthedAdminAdminPropertyManagementIndexRouteImport.update({
     id: '/admin/property-management/',
@@ -248,8 +262,10 @@ export interface FileRoutesByFullPath {
   '/admin/bookings/current-bookings': typeof AuthedAdminAdminBookingsCurrentBookingsRoute
   '/admin/bookings/past-bookings': typeof AuthedAdminAdminBookingsPastBookingsRoute
   '/admin/guest/$publicId': typeof AuthedAdminAdminGuestPublicIdRoute
+  '/admin/inbox/$publicId': typeof AuthedAdminAdminInboxPublicIdRoute
   '/admin/property-management/$publicId': typeof AuthedAdminAdminPropertyManagementPublicIdRoute
   '/admin/guest/': typeof AuthedAdminAdminGuestIndexRoute
+  '/admin/inbox/': typeof AuthedAdminAdminInboxIndexRoute
   '/admin/property-management/': typeof AuthedAdminAdminPropertyManagementIndexRoute
 }
 export interface FileRoutesByTo {
@@ -281,8 +297,10 @@ export interface FileRoutesByTo {
   '/admin/bookings/current-bookings': typeof AuthedAdminAdminBookingsCurrentBookingsRoute
   '/admin/bookings/past-bookings': typeof AuthedAdminAdminBookingsPastBookingsRoute
   '/admin/guest/$publicId': typeof AuthedAdminAdminGuestPublicIdRoute
+  '/admin/inbox/$publicId': typeof AuthedAdminAdminInboxPublicIdRoute
   '/admin/property-management/$publicId': typeof AuthedAdminAdminPropertyManagementPublicIdRoute
   '/admin/guest': typeof AuthedAdminAdminGuestIndexRoute
+  '/admin/inbox': typeof AuthedAdminAdminInboxIndexRoute
   '/admin/property-management': typeof AuthedAdminAdminPropertyManagementIndexRoute
 }
 export interface FileRoutesById {
@@ -317,8 +335,10 @@ export interface FileRoutesById {
   '/_authed/_admin/admin/bookings/current-bookings': typeof AuthedAdminAdminBookingsCurrentBookingsRoute
   '/_authed/_admin/admin/bookings/past-bookings': typeof AuthedAdminAdminBookingsPastBookingsRoute
   '/_authed/_admin/admin/guest/$publicId': typeof AuthedAdminAdminGuestPublicIdRoute
+  '/_authed/_admin/admin/inbox/$publicId': typeof AuthedAdminAdminInboxPublicIdRoute
   '/_authed/_admin/admin/property-management/$publicId': typeof AuthedAdminAdminPropertyManagementPublicIdRoute
   '/_authed/_admin/admin/guest/': typeof AuthedAdminAdminGuestIndexRoute
+  '/_authed/_admin/admin/inbox/': typeof AuthedAdminAdminInboxIndexRoute
   '/_authed/_admin/admin/property-management/': typeof AuthedAdminAdminPropertyManagementIndexRoute
 }
 export interface FileRouteTypes {
@@ -352,8 +372,10 @@ export interface FileRouteTypes {
     | '/admin/bookings/current-bookings'
     | '/admin/bookings/past-bookings'
     | '/admin/guest/$publicId'
+    | '/admin/inbox/$publicId'
     | '/admin/property-management/$publicId'
     | '/admin/guest/'
+    | '/admin/inbox/'
     | '/admin/property-management/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -385,8 +407,10 @@ export interface FileRouteTypes {
     | '/admin/bookings/current-bookings'
     | '/admin/bookings/past-bookings'
     | '/admin/guest/$publicId'
+    | '/admin/inbox/$publicId'
     | '/admin/property-management/$publicId'
     | '/admin/guest'
+    | '/admin/inbox'
     | '/admin/property-management'
   id:
     | '__root__'
@@ -420,8 +444,10 @@ export interface FileRouteTypes {
     | '/_authed/_admin/admin/bookings/current-bookings'
     | '/_authed/_admin/admin/bookings/past-bookings'
     | '/_authed/_admin/admin/guest/$publicId'
+    | '/_authed/_admin/admin/inbox/$publicId'
     | '/_authed/_admin/admin/property-management/$publicId'
     | '/_authed/_admin/admin/guest/'
+    | '/_authed/_admin/admin/inbox/'
     | '/_authed/_admin/admin/property-management/'
   fileRoutesById: FileRoutesById
 }
@@ -666,6 +692,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAdminAdminGuestPublicIdRouteImport
       parentRoute: typeof AuthedAdminRoute
     }
+    '/_authed/_admin/admin/inbox/': {
+      id: '/_authed/_admin/admin/inbox/'
+      path: '/admin/inbox'
+      fullPath: '/admin/inbox/'
+      preLoaderRoute: typeof AuthedAdminAdminInboxIndexRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/_admin/admin/inbox/$publicId': {
+      id: '/_authed/_admin/admin/inbox/$publicId'
+      path: '/admin/inbox/$publicId'
+      fullPath: '/admin/inbox/$publicId'
+      preLoaderRoute: typeof AuthedAdminAdminInboxPublicIdRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
     '/_authed/_admin/admin/property-management/': {
       id: '/_authed/_admin/admin/property-management/'
       path: '/admin/property-management'
@@ -690,8 +730,10 @@ interface AuthedAdminRouteChildren {
   AuthedAdminAdminBookingsCurrentBookingsRoute: typeof AuthedAdminAdminBookingsCurrentBookingsRoute
   AuthedAdminAdminBookingsPastBookingsRoute: typeof AuthedAdminAdminBookingsPastBookingsRoute
   AuthedAdminAdminGuestPublicIdRoute: typeof AuthedAdminAdminGuestPublicIdRoute
+  AuthedAdminAdminInboxPublicIdRoute: typeof AuthedAdminAdminInboxPublicIdRoute
   AuthedAdminAdminPropertyManagementPublicIdRoute: typeof AuthedAdminAdminPropertyManagementPublicIdRoute
   AuthedAdminAdminGuestIndexRoute: typeof AuthedAdminAdminGuestIndexRoute
+  AuthedAdminAdminInboxIndexRoute: typeof AuthedAdminAdminInboxIndexRoute
   AuthedAdminAdminPropertyManagementIndexRoute: typeof AuthedAdminAdminPropertyManagementIndexRoute
 }
 
@@ -705,9 +747,11 @@ const AuthedAdminRouteChildren: AuthedAdminRouteChildren = {
   AuthedAdminAdminBookingsPastBookingsRoute:
     AuthedAdminAdminBookingsPastBookingsRoute,
   AuthedAdminAdminGuestPublicIdRoute: AuthedAdminAdminGuestPublicIdRoute,
+  AuthedAdminAdminInboxPublicIdRoute: AuthedAdminAdminInboxPublicIdRoute,
   AuthedAdminAdminPropertyManagementPublicIdRoute:
     AuthedAdminAdminPropertyManagementPublicIdRoute,
   AuthedAdminAdminGuestIndexRoute: AuthedAdminAdminGuestIndexRoute,
+  AuthedAdminAdminInboxIndexRoute: AuthedAdminAdminInboxIndexRoute,
   AuthedAdminAdminPropertyManagementIndexRoute:
     AuthedAdminAdminPropertyManagementIndexRoute,
 }

@@ -3,6 +3,7 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 
 import { AdminLayout } from '@/components/admin/AdminLayout';
+import { NotificationsPanel } from '@/components/admin/inbox/NotificationsPanel';
 import {
 	createAppColumnHelper,
 	DataTableView,
@@ -340,6 +341,8 @@ function AdminGuestDetail() {
 					</Card>
 				</div>
 			</div>
+
+			<NotificationsPanel userPublicId={user.publicId} />
 
 			{/* Bookings History */}
 			<Card>

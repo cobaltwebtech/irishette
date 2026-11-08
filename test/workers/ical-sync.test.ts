@@ -11,7 +11,13 @@ import { afterEach, describe, expect, it } from 'vite-plus/test';
 import { externalEvents, icalFeeds } from '@/db/schema-export';
 
 import worker from './entry';
-import { caller, db, insertBooking, insertFeed } from './helpers';
+import {
+	caller,
+	db,
+	inboxItemsOfKind,
+	insertBooking,
+	insertFeed,
+} from './helpers';
 import { calendarResponse, mockFeed, mockResend, vcalendar } from './mocks';
 import { ADMIN } from './seed';
 
@@ -229,6 +235,13 @@ describe('feed validation (protect stored data)', () => {
 			// One alert when a healthy feed starts failing; none on repeats.
 			await runSync();
 			expect(sent.filter((e) => e.to.includes(ADMIN.email))).toHaveLength(1);
+			// ...mirrored by one inbox item for the feed (per day).
+			const items = (await inboxItemsOfKind('ical_sync_failed')).filter((i) =>
+				i.dedupeKey?.startsWith(`ical_sync_failed:${feed.id}:`),
+			);
+			expect(items).toHaveLength(1);
+			expect(items[0]).toMatchObject({ source: 'system', status: 'new' });
+			expect(items[0].details).toMatchObject({ problem: 'HTTP 500' });
 		},
 	);
 
@@ -332,7 +345,7 @@ describe('conflicts', () => {
 			timeout: 10_000,
 		},
 		async () => {
-			await insertBooking({
+			const booking = await insertBooking({
 				checkInDate: '2040-03-10',
 				checkOutDate: '2040-03-12',
 			});
@@ -346,6 +359,19 @@ describe('conflicts', () => {
 			const sent = mockResend();
 			await runSync();
 			expect(sent.some((e) => e.to.includes(ADMIN.email))).toBe(true);
+			const items = (await inboxItemsOfKind('ical_conflict')).filter((i) =>
+				i.dedupeKey?.startsWith(`ical_conflict:${feed.id}:`),
+			);
+			expect(items).toHaveLength(1);
+			expect(items[0].bookingId).toBe(booking.id);
+			expect(items[0].details).toMatchObject({
+				conflicts: [
+					expect.objectContaining({
+						confirmationId: booking.confirmationId,
+						eventStart: '2040-03-11',
+					}),
+				],
+			});
 		},
 	);
 });

@@ -4,10 +4,12 @@ import {
 	waitOnExecutionContext,
 } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
+import { eq } from 'drizzle-orm';
 import { expect } from 'vite-plus/test';
 
 import { createDrizzle } from '@/db/drizzle-init';
 import {
+	adminInboxItems,
 	bookings,
 	externalEvents,
 	icalFeeds,
@@ -20,6 +22,7 @@ import {
 } from '@/integrations/trpc/inner-context';
 import { trpcRouter } from '@/integrations/trpc/router';
 import { newId, newPublicId } from '@/lib/ids';
+import type { InboxKind } from '@/lib/inbox';
 
 import worker from './entry';
 import { ADMIN, GUEST, OTHER_GUEST, ROSE } from './seed';
@@ -145,6 +148,15 @@ export async function trpcError(promise: Promise<unknown>): Promise<TRPCError> {
 export function causeField(error: TRPCError, key: string): unknown {
 	const cause = error.cause as Record<string, unknown> | undefined;
 	return cause?.[key];
+}
+
+/** Admin inbox rows of one kind (raw, with internal ids), oldest first. */
+export async function inboxItemsOfKind(kind: InboxKind) {
+	const rows = await db()
+		.select()
+		.from(adminInboxItems)
+		.where(eq(adminInboxItems.kind, kind));
+	return rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 }
 
 // --- Direct inserts for arranging state ---------------------------------

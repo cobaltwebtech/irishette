@@ -8,6 +8,7 @@ import {
 	caller,
 	db,
 	fetchWorker,
+	inboxItemsOfKind,
 	insertBooking,
 	insertExternalEvent,
 	insertFeed,
@@ -147,6 +148,20 @@ describe('confirmation when the dates were taken meanwhile', () => {
 			await settle();
 			expect(sent.some((e) => e.to.includes(ADMIN.email))).toBe(true);
 			expect(sent.some((e) => e.to.includes(booking.guestEmail))).toBe(true);
+			// Mirrored into the admin inbox, linked to the booking and guest.
+			const [item] = (await inboxItemsOfKind('refund_auto')).filter(
+				(i) => i.bookingId === booking.id,
+			);
+			expect(item).toMatchObject({
+				source: 'system',
+				status: 'new',
+				userId: booking.userId,
+				dedupeKey: `refund_auto:${booking.id}`,
+			});
+			expect(item.details).toMatchObject({
+				confirmationId: booking.confirmationId,
+				paymentIntentId: 'pi_taken',
+			});
 		},
 	);
 

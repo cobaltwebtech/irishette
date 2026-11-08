@@ -55,7 +55,7 @@ these:
 |---|---|
 | `payment_intent.succeeded` | Confirms the booking via `confirmBookingPayment` (backup for the in-browser confirm, e.g. when the guest closes the tab). The booking is found by `metadata.bookingId`, then by `stripePaymentIntentId`. |
 | `charge.refunded` | Sets `paymentStatus` (`refunded` / `partially_refunded`) and `refundAmount`, including refunds made in the Dashboard |
-| `refund.failed` | Logs and emails an admin alert |
+| `refund.failed` | Logs, emails an admin alert and adds a `refund_failed` item to the admin notification inbox (`ADMIN_INBOX.md`) |
 | `refund.updated` | Same as `refund.failed` when the refund's status is `failed`; otherwise ignored |
 
 **Optional.** `payment_intent.payment_failed` is only logged (the pending hold

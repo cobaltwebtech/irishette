@@ -237,7 +237,9 @@ idempotent across all three:
    `refundUnavailableBooking` refunds the full intent (idempotency key
    `refund-unavailable/<id>`), sets `cancelled` / `refunded`,
    `cancelledBy: 'system'`, `cancellationReason: 'dates_unavailable'`, and
-   emails the guest and admins plus an admin alert (`refunded_conflict`).
+   emails the guest and admins plus an admin alert (`refunded_conflict`),
+   and adds a `refund_auto` item to the admin notification inbox
+   (`ADMIN_INBOX.md`).
 
 Confirmation does not check `expiresAt` and ignores other pending holds: a
 guest who pays after their hold expired is still confirmed if no confirmed
@@ -256,7 +258,7 @@ Stripe plugin has its own endpoint under `/api/auth`.
 | `payment_intent.succeeded` | Finds the booking by `metadata.bookingId` or intent id, then `confirmBookingPayment`. Unknown intents and permanent `TRPCError`s are acknowledged (200); other errors return 500 so Stripe retries. |
 | `payment_intent.payment_failed` | Logged; the hold stays until it expires. |
 | `charge.refunded` | Sets `paymentStatus` (`refunded` / `partially_refunded`) and `refundAmount` from the charge, including refunds made in the dashboard. |
-| `refund.failed`, `refund.updated` (status `failed`) | Logs and sends an admin alert. |
+| `refund.failed`, `refund.updated` (status `failed`) | Logs, sends an admin alert and adds a `refund_failed` inbox item (`ADMIN_INBOX.md`). |
 
 Logs carry Stripe ids and confirmation ids only.
 
@@ -305,7 +307,8 @@ confirm or retry does not send twice. Logs never include addresses.
 | `sendBookingConfirmedEmails` | Booking confirmed (key `booking-confirmed/<id>`) | Guest + all admins |
 | `sendBookingConfirmationEmail` | "Resend" button | Guest |
 | `sendCancellationEmails` | Confirmed booking cancelled, or auto-refund (key `booking-cancelled/<id>`) | Guest + admins |
-| `sendAdminAlert` | Auto-refund, failed refund, iCal problems | Admins |
+| `sendAdminAlert` | Auto-refund, failed refund, iCal problems (each also creates an admin inbox item, `ADMIN_INBOX.md`) | Admins |
+| `sendContactNotification` | Contact form (`CONTACT_FORM.md`); `replyTo` = the guest | `CONTACT_EMAIL` |
 
 Admin addresses come from `getAdminEmails` (`src/lib/admin-query.ts`).
 

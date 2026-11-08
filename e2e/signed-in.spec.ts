@@ -66,7 +66,12 @@ test.describe('normal user', () => {
 test.describe('admin', () => {
 	test.skip(!credentials.admin, 'Set E2E_ADMIN_EMAIL and E2E_ADMIN_PASSWORD');
 
-	for (const path of ['/admin', '/admin/property-management', '/admin/guest']) {
+	for (const path of [
+		'/admin',
+		'/admin/property-management',
+		'/admin/guest',
+		'/admin/inbox',
+	]) {
 		test(`hard reload of ${path}`, async ({ page, expectCleanConsole }) => {
 			if (!credentials.admin) return;
 			await login(page, credentials.admin);
@@ -76,4 +81,31 @@ test.describe('admin', () => {
 			expectCleanConsole();
 		});
 	}
+
+	test('notifications: filters, the detail page and the mailto reply', async ({
+		page,
+		expectCleanConsole,
+	}) => {
+		if (!credentials.admin) return;
+		await login(page, credentials.admin);
+		await page.goto('/admin/inbox?source=guest');
+		await expect(
+			page.getByRole('heading', { name: 'Notifications' }),
+		).toBeVisible();
+		await expect(
+			page.getByRole('button', { name: 'Guest', pressed: true }),
+		).toBeVisible();
+		const firstRow = page.locator('tbody tr').first();
+		// Without a contact message locally, only the empty state is checked.
+		if ((await firstRow.textContent())?.includes('No notifications.')) return;
+		await firstRow.click();
+		await page.waitForURL(/\/admin\/inbox\/[0-9a-z]{16}$/);
+		const reply = page.getByRole('link', { name: 'Reply by email' });
+		await expect(reply).toHaveAttribute(
+			'href',
+			/^mailto:[^?]+@[^?]+\?subject=Re%3A/,
+		);
+		await hardReload(page);
+		expectCleanConsole();
+	});
 });

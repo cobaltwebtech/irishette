@@ -110,12 +110,12 @@ src/server.ts            Custom Worker entry: fetch -> TanStack Start handler; s
 src/start.tsx, router.tsx  TanStack Start / Router setup. start.tsx: global request middleware (security headers + report-only CSP, CSRF for server functions). router.tsx creates a QueryClient and tRPC client PER REQUEST (SSR uses a local in-process link, no HTTP) and refreshes the session on tRPC UNAUTHORIZED/FORBIDDEN
 src/routes/              File-based routes: _authed.tsx (signed-in layout) -> _authed/account/, _authed/booking/, _authed/_admin.tsx -> _authed/_admin/admin/; public auth/, booking/, rooms/; api/
 src/routes/api/          Server routes: auth.$ (Better Auth, rate-limited), trpc.$ (tRPC), stripe.$ (webhook), ical.$ (iCal export feed), csp-report (CSP violation reports -> Workers Logs)
-src/integrations/trpc/   init.ts (public/protected/admin procedures, errorFormatter), context.ts + inner-context.ts (per-request context), router.ts, routers: bookings, rooms, availability, ical, policies, users
-src/core/functions/      TanStack Start server functions (auth-server.ts: getSessionFn)
-src/core/middleware/     TanStack Start middleware: security-headers (global), rate-limit (server routes), auth (requireSession/requireAdmin function middleware)
-src/lib/                 Services and validation: auth, auth-client, auth-check (route guards), server-auth (server fn checks), session (useSession), session-user, booking-service, availability, pricing, date-range, cancellation-policy, email-service, stripe(-webhook), ical-sync/-parse/-generate/-export, scheduled-tasks, deps (ServiceDeps), ids, site (domain, contact details, email senders, check-in/out times), *-validation (Zod)
-src/db/                  Drizzle schemas (auth-, booking-, room-, policy-), schema-export.ts, drizzle-init.ts (createDrizzle, Database type)
-src/components/          UI (ui/ = shadcn, admin/, booking/, email/, data-table/)
+src/integrations/trpc/   init.ts (public/protected/admin procedures, errorFormatter), context.ts + inner-context.ts (per-request context), router.ts, routers: bookings, rooms, availability, ical, policies, users, inbox
+src/core/functions/      TanStack Start server functions (auth-server.ts: getSessionFn; contact.ts: submitContactFn, public)
+src/core/middleware/     TanStack Start middleware: security-headers (global), rate-limit (server routes + rateLimitFnMiddleware for server functions), auth (requireSession/requireAdmin function middleware)
+src/lib/                 Services and validation: auth, auth-client, auth-check (route guards), server-auth (server fn checks), session (useSession), session-user, booking-service, availability, pricing, date-range, cancellation-policy, email-service, stripe(-webhook), ical-sync/-parse/-generate/-export, scheduled-tasks, deps (ServiceDeps), ids, site (domain, contact details, email senders, check-in/out times), inbox (kinds, details types) + inbox-service (createInboxItem), contact-service + turnstile (contact form, Siteverify), *-validation (Zod)
+src/db/                  Drizzle schemas (auth-, booking-, room-, policy-, inbox-), schema-export.ts, drizzle-init.ts (createDrizzle, Database type)
+src/components/          UI (ui/ = shadcn, admin/ (admin/inbox/ = notifications), booking/, email/, data-table/)
 src/stores/              TanStack Store booking state
 drizzle/                 Generated SQL migrations: a single fresh baseline 0000_init.sql (applied via `cf d1 migrations apply`)
 scripts/                 d1-local.mjs (local D1 helpers), smoke.mjs, check-client-bundle.mjs (post-build secret-name check)
@@ -144,7 +144,7 @@ Conventions:
 - Only the `SessionUser` shape leaves the server. Never put the session token, IP or user agent into route context, loader data or query data (it is dehydrated into the HTML).
 - Route guards live in `src/lib/auth-check.ts`: `requireAuth` (`_authed.tsx`), `requireAdmin` (`_authed/_admin.tsx`; database-fresh session on every SSR load, cached 30 minutes in the browser), `optionalAuth`, and `requireNoSession` (auth pages; sanitizes `redirect` with `isSafeRedirect`). They use the per-request `context.queryClient` and `getSessionFn`, never a module-level QueryClient or `fetch('/api/auth/...')`. Put new protected routes under the pathless layouts instead of adding per-route guards. Guards are UX only.
 - Server-side checks: `protectedProcedure` rejects banned users; `adminProcedure` re-reads role and ban from D1 on every call (`src/integrations/trpc/access.ts`). In the browser, a tRPC `UNAUTHORIZED`/`FORBIDDEN` refreshes the session and re-runs the guards (`createAuthErrorHandler`).
-- **Every server function that reads or writes private data must use `requireSessionMiddleware` or `requireAdminMiddleware`** (`src/core/middleware/auth.ts`, attached per function with `.middleware([...])`, never globally: `getSessionFn` is public). A route guard does not protect a server function. Use `context.user` (a `SessionUser`) in the handler.
+- **Every server function that reads or writes private data must use `requireSessionMiddleware` or `requireAdminMiddleware`** (`src/core/middleware/auth.ts`, attached per function with `.middleware([...])`, never globally: `getSessionFn` is public). A route guard does not protect a server function. Use `context.user` (a `SessionUser`) in the handler. The only public ones are `getSessionFn` and `submitContactFn` (the contact form: no private data; `rateLimitFnMiddleware` + Turnstile instead, see `docs/CONTACT_FORM.md`).
 - After sign-in, sign-out or a profile change, call `refreshSession` (also exported as `invalidateSession`) / `clearSession` so guards and loaders re-run.
 - Better Auth client calls return `{ data, error }`: always check `error` (show `authErrorMessage` from `src/lib/auth-errors.ts`), and reset Turnstile (`useTurnstile().reset()`) after every request; `useAuthRequest(turnstile).run(...)` in `src/components/auth/` does both. Auth forms use the shared parts in `src/components/auth/`. Link lifetimes are set only in `src/lib/auth-constants.ts` (pages and emails print them).
 - Sign-in is magic link first; there is no phone sign-in. `user.phoneNumber` is a plain optional unique field (`input: false`), changed only through tRPC `users.updateProfile` (`phoneNumberSchema` in `src/lib/user-validation.ts`).
@@ -154,6 +154,7 @@ Conventions:
 
 `docs/` has one current note per area. Check the matching one first:
 - Booking: `BOOKING_ARCHITECTURE.md`
+- Admin notifications (inbox), contact form: `ADMIN_INBOX.md`, `CONTACT_FORM.md`
 - tRPC: `TRPC_QUICK_REFERENCE.md` (every procedure with its access level)
 - Auth / sessions: `SECURE_AUTH_IMPLEMENTATION.md`
 - Stripe: `STRIPE_PAYMENT_INTEGRATION.md`, `STRIPE_WEBHOOKS.md` (dashboard and Stripe CLI setup)
@@ -341,7 +342,7 @@ Tuned in Phase 8 of the 2026-11 upgrade plan. Framework entry points (TanStack S
   | `ui` | `src/components/ui/**` | `ui`, `shared` |
   | `email` | `src/components/email/**` | `email` |
   | `client` | other `src/components/**`, `src/stores/**` | `ui`, `client`, `shared`; `server` type-only |
-  | `server` | server-only services in `src/lib/` (auth, booking-service, availability, deps, email-service, stripe, stripe-webhook, ical-sync, ical-export, scheduled-tasks, admin-query, cancellation-policy-store, rate-limit, server-auth), `src/db/**`, `src/server.ts`, tRPC init/access/context/routers | anything |
+  | `server` | server-only services in `src/lib/` (auth, booking-service, availability, deps, email-service, stripe, stripe-webhook, ical-sync, ical-export, scheduled-tasks, admin-query, cancellation-policy-store, rate-limit, server-auth, inbox-service, contact-service, turnstile), `src/db/**`, `src/server.ts`, tRPC init/access/context/routers | anything |
   | `shared` | the rest of `src/lib/**`, `src/utils/**`, tRPC `react`/`types`/`errors`/`batching` | `shared`; `server` type-only |
 
   Routes and `src/core/` are unzoned. When you add a server-only module to `src/lib/`, add it to the `server` zone. If client code needs a constant that lives in a server file (e.g. a Drizzle schema), move it into a shared module (see `src/lib/ical-feed-sources.ts`) instead of suppressing the violation.

@@ -43,7 +43,8 @@ Evaluate a 5-minute cron at production go-live.
    when the response is not HTTP 200, is not a `VCALENDAR`, has no events
    while the last run had some, or drops by more than half (from 4 or more).
    The error is stored on the feed and the admins get one email when a healthy
-   feed starts failing (not on every retry). If a drop is real, use
+   feed starts failing (not on every retry), plus an `ical_sync_failed` item
+   in the admin notification inbox (one per feed per day, `ADMIN_INBOX.md`). If a drop is real, use
    **Apply anyway** (`force: true`).
 3. **Parse** (RFC 5545): line unfolding, CRLF/LF, `VALUE=DATE`, `TZID` and
    UTC date-times (converted to property dates in `America/Chicago`),
@@ -55,7 +56,9 @@ Evaluate a 5-minute cron at production go-live.
    already ended, and apply inserts, updates, deletes, the run log and the
    change log in **one D1 batch** (a transaction).
 5. **Conflicts:** new or changed events that overlap a confirmed booking or a
-   live hold are logged and emailed to the admins.
+   live hold are logged and emailed to the admins, and create an
+   `ical_conflict` inbox item (one per feed and set of conflicts; a repeat
+   resurfaces it at most once a day).
 
 Imported events have an **exclusive** end date (iCal `DTEND`).
 

@@ -9,9 +9,19 @@ import { network } from './network';
 interface SentEmail {
 	to: string[];
 	subject: string;
+	replyTo: string[];
+	from: string;
 }
 
-type ResendBody = { to: string | string[]; subject: string };
+type ResendBody = {
+	to: string | string[];
+	subject: string;
+	from: string;
+	reply_to?: string | string[];
+};
+
+const asList = (value: string | string[] | undefined) =>
+	value === undefined ? [] : Array.isArray(value) ? value : [value];
 
 /**
  * Resend: accepts single and batch sends and records recipients and
@@ -22,8 +32,10 @@ export function mockResend() {
 	const seenKeys = new Set<string>();
 	const record = (email: ResendBody) =>
 		sent.push({
-			to: Array.isArray(email.to) ? email.to : [email.to],
+			to: asList(email.to),
 			subject: email.subject,
+			replyTo: asList(email.reply_to),
+			from: email.from,
 		});
 	const duplicate = (request: { headers: Headers }) => {
 		const key = request.headers.get('idempotency-key');
@@ -172,4 +184,39 @@ export function vcalendar(events: string[][]): string {
 		'END:VCALENDAR',
 	];
 	return `${lines.join('\r\n')}\r\n`;
+}
+
+const SITEVERIFY_URL =
+	'https://challenges.cloudflare.com/turnstile/v0/siteverify';
+
+/**
+ * Turnstile Siteverify: answers with `result` (or an HTTP error / a hang) and
+ * records the form fields it received.
+ */
+export function mockTurnstile(
+	result:
+		| { success: boolean; 'error-codes'?: string[] }
+		| { status: number }
+		| 'hang',
+) {
+	const requests: URLSearchParams[] = [];
+	network.use(
+		http.post(SITEVERIFY_URL, async ({ request }) => {
+			const form = await request.formData();
+			requests.push(
+				new URLSearchParams(
+					[...form.entries()].map(
+						([k, v]) =>
+							[k, typeof v === 'string' ? v : v.name] as [string, string],
+					),
+				),
+			);
+			if (result === 'hang') return new Promise<never>(() => {});
+			if ('status' in result) {
+				return new HttpResponse('error', { status: result.status });
+			}
+			return HttpResponse.json(result);
+		}),
+	);
+	return requests;
 }

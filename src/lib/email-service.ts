@@ -304,6 +304,65 @@ export async function sendAdminAlert(
 	);
 }
 
+/** A contact form submission, for CONTACT_EMAIL (the admin's own inbox). */
+export interface ContactNotification {
+	name: string;
+	email: string;
+	phone?: string;
+	subject: string;
+	message: string;
+	bookingConfirmationId?: string;
+	/** Admin dashboard path of the matching notification, when stored. */
+	inboxPath?: string;
+}
+
+/**
+ * Emails a contact form submission to CONTACT_EMAIL with the guest as
+ * reply-to, so "Reply" in the admin's mail client answers the guest. Nothing
+ * goes to the guest. Logs never include the message or the guest's email.
+ */
+export function sendContactNotification(
+	env: EmailEnv,
+	contact: ContactNotification,
+): Promise<EmailResult> {
+	const details = [
+		{ label: 'Name', value: contact.name },
+		{ label: 'Email', value: contact.email },
+		...(contact.phone ? [{ label: 'Phone', value: contact.phone }] : []),
+		...(contact.bookingConfirmationId
+			? [{ label: 'Booking', value: contact.bookingConfirmationId }]
+			: []),
+	];
+	return sendBatch(env, 'contact form', [
+		{
+			...notification(
+				EMAIL_FROM_ADMIN,
+				[CONTACT_EMAIL],
+				`Contact form: ${contact.subject}`,
+				{
+					preview: `${contact.name}: ${contact.subject}`,
+					heading: contact.subject,
+					paragraphs: [
+						`${contact.name} sent a message through the contact form. Reply to this email to answer them.`,
+						...contact.message
+							.split(/\r?\n\s*\r?\n/)
+							.map((p) => p.trim())
+							.filter(Boolean),
+					],
+					details,
+					button: contact.inboxPath
+						? {
+								label: 'Open in dashboard',
+								href: `${env.BETTER_AUTH_URL}${contact.inboxPath}`,
+							}
+						: undefined,
+				},
+			),
+			replyTo: contact.email,
+		},
+	]);
+}
+
 // --- Better Auth emails ------------------------------------------------------
 // Called from Better Auth hooks (src/lib/auth.ts). They throw on failure so
 // Better Auth reports the error to the user instead of claiming success.

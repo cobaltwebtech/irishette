@@ -32,6 +32,7 @@ import {
 } from './email-service';
 import { syncRoomFeeds } from './ical-sync';
 import { newId, newPublicId } from './ids';
+import { createInboxItemInBackground } from './inbox-service';
 import type { CreateBookingInput } from './payment-validation';
 import { priceStay, type StayPrice } from './pricing';
 import { todayIn } from './timezone';
@@ -594,6 +595,24 @@ async function refundUnavailableBooking(
 		`Booking ${booking.confirmationId}: dates taken before confirmation, refunded automatically`,
 	);
 	const roomInfo = await roomName(db, booking.roomId);
+	createInboxItemInBackground(deps, {
+		kind: 'refund_auto',
+		title: `Automatic refund: ${booking.confirmationId}`,
+		summary: `${roomInfo.name}, ${booking.checkInDate} to ${booking.checkOutDate}: the dates were taken before the payment was confirmed, so it was refunded in full.`,
+		details: {
+			confirmationId: booking.confirmationId,
+			roomName: roomInfo.name,
+			checkInDate: booking.checkInDate,
+			checkOutDate: booking.checkOutDate,
+			amount: booking.totalAmount,
+			paymentIntentId: intent.id,
+			refundId: refund.id,
+			livemode: intent.livemode,
+		},
+		bookingId: booking.id,
+		userId: booking.userId,
+		dedupeKey: `refund_auto:${booking.id}`,
+	});
 	inBackground(deps, `auto-refund ${booking.confirmationId}`, async () => {
 		await sendCancellationEmails(db, deps.env, cancelled, roomInfo, {
 			refundAmount: booking.totalAmount,

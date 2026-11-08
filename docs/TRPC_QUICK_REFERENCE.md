@@ -13,8 +13,8 @@ and the iCal export feed are separate HTTP routes (see
 | `src/integrations/trpc/init.ts` | `initTRPC` with the superjson transformer and `errorFormatter`; exports `createTRPCRouter`, `publicProcedure`, `protectedProcedure`, `adminProcedure` |
 | `src/integrations/trpc/context.ts` | `createTRPCContext({ headers })`: resolves the Better Auth session from the request headers, then calls `createInnerTRPCContext` |
 | `src/integrations/trpc/inner-context.ts` | `createInnerTRPCContext({ session, headers?, waitUntil? })` and the `TRPCContext` / `AuthSession` types. Tests call it directly with a synthetic session |
-| `src/integrations/trpc/router.ts` | `trpcRouter` (`rooms`, `bookings`, `availability`, `ical`, `policies`, `users`) and the `TRPCRouter` type |
-| `src/integrations/trpc/{rooms,bookings,availability,ical,policies,users}.ts` | The routers |
+| `src/integrations/trpc/router.ts` | `trpcRouter` (`rooms`, `bookings`, `availability`, `ical`, `policies`, `users`, `inbox`) and the `TRPCRouter` type |
+| `src/integrations/trpc/{rooms,bookings,availability,ical,policies,users,inbox}.ts` | The routers |
 | `src/integrations/trpc/client.ts` | `makeTRPCClient`: `localLink` on the server, `httpBatchLink` in the browser |
 | `src/integrations/trpc/react.ts` | `TRPCProvider` and `useTRPC` (`@trpc/tanstack-react-query`) |
 | `src/integrations/trpc/batching.ts` | `MAX_BATCH_SIZE = 20`, shared by the client link (`maxItems`) and the handler (`maxBatchSize`) |
@@ -23,7 +23,7 @@ and the iCal export feed are separate HTTP routes (see
 | `src/routes/api/trpc.$.ts` | HTTP handler (`fetchRequestHandler`) for `GET`/`POST /api/trpc/*` |
 | `src/router.tsx` | `getRouter`: per-request `QueryClient`, tRPC client, options proxy and provider |
 | `src/lib/deps.ts` | `ServiceDeps` / `createServiceDeps`: the `db`, `env`, `stripe`, `waitUntil` part of the context |
-| `src/lib/*-validation.ts` | Zod input schemas (`payment-validation.ts`, `room-validation.ts`) |
+| `src/lib/*-validation.ts` | Zod input schemas (`payment-validation.ts`, `room-validation.ts`, `inbox-validation.ts`, ...) |
 
 ## Request flow
 
@@ -234,6 +234,26 @@ returned only here. See `ICAL_SYNC_README.md`.
 `users.updatePhoneNumber` was merged into `updateProfile` in plan 02 Phase 2
 (listed in `REMOVED` in `trpc-authz.test.ts`). The booking input's
 `guestPhone` uses the same `phoneNumberSchema`.
+
+### `inbox` (`src/integrations/trpc/inbox.ts`)
+
+The admin notification inbox (`ADMIN_INBOX.md`). All admin; items are
+addressed by `publicId`. Schemas are in `src/lib/inbox-validation.ts`. List
+rows carry no `details` JSON and no internal ids.
+
+| Procedure | Type | Access | Input | Purpose |
+|---|---|---|---|---|
+| `adminList` | query | admin | `inboxListSchema`: filters (`view`: `inbox` (new + read, default) \| `new` \| `read` \| `archived`; `source?`; `kind?`; `search?` max 100) + `pageSize` 1-100 (25), `cursor?`, `direction` `next` \| `prev` | One page, newest surfaced first, **keyset** on `(surfaced_at, public_id)`. Returns `items` (with the linked booking's confirmation id and the guest's name), `nextCursor` (older), `prevCursor` (newer). `search` is a `LIKE` on title and summary (`%`/`_` literal) |
+| `adminCount` | query | admin | `inboxFiltersSchema` (the filters only) | `{ total }` for the filters; cached separately so paging does not recount |
+| `adminUnreadCount` | query | admin | none | `{ unread }` (`status = 'new'`), for the sidebar badge |
+| `adminGet` | query | admin | `{ publicId }` | One item with its `details` and linked booking / guest summaries. `NOT_FOUND` |
+| `adminSetStatus` | mutation | admin | `inboxSetStatusSchema` (`publicIds` 1-100, `status`: `new` \| `read` \| `archived` \| `unarchived`) | Batch status change (`unarchived` = back to the inbox as read). Status is shared by all admins |
+| `adminDelete` | mutation | admin | `inboxDeleteSchema` (`publicIds` 1-100) | Delete for good |
+| `adminListForBooking` | query | admin | `{ bookingPublicId }` | The 20 latest items linked to a booking (admin booking page) |
+| `adminListForUser` | query | admin | `{ userPublicId }` | The 20 latest items linked to a guest (admin guest page) |
+
+The contact form is a TanStack Start server function, not a tRPC procedure
+(`CONTACT_FORM.md`).
 
 ## Security model
 
