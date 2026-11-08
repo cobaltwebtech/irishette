@@ -3,21 +3,22 @@
 Auth is Better Auth (`src/lib/auth.ts`) on D1 through the Drizzle adapter,
 mounted at `/api/auth/*` (`src/routes/api/auth.$.ts`, all HTTP methods). The
 page reads the session through one server function that returns a small,
-token-free user shape. Route guards are only for UX: tRPC procedures enforce
-auth on the server.
+token-free user shape. Route guards are only for UX: tRPC procedures (and the
+server function middleware) enforce auth on the server.
 
 | Piece | Code |
 |---|---|
 | Server config | `src/lib/auth.ts` (`auth()`, `createAuth`) |
 | Browser client | `src/lib/auth-client.ts` (`authClient`) |
 | Auth emails | `src/lib/email-service.ts` (`sendPasswordResetEmail`, `sendMagicLinkEmail`, `sendVerificationEmail`, `sendChangeEmailConfirmation`) |
-| Session for the page | `src/core/functions/auth-server.ts` (`getSessionFn`), `src/lib/session.ts` |
-| Route guards | `src/routes/__root.tsx`, `src/routes/_authed.tsx`, `src/routes/_authed/_admin.tsx`, `src/lib/redirect.ts` |
+| Session for the page | `src/core/functions/auth-server.ts` (`getSessionFn`), `src/lib/session.ts`, `src/lib/session-user.ts` (`SessionUser`, `toSessionUser`) |
+| Route guards | `src/lib/auth-check.ts` (`requireAuth`, `requireAdmin`, `optionalAuth`, `requireNoSession`), used by `src/routes/_authed.tsx`, `src/routes/_authed/_admin.tsx` and `src/routes/auth/*`; `src/lib/redirect.ts` |
+| Server function auth | `src/core/middleware/auth.ts` (`requireSessionMiddleware`, `requireAdminMiddleware`), `src/lib/server-auth.ts` (`getAuthSession`, `authorizeSession`, `authorizeRequest`) |
 | Rate limiting | `src/lib/auth.ts` (`rateLimit`, `AUTH_RATE_LIMIT_RULES`), `src/lib/rate-limit.ts`, `src/core/middleware/rate-limit.ts`, `cloudflare.config.ts` bindings |
 | Security headers, CSRF | `src/start.tsx`, `src/core/middleware/security-headers.ts`, `src/lib/security-headers.ts`, `src/lib/csp-report.ts` |
 | tRPC auth | `src/integrations/trpc/context.ts`, `inner-context.ts`, `init.ts`, `access.ts` |
-| Auth pages | `src/routes/auth/` (login, signup, forgot-password, reset-password, logout) |
-| Form validation | `src/lib/auth-validation.ts` |
+| Auth pages | `src/routes/auth/` (login, signup, forgot-password, reset-password, logout), shared parts in `src/components/auth/` |
+| Form validation, errors, link lifetimes | `src/lib/auth-validation.ts`, `src/lib/auth-errors.ts`, `src/lib/auth-constants.ts`, `src/lib/user-validation.ts` (phone, profile) |
 | Tables | `src/db/auth-schema.ts` |
 
 ## Server config (`src/lib/auth.ts`)
@@ -31,10 +32,12 @@ on creation) and reads secrets and the D1 binding from `cloudflare:workers`.
 | Cookie cache | On, 5 minutes. `getSession` trusts the signed cookie for that long without reading D1 |
 | Ids | `advanced.database.generateId` = `newId()` (UUIDv7, `src/lib/ids.ts`) for every Better Auth table |
 | `user.publicId` | Additional field, `input: false`, default `newPublicId()` (16 chars `[0-9a-z]`). Used in URLs (`/admin/guest/$publicId`) instead of the id |
+| `user.phoneNumber` | Additional field: optional, unique, `input: false`, so Better Auth's sign-up and update-user bodies cannot set it. It changes only through tRPC `users.updateProfile` (see [Profile editing](#profile-editing)). There is no phone sign-in (the `phoneNumber` plugin was removed in plan 02 Phase 2; `/api/auth/sign-in/phone-number` is a 404) |
 | Rate limiting | `rateLimit.enabled: true`, `storage: 'database'` (table `rate_limit`; strict across isolates and locations; Better Auth deletes expired rows itself), `customRules` = `AUTH_RATE_LIMIT_RULES` (see [Rate limiting](#rate-limiting)) |
 | Client IP | `advanced.ipAddress.ipAddressHeaders: ['cf-connecting-ip']` |
-| Email + password | Enabled, `requireEmailVerification: true` |
-| Email verification | `sendOnSignUp`, `autoSignInAfterVerification` |
+| Email + password | Enabled, `requireEmailVerification: true`, reset links valid 1 hour (`resetPasswordTokenExpiresIn`) |
+| Email verification | `sendOnSignUp`, `autoSignInAfterVerification`, links valid 1 hour (`expiresIn`; also email change confirmations) |
+| Link lifetimes | `src/lib/auth-constants.ts`: `MAGIC_LINK_EXPIRES_IN` (15 min), `PASSWORD_RESET_EXPIRES_IN` and `EMAIL_VERIFICATION_EXPIRES_IN` (1 h). The pages and emails print the same values with `formatLinkLifetime`, so change them only there |
 | Change email | `user.changeEmail.enabled`, with `sendChangeEmailConfirmation` |
 
 Plugins, in order (`tanstackStartCookies()` must stay last):
@@ -42,10 +45,9 @@ Plugins, in order (`tanstackStartCookies()` must stay last):
 | Plugin | What it does here |
 |---|---|
 | `admin()` | `user.role` (`'user'` by default, `'admin'`), ban fields, `/admin/*` auth endpoints. Promote locally with `pnpm db:make-admin:local` |
-| `magicLink()` | Passwordless sign-in and sign-up. Creates the user if new (with `emailVerified: true`) and marks an existing unverified user as verified |
-| `phoneNumber()` | `user.phoneNumber` (unique) and `phoneNumberVerified`. No `sendOTP` is configured, so OTP flows are not used; the number is edited through tRPC (see [Profile editing](#profile-editing)) |
+| `magicLink()` | Passwordless sign-in and sign-up (`expiresIn` 15 min). Creates the user if new (with `emailVerified: true` and the optional `name` from the request body) and marks an existing unverified user as verified |
 | `stripe()` | `createCustomerOnSignUp`: a database hook creates a Stripe customer whenever a user row is created (any sign-up method) and stores `user.stripeCustomerId`. Its webhook is verified with `STRIPE_BETTER_AUTH_WEBHOOK_SECRET` |
-| `captcha()` | Cloudflare Turnstile, verified server-side with `TURNSTILE_SECRET_KEY`, on `/sign-in/magic-link`, `/sign-up/email`, `/sign-in/email`, `/request-password-reset`. The client sends the token in the `x-captcha-response` header |
+| `captcha()` | Cloudflare Turnstile, verified server-side with `TURNSTILE_SECRET_KEY`, on `/sign-in/magic-link`, `/sign-up/email`, `/sign-in/email`, `/request-password-reset`, `/send-verification-email`. It runs as an `onRequest` hook after Better Auth's rate limit and matches the exact path. The client sends the token in the `x-captcha-response` header |
 | `tanstackStartCookies()` | Writes Better Auth's `Set-Cookie` headers from server functions |
 
 ### Emails
@@ -63,57 +65,83 @@ error instead of claiming the email was sent.
 | Change email (unverified user) | `changeEmail` | New address (verification email) |
 
 A password sign-in by an unverified user fails with `EMAIL_NOT_VERIFIED`
-(`sendOnSignIn` is not set, so no new email is sent). Signing in with a magic
-link verifies the address.
+(`sendOnSignIn` is not set, so no new email is sent automatically). The login
+page then offers **Resend verification email** (`ResendVerification`:
+`sendVerificationEmail` with its own Turnstile widget); the password sign-up
+"check your email" step offers the same. For an unknown or already verified
+address Better Auth answers the same way and sends nothing, so it reveals
+nothing. Signing in with a magic link also verifies the address.
+
+Every email states the real link lifetime (`expiresIn` prop on
+`MagicLinkEmail` / `PasswordReset`, a sentence in the verification and change
+emails).
 
 ## Client
 
 `src/lib/auth-client.ts` creates `authClient` with `magicLinkClient`,
-`phoneNumberClient`, `adminClient` and `stripeClient`, no `baseURL` (current
-origin) and `credentials: 'include'`. It re-exports `signIn`, `signOut`,
-`signUp`, `revokeSessions`, `requestPasswordReset`, `resetPassword`,
-`sendVerificationEmail`, `changeEmail` and `$Infer`. Its calls return
-`{ data, error }`; they do not throw on an API error.
+`adminClient` and `stripeClient`, no `baseURL` (current origin) and
+`credentials: 'include'`. It also exports `signOut` and `changeEmail`. Its
+calls return `{ data, error }` and do not throw on an API error, so **every
+call must check `error`** (the forms map it with `authErrorMessage` from
+`src/lib/auth-errors.ts`, which never shows raw server messages; 429 gets a
+"wait a minute" message).
 
 Do not use Better Auth's own `useSession` hook; use `src/lib/session.ts`.
 
+Login and signup are **magic link first** (plan 02 Phase 2): the page opens on
+the email-link form, with **Use a password instead** as the alternative.
+
 | Route | Guard (`beforeLoad`) | Does |
 |---|---|---|
-| `/auth/login` | `redirectIfSignedIn(session, search.redirect)` | Magic link (default) or email + password. Password success: `refreshSession`, then `router.history.push(redirect ?? '/account')`. Shows Better Auth `?error=` codes (also when nested in `redirect`) |
-| `/auth/signup` | `redirectIfSignedIn` | Magic link (default) or name + email + password (`registerSchema`), then "check your email" |
-| `/auth/forgot-password` | `redirectIfSignedIn` | `requestPasswordReset({ redirectTo: '/auth/reset-password' })` |
-| `/auth/reset-password` | `redirectIfSignedIn(session, undefined)` | Reads `token`/`error` from the URL, checks `passwordSchema`, calls `resetPassword` |
+| `/auth/login` | `requireNoSession` | Magic link (`callbackURL` = redirect or `/account`, `errorCallbackURL` = this page with the same redirect) or email + password. Password success: `invalidateSession`, then `router.history.push(redirect ?? '/account')`. Shows `?error=` link codes (also when nested in `redirect`, from verification links) and removes them from the URL. `EMAIL_NOT_VERIFIED` shows Resend verification email |
+| `/auth/signup` | `requireNoSession` | Magic link with name + email (`signIn.magicLink({ email, name, ... })`; the name is used when the link creates the account) or name + email + password (`registerSchema`), then "check your email" (password sign-ups can resend the verification email there) |
+| `/auth/forgot-password` | `requireNoSession` | `requestPasswordReset({ redirectTo: '/auth/reset-password' })` |
+| `/auth/reset-password` | `requireNoSession` (no redirect param) | `validateSearch` with Zod (`token`, `error`), checks `passwordSchema`, calls `resetPassword`; an invalid or expired token shows "request a new link" |
 | `/auth/logout` | none | In an effect (never in `beforeLoad`, which also runs during SSR and preload): `signOut()`, `clearSession`, navigate to `/` |
 
 The header's logout button (`src/components/Header.tsx`) does the same as
 `/auth/logout`. The booking flow's `AuthenticationStep` sends a magic link back
-to `/booking`.
+to `/booking` with the same shared Turnstile, error and lifetime handling.
 
-**Turnstile.** Every form that hits a captcha endpoint renders
-`<Turnstile siteKey={import.meta.env.VITE_TURNSTILE_PUBLIC_KEY}>`
-(`@marsidev/react-turnstile`), keeps the token in state, disables submit until
-it exists, and passes it as `x-captcha-response`. On error or expiry the token
-is cleared and the widget reset. The secret never reaches the client.
+**Shared parts** (`src/components/auth/`): `AuthCard` (page shell),
+`AuthError` (inline `role="alert"` message), `EmailField`, `AuthModeToggle`
+("or" + "Use a password instead"), `CheckEmailPanel` ("check your email" with
+the link lifetime), `ResendVerification`, `TurnstileField` + `useTurnstile()`,
+`useMagicLinkURLs(redirect)` (`callbackURL` + `errorCallbackURL`), and
+`useAuthRequest(turnstile)`: its `run(request, { onSuccess, onError })` sends
+one Better Auth call, checks `error`, shows the mapped message, and resets
+Turnstile in `finally`. New auth forms should use it.
+
+**Turnstile.** Every form that hits a captcha endpoint renders `TurnstileField`
+(`@marsidev/react-turnstile`, site key `VITE_TURNSTILE_PUBLIC_KEY`), disables
+submit until `useTurnstile().token` exists and sends `turnstile.headers`
+(`x-captcha-response`). Tokens are single-use, so every handler calls
+`turnstile.reset()` in `finally`, after success or failure. The secret never
+reaches the client.
 
 **Redirects** (`src/lib/redirect.ts`). `redirectSearchParam` is a Zod schema
-for `?redirect=`: only same-origin paths survive (single leading `/`, no `//`,
-backslashes or control characters); anything else becomes `undefined` and the
-default `DEFAULT_AUTH_REDIRECT` (`/account`) applies. Every auth page validates
-`redirect` with it. Better Auth also origin-checks `callbackURL`.
+for `?redirect=`: only same-origin paths survive (`isSafeRedirect`: single
+leading `/`, no `//`, backslashes or control characters); anything else
+becomes `undefined` and the default `DEFAULT_AUTH_REDIRECT` (`/account`)
+applies. Every auth page validates `redirect` with it, and `requireNoSession`
+checks it again with `isSafeRedirect`. Better Auth also origin-checks
+`callbackURL`, `newUserCallbackURL` and `errorCallbackURL`.
 
 **Validation** (`src/lib/auth-validation.ts`). `passwordSchema` (8 to 100
-chars, upper, lower, digit), `emailSchema`, `registerSchema` (email, password
-of 8+ chars, confirmation, optional name). Better Auth enforces its own
-minimum length on the server.
+chars, upper, lower, digit), `emailSchema`, `magicLinkSignupSchema` (name 2 to
+100, email) and `registerSchema` (name, email, the same password rules,
+confirmation). Better Auth enforces its own minimum length on the server.
 
 ## Session on the page
 
 ### `getSessionFn` and the session shape
 
-`getSessionFn` (`src/core/functions/auth-server.ts`) is a GET server function
-(`createServerFn(...).validator(z.object({ fresh }).optional())`). It calls
-`auth.api.getSession` with the request headers and returns `AppSession`:
-`{ user: SessionUser } | null`, where `SessionUser` is `id`, `publicId`, `name`,
+`getSessionFn` (`src/core/functions/auth-server.ts`) is a public GET server
+function (`createServerFn(...).validator(z.object({ fresh }).optional())`). It
+calls `getAuthSession` (`src/lib/server-auth.ts`, Better Auth's `getSession`)
+with the request headers and returns `AppSession`: `{ user: SessionUser } |
+null`, where `SessionUser` (`src/lib/session-user.ts`, built by
+`toSessionUser` from an explicit field list) is `id`, `publicId`, `name`,
 `email`, `image`, `role`, `emailVerified`, `phoneNumber`, `createdAt`.
 
 This is the **only** session shape that leaves the server. It is dehydrated
@@ -128,29 +156,59 @@ the session from D1.
 | `sessionQueryOptions()` | Query `['auth', 'session']`, `getSessionFn()`, `staleTime` 60 s |
 | `freshSessionQueryOptions()` | Its own key `['auth', 'session', 'fresh']`, `getSessionFn({ data: { fresh: true } })` (bypasses the cookie cache), `staleTime` 30 minutes. Used by the admin layout |
 | `useSession()` | `useSuspenseQuery(sessionQueryOptions()).data`; always resolved because the root preloads it |
+| `fetchFreshSession(queryClient)` | `fetchQuery(freshSessionQueryOptions())`; when it really refetched, also writes the result to the shared key so `useSession()` agrees. Used by `requireAdmin` |
 | `refreshSession(queryClient, router)` | Fetches the fresh session (bypassing the 5-minute cookie cache), writes it to both keys, then `router.invalidate()` to re-run guards and loaders |
 | `createAuthErrorHandler(queryClient, getRouter)` | `onError` for the QueryClient's query and mutation caches (`src/router.tsx`). In the browser, a tRPC `UNAUTHORIZED`/`FORBIDDEN` (`isAuthError`) calls `refreshSession`, at most every 10 s, so a revoked role, a ban or an expired session redirects through the guards |
 | `clearSession(queryClient, router)` | Sets the session to `null`, removes every other cached query (it may hold the previous user's data), then `refreshSession` |
 
-### Guards
+### Guards (`src/lib/auth-check.ts`)
+
+All guards take the `beforeLoad` arguments and read the session from the
+**per-request** `context.queryClient` (created in `src/router.tsx`) through
+`getSessionFn`: on the server during SSR, over RPC in the browser. Never use a
+module-level QueryClient (shared between requests and users on Workers) or
+`fetch('/api/auth/...')` (no cookies during SSR).
+
+| Guard | Used by | Does |
+|---|---|---|
+| `requireAuth({ context, location })` | `/_authed` | Cached session; none: redirect to `/auth/login?redirect=<location.href>`. Returns the `SessionUser` (route context `user`, read with `Route.useRouteContext()`) |
+| `requireAdmin({ context, location })` | `/_authed/_admin` | `fetchFreshSession`: a database read on every SSR page load and at most every 30 minutes during client navigation (decision in plan 02, 1.6). None: login redirect. Not an admin: `/` (login would bounce back: a loop) |
+| `optionalAuth({ context })` | pages that work either way | `SessionUser` or `null`, no redirect |
+| `requireNoSession({ context, search })` | `/auth/*` pages | Signed in: redirect to `search.redirect` if `isSafeRedirect`, else `/account` |
+| `invalidateSession(queryClient, router)` | after auth actions | Re-export of `refreshSession` (no duplicate logic) |
 
 - **Root** (`src/routes/__root.tsx`): `beforeLoad` runs
   `queryClient.ensureQueryData({ ...sessionQueryOptions(), revalidateIfStale: true })`
   and returns `{ session }` into the router context. On SSR this happens once
   per request and the result is dehydrated; client navigations read the cache
   and revalidate in the background when stale. A failed lookup is logged and
-  treated as signed out.
-- **`/_authed`** (`src/routes/_authed.tsx`): pathless layout for `/account/*`,
-  `/booking/confirmation/*` and the admin pages. No session: redirect to
-  `/auth/login?redirect=<location.href>`. Otherwise it returns `{ user }`, which
-  pages read with `Route.useRouteContext()`.
-- **`/_authed/_admin`** (`src/routes/_authed/_admin.tsx`): `fetchQuery`
-  of `freshSessionQueryOptions()`: a database read on every SSR page load
-  (per-request QueryClient) and at most every 30 minutes during client
-  navigation. No session: login redirect. Not an admin: redirect to `/`
-  (sending a signed-in user to login would bounce back, a redirect loop).
-  The real check is `adminProcedure` on every admin tRPC call (below); a
-  `FORBIDDEN` answer refreshes the session and re-runs this guard.
+  treated as signed out. The guards then reuse that cache entry.
+- The real checks are on the server: `adminProcedure` on every admin tRPC call
+  (below), and a `FORBIDDEN`/`UNAUTHORIZED` answer refreshes the session and
+  re-runs the guards (`createAuthErrorHandler`).
+
+### Server functions (`src/core/middleware/auth.ts`)
+
+A route guard does not protect a server function: every `createServerFn` is
+its own RPC endpoint. **Every server function that reads or writes private
+data must attach one of these** (per function, not globally, because
+`getSessionFn` is public):
+
+```ts
+createServerFn({ method: 'POST' })
+	.middleware([requireSessionMiddleware]) // or requireAdminMiddleware
+	.validator(schema)
+	.handler(({ context }) => /* context.user: SessionUser */);
+```
+
+| Middleware | Check (`authorizeRequest` / `authorizeSession` in `src/lib/server-auth.ts`) | Failure |
+|---|---|---|
+| `requireSessionMiddleware` | Session from the request cookies, not banned (same as `protectedProcedure`) | 401 signed out, 403 banned |
+| `requireAdminMiddleware` | Session without the cookie cache, then the role and ban re-read from D1 (same as `adminProcedure`) | 401 / 403 |
+
+Both set the HTTP status with `setResponseStatus` and throw, and pass
+`context.user` (the `SessionUser` shape) to the handler. Today no server
+function needs them (`getSessionFn` is the only one); the rule is for new ones.
 
 ## tRPC
 
@@ -256,7 +314,7 @@ payment including Link, auth and admin): switch the header name to
 
 | Action | Call |
 |---|---|
-| Password sign-in | `refreshSession(queryClient, router)`, then navigate |
+| Password sign-in | `invalidateSession(queryClient, router)` (= `refreshSession`), then navigate |
 | Magic link / email verification | Nothing: the link is a full page load, and the root reloads the session |
 | Sign-out | `signOut()`, then `clearSession(queryClient, router)`, then navigate |
 | Profile change (name, phone) | `refreshSession(queryClient, router)` |
@@ -268,17 +326,22 @@ payment including Link, auth and admin): switch the header name to
 account page (`src/routes/_authed/account/index.tsx`):
 
 - Name and phone: `users.updateProfile` (`src/integrations/trpc/users.ts`,
-  `protectedProcedure`). Optional `name` (trimmed, 1 to 100) and `phoneNumber`
-  (trimmed, 10 to 20 chars); updates only `ctx.user.id`. A duplicate phone
-  number (unique column) returns `CONFLICT`. Then `refreshSession`.
+  `protectedProcedure`, input `updateProfileSchema` from
+  `src/lib/user-validation.ts`). Optional `name` (trimmed, 1 to 100) and
+  `phoneNumber` (`phoneNumberSchema`: trimmed, at most 20 characters, at least
+  10 digits; `null` removes it, and emptying the field in the modal sends
+  `null`); updates only `ctx.user.id`. A duplicate phone number (unique
+  column) returns `CONFLICT`. Then `refreshSession`. This is the only way to
+  change the phone (`input: false` in Better Auth).
 - Email: never through tRPC. The modal calls `changeEmail({ newEmail,
   callbackURL: '/account' })`; the address changes only after the emailed
   confirmation.
 
 The booking details step (`src/components/booking/BookingDetailsStep.tsx`)
-also saves the guest's profile: the name with `authClient.updateUser`, the
-phone with `users.updatePhoneNumber` (`protectedProcedure`, min 10 chars),
-then `refreshSession`. Failures there are logged and do not block the booking.
+also saves a changed name or phone with one `users.updateProfile` call, then
+`refreshSession`. A failure there (e.g. `CONFLICT`) is logged and does not
+block the booking, which keeps the details typed in the form. The booking's
+`guestPhone` uses the same `phoneNumberSchema`.
 
 Admins read users through `users.adminListGuests` and
 `users.adminGetGuestDetails` (`adminProcedure`, by `publicId`).
@@ -287,17 +350,24 @@ Admins read users through `users.adminListGuests` and
 
 - Never send the session token (or IP, user agent) to the client. Only
   `getSessionFn` returns session data to the page, and only `SessionUser`.
-- Check roles on the server: `adminProcedure` for tRPC (D1 read per call);
-  `_admin` is UX.
+- Check roles on the server: `adminProcedure` for tRPC (D1 read per call),
+  `requireSessionMiddleware` / `requireAdminMiddleware` for every server
+  function with private data; the `beforeLoad` guards are UX.
 - New pages that need a user go under `src/routes/_authed/`; admin pages under
   `_authed/_admin/`.
 - Read the session with `useSession()` or the `_authed` route context, never
   by calling `auth` or `getSession` from components.
 - After changing anything in the session user, call `refreshSession`; after
   sign-out, `clearSession`.
-- Sanitize every redirect target with `redirectSearchParam`.
-- Keep the Turnstile header on every captcha endpoint call, and keep
-  `tanstackStartCookies()` last in the plugin list.
+- Use the guards in `src/lib/auth-check.ts`; do not write per-route session
+  checks.
+- Sanitize every redirect target with `redirectSearchParam` / `isSafeRedirect`.
+- Check `{ error }` on every Better Auth client call and show
+  `authErrorMessage(error)`.
+- Keep the Turnstile header on every captcha endpoint call, reset the widget
+  after every request, and keep `tanstackStartCookies()` last in the plugin
+  list.
+- Change link lifetimes only in `src/lib/auth-constants.ts`.
 
 ## Tests
 
@@ -307,11 +377,16 @@ Admins read users through `users.adminListGuests` and
 | `test/workers/helpers.ts` | `makeCtx(role, overrides?)` builds a context with a synthetic session via `createInnerTRPCContext` (no Better Auth); `overrides` sets a stale role or a ban on the session user |
 | `test/workers/access-freshness.test.ts` | `adminProcedure` trusts D1, not the session (stale admin session, revoked role, banned admin); banned sessions are `FORBIDDEN`; an expired ban is not |
 | `test/workers/auth-rate-limit.test.ts` | Better Auth's D1-backed limit returns 429 past the rule and stores rows in `rate_limit` |
+| `test/workers/auth-routes.test.ts` | The phone-number endpoints are gone (404); `/send-verification-email` needs a Turnstile token |
+| `test/workers/users.test.ts` | `users.updateProfile` round-trips name and phone (trim, `null` clears), duplicate phone is `CONFLICT`, invalid phones are `BAD_REQUEST` |
+| `test/workers/server-fn-auth.test.ts`, `test/unit/server-fn-middleware.test.ts` | Server function auth: 401 signed out, 403 banned or not an admin in D1 (stale session role ignored), only `SessionUser` fields; the middleware wiring (status codes, `context.user`) |
+| `test/unit/auth-check.test.ts` | Guards: `requireNoSession` sanitizes the redirect, `requireAuth` keeps the href, `requireAdmin` uses the fresh session, `optionalAuth` never redirects |
+| `test/unit/auth-forms.test.ts` | Link lifetimes (15 min / 1 h), error mapping, `registerSchema` password rules, phone schema |
 | `test/workers/rate-limit.test.ts` | Binding limit, fail-open, keys, the log line (no raw IP), the tRPC `rateLimit` middleware |
 | `test/workers/csp-report.test.ts`, `test/unit/security-headers.test.ts` | CSP report endpoint and parsing (no query strings), the policy and headers |
 | `test/unit/validation.test.ts` | `redirectSearchParam` keeps same-origin paths and drops unsafe values |
-| `e2e/public.spec.ts` | `/admin` and `/account` send a signed-out visitor to `/auth/login?redirect=<path>` |
-| `e2e/signed-in.spec.ts` | Password login reaches `/account` and survives a hard reload; a non-admin on `/admin` lands on `/` (no loop); hard reload of an own booking page and of admin pages. Needs `E2E_USER_*` / `E2E_ADMIN_*` credentials, otherwise skipped |
+| `e2e/public.spec.ts` | `/admin` and `/account` send a signed-out visitor to `/auth/login?redirect=<href>` (query kept); login and signup open on the magic-link form; a wrong password shows an inline error and Turnstile issues a new token; a link error on the login page; reset password without a token |
+| `e2e/signed-in.spec.ts` | Password login reaches `/account` and survives a hard reload; a non-admin on `/admin` lands on `/` (no loop); a signed-in user on the auth pages goes to the safe redirect (unsafe ones to `/account`); hard reload of an own booking page and of admin pages. Needs `E2E_USER_*` / `E2E_ADMIN_*` credentials, otherwise skipped |
 
-The e2e `login` helper (`e2e/fixtures.ts`) waits for Turnstile before
-submitting.
+The e2e `login` helper (`e2e/fixtures.ts`) switches to the password form and
+waits for Turnstile before submitting.

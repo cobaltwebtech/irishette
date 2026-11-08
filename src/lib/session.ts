@@ -5,10 +5,11 @@ import {
 } from '@tanstack/react-query';
 import type { AnyRouter } from '@tanstack/react-router';
 
-import { type AppSession, getSessionFn } from '@/core/functions/auth-server';
+import { getSessionFn } from '@/core/functions/auth-server';
 import { isAuthError } from '@/integrations/trpc/errors';
+import type { AppSession } from '@/lib/session-user';
 
-export type { AppSession } from '@/core/functions/auth-server';
+export type { AppSession } from '@/lib/session-user';
 
 const SESSION_QUERY_KEY = ['auth', 'session'] as const;
 
@@ -38,6 +39,22 @@ export const freshSessionQueryOptions = () =>
 		queryFn: () => getSessionFn({ data: { fresh: true } }),
 		staleTime: 30 * 60_000,
 	});
+
+/**
+ * The database-fresh session for the admin guard (cached 30 minutes, see
+ * freshSessionQueryOptions). When it was actually refetched, the shared
+ * session key gets the result too, so useSession() and the guards agree.
+ */
+export async function fetchFreshSession(
+	queryClient: QueryClient,
+): Promise<AppSession> {
+	const options = freshSessionQueryOptions();
+	const before = queryClient.getQueryState(options.queryKey)?.dataUpdatedAt;
+	const session = await queryClient.fetchQuery(options);
+	const after = queryClient.getQueryState(options.queryKey)?.dataUpdatedAt;
+	if (after !== before) queryClient.setQueryData(SESSION_QUERY_KEY, session);
+	return session;
+}
 
 /** Current session (or null). Always resolved: the root route preloads it. */
 export function useSession(): AppSession {

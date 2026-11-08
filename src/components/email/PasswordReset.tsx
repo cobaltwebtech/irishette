@@ -20,11 +20,14 @@ interface PasswordResetProps {
 	url: string;
 	/** Contact address shown in the footer (src/lib/site.ts CONTACT_EMAIL). */
 	contactEmail: string;
+	/** Link lifetime, e.g. "15 minutes" (src/lib/auth-constants.ts). */
+	expiresIn: string;
 }
 
 export const PasswordReset: React.FC<PasswordResetProps> = ({
 	url,
 	contactEmail,
+	expiresIn,
 }) => {
 	return (
 		<Html>
@@ -87,7 +90,7 @@ export const PasswordReset: React.FC<PasswordResetProps> = ({
 										Reset Password
 									</Button>
 									<Text className="text-base text-stone-700">
-										Link will expire in five minutes.
+										This link expires in {expiresIn}.
 									</Text>
 								</Column>
 							</Row>

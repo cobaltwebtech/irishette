@@ -54,8 +54,7 @@ CREATE TABLE `user` (
 	`ban_reason` text,
 	`ban_expires` integer,
 	`stripe_customer_id` text,
-	`phone_number` text,
-	`phone_number_verified` integer
+	`phone_number` text
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `user_public_id_unique` ON `user` (`public_id`);--> statement-breakpoint

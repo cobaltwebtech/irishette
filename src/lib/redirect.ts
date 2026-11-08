@@ -1,7 +1,4 @@
-import { redirect } from '@tanstack/react-router';
 import { z } from 'zod';
-
-import type { AppSession } from '@/lib/session';
 
 export const DEFAULT_AUTH_REDIRECT = '/account';
 
@@ -9,7 +6,7 @@ export const DEFAULT_AUTH_REDIRECT = '/account';
  * True for same-origin relative paths only: must start with a single `/`,
  * no `//` or `/\` (protocol-relative), no backslashes or control characters.
  */
-function isSafeRedirect(value: string): boolean {
+export function isSafeRedirect(value: string): boolean {
 	if (!value.startsWith('/') || value.startsWith('//')) return false;
 	// oxlint-disable-next-line eslint/no-control-regex -- rejecting control characters is the point
 	if (/[\\\u0000-\u001f\u007f]/.test(value)) return false;
@@ -30,16 +27,3 @@ export const redirectSearchParam = z
 	.refine(isSafeRedirect)
 	.optional()
 	.catch(undefined);
-
-/**
- * beforeLoad guard for auth pages (login, signup, password reset): a signed-in
- * user is sent on to the (sanitized) redirect target instead.
- */
-export function redirectIfSignedIn(
-	session: AppSession,
-	redirectTo: string | undefined,
-) {
-	if (session) {
-		throw redirect({ href: redirectTo ?? DEFAULT_AUTH_REDIRECT });
-	}
-}

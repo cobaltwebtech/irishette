@@ -55,6 +55,7 @@
           "src/lib/admin-query.ts",
           "src/lib/cancellation-policy-store.ts",
           "src/lib/rate-limit.ts",
+          "src/lib/server-auth.ts",
           "src/db/**",
           "src/server.ts",
           "src/integrations/trpc/init.ts",

@@ -38,7 +38,7 @@ export type SessionUserOverrides = Partial<{
 }>;
 
 /** A minimal Better Auth session for a seeded user. */
-function fakeSession(
+export function fakeSession(
 	u: SeedUser,
 	overrides: SessionUserOverrides = {},
 ): NonNullable<AuthSession> {
@@ -68,7 +68,6 @@ function fakeSession(
 			banReason: null,
 			banExpires: null,
 			phoneNumber: null,
-			phoneNumberVerified: false,
 			...overrides,
 		},
 	} as unknown as NonNullable<AuthSession>;

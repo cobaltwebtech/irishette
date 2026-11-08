@@ -1,437 +1,258 @@
 import { Icon } from '@iconify/react';
-import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
 import { useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
-import { useEffect, useEffectEvent, useId, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useId, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
-import { Badge } from '@/components/ui/badge';
+import { AuthCard, AuthError } from '@/components/auth/AuthCard';
+import { AuthModeToggle } from '@/components/auth/AuthModeToggle';
+import { CheckEmailPanel } from '@/components/auth/CheckEmailPanel';
+import { EmailField } from '@/components/auth/EmailField';
+import { useMagicLinkURLs } from '@/components/auth/magic-link';
+import { ResendVerification } from '@/components/auth/ResendVerification';
+import { TurnstileField, useTurnstile } from '@/components/auth/TurnstileField';
+import { useAuthRequest } from '@/components/auth/useAuthRequest';
 import { Button } from '@/components/ui/button';
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardFooter,
-	CardHeader,
-	CardTitle,
-} from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password';
-import { authClient, signIn } from '@/lib/auth-client';
+import { invalidateSession, requireNoSession } from '@/lib/auth-check';
+import { authClient } from '@/lib/auth-client';
 import {
-	DEFAULT_AUTH_REDIRECT,
-	redirectIfSignedIn,
-	redirectSearchParam,
-} from '@/lib/redirect';
-import { refreshSession } from '@/lib/session';
+	formatLinkLifetime,
+	MAGIC_LINK_EXPIRES_IN,
+} from '@/lib/auth-constants';
+import { authLinkErrorMessage } from '@/lib/auth-errors';
+import { emailSchema, firstIssue } from '@/lib/auth-validation';
+import { DEFAULT_AUTH_REDIRECT, redirectSearchParam } from '@/lib/redirect';
 
 export const Route = createFileRoute('/auth/login')({
 	head: () => ({
-		meta: [
-			{
-				title: 'Login to Account | Irishette.com',
-			},
-		],
+		meta: [{ title: 'Login to Account | Irishette.com' }],
 	}),
 	validateSearch: z.object({
 		redirect: redirectSearchParam,
-		error: z.string().optional().catch(undefined),
+		error: z.string().max(100).optional().catch(undefined),
 	}),
 	// Signed-in users skip the login page.
-	beforeLoad: ({ context, search }) => {
-		redirectIfSignedIn(context.session, search.redirect);
-	},
+	beforeLoad: (ctx) => requireNoSession(ctx),
 	component: LoginPage,
 });
 
-function LoginPage() {
-	const [email, setEmail] = useState('');
-	const [password, setPassword] = useState('');
-	const [isLoading, setIsLoading] = useState(false);
-	const [emailSent, setEmailSent] = useState(false);
-	const [error, setError] = useState('');
-	const [showPasswordLogin, setShowPasswordLogin] = useState(false);
-	const [turnstileToken, setTurnstileToken] = useState('');
-	const turnstileRef = useRef<TurnstileInstance>(null);
-	const emailInputId = useId();
-	const passwordInputId = useId();
+/**
+ * `?error=CODE` from an email link: on this page (magic link errorCallbackURL)
+ * or inside the redirect target (verification links add it to their
+ * callbackURL, which then bounces here through the signed-in guard).
+ * Returns the code and the redirect without it.
+ */
+function linkError(search: { redirect?: string; error?: string }) {
+	if (search.error) return { code: search.error, redirect: search.redirect };
+	if (!search.redirect?.includes('error=')) return null;
+	const url = new URL(search.redirect, 'http://localhost');
+	const code = url.searchParams.get('error');
+	if (!code) return null;
+	url.searchParams.delete('error');
+	return { code, redirect: url.pathname + url.search };
+}
 
+function LoginPage() {
+	const search = Route.useSearch();
 	const router = useRouter();
 	const queryClient = useQueryClient();
-	const search = Route.useSearch();
+	const turnstile = useTurnstile();
+	const passwordId = useId();
 
-	// Error message mapping for Better Auth errors
-	const getErrorMessage = (errorCode: string): string => {
-		const errorMessages: Record<string, string> = {
-			INVALID_TOKEN:
-				'This magic link has expired or is invalid. Please request a new one.',
-			EXPIRED_TOKEN: 'This magic link has expired. Please request a new one.',
-		};
-		return errorMessages[errorCode] || `Authentication error: ${errorCode}`;
-	};
+	const [mode, setMode] = useState<'magic' | 'password'>('magic');
+	const [email, setEmail] = useState('');
+	const [password, setPassword] = useState('');
+	const { isLoading, error, setError, run } = useAuthRequest(turnstile);
+	const magicLinkURLs = useMagicLinkURLs(search.redirect);
+	const [needsVerification, setNeedsVerification] = useState(false);
+	const [sentTo, setSentTo] = useState('');
 
-	// Stable callback for showing error toast (doesn't trigger effect re-runs)
-	const showErrorToast = useEffectEvent((errorCode: string) => {
-		const message = getErrorMessage(errorCode);
-		setError(message);
-		toast.error(message, {
-			duration: 6000,
-			description: 'Please try logging in again.',
-		});
-	});
+	const redirectTo = search.redirect ?? DEFAULT_AUTH_REDIRECT;
 
-	// Check for error in query parameters (top-level or nested in redirect)
+	// Show an email-link error once, then drop it from the URL.
+	const showLinkError = useEffectEvent(
+		(found: { code: string; redirect?: string }) => {
+			setError(`${authLinkErrorMessage(found.code)} Request a new link below.`);
+			void router.navigate({
+				to: '/auth/login',
+				search: { redirect: found.redirect, error: undefined },
+				replace: true,
+			});
+		},
+	);
 	useEffect(() => {
-		// Check top-level error param first
-		if (search.error) {
-			showErrorToast(search.error);
-			return;
-		}
+		const found = linkError(search);
+		if (found) showLinkError(found);
+	}, [search]);
 
-		// Check if error is nested in the redirect URL
-		// Example: redirect=/account?error=INVALID_TOKEN
-		if (search.redirect?.includes('?error=')) {
-			try {
-				// Parse the redirect URL to extract error param
-				const redirectUrl = new URL(search.redirect, window.location.origin);
-				const errorParam = redirectUrl.searchParams.get('error');
-
-				if (errorParam) {
-					showErrorToast(errorParam);
-
-					// Clean up the redirect URL by removing the error param
-					redirectUrl.searchParams.delete('error');
-					const cleanRedirect =
-						redirectUrl.pathname +
-						(redirectUrl.search ? redirectUrl.search : '');
-
-					// Update the URL to remove error and clean redirect
-					void router.navigate({
-						to: '/auth/login',
-						search: { redirect: cleanRedirect, error: undefined },
-						replace: true,
-					});
-				}
-			} catch (err) {
-				console.error('Failed to parse redirect URL for error:', err);
-			}
-		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [search.error, search.redirect, router]);
-
-	const handleMagicLinkSignIn = async (e: React.FormEvent) => {
-		e.preventDefault();
-
-		if (!email) {
-			setError('Email is required');
-			toast.error('Email is required');
-			return;
-		}
-
-		setIsLoading(true);
+	const switchMode = () => {
+		setMode(mode === 'magic' ? 'password' : 'magic');
 		setError('');
-
-		try {
-			await authClient.signIn.magicLink({
-				email,
-				callbackURL: search.redirect,
-				fetchOptions: {
-					headers: {
-						'x-captcha-response': turnstileToken,
-					},
-				},
-			});
-			setEmailSent(true);
-			toast.success('Magic link sent! Check your email.');
-		} catch (err: unknown) {
-			console.error('Magic link sign-in error:', err);
-			const message =
-				err instanceof Error
-					? err.message
-					: 'Failed to send magic link. Please try again.';
-			setError(message);
-			toast.error(message);
-			// Reset turnstile on error
-			turnstileRef.current?.reset();
-			setTurnstileToken('');
-		} finally {
-			setIsLoading(false);
-		}
+		setNeedsVerification(false);
 	};
 
-	const handlePasswordLogin = async (e: React.FormEvent) => {
+	const handleMagicLink = async (e: React.FormEvent) => {
 		e.preventDefault();
-
-		if (!email || !password) {
-			setError('Email and password are required');
-			toast.error('Email and password are required');
+		const parsed = emailSchema.safeParse({ email });
+		if (!parsed.success) {
+			setError(firstIssue(parsed.error));
 			return;
 		}
-
-		setIsLoading(true);
-		setError('');
-
-		try {
-			const response = await signIn.email({
-				email,
-				password,
-				callbackURL: search.redirect,
-				fetchOptions: {
-					headers: {
-						'x-captcha-response': turnstileToken,
-					},
-				},
-			});
-
-			if (response && !response.error) {
-				toast.success('Login successful!');
-				await refreshSession(queryClient, router);
-				// history.push keeps the full (already sanitized) path + search.
-				router.history.push(search.redirect ?? DEFAULT_AUTH_REDIRECT);
-				return;
-			}
-
-			if (response.error) {
-				const errorMsg =
-					response.error.message || 'Login failed. Please try again.';
-				setError(errorMsg);
-				toast.error(errorMsg);
-				return;
-			}
-		} catch (error) {
-			console.error('Login failed', error);
-			const errorMsg =
-				error instanceof Error
-					? error.message
-					: 'Login failed. Please check your credentials and try again.';
-			setError(errorMsg);
-			toast.error(errorMsg);
-			// Reset turnstile on error
-			turnstileRef.current?.reset();
-			setTurnstileToken('');
-		} finally {
-			setIsLoading(false);
-		}
+		await run(
+			() =>
+				authClient.signIn.magicLink({
+					email: parsed.data.email,
+					...magicLinkURLs,
+					fetchOptions: { headers: turnstile.headers },
+				}),
+			{ onSuccess: () => setSentTo(parsed.data.email) },
+		);
 	};
 
-	if (emailSent) {
+	const handlePassword = async (e: React.FormEvent) => {
+		e.preventDefault();
+		const parsed = emailSchema.safeParse({ email });
+		if (!parsed.success || !password) {
+			setError(
+				parsed.success ? 'Password is required' : firstIssue(parsed.error),
+			);
+			return;
+		}
+		setNeedsVerification(false);
+		await run(
+			() =>
+				authClient.signIn.email({
+					email: parsed.data.email,
+					password,
+					callbackURL: redirectTo,
+					fetchOptions: { headers: turnstile.headers },
+				}),
+			{
+				onError: (signInError) =>
+					setNeedsVerification(signInError.code === 'EMAIL_NOT_VERIFIED'),
+				onSuccess: async () => {
+					toast.success('Logged in');
+					await invalidateSession(queryClient, router);
+					// history.push keeps the full (already sanitized) path + search.
+					router.history.push(redirectTo);
+				},
+			},
+		);
+	};
+
+	if (sentTo) {
 		return (
-			<div className="flex flex-auto flex-col items-center justify-center bg-background px-4 py-8">
-				<Card className="w-full max-w-md">
-					<CardHeader className="text-center">
-						<div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-primary">
-							<Icon
-								icon="tabler:mail-fast"
-								className="size-10 text-primary-foreground"
-							/>
-						</div>
-						<CardTitle className="text-2xl font-bold">
-							Check Your Email
-						</CardTitle>
-						<CardDescription>
-							<p>We have emailed a magic link to:</p>
-							<p className="font-semibold">{email}</p>
-						</CardDescription>
-					</CardHeader>
-					<CardContent className="space-y-4">
-						<p className="text-center text-muted-foreground">
-							Click the link in your email to sign in to your Irishette account.
-							The link will expire in 15 minutes.
-						</p>
-						<div className="flex flex-auto flex-wrap items-center justify-center gap-4">
-							<Button
-								variant="secondary"
-								onClick={() => {
-									setEmailSent(false);
-									setEmail('');
-									setError('');
-								}}
-								className="flex-1"
-							>
-								<Icon icon="tabler:mail-share" className="size-5" />
-								Send Another Link
-							</Button>
-							<Button
-								className="flex-1"
-								variant="outline"
-								onClick={() => {
-									setEmailSent(false);
-									setEmail('');
-									setPassword('');
-									setError('');
-									setShowPasswordLogin(false);
-								}}
-							>
-								← Go Back to Login
-							</Button>
-						</div>
-					</CardContent>
-				</Card>
-			</div>
+			<CheckEmailPanel
+				email={sentTo}
+				purpose="sign in to your Irishette account"
+				lifetime={formatLinkLifetime(MAGIC_LINK_EXPIRES_IN)}
+			>
+				<Button
+					variant="secondary"
+					className="w-full"
+					onClick={() => setSentTo('')}
+				>
+					<Icon icon="tabler:mail-share" className="size-5" />
+					Send another link
+				</Button>
+			</CheckEmailPanel>
 		);
 	}
 
+	const isMagic = mode === 'magic';
+
 	return (
-		<div className="flex flex-auto flex-col items-center justify-center bg-background px-4 py-8">
-			<Card className="w-full max-w-md">
-				<CardHeader className="text-center">
-					<div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-primary">
-						<Icon
-							icon="tabler:user-circle"
-							className="size-10 text-primary-foreground"
-						/>
-					</div>
-					<CardTitle className="text-2xl font-bold">
-						Login to Your Account
-					</CardTitle>
-					<CardDescription>
-						{showPasswordLogin
-							? 'Enter your account email address and password to login. If you would like to login without a password, click the Login with Magic Link button below.'
-							: 'Enter your account email address to receive a Magic Link and login without a password.'}
-					</CardDescription>
-				</CardHeader>
-				<CardContent>
-					<form
-						onSubmit={
-							showPasswordLogin ? handlePasswordLogin : handleMagicLinkSignIn
-						}
-						className="space-y-4"
+		<AuthCard
+			icon="tabler:user-circle"
+			title="Login to Your Account"
+			description={
+				isMagic
+					? 'Enter your email address and we will email you a link to log in. No password needed.'
+					: 'Enter your email address and password.'
+			}
+			footer={
+				<p>
+					Don&apos;t have an account?{' '}
+					<Link
+						to="/auth/signup"
+						search={{ redirect: search.redirect }}
+						className="text-accent underline-offset-4 hover:underline"
 					>
-						<div className="flex flex-col gap-2">
-							<Label htmlFor={emailInputId}>Email</Label>
-							<Input
-								id={emailInputId}
-								type="email"
-								value={email}
-								onChange={(e) => setEmail(e.target.value)}
-								placeholder="Enter your email address"
-								required
-								disabled={isLoading}
-								autoComplete="email"
-							/>
-						</div>
+						Sign Up
+					</Link>
+				</p>
+			}
+		>
+			<form
+				onSubmit={isMagic ? handleMagicLink : handlePassword}
+				className="space-y-4"
+				noValidate
+			>
+				<EmailField value={email} onChange={setEmail} disabled={isLoading} />
 
-						{showPasswordLogin && (
-							<div className="flex flex-col gap-2">
-								<div className="flex items-center">
-									<Label htmlFor={passwordInputId}>Password</Label>
-									<Link
-										to="/auth/forgot-password"
-										search={{ redirect: search.redirect }}
-										className="ml-auto inline-block text-sm text-accent underline-offset-4 hover:underline"
-									>
-										Forgot your password?
-									</Link>
-								</div>
-								<PasswordInput
-									id={passwordInputId}
-									value={password}
-									onChange={(e) => setPassword(e.target.value)}
-									required
-									disabled={isLoading}
-									autoComplete="current-password"
-								/>
-							</div>
-						)}
-
-						{error && (
-							<div className="inline-flex gap-1 text-sm font-bold text-destructive">
-								<Icon icon="tabler:circle-x" className="size-5" />
-								{error}
-							</div>
-						)}
-
-						<Turnstile
-							className="w-full"
-							ref={turnstileRef}
-							siteKey={import.meta.env.VITE_TURNSTILE_PUBLIC_KEY}
-							onSuccess={(token: string) => setTurnstileToken(token)}
-							onError={() => {
-								setTurnstileToken('');
-								toast.error('Captcha verification failed. Please try again.');
-							}}
-							onExpire={() => setTurnstileToken('')}
-							options={{
-								appearance: 'interaction-only',
-								theme: 'light',
-								size: 'flexible',
-							}}
-							style={{
-								display: 'block',
-								width: '100%',
-								minWidth: '300px',
-								height: '65px',
-							}}
-						/>
-
-						<Button
-							type="submit"
-							className="w-full"
-							disabled={isLoading || !email || !turnstileToken}
-						>
-							{isLoading ? (
-								<>
-									<Icon
-										icon="tabler:loader-2"
-										className="size-5 animate-spin"
-									/>
-									{showPasswordLogin
-										? 'Logging in...'
-										: 'Sending Magic Link...'}
-								</>
-							) : showPasswordLogin ? (
-								'Login'
-							) : (
-								<>
-									<Icon icon="tabler:mail" className="size-5" />
-									<span>Send Magic Link</span>
-								</>
-							)}
-						</Button>
-
+				{!isMagic && (
+					<div className="flex flex-col gap-2">
 						<div className="flex items-center">
-							<hr className="flex-1" />
-							<Badge variant="outline" className="bg-background uppercase">
-								Or login using
-							</Badge>
-							<hr className="flex-1" />
+							<Label htmlFor={passwordId}>Password</Label>
+							<Link
+								to="/auth/forgot-password"
+								search={{ redirect: search.redirect }}
+								className="ml-auto inline-block text-sm text-accent underline-offset-4 hover:underline"
+							>
+								Forgot your password?
+							</Link>
 						</div>
-
-						<Button
-							type="button"
-							variant="outline"
-							className="w-full"
-							onClick={() => setShowPasswordLogin(!showPasswordLogin)}
-						>
-							{showPasswordLogin ? (
-								<>
-									<Icon icon="tabler:mail-bolt" className="size-5" />
-									<span>Login with Magic Link</span>
-								</>
-							) : (
-								<>
-									<Icon icon="tabler:lock-password" className="size-5" />
-									<span>Login with Password</span>
-								</>
-							)}
-						</Button>
-					</form>
-				</CardContent>
-				<CardFooter className="flex justify-center">
-					<div className="text-center text-sm">
-						Don't have an account?{' '}
-						<Link
-							to="/auth/signup"
-							search={{ redirect: search.redirect }}
-							className="text-accent underline-offset-4 hover:underline"
-						>
-							Sign Up
-						</Link>
+						<PasswordInput
+							id={passwordId}
+							value={password}
+							onChange={(e) => setPassword(e.target.value)}
+							required
+							disabled={isLoading}
+							autoComplete="current-password"
+						/>
 					</div>
-				</CardFooter>
-			</Card>
-		</div>
+				)}
+
+				<AuthError message={error} />
+
+				<TurnstileField
+					widgetRef={turnstile.ref}
+					onToken={turnstile.setToken}
+				/>
+
+				<Button
+					type="submit"
+					className="w-full"
+					disabled={isLoading || !email || !turnstile.token}
+				>
+					{isLoading ? (
+						<>
+							<Icon icon="tabler:loader-2" className="size-5 animate-spin" />
+							{isMagic ? 'Sending link...' : 'Logging in...'}
+						</>
+					) : isMagic ? (
+						<>
+							<Icon icon="tabler:mail" className="size-5" />
+							Email me a login link
+						</>
+					) : (
+						'Login'
+					)}
+				</Button>
+			</form>
+
+			{needsVerification && (
+				<ResendVerification email={email} callbackURL={redirectTo} />
+			)}
+
+			<AuthModeToggle
+				mode={mode}
+				onToggle={switchMode}
+				magicLabel="Email me a login link instead"
+			/>
+		</AuthCard>
 	);
 }

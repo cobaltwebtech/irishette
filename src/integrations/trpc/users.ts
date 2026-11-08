@@ -6,6 +6,7 @@ import type { Database } from '@/db/drizzle-init';
 import { bookings, user } from '@/db/schema-export';
 import { isUniqueViolation } from '@/lib/db-errors';
 import { publicIdSchema } from '@/lib/ids';
+import { updateProfileSchema } from '@/lib/user-validation';
 
 import { adminProcedure, createTRPCRouter, protectedProcedure } from './init';
 
@@ -112,38 +113,13 @@ export const usersRouter = createTRPCRouter({
 			return { user: profile, bookings: userBookings };
 		}),
 
-	/** The caller's phone number (replaced by the profile update in Phase 2). */
-	updatePhoneNumber: protectedProcedure
-		.input(
-			z.object({
-				phoneNumber: z
-					.string()
-					.trim()
-					.min(10, 'Phone number must be at least 10 digits')
-					.max(20),
-			}),
-		)
-		.mutation(async ({ ctx, input }) => {
-			await updateOwnUser(ctx, { phoneNumber: input.phoneNumber });
-			return { success: true, message: 'Phone number updated successfully' };
-		}),
-
 	/**
-	 * Update the user's name and phone number. Email changes go through Better
-	 * Auth's changeEmail (verified by email), never through here.
+	 * The caller's own name and phone number (the only way to change the
+	 * phone: Better Auth's user.additionalFields.phoneNumber has input: false).
+	 * A phone number used by another account is CONFLICT.
 	 */
 	updateProfile: protectedProcedure
-		.input(
-			z.object({
-				name: z.string().trim().min(1, 'Name is required').max(100).optional(),
-				phoneNumber: z
-					.string()
-					.trim()
-					.min(10, 'Phone number must be at least 10 digits')
-					.max(20)
-					.optional(),
-			}),
-		)
+		.input(updateProfileSchema)
 		.mutation(async ({ ctx, input }) => {
 			await updateOwnUser(ctx, {
 				...(input.name !== undefined ? { name: input.name } : {}),

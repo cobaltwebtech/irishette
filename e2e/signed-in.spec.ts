@@ -28,6 +28,21 @@ test.describe('normal user', () => {
 		await expect(page).toHaveURL((url) => url.pathname === '/');
 	});
 
+	test('a signed-in user on the auth pages goes to the (safe) redirect', async ({
+		page,
+	}) => {
+		if (!credentials.user) return;
+		await login(page, credentials.user);
+		await page.goto('/auth/login?redirect=%2Faccount%2Fpast-bookings');
+		await expect(page).toHaveURL(
+			(url) => url.pathname === '/account/past-bookings',
+		);
+		await page.goto('/auth/signup?redirect=%2F%2Fevil.example');
+		await expect(page).toHaveURL((url) => url.pathname === '/account');
+		await page.goto('/auth/reset-password?token=abc');
+		await expect(page).toHaveURL((url) => url.pathname === '/account');
+	});
+
 	test('hard reload of an own booking page', async ({
 		page,
 		expectCleanConsole,

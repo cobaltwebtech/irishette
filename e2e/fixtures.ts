@@ -1,4 +1,9 @@
-import { test as base, expect, type Page } from '@playwright/test';
+import {
+	test as base,
+	type BrowserContext,
+	expect,
+	type Page,
+} from '@playwright/test';
 
 /**
  * `test` with a page that records console errors, page errors and React
@@ -51,20 +56,48 @@ export const credentials = {
 			: null,
 };
 
-/** Signs in with email + password on /auth/login (waits for Turnstile). */
+/**
+ * Switches an auth page from the magic-link form to the password form. Retries
+ * the click: in dev, a click before hydration does nothing.
+ */
+export async function showPasswordForm(page: Page) {
+	const password = page.getByLabel('Password', { exact: true });
+	await expect(async () => {
+		await page.getByRole('button', { name: 'Use a password instead' }).click();
+		await expect(password).toBeVisible({ timeout: 1_000 });
+	}).toPass({ timeout: 30_000 });
+}
+
+/** Session cookies per account, so each account signs in through the UI once. */
+const sessionCookies = new Map<
+	string,
+	Awaited<ReturnType<BrowserContext['cookies']>>
+>();
+
+/**
+ * Signs in with email + password on /auth/login (waits for Turnstile). The
+ * first call per account uses the form; later calls reuse its session cookies
+ * (Better Auth allows 5 password sign-ins per minute per IP).
+ */
 export async function login(
 	page: Page,
 	account: { email: string; password: string },
 ) {
+	const cookies = sessionCookies.get(account.email);
+	if (cookies) {
+		await page.context().addCookies(cookies);
+		return;
+	}
 	await page.goto('/auth/login');
-	await page.getByRole('button', { name: 'Login with Password' }).click();
-	await page.getByLabel('Email').fill(account.email);
-	await page.getByLabel('Password').fill(account.password);
+	await showPasswordForm(page);
+	await page.getByLabel('Email', { exact: true }).fill(account.email);
+	await page.getByLabel('Password', { exact: true }).fill(account.password);
 	const submit = page.getByRole('button', { name: 'Login', exact: true });
 	// Enabled once Turnstile has issued a token.
 	await expect(submit).toBeEnabled({ timeout: 30_000 });
 	await submit.click();
 	await page.waitForURL((url) => !url.pathname.startsWith('/auth/'));
+	sessionCookies.set(account.email, await page.context().cookies());
 }
 
 /** Reloads the current page with the browser cache bypassed (hard reload). */

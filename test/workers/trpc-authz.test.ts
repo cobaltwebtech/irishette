@@ -29,7 +29,6 @@ const USER = new Set([
 	'bookings.getCancellationQuote',
 	'bookings.cancelBooking',
 	'bookings.resendConfirmationEmail',
-	'users.updatePhoneNumber',
 	'users.updateProfile',
 ]);
 
@@ -47,6 +46,8 @@ const REMOVED = [
 	'availability.checkBulk',
 	// Plan 02 Phase 1: unused (the admin UI syncs a whole room).
 	'ical.syncFeed',
+	// Plan 02 Phase 2: merged into users.updateProfile.
+	'users.updatePhoneNumber',
 ];
 
 const paths = Object.keys(trpcRouter._def.procedures).sort();

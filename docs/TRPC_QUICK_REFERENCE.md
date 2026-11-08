@@ -229,15 +229,21 @@ returned only here. See `ICAL_SYNC_README.md`.
 |---|---|---|---|---|
 | `adminListGuests` | query | admin | `{ limit 1-100 (50), offset }` | Users with role `user`, with non-pending booking count, `total`, `hasMore` |
 | `adminGetGuestDetails` | query | admin | `{ publicId }` (`publicIdSchema`) | The guest's profile (explicit columns: `publicId`, name, email, `emailVerified`, phone, role, `stripeCustomerId`, `createdAt`; no ban fields or internal id) and their non-pending bookings |
-| `updatePhoneNumber` | mutation | user | `{ phoneNumber (10-20) }` | Set the caller's phone number. `CONFLICT` if taken (merged into `updateProfile` in plan 02 Phase 2) |
-| `updateProfile` | mutation | user | `{ name? (1-100), phoneNumber? (10-20) }` | Update the caller's name and phone. `CONFLICT` if the phone is taken. Email changes go through Better Auth's `changeEmail` |
+| `updateProfile` | mutation | user | `updateProfileSchema` (`src/lib/user-validation.ts`): `{ name? (trimmed, 1-100), phoneNumber? (phoneNumberSchema: trimmed, max 20 chars, at least 10 digits; null removes it) }` | Update the caller's own name and phone; omitted fields stay. The only way to change the phone (`additionalFields.phoneNumber` has `input: false` in Better Auth). `CONFLICT` if the phone is used by another account. Email changes go through Better Auth's `changeEmail` |
+
+`users.updatePhoneNumber` was merged into `updateProfile` in plan 02 Phase 2
+(listed in `REMOVED` in `trpc-authz.test.ts`). The booking input's
+`guestPhone` uses the same `phoneNumberSchema`.
 
 ## Security model
 
 - **Auth is enforced in procedures, not routes.** The `_authed` and
   `_authed/_admin` layouts (`src/routes/_authed.tsx`,
-  `src/routes/_authed/_admin.tsx`) only redirect for UX. Every procedure
-  behind them is `protectedProcedure` or `adminProcedure`.
+  `src/routes/_authed/_admin.tsx`, guards in `src/lib/auth-check.ts`) only
+  redirect for UX. Every procedure behind them is `protectedProcedure` or
+  `adminProcedure`. (TanStack Start server functions with private data use
+  `requireSessionMiddleware` / `requireAdminMiddleware` instead; see
+  `SECURE_AUTH_IMPLEMENTATION.md`.)
 - **Identity comes from the session only.** User-scoped procedures use
   `ctx.user.id`; no input field selects the acting user.
 - **Ownership:** `findAccessibleBooking` (`bookings.ts`) adds

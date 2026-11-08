@@ -9,8 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useTRPC } from '@/integrations/trpc/react';
-import { authClient } from '@/lib/auth-client';
 import { refreshSession, useSession } from '@/lib/session';
+import { phoneNumberSchema } from '@/lib/user-validation';
 import { useBookingStore } from '@/stores';
 import { bookingActions, bookingStore } from '@/stores/booking-store';
 import { parseISODateString } from '@/utils/booking-utils';
@@ -21,9 +21,7 @@ export function BookingDetailsStep() {
 	const trpc = useTRPC();
 	const queryClient = useQueryClient();
 	const router = useRouter();
-	const updatePhoneNumber = useMutation(
-		trpc.users.updatePhoneNumber.mutationOptions(),
-	);
+	const updateProfile = useMutation(trpc.users.updateProfile.mutationOptions());
 	const createBooking = useMutation(
 		trpc.bookings.createBooking.mutationOptions(),
 	);
@@ -94,9 +92,11 @@ export function BookingDetailsStep() {
 
 		if (!guestPhone.trim()) {
 			newErrors.guestPhone = 'Phone number is required';
-		} else if (guestPhone.length < 10) {
-			newErrors.guestPhone =
-				'Please enter a valid phone number (at least 10 digits)';
+		} else {
+			const phone = phoneNumberSchema.safeParse(guestPhone);
+			if (!phone.success) {
+				newErrors.guestPhone = phone.error.issues[0].message;
+			}
 		}
 
 		setErrors(newErrors);
@@ -108,45 +108,25 @@ export function BookingDetailsStep() {
 			return;
 		}
 
-		// Whether the session user (name/phone) changed and must be refetched
-		let profileUpdated = false;
-
-		// Update user's name in Better Auth if it's different and user is logged in
-		if (session?.user && guestName.trim() !== session.user.name) {
-			try {
-				const { error } = await authClient.updateUser({
-					name: guestName.trim(),
-				});
-				if (error) throw error;
-				profileUpdated = true;
-			} catch (error) {
-				console.warn('Failed to update user name in Better Auth:', error);
-				// Don't block the booking flow if user update fails
-			}
-		}
-
-		// Update user's phone number via tRPC if it's different and user is logged in
-		if (
-			session?.user &&
-			guestPhone.trim() &&
-			guestPhone.trim() !== session.user.phoneNumber
-		) {
-			try {
-				await updatePhoneNumber.mutateAsync({
-					phoneNumber: guestPhone.trim(),
-				});
-				profileUpdated = true;
-			} catch (error) {
-				console.warn('Failed to update user phone number via tRPC:', error);
-				// Don't block the booking flow if user update fails
-			}
-		}
-
-		if (profileUpdated) {
-			try {
-				await refreshSession(queryClient, router);
-			} catch (error) {
-				console.warn('Failed to refresh session after profile update:', error);
+		// Save a changed name or phone to the signed-in user's profile (one
+		// call). A failure (e.g. the phone is used by another account) does not
+		// block the booking: the booking keeps the details typed here.
+		if (session?.user) {
+			const name = guestName.trim();
+			const phoneNumber = guestPhone.trim();
+			const changes = {
+				...(name !== session.user.name ? { name } : {}),
+				...(phoneNumber && phoneNumber !== session.user.phoneNumber
+					? { phoneNumber }
+					: {}),
+			};
+			if (Object.keys(changes).length > 0) {
+				try {
+					await updateProfile.mutateAsync(changes);
+					await refreshSession(queryClient, router);
+				} catch (error) {
+					console.warn('Failed to update the user profile:', error);
+				}
 			}
 		}
 

@@ -3,8 +3,8 @@ import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { newId, newPublicId } from '../lib/ids';
 
 // Better Auth tables. Keep in sync with the Better Auth plugins in
-// src/lib/auth.ts (admin, phoneNumber, stripe), user.additionalFields and the
-// rateLimit option.
+// src/lib/auth.ts (admin, stripe), user.additionalFields (publicId,
+// phoneNumber) and the rateLimit option.
 // Timestamps stay in seconds (mode: 'timestamp').
 
 export const user = sqliteTable('user', {
@@ -29,8 +29,9 @@ export const user = sqliteTable('user', {
 	banReason: text('ban_reason'),
 	banExpires: integer('ban_expires', { mode: 'timestamp' }),
 	stripeCustomerId: text('stripe_customer_id'),
+	// Optional, unique. Declared to Better Auth via user.additionalFields
+	// (input: false); changed only through tRPC users.updateProfile.
 	phoneNumber: text('phone_number').unique(),
-	phoneNumberVerified: integer('phone_number_verified', { mode: 'boolean' }),
 });
 
 export const session = sqliteTable(

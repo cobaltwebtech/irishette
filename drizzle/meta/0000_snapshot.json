@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "d18e3ce8-afe1-4cae-b5aa-f569d9ed71fd",
+  "id": "d3efc183-745d-4fa2-8599-197e7b342112",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -379,13 +379,6 @@
         "phone_number": {
           "name": "phone_number",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "phone_number_verified": {
-          "name": "phone_number_verified",
-          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false

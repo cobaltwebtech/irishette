@@ -1,11 +1,16 @@
 import { drizzleAdapter } from '@better-auth/drizzle-adapter';
 import { stripe } from '@better-auth/stripe';
 import { betterAuth } from 'better-auth';
-import { admin, captcha, magicLink, phoneNumber } from 'better-auth/plugins';
+import { admin, captcha, magicLink } from 'better-auth/plugins';
 import { tanstackStartCookies } from 'better-auth/tanstack-start';
 import { env } from 'cloudflare:workers';
 
 import { createDrizzle } from '@/db/drizzle-init';
+import {
+	EMAIL_VERIFICATION_EXPIRES_IN,
+	MAGIC_LINK_EXPIRES_IN,
+	PASSWORD_RESET_EXPIRES_IN,
+} from '@/lib/auth-constants';
 import {
 	sendChangeEmailConfirmation,
 	sendMagicLinkEmail,
@@ -79,6 +84,7 @@ function createAuth() {
 		emailAndPassword: {
 			enabled: true,
 			requireEmailVerification: true,
+			resetPasswordTokenExpiresIn: PASSWORD_RESET_EXPIRES_IN,
 			sendResetPassword: ({ user, url }) =>
 				sendPasswordResetEmail(env, user.email, url),
 		},
@@ -87,6 +93,7 @@ function createAuth() {
 		emailVerification: {
 			sendOnSignUp: true,
 			autoSignInAfterVerification: true,
+			expiresIn: EMAIL_VERIFICATION_EXPIRES_IN,
 			sendVerificationEmail: ({ user, url }) =>
 				sendVerificationEmail(env, user.email, url),
 		},
@@ -98,6 +105,16 @@ function createAuth() {
 					required: true,
 					input: false,
 					defaultValue: () => newPublicId(),
+				},
+				// Optional, unique (column user.phone_number). input: false keeps
+				// it out of Better Auth's sign-up and update-user bodies, so it
+				// only changes through tRPC users.updateProfile (validated,
+				// duplicate -> CONFLICT).
+				phoneNumber: {
+					type: 'string',
+					required: false,
+					unique: true,
+					input: false,
 				},
 			},
 			changeEmail: {
@@ -111,9 +128,9 @@ function createAuth() {
 		plugins: [
 			admin(),
 			magicLink({
+				expiresIn: MAGIC_LINK_EXPIRES_IN,
 				sendMagicLink: ({ email, url }) => sendMagicLinkEmail(env, email, url),
 			}),
-			phoneNumber(),
 			stripe({
 				stripeClient,
 				stripeWebhookSecret: env.STRIPE_BETTER_AUTH_WEBHOOK_SECRET,
@@ -127,6 +144,7 @@ function createAuth() {
 					'/sign-up/email',
 					'/sign-in/email',
 					'/request-password-reset',
+					'/send-verification-email',
 				],
 			}),
 			tanstackStartCookies(), // Handle cookies for TanStack Start. Needs to be last in array.

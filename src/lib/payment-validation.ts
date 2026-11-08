@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { isoDateSchema } from '@/lib/date-range';
 import { publicIdSchema } from '@/lib/ids';
+import { phoneNumberSchema } from '@/lib/user-validation';
 
 const checkOutAfterCheckIn = {
 	message: 'Check-out must be after check-in',
@@ -19,7 +20,7 @@ const createBookingBaseSchema = z.object({
 
 	guestName: z.string().trim().min(2).max(100),
 	guestEmail: z.email(),
-	guestPhone: z.string().trim().min(10).max(20),
+	guestPhone: phoneNumberSchema,
 	specialRequests: z.string().max(1000).optional(),
 
 	basePrice: z.number().nonnegative().optional(),

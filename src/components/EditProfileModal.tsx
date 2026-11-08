@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label';
 import { useTRPC } from '@/integrations/trpc/react';
 import { changeEmail } from '@/lib/auth-client';
 import { refreshSession } from '@/lib/session';
+import { phoneNumberSchema } from '@/lib/user-validation';
 
 interface EditProfileModalProps {
 	open: boolean;
@@ -82,10 +83,10 @@ export function EditProfileModal({
 			newErrors.email = 'Invalid email address';
 		}
 
-		if (phoneNumber && phoneNumber.trim().length > 0) {
-			const digitsOnly = phoneNumber.replace(/\D/g, '');
-			if (digitsOnly.length < 10) {
-				newErrors.phoneNumber = 'Phone number must be at least 10 digits';
+		if (phoneNumber.trim()) {
+			const phone = phoneNumberSchema.safeParse(phoneNumber);
+			if (!phone.success) {
+				newErrors.phoneNumber = phone.error.issues[0].message;
 			}
 		}
 
@@ -108,9 +109,8 @@ export function EditProfileModal({
 			if (nameChanged || phoneChanged) {
 				await updateProfileMutation.mutateAsync({
 					...(nameChanged ? { name: name.trim() } : {}),
-					...(phoneChanged && phoneNumber.trim()
-						? { phoneNumber: phoneNumber.trim() }
-						: {}),
+					// An emptied field removes the number.
+					...(phoneChanged ? { phoneNumber: phoneNumber.trim() || null } : {}),
 				});
 			}
 			if (emailChanged) {

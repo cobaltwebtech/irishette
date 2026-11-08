@@ -112,8 +112,8 @@ src/routes/              File-based routes: _authed.tsx (signed-in layout) -> _a
 src/routes/api/          Server routes: auth.$ (Better Auth, rate-limited), trpc.$ (tRPC), stripe.$ (webhook), ical.$ (iCal export feed), csp-report (CSP violation reports -> Workers Logs)
 src/integrations/trpc/   init.ts (public/protected/admin procedures, errorFormatter), context.ts + inner-context.ts (per-request context), router.ts, routers: bookings, rooms, availability, ical, policies, users
 src/core/functions/      TanStack Start server functions (auth-server.ts: getSessionFn)
-src/core/middleware/     TanStack Start middleware: security-headers (global), rate-limit (server routes)
-src/lib/                 Services and validation: auth, auth-client, session (useSession), booking-service, availability, pricing, date-range, cancellation-policy, email-service, stripe(-webhook), ical-sync/-parse/-generate/-export, scheduled-tasks, deps (ServiceDeps), ids, site (domain, contact details, email senders, check-in/out times), *-validation (Zod)
+src/core/middleware/     TanStack Start middleware: security-headers (global), rate-limit (server routes), auth (requireSession/requireAdmin function middleware)
+src/lib/                 Services and validation: auth, auth-client, auth-check (route guards), server-auth (server fn checks), session (useSession), session-user, booking-service, availability, pricing, date-range, cancellation-policy, email-service, stripe(-webhook), ical-sync/-parse/-generate/-export, scheduled-tasks, deps (ServiceDeps), ids, site (domain, contact details, email senders, check-in/out times), *-validation (Zod)
 src/db/                  Drizzle schemas (auth-, booking-, room-, policy-), schema-export.ts, drizzle-init.ts (createDrizzle, Database type)
 src/components/          UI (ui/ = shadcn, admin/, booking/, email/, data-table/)
 src/stores/              TanStack Store booking state
@@ -142,9 +142,12 @@ Conventions:
 
 - Session state comes from the server function `getSessionFn` (`src/core/functions/auth-server.ts`) through TanStack Query: `sessionQueryOptions` / `useSession()` / `refreshSession()` / `clearSession()` in `src/lib/session.ts`. The root route preloads it during SSR.
 - Only the `SessionUser` shape leaves the server. Never put the session token, IP or user agent into route context, loader data or query data (it is dehydrated into the HTML).
-- Protected pages live under the pathless layouts `src/routes/_authed.tsx` (signed in) and `src/routes/_authed/_admin.tsx` (admin; uses `freshSessionQueryOptions`: a database-fresh session on every SSR load, cached 30 minutes in the browser). Put new protected routes under them instead of adding per-route guards.
+- Route guards live in `src/lib/auth-check.ts`: `requireAuth` (`_authed.tsx`), `requireAdmin` (`_authed/_admin.tsx`; database-fresh session on every SSR load, cached 30 minutes in the browser), `optionalAuth`, and `requireNoSession` (auth pages; sanitizes `redirect` with `isSafeRedirect`). They use the per-request `context.queryClient` and `getSessionFn`, never a module-level QueryClient or `fetch('/api/auth/...')`. Put new protected routes under the pathless layouts instead of adding per-route guards. Guards are UX only.
 - Server-side checks: `protectedProcedure` rejects banned users; `adminProcedure` re-reads role and ban from D1 on every call (`src/integrations/trpc/access.ts`). In the browser, a tRPC `UNAUTHORIZED`/`FORBIDDEN` refreshes the session and re-runs the guards (`createAuthErrorHandler`).
-- After sign-in, sign-out or a profile change, call `refreshSession` / `clearSession` so guards and loaders re-run.
+- **Every server function that reads or writes private data must use `requireSessionMiddleware` or `requireAdminMiddleware`** (`src/core/middleware/auth.ts`, attached per function with `.middleware([...])`, never globally: `getSessionFn` is public). A route guard does not protect a server function. Use `context.user` (a `SessionUser`) in the handler.
+- After sign-in, sign-out or a profile change, call `refreshSession` (also exported as `invalidateSession`) / `clearSession` so guards and loaders re-run.
+- Better Auth client calls return `{ data, error }`: always check `error` (show `authErrorMessage` from `src/lib/auth-errors.ts`), and reset Turnstile (`useTurnstile().reset()`) after every request; `useAuthRequest(turnstile).run(...)` in `src/components/auth/` does both. Auth forms use the shared parts in `src/components/auth/`. Link lifetimes are set only in `src/lib/auth-constants.ts` (pages and emails print them).
+- Sign-in is magic link first; there is no phone sign-in. `user.phoneNumber` is a plain optional unique field (`input: false`), changed only through tRPC `users.updateProfile` (`phoneNumberSchema` in `src/lib/user-validation.ts`).
 - Server functions: the installed TanStack Start (1.170) uses `createServerFn({ method }).validator(zodSchema).handler(...)`. Check the Start skill before assuming another name (`inputValidator` appears in some docs).
 
 ### Docs worth reading before changing an area
@@ -338,7 +341,7 @@ Tuned in Phase 8 of the 2026-11 upgrade plan. Framework entry points (TanStack S
   | `ui` | `src/components/ui/**` | `ui`, `shared` |
   | `email` | `src/components/email/**` | `email` |
   | `client` | other `src/components/**`, `src/stores/**` | `ui`, `client`, `shared`; `server` type-only |
-  | `server` | server-only services in `src/lib/` (auth, booking-service, availability, deps, email-service, stripe, stripe-webhook, ical-sync, ical-export, scheduled-tasks, admin-query, cancellation-policy-store, rate-limit), `src/db/**`, `src/server.ts`, tRPC init/access/context/routers | anything |
+  | `server` | server-only services in `src/lib/` (auth, booking-service, availability, deps, email-service, stripe, stripe-webhook, ical-sync, ical-export, scheduled-tasks, admin-query, cancellation-policy-store, rate-limit, server-auth), `src/db/**`, `src/server.ts`, tRPC init/access/context/routers | anything |
   | `shared` | the rest of `src/lib/**`, `src/utils/**`, tRPC `react`/`types`/`errors`/`batching` | `shared`; `server` type-only |
 
   Routes and `src/core/` are unzoned. When you add a server-only module to `src/lib/`, add it to the `server` zone. If client code needs a constant that lives in a server file (e.g. a Drizzle schema), move it into a shared module (see `src/lib/ical-feed-sources.ts`) instead of suppressing the violation.

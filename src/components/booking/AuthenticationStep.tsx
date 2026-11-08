@@ -1,11 +1,18 @@
 import { Icon } from '@iconify/react';
-import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
+import { AuthError } from '@/components/auth/AuthCard';
+import { EmailField } from '@/components/auth/EmailField';
+import { TurnstileField, useTurnstile } from '@/components/auth/TurnstileField';
+import { useAuthRequest } from '@/components/auth/useAuthRequest';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { authClient } from '@/lib/auth-client';
+import {
+	formatLinkLifetime,
+	MAGIC_LINK_EXPIRES_IN,
+} from '@/lib/auth-constants';
+import { emailSchema, firstIssue } from '@/lib/auth-validation';
 import { useSession } from '@/lib/session';
 import { useBookingStore } from '@/stores';
 
@@ -14,9 +21,8 @@ export function AuthenticationStep() {
 	const session = useSession();
 	const [email, setEmail] = useState('');
 	const [emailSent, setEmailSent] = useState(false);
-	const [isLoading, setIsLoading] = useState(false);
-	const [turnstileToken, setTurnstileToken] = useState('');
-	const turnstileRef = useRef<TurnstileInstance>(null);
+	const turnstile = useTurnstile();
+	const { isLoading, error, setError, run } = useAuthRequest(turnstile);
 
 	if (session?.user) {
 		// User is already authenticated, advance to next step
@@ -42,37 +48,25 @@ export function AuthenticationStep() {
 
 	const handleSendMagicLink = async (e: React.FormEvent) => {
 		e.preventDefault();
-		if (!email || isLoading) return;
-
-		setIsLoading(true);
-		try {
-			// Send magic link using Better Auth client-side API
-			const { error } = await authClient.signIn.magicLink({
-				email: email,
-				callbackURL: '/booking', // Redirect back to booking after authentication
-				newUserCallbackURL: '/booking', // Also redirect new users to booking
-				errorCallbackURL: '/booking?error=auth', // Handle errors gracefully
-				fetchOptions: {
-					headers: {
-						'x-captcha-response': turnstileToken,
-					},
-				},
-			});
-
-			if (error) {
-				throw new Error(error.message || 'Failed to send magic link');
-			}
-
-			setEmailSent(true);
-		} catch (error) {
-			console.error('Error sending magic link:', error);
-			alert('Failed to send magic link. Please try again.');
-			// Reset turnstile on error
-			turnstileRef.current?.reset();
-			setTurnstileToken('');
-		} finally {
-			setIsLoading(false);
+		if (isLoading) return;
+		const parsed = emailSchema.safeParse({ email });
+		if (!parsed.success) {
+			setError(firstIssue(parsed.error));
+			return;
 		}
+
+		// New and existing users both come back to the booking.
+		await run(
+			() =>
+				authClient.signIn.magicLink({
+					email: parsed.data.email,
+					callbackURL: '/booking',
+					newUserCallbackURL: '/booking',
+					errorCallbackURL: '/booking?error=auth',
+					fetchOptions: { headers: turnstile.headers },
+				}),
+			{ onSuccess: () => setEmailSent(true) },
+		);
 	};
 
 	if (emailSent) {
@@ -84,7 +78,8 @@ export function AuthenticationStep() {
 				<CardContent>
 					<p className="mb-4 text-muted-foreground">
 						We've sent a magic link to <strong>{email}</strong>. Click the link
-						in your email to continue with your booking.
+						in your email to continue with your booking. The link expires in{' '}
+						{formatLinkLifetime(MAGIC_LINK_EXPIRES_IN)}.
 					</p>
 					<p className="text-sm text-muted-foreground">
 						Don't see the email? Check your spam folder or{' '}
@@ -118,41 +113,16 @@ export function AuthenticationStep() {
 					Don't worry, if you don't have an account yet we will create one for
 					you automatically.
 				</p>
-				<form onSubmit={handleSendMagicLink} className="space-y-4">
-					<div>
-						<Input
-							type="email"
-							placeholder="Enter your email address"
-							value={email}
-							onChange={(e) => setEmail(e.target.value)}
-							required
-							disabled={isLoading}
-						/>
-					</div>
-					<Turnstile
-						ref={turnstileRef}
-						siteKey={import.meta.env.VITE_TURNSTILE_PUBLIC_KEY}
-						onSuccess={(token: string) => setTurnstileToken(token)}
-						onError={() => {
-							setTurnstileToken('');
-							alert('Captcha verification failed. Please try again.');
-						}}
-						onExpire={() => setTurnstileToken('')}
-						options={{
-							appearance: 'interaction-only',
-							theme: 'light',
-							size: 'flexible',
-						}}
-						style={{
-							display: 'block',
-							width: '100%',
-							minWidth: '300px',
-							height: '65px',
-						}}
+				<form onSubmit={handleSendMagicLink} className="space-y-4" noValidate>
+					<EmailField value={email} onChange={setEmail} disabled={isLoading} />
+					<AuthError message={error} />
+					<TurnstileField
+						widgetRef={turnstile.ref}
+						onToken={turnstile.setToken}
 					/>
 					<Button
 						type="submit"
-						disabled={isLoading || !email || !turnstileToken}
+						disabled={isLoading || !email || !turnstile.token}
 						className="w-full"
 					>
 						{isLoading ? (

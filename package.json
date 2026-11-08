@@ -26,7 +26,7 @@
     "db:studio": "drizzle-kit studio",
     "db:studio:remote": "DB_TARGET=remote drizzle-kit studio",
     "db:migrate:local": "node scripts/d1-local.mjs migrate",
-    "db:migrate:remote": "cf d1 migrations apply 7a52bbfc-592e-4792-990e-6a5e51ca8cbd --dir ./drizzle",
+    "db:migrate:remote": "cf d1 migrations apply DB --dir ./drizzle",
     "db:seed:local": "node scripts/d1-local.mjs seed",
     "db:reset:local": "rm -rf .cloudflare/state/v3/d1 && pnpm db:migrate:local && pnpm db:seed:local",
     "db:make-admin:local": "node scripts/d1-local.mjs make-admin",

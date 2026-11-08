@@ -14,6 +14,12 @@ import type { bookings } from '@/db/schema-export';
 
 import { getAdminEmails } from './admin-query';
 import {
+	EMAIL_VERIFICATION_EXPIRES_IN,
+	formatLinkLifetime,
+	MAGIC_LINK_EXPIRES_IN,
+	PASSWORD_RESET_EXPIRES_IN,
+} from './auth-constants';
+import {
 	CHECK_OUT_TIME_LABEL,
 	CONTACT_EMAIL,
 	EMAIL_FROM_ADMIN,
@@ -327,6 +333,7 @@ export function sendPasswordResetEmail(
 		react: React.createElement(PasswordReset, {
 			url,
 			contactEmail: CONTACT_EMAIL,
+			expiresIn: formatLinkLifetime(PASSWORD_RESET_EXPIRES_IN),
 		}),
 	});
 }
@@ -343,6 +350,7 @@ export function sendMagicLinkEmail(
 		react: React.createElement(MagicLinkEmail, {
 			url,
 			contactEmail: CONTACT_EMAIL,
+			expiresIn: formatLinkLifetime(MAGIC_LINK_EXPIRES_IN),
 		}),
 	});
 }
@@ -360,6 +368,7 @@ export function sendVerificationEmail(
 			heading: 'Verify your email',
 			paragraphs: [
 				'Click the button below to verify your email address for your Irishette account.',
+				`This link expires in ${formatLinkLifetime(EMAIL_VERIFICATION_EXPIRES_IN)}.`,
 				'If you did not request this, you can ignore this email.',
 			],
 			button: { label: 'Verify email', href: url },
@@ -387,6 +396,7 @@ export function sendChangeEmailConfirmation(
 				paragraphs: [
 					`Someone asked to change the email on your Irishette account to ${newEmail}.`,
 					'If this was you, confirm below. If not, ignore this email and your account stays unchanged.',
+					`This link expires in ${formatLinkLifetime(EMAIL_VERIFICATION_EXPIRES_IN)}.`,
 				],
 				button: { label: 'Confirm change', href: url },
 			},
