@@ -20,7 +20,7 @@ import * as entrypoint from './src/server.ts' with { type: 'cf-worker' };
 // VITE_TURNSTILE_PUBLIC_KEY is a public build-time value inlined by Vite and is
 // intentionally not declared here.
 
-// tsconfig has no Node types (types: ["vite/client"]); this file runs under
+// tsconfig has no Node types (types: ["vite-plus/client"]); this file runs under
 // Node (cf / Vite), where Varlock injects values into process.env.
 declare const process: { env: Record<string, string | undefined> };
 

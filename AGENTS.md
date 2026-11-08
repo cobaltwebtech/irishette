@@ -81,7 +81,7 @@ Config is the `fmt` and `lint` blocks in `vite.config.ts`. Oxfmt is scoped to co
 
 ### Vite+ notes
 
-- `pnpm-workspace.yaml` aliases `vite` to `@voidzero-dev/vite-plus-core` via a catalog + `overrides`, and `vitest` is pinned to the version bundled in `vite-plus`. Keep `vite-plus`, the `vite` alias and `vitest` in lockstep; upgrade with `vp migrate`/the Vite+ upgrade guide, not by bumping one of them alone.
+- `package.json` does not declare `vite` (the documented layout for pnpm: `vite-plus` brings the core). `pnpm-workspace.yaml` aliases `vite` to `@voidzero-dev/vite-plus-core` via a catalog + `overrides` so every plugin resolves that one copy; do not re-add a direct real `vite` (two Vite copies break `vp`, typecheck and the workers tests). Ambient types come from `vite-plus/client` (tsconfig `types` and `src/routes/__root.tsx`), not `vite/client`. The core alias is pinned in the catalog, and `vitest` is pinned to the version bundled in `vite-plus`. Keep `vite-plus`, the `vite` alias and `vitest` in lockstep; upgrade with `vp migrate`/the Vite+ upgrade guide, not by bumping one of them alone.
 - Imports in config files (`vite.config.ts`, `vitest.config.ts`) come from `vite-plus`; tests import from `vite-plus/test`.
 - Keep `@vitejs/plugin-react` ^6.1+ and a pinned `oxc-transform-react` (inside the plugin's peer range).
 
