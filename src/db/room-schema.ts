@@ -8,6 +8,7 @@ import {
 	uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 
+import { icalFeedSources } from '../lib/ical-feed-sources';
 import { newIcalExportToken, newId, newPublicId } from '../lib/ids';
 
 export const room = sqliteTable('room', {
@@ -55,14 +56,6 @@ export const room = sqliteTable('room', {
 // Imported iCal feeds (Airbnb, Expedia, Vrbo, Booking.com, ...). Adding a
 // platform is a new row, not a code change. `url` is a third-party secret:
 // never return it from public procedures.
-export const icalFeedSources = [
-	'airbnb',
-	'expedia',
-	'vrbo',
-	'booking',
-	'other',
-] as const;
-export type IcalFeedSource = (typeof icalFeedSources)[number];
 
 export const icalFeeds = sqliteTable(
 	'ical_feeds',

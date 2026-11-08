@@ -64,4 +64,3 @@ export const adminCancelBookingSchema = z.object({
 });
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
-export type CalculateBookingInput = z.infer<typeof calculateBookingSchema>;

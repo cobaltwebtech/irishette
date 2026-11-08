@@ -11,11 +11,15 @@ declared in `cloudflare.config.ts`.
 | `15 9 * * *` | iCal sync log cleanup (09:15 UTC) |
 
 Changing a schedule requires updating both `cloudflare.config.ts` and
-`src/lib/scheduled-tasks.ts`.
+`CRON_SCHEDULES` in `src/lib/scheduled-tasks.ts` (see `CRON_JOBS_SETUP.md`).
+
+The quickest check is the test suite, which calls the handler directly:
+`pnpm test:workers` (`test/workers/scheduled.test.ts`,
+`test/workers/ical-sync.test.ts`).
 
 ## Trigger a cron locally
 
-1. Start the dev server (local D1/KV in `.cloudflare/state`):
+1. Start the dev server (local D1 in `.cloudflare/state`):
 
    ```bash
    pnpm dev            # runs `cf dev` on http://localhost:3000
@@ -34,19 +38,19 @@ Changing a schedule requires updating both `cloudflare.config.ts` and
    The old `/__scheduled` and `/cdn-cgi/handler/scheduled` endpoints are no
    longer used.
 
-3. Watch the dev server terminal. For the sync you should see:
+3. Watch the dev server terminal. Each task logs one summary line, e.g.:
 
    ```
-   🔔 Scheduled event received in server.ts
-   ⏰ Scheduled event triggered: */30 * * * *
-   🚀 Starting scheduled calendar sync...
-   📋 Found 2 active rooms to sync
-   🎉 Calendar sync completed:
-   📝 Sync summary stored in KV: sync_summary:...
+   iCal sync: 0 feed(s), 0 failed, 0 change(s), 0 conflict(s)
+   Expired holds: 0 deleted, 0 kept (payment found or unknown)
+   Sync history cleanup: 0 run(s), 0 change(s) older than ... removed
    ```
 
-The local seed (`pnpm db:reset:local`) has no iCal URLs, so the sync makes no
-external requests. Add a URL in the admin UI to test a real fetch.
+   An unknown cron string logs `Unknown cron schedule "...": nothing to do`.
+
+The local seed (`pnpm db:reset:local`) adds one **inactive** feed per room with
+a placeholder URL, so the sync makes no external requests. Add a real feed URL
+(and activate it) in the admin UI to test a fetch.
 
 ## Inspect local data
 
@@ -59,7 +63,8 @@ cf d1 raw 7a52bbfc-592e-4792-990e-6a5e51ca8cbd --local --persist-to .cloudflare/
 pnpm db:studio
 ```
 
-KV entries (`sync_summary:*`) can be browsed in Local Explorer.
+Sync history lives in D1 (`ical_sync_log`, `ical_sync_changes`, and the
+`last_*` columns on `ical_feeds`); the admin iCal page shows it too.
 
 ## Production
 
@@ -72,7 +77,8 @@ KV entries (`sync_summary:*`) can be browsed in Local Explorer.
 
 - **Secrets are undefined in `env`:** a secret reaches `env` only if it is
   declared with `bindings.secret()` in `cloudflare.config.ts`. Local values come
-  from `.env`.
+  from Varlock (`.env.schema` + the encrypted `.env.local`, injected by
+  `varlock run`); check them with `pnpm env:check`.
 - **Binding is undefined:** check `worker.env` in `cloudflare.config.ts`, then
   restart `pnpm dev`.
 - **No rooms found:** run `pnpm db:reset:local` to re-create and seed the local

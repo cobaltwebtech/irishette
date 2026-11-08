@@ -13,10 +13,10 @@ Irishette is a room-booking site (rooms, availability, bookings, payments, admin
 | Routing / data | TanStack Router (file-based), TanStack Query, TanStack Table, TanStack Store |
 | API | tRPC v11 (`src/integrations/trpc/`) served through TanStack Start server routes in `src/routes/api/` |
 | Auth | Better Auth + `@better-auth/stripe` + Drizzle adapter (`src/lib/auth.ts`) |
-| Payments | Stripe (`src/lib/payment-service.ts`, webhooks in `src/routes/api/stripe.$.ts`) |
+| Payments | Stripe PaymentIntents + Payment Element (`src/lib/booking-service.ts`; webhook handler `src/lib/stripe-webhook.ts`, mounted at `src/routes/api/stripe.$.ts`) |
 | Database | Cloudflare D1 (binding `DB`) via Drizzle ORM (SQLite dialect) |
-| Other bindings | KV `KV_ICAL_SYNC_LOG`; cron triggers (see `cloudflare.config.ts`) |
-| Email | Resend + react-email templates in `src/components/email/` |
+| Other bindings | None besides text/secret bindings; cron triggers (see `cloudflare.config.ts`). The old `KV_ICAL_SYNC_LOG` KV binding is gone (sync history is in D1). |
+| Email | Resend + react-email templates in `src/components/email/`; every send (booking, admin alerts, Better Auth) goes through `src/lib/email-service.ts` |
 | Bot protection | Cloudflare Turnstile |
 | Env / secrets | **Varlock** (`.env.schema` contract, generated `varlock.d.ts`, local encryption). Cloudflare config via `cf` + `cloudflare.config.ts`; no Wrangler config, no Varlock Cloudflare/Vite integrations (see [Secrets and environment](#secrets-and-environment-varlock)) |
 | UI | Tailwind CSS v4, shadcn/ui (new-york, Stone) + Radix, `sonner` toasts |
@@ -32,7 +32,7 @@ Always run project tools through `pnpm` (`vp`, drizzle-kit, tsc, `cf`, Varlock a
 
 ```bash
 pnpm install                 # install deps
-pnpm dev                     # varlock run --inject vars -> cf dev (Vite on :3000, local D1/KV). Asks the user for Touch ID/password to decrypt secrets.
+pnpm dev                     # varlock run --inject vars -> cf dev (Vite on :3000, local D1). Asks the user for Touch ID/password to decrypt secrets.
 pnpm build                   # varlock run --inject vars -> cf build (output in .cloudflare/output/)
 pnpm preview                 # varlock run --inject vars -> vp preview
 pnpm run deploy              # varlock run --inject vars -> cf deploy  (ASK THE USER FIRST). Must be `pnpm run deploy`: bare `pnpm deploy` is a pnpm built-in.
@@ -42,9 +42,11 @@ pnpm types                   # cf workers types: regenerate Worker `Env` types i
 pnpm tail                    # wrangler tail irishette (the one allowed Wrangler use besides `secret put`; streams live logs)
 
 pnpm db:generate             # drizzle-kit generate (new SQL migration in drizzle/)
-pnpm db:migrate:local        # apply ./drizzle to the LOCAL D1 (scripts/d1-local.mjs always passes --local)
-pnpm db:seed:local           # seed local D1
-pnpm db:make-admin:local     # promote an existing local user to admin
+pnpm db:check                # drizzle-kit check (schema vs snapshots)
+pnpm db:studio               # Drizzle Studio on the local D1 (db:studio:remote targets REMOTE; ask first)
+pnpm db:migrate:local        # apply ./drizzle to the LOCAL D1 (scripts/d1-local.mjs always passes --local --persist-to .cloudflare/state)
+pnpm db:seed:local           # seed local D1 with synthetic data (scripts/seed-local.sql)
+pnpm db:make-admin:local <email>  # promote an existing local user to admin
 pnpm db:reset:local          # wipe local D1, re-migrate, re-seed
 pnpm db:migrate:remote       # cf d1 migrations apply on the REMOTE database (ASK THE USER FIRST)
 
@@ -58,13 +60,23 @@ pnpm check:fix               # vp check --fix: format, sort imports/Tailwind cla
 pnpm lint                    # vp lint
 pnpm format                  # vp fmt (writes)
 pnpm typecheck               # cf workers types && tsc --noEmit (also covers e2e); `vp check` type-checks too but does not regenerate Worker types
-pnpm test                    # vp test run (unit + workers projects)
+pnpm test                    # vp test run (unit + workers projects; config in vitest.config.ts)
+pnpm test:unit               # unit project only (test/unit/, Node, TZ=UTC)
+pnpm test:workers            # workers project only (test/workers/, workerd + local D1 via @cloudflare/vitest-plugin)
+pnpm test:smoke              # HTTP smoke checks against a running `pnpm dev` (BASE_URL to override)
+pnpm test:e2e                # Playwright (Chromium) against the dev server; signed-in/Stripe tests need E2E_* vars (see playwright.config.ts)
 ```
 
 Notes:
-- `README.md` mentions ESLint/Prettier/`pnpm check`/`pnpm start`; that is stale. Vite+ (Oxlint + Oxfmt) is the only linter/formatter.
 - `src/routeTree.gen.ts`, `varlock.d.ts` and `.cloudflare/types/` (Worker `Env` types) are generated. Never hand-edit them. `.cloudflare/` is gitignored; `varlock.d.ts` is committed.
-- `docs/CLAUDE.md` is an older, partially stale overview. Prefer this file when they conflict.
+- Root `CLAUDE.md` only includes this file (`@AGENTS.md`).
+
+### Tests
+
+- **Unit** (`test/unit/`): pure modules (date rules, pricing, iCal parse/generate, cancellation policy, validation, ids, booking store).
+- **Workers** (`test/workers/`): tRPC procedures through `createInnerTRPCContext` with a synthetic session (no Better Auth), the Stripe webhook, the iCal route and the cron handlers, inside workerd with a migrated local D1. Bindings are declared in `vitest.config.ts` with test-only values (it does not read `cloudflare.config.ts` or any `.env`). Outbound requests (Stripe, Resend, feed URLs) are mocked with msw (`test/workers/mocks.ts`); unmocked requests fail.
+- When you add a tRPC procedure, add it to the access lists in `test/workers/trpc-authz.test.ts` (and `trpc-public-leaks.test.ts` if public).
+- **E2E** (`e2e/`): a few Playwright flows (hard reloads, auth redirects, calendar, optional Stripe booking with `E2E_STRIPE=1`).
 
 ## Code style (Vite+: Oxlint + Oxfmt)
 
@@ -95,17 +107,16 @@ Config is the `fmt` and `lint` blocks in `vite.config.ts`. Oxfmt is scoped to co
 
 ```
 src/server.ts            Custom Worker entry: fetch -> TanStack Start handler; scheduled -> handleScheduledEvent. DO NOT DELETE.
-src/start.tsx, router.tsx  TanStack Start / Router setup (Query SSR integration)
-src/routes/              File-based routes (admin/, account/, auth/, booking/, rooms/, api/)
-src/routes/api/          Server routes: auth.$ (Better Auth), trpc.$ (tRPC), stripe.$ (webhooks), ical.$ (iCal feeds)
-src/integrations/trpc/   init.ts (context, public/protected procedures), router.ts, bookings/rooms/users/availability routers
-src/integrations/tanstack-query/  Query client + providers
-src/core/functions|middleware/    TanStack Start server functions + middleware
-src/lib/                 Services and validation: auth, auth-client, payment-service, email-service, ical-service, scheduled-tasks, *-validation (Zod)
-src/db/                  Drizzle schemas (auth-, booking-, room-), schema-export.ts, drizzle-init.ts
-src/components/          UI (ui/ = shadcn, admin/, booking/, email/)
+src/start.tsx, router.tsx  TanStack Start / Router setup; router.tsx creates a QueryClient and tRPC client PER REQUEST (SSR uses a local in-process link, no HTTP)
+src/routes/              File-based routes: _authed.tsx (signed-in layout) -> _authed/account/, _authed/booking/, _authed/_admin.tsx -> _authed/_admin/admin/; public auth/, booking/, rooms/; api/
+src/routes/api/          Server routes: auth.$ (Better Auth), trpc.$ (tRPC), stripe.$ (webhook), ical.$ (iCal export feed)
+src/integrations/trpc/   init.ts (public/protected/admin procedures, errorFormatter), context.ts + inner-context.ts (per-request context), router.ts, routers: bookings, rooms, availability, ical, policies, users
+src/core/functions/      TanStack Start server functions (auth-server.ts: getSessionFn)
+src/lib/                 Services and validation: auth, auth-client, session (useSession), booking-service, availability, pricing, date-range, cancellation-policy, email-service, stripe(-webhook), ical-sync/-parse/-generate/-export, scheduled-tasks, deps (ServiceDeps), ids, *-validation (Zod)
+src/db/                  Drizzle schemas (auth-, booking-, room-, policy-), schema-export.ts, drizzle-init.ts (createDrizzle, Database type)
+src/components/          UI (ui/ = shadcn, admin/, booking/, email/, data-table/)
 src/stores/              TanStack Store booking state
-drizzle/                 Generated SQL migrations (applied via `cf d1 migrations apply`)
+drizzle/                 Generated SQL migrations: a single fresh baseline 0000_init.sql (applied via `cf d1 migrations apply`)
 scripts/                 d1-local.mjs (local D1 helpers), smoke.mjs, check-client-bundle.mjs (post-build secret-name check)
 cloudflare.config.ts     Worker config (bindings, cron triggers, compat flags). Replaces wrangler.jsonc.
 docs/                    Feature/architecture notes (see below)
@@ -114,21 +125,36 @@ db-copy/                 Local DB dumps (gitignored; never commit or edit)
 
 Conventions:
 - Server-only env access uses `import { env } from 'cloudflare:workers'` (see `src/lib/auth.ts`). Do not use `process.env` for Worker secrets, and never import server-only modules into client code.
-- tRPC: use `publicProcedure` / `protectedProcedure` from `src/integrations/trpc/init.ts`; validate every input with Zod (schemas live in `src/lib/*-validation.ts`); register new routers in `src/integrations/trpc/router.ts`. Admin-only logic must check the user role server-side.
-- Client data fetching uses `@trpc/tanstack-react-query` + TanStack Query; prefer route loaders / `ensureQueryData` for SSR.
+- tRPC: use `publicProcedure` / `protectedProcedure` / `adminProcedure` from `src/integrations/trpc/init.ts` (admin checks are server-side, in `adminProcedure`); validate every input with Zod (schemas live in `src/lib/*-validation.ts`); register new routers in `src/integrations/trpc/router.ts`. Public procedures must never return feed URLs, internal booking ids or guest data.
+- Server services take `ServiceDeps` (`src/lib/deps.ts`: `db`, `env`, `stripe`, `waitUntil`). The tRPC context satisfies it (one Drizzle and one Stripe client per request); webhook and cron handlers build one with `createServiceDeps`. Do not create extra Drizzle/Stripe clients in procedures.
+- Client data fetching uses `@trpc/tanstack-react-query` (`useTRPC()` + `queryOptions`/`mutationOptions`) + TanStack Query; prefer route loaders / `ensureQueryData` for SSR. Never share a QueryClient across requests.
 - Do not call Stripe, D1, or Better Auth server APIs from components; go through tRPC procedures, server functions, or `src/lib` services.
-- The React Compiler is enabled: avoid manual `useMemo`/`useCallback` unless there is a measured reason; follow the Rules of React.
+- The React Compiler is enabled: avoid manual `useMemo`/`useCallback` unless there is a measured reason; follow the Rules of React. (Only vendored shadcn components in `src/components/ui/` still use them.)
 
-### Existing docs worth reading before changing an area
+### IDs
 
-`docs/` has per-feature notes. Check the matching one first:
-- Booking: `BOOKING_ARCHITECTURE.md`, `BOOKING_QUICK_REFERENCE.md`, `BOOKING-STORE-README.md`
-- tRPC: `TRPC_PROCEDURES_REFERENCE.md`, `TRPC_QUICK_REFERENCE.md`, `TRPC_SECURITY_IMPLEMENTATION.md`
-- Auth: `SECURE_AUTH_IMPLEMENTATION.md`, `AUTH_CHECK_UTILITIES.md`, `TANSTACK_QUERY_AUTH_INTEGRATION.md`
-- Stripe: `STRIPE_PAYMENT_INTEGRATION.md`, `STRIPE_WEBHOOK_SETUP.md`, `STRIPE_WEBHOOK_SECURITY.md`, `STRIPE_WEBHOOK_REFERENCE.md`
+- Every table uses a **UUIDv7** TEXT primary key (`newId()` in `src/lib/ids.ts`), including Better Auth tables (`advanced.database.generateId` in `src/lib/auth.ts`).
+- **Any table shown in a dynamic route gets a `public_id`**: a 16-char nanoid (`[0-9a-z]`, `newPublicId()`, validated with `publicIdSchema`). Today: `bookings`, `user`, `room`. URLs, route params and frontend lookups use `publicId`, never the primary key. Bookings also have a human-readable `confirmationId` for guests and emails.
+
+### Session and auth pattern
+
+- Session state comes from the server function `getSessionFn` (`src/core/functions/auth-server.ts`) through TanStack Query: `sessionQueryOptions` / `useSession()` / `refreshSession()` / `clearSession()` in `src/lib/session.ts`. The root route preloads it during SSR.
+- Only the `SessionUser` shape leaves the server. Never put the session token, IP or user agent into route context, loader data or query data (it is dehydrated into the HTML).
+- Protected pages live under the pathless layouts `src/routes/_authed.tsx` (signed in) and `src/routes/_authed/_admin.tsx` (admin; uses `freshSessionQueryOptions`). Put new protected routes under them instead of adding per-route guards.
+- After sign-in, sign-out or a profile change, call `refreshSession` / `clearSession` so guards and loaders re-run.
+- Server functions: the installed TanStack Start (1.170) uses `createServerFn({ method }).validator(zodSchema).handler(...)`. Check the Start skill before assuming another name (`inputValidator` appears in some docs).
+
+### Docs worth reading before changing an area
+
+`docs/` has one current note per area. Check the matching one first:
+- Booking: `BOOKING_ARCHITECTURE.md`
+- tRPC: `TRPC_QUICK_REFERENCE.md` (every procedure with its access level)
+- Auth / sessions: `SECURE_AUTH_IMPLEMENTATION.md`
+- Stripe: `STRIPE_PAYMENT_INTEGRATION.md`, `STRIPE_WEBHOOKS.md` (dashboard and Stripe CLI setup)
 - Cron / iCal: `CRON_JOBS_SETUP.md`, `TESTING_CRON_JOBS_LOCALLY.md`, `ICAL_SYNC_README.md`
+- Legal page sources: `cancellation-refund-policy.md`, `privacy-policy.md`, `terms-of-service.md`
 
-These may lag the code; verify against the source.
+Update the matching doc when you change an area; verify against the source when they disagree.
 
 ## Database (D1 + Drizzle)
 
@@ -293,38 +319,31 @@ fallow dead-code --trace-dependency <package> --format json --quiet
 
 Report to the user: the audit verdict, new findings you introduced (fixed or justified), and any findings you judged to be false positives (with reason).
 
-### Fallow tuning status: NOT YET TUNED
+### Fallow config: `.fallowrc.json`
 
-Fallow is running on defaults (no `.fallowrc.json` exists; `fallow config --path` exits 3). **Expect false positives.** Do not treat a raw Fallow finding as proof of dead code, and do not delete files/exports/dependencies just because it was reported. Observed on the first default run (93 issues):
+Tuned in Phase 8 of the 2026-11 upgrade plan. Framework entry points (TanStack Start/Router routes, `src/server.ts`, Vitest, Playwright) are auto-detected; no `entry` overrides are needed. Ask the user before loosening the config.
 
-- `src/components/ui/*`: ~31 "unused exports". These are shadcn primitives kept as a component library. Likely noise.
-- `src/integrations/tanstack-query/devtools.tsx` reported unused: probably referenced via root route/devtools wiring that the analysis misses; verify with `--trace-file`.
-- `@tailwindcss/vite` reported "test-only dependency": false positive (it is used in `vite.config.ts`).
-- `@iconify/react` flagged as a dev dependency used in production code: a legitimate finding about `package.json` placement, but confirm bundling intent before moving it.
-- `src/core/middleware/example-middleware.ts`, `src/lib/booking-validation.ts`, `src/lib/room-validation.ts`/`payment-validation.ts` exports/types: may be real dead code or scaffolding; confirm with `--trace` before removing.
-- Boundaries and rule packs are not configured, so the architecture check is effectively off (`boundaries-not-configured`).
+- `ignoreExportsUsedInFile: true`.
+- `rules`: `unused-exports` and `unused-types` are `warn` (promote to `error` once they stay clean); `boundary-violation` is `error`; `policy-violation` is `off` (no rule packs).
+- `overrides`: `src/components/ui/**` (vendored shadcn library) has `unused-exports`/`unused-types` off.
+- `boundaries` (zones are matched in order):
 
-Likely sources of false positives to keep in mind (verify each, do not assume):
-- TanStack Start/Router: route files export `Route`; `src/routeTree.gen.ts`, `src/start.tsx`, `src/router.tsx`, `src/server.ts` are framework entry points.
-- The `cloudflare:workers` virtual module and Worker `Env` types generated into `.cloudflare/types/`.
-- Drizzle schema exports consumed only by `drizzle-kit` (`src/db/schema-export.ts`) and `drizzle/` SQL.
-- `react-email` templates and Better Auth / tRPC types consumed only for inference (`AppRouter`, `typeof auth`).
-- Scheduled handlers invoked by Cloudflare cron, not by imports (`src/lib/scheduled-tasks.ts`).
+  | Zone | Files | May import |
+  |---|---|---|
+  | `ui` | `src/components/ui/**` | `ui`, `shared` |
+  | `email` | `src/components/email/**` | `email` |
+  | `client` | other `src/components/**`, `src/stores/**` | `ui`, `client`, `shared`; `server` type-only |
+  | `server` | server-only services in `src/lib/` (auth, booking-service, availability, deps, email-service, stripe, stripe-webhook, ical-sync, ical-export, scheduled-tasks, admin-query, cancellation-policy-store), `src/db/**`, `src/server.ts`, tRPC init/context/routers | anything |
+  | `shared` | the rest of `src/lib/**`, `src/utils/**`, tRPC `react`/`types`/`errors`/`batching` | `shared`; `server` type-only |
 
-#### How to tune (do this incrementally; get user approval before writing config)
+  Routes and `src/core/` are unzoned. When you add a server-only module to `src/lib/`, add it to the `server` zone. If client code needs a constant that lives in a server file (e.g. a Drizzle schema), move it into a shared module (see `src/lib/ical-feed-sources.ts`) instead of suppressing the violation.
 
-1. `fallow doctor --format json --quiet`, then `fallow list --entry-points --format json --quiet` and `fallow list --plugins --format json --quiet` to see what was auto-detected. Add missing entry points via `entry` (e.g. `src/server.ts`, `src/start.tsx`, `src/lib/scheduled-tasks.ts`) only if absent.
-2. Triage one issue type at a time (`--unused-files`, then `--unused-exports`, `--unused-types`, `--unused-deps`) with `--trace` / `--trace-file` to separate real findings from noise.
-3. Fix real findings in small, separate commits.
-4. Encode noise in a project config (`.fallowrc.json`, or `.fallowrc.jsonc`), preferring in order:
-   - config: `ignorePatterns`, `entry`, `ignoreDependencies`, `ignoreExportsUsedInFile`, `usedClassMembers`, per-rule severity in `rules`;
-   - inline `// fallow-ignore-next-line <issue-type> -- <reason>` for one-off cases. Always include a reason.
-5. Start `rules` at `"warn"` for noisy categories (e.g. `unused-exports`, `unused-types`) and promote to `"error"` once clean. Consider `fallow audit --gate new-only` or a saved baseline (`--save-baseline`, committed outside `.fallow/`) so only newly introduced issues block work.
-6. Configure `boundaries` (e.g. `components/ui` must not import from `routes`/`lib`; client code must not import server-only `src/lib/*` services / `cloudflare:workers`), or set `boundary-violation` to `off` to state it is not wanted.
-7. Consider `--type-aware` (`fallow type-aware status`) to cut syntactic false positives before relying on it for deletions.
-8. Update this section with the final config location and remove the "NOT YET TUNED" status.
+Remaining known findings: `fallow dupes` reports ~15% duplicated lines, mostly page-level JSX (the two room pages, the admin vs account booking detail pages, login vs signup, the legal pages). Treat these as refactoring candidates, not gate failures.
 
-Until tuning is done, use Fallow as a **signal**: prioritize findings in files you changed (`fallow audit --base main`), and ask the user before removing anything outside your diff.
+Rules of thumb (verify each, do not assume):
+- Drizzle schema exports consumed only by `drizzle-kit` (`src/db/schema-export.ts`), react-email templates, and Better Auth / tRPC types used only for inference can look unused.
+- Inline suppressions: `// fallow-ignore-next-line <issue-type> -- <reason>`; always give a reason. Prefer config changes for whole categories.
+- Ask the user before removing anything outside your diff.
 
 ## Git and safety
 

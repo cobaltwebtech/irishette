@@ -227,9 +227,6 @@ importers:
       '@stripe/stripe-js':
         specifier: ^10.2.1
         version: 10.2.1
-      '@tailwindcss/vite':
-        specifier: ^4.3.5
-        version: 4.3.5(@voidzero-dev/vite-plus-core@1.5.0(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.6.1)(tsx@4.23.15)(typescript@7.0.2))
       '@tanstack/react-query':
         specifier: ^5.106.1
         version: 5.106.1(@types/react@19.3.0)(react@19.3.1)
@@ -351,6 +348,9 @@ importers:
       '@playwright/test':
         specifier: ^1.65.0
         version: 1.65.0
+      '@tailwindcss/vite':
+        specifier: ^4.3.5
+        version: 4.3.5(@voidzero-dev/vite-plus-core@1.5.0(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.6.1)(tsx@4.23.15)(typescript@7.0.2))
       '@types/node':
         specifier: ^26.6.6
         version: 26.6.6

@@ -1,7 +1,6 @@
 import { useStore } from '@tanstack/react-store';
 
 import {
-	type BookingState,
 	type BookingStep,
 	bookingActions,
 	bookingStore,
@@ -155,19 +154,4 @@ export function useBookingStore() {
 		hasActiveBooking,
 		getDateRange,
 	};
-}
-
-/**
- * Hook to access only the booking actions (for components that only need to update state)
- */
-export function useBookingActions() {
-	return bookingActions;
-}
-
-/**
- * Hook to access only specific parts of the booking state (for performance optimization)
- */
-export function useBookingSelector<T>(selector: (state: BookingState) => T) {
-	const state = useStore(bookingStore);
-	return selector(state);
 }

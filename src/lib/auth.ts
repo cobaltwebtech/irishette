@@ -4,19 +4,16 @@ import { betterAuth } from 'better-auth';
 import { admin, captcha, magicLink, phoneNumber } from 'better-auth/plugins';
 import { tanstackStartCookies } from 'better-auth/tanstack-start';
 import { env } from 'cloudflare:workers';
-import { drizzle } from 'drizzle-orm/d1';
-import { Resend } from 'resend';
 
-import { MagicLinkEmail } from '@/components/email/MagicLinkEmail';
-import { NotificationEmail } from '@/components/email/NotificationEmail';
-import { PasswordReset } from '@/components/email/PasswordReset';
-import * as authSchema from '@/db/auth-schema';
+import { createDrizzle } from '@/db/drizzle-init';
+import {
+	sendChangeEmailConfirmation,
+	sendMagicLinkEmail,
+	sendPasswordResetEmail,
+	sendVerificationEmail,
+} from '@/lib/email-service';
 import { newId, newPublicId } from '@/lib/ids';
 import { createStripe } from '@/lib/stripe';
-
-// Initialize Drizzle with the Cloudflare D1 database
-export const createDrizzle = (db: D1Database) =>
-	drizzle(db, { schema: authSchema });
 
 // Built once per isolate: Better Auth 1.7 validates its schema on creation and
 // caches per instance, so rebuilding it on every call repeats that work.
@@ -31,9 +28,6 @@ export const auth = async () => {
 function createAuth() {
 	// Initialize Stripe with environment variables
 	const stripeClient = createStripe(env.STRIPE_SECRET_KEY);
-
-	// Initialize Resend for email service
-	const resend = new Resend(env.RESEND_API_KEY);
 
 	return betterAuth({
 		secret: env.BETTER_AUTH_SECRET,
@@ -65,43 +59,16 @@ function createAuth() {
 		emailAndPassword: {
 			enabled: true,
 			requireEmailVerification: true,
-			sendResetPassword: async ({ user, url }) => {
-				try {
-					await resend.emails.send({
-						from: 'Irishette <auth@contact.cobaltweb.tech>',
-						to: user.email,
-						subject: 'Password Reset',
-						react: await PasswordReset({
-							url: url,
-						}),
-					});
-				} catch (error) {
-					console.error('Error sending password reset:', error);
-					throw error;
-				}
-			},
+			sendResetPassword: ({ user, url }) =>
+				sendPasswordResetEmail(env, user.email, url),
 		},
 		// Sign-up asks users to verify their address (the sign-up page says an
 		// email was sent), and email changes are verified too.
 		emailVerification: {
 			sendOnSignUp: true,
 			autoSignInAfterVerification: true,
-			sendVerificationEmail: async ({ user, url }) => {
-				await resend.emails.send({
-					from: 'Irishette <auth@contact.cobaltweb.tech>',
-					to: user.email,
-					subject: 'Verify your email | Irishette',
-					react: NotificationEmail({
-						preview: 'Verify your email address',
-						heading: 'Verify your email',
-						paragraphs: [
-							'Click the button below to verify your email address for your Irishette account.',
-							'If you did not request this, you can ignore this email.',
-						],
-						button: { label: 'Verify email', href: url },
-					}),
-				});
-			},
+			sendVerificationEmail: ({ user, url }) =>
+				sendVerificationEmail(env, user.email, url),
 		},
 		user: {
 			additionalFields: {
@@ -117,42 +84,14 @@ function createAuth() {
 				enabled: true,
 				// Verified users approve the change from their current address;
 				// the new address is then verified too.
-				sendChangeEmailConfirmation: async ({ user, newEmail, url }) => {
-					await resend.emails.send({
-						from: 'Irishette <auth@contact.cobaltweb.tech>',
-						to: user.email,
-						subject: 'Confirm your email change | Irishette',
-						react: NotificationEmail({
-							preview: 'Confirm your new email address',
-							heading: 'Confirm your email change',
-							paragraphs: [
-								`Someone asked to change the email on your Irishette account to ${newEmail}.`,
-								'If this was you, confirm below. If not, ignore this email and your account stays unchanged.',
-							],
-							button: { label: 'Confirm change', href: url },
-						}),
-					});
-				},
+				sendChangeEmailConfirmation: ({ user, newEmail, url }) =>
+					sendChangeEmailConfirmation(env, user.email, newEmail, url),
 			},
 		},
 		plugins: [
 			admin(),
 			magicLink({
-				sendMagicLink: async ({ email, url }) => {
-					try {
-						await resend.emails.send({
-							from: 'Irishette <auth@contact.cobaltweb.tech>',
-							to: email,
-							subject: 'Login to Irishette',
-							react: await MagicLinkEmail({
-								url: url,
-							}),
-						});
-					} catch (error) {
-						console.error('Error sending magic link email:', error);
-						throw error;
-					}
-				},
+				sendMagicLink: ({ email, url }) => sendMagicLinkEmail(env, email, url),
 			}),
 			phoneNumber(),
 			stripe({
@@ -174,5 +113,3 @@ function createAuth() {
 		],
 	});
 }
-
-export type Auth = ReturnType<typeof auth>;

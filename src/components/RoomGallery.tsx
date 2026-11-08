@@ -151,20 +151,3 @@ export function RoomGallery({
 		</div>
 	);
 }
-
-/**
- * Helper function to generate image objects from a directory path
- * This assumes your images are organized in folders like /src/images/rose-room/
- */
-export function createRoomImages(
-	roomSlug: string,
-	imageFiles: string[],
-	roomName: string,
-): RoomImage[] {
-	return imageFiles.map((filename, index) => ({
-		src: `/src/images/${roomSlug}/${filename}`,
-		alt: `${roomName} - Image ${index + 1}`,
-		// You can add captions here if needed
-		// caption: `Beautiful view of the ${roomName}`
-	}));
-}

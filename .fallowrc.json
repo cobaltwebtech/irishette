@@ -1,0 +1,119 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "ignoreExportsUsedInFile": true,
+  "rules": {
+    "unused-exports": "warn",
+    "unused-types": "warn",
+    "boundary-violation": "error",
+    "policy-violation": "off"
+  },
+  "overrides": [
+    {
+      "files": [
+        "src/components/ui/**"
+      ],
+      "rules": {
+        "unused-exports": "off",
+        "unused-types": "off"
+      }
+    }
+  ],
+  "boundaries": {
+    "zones": [
+      {
+        "name": "ui",
+        "patterns": [
+          "src/components/ui/**"
+        ]
+      },
+      {
+        "name": "email",
+        "patterns": [
+          "src/components/email/**"
+        ]
+      },
+      {
+        "name": "client",
+        "patterns": [
+          "src/components/**",
+          "src/stores/**"
+        ]
+      },
+      {
+        "name": "server",
+        "patterns": [
+          "src/lib/auth.ts",
+          "src/lib/booking-service.ts",
+          "src/lib/availability.ts",
+          "src/lib/deps.ts",
+          "src/lib/email-service.ts",
+          "src/lib/stripe.ts",
+          "src/lib/stripe-webhook.ts",
+          "src/lib/ical-sync.ts",
+          "src/lib/ical-export.ts",
+          "src/lib/scheduled-tasks.ts",
+          "src/lib/admin-query.ts",
+          "src/lib/cancellation-policy-store.ts",
+          "src/db/**",
+          "src/server.ts",
+          "src/integrations/trpc/init.ts",
+          "src/integrations/trpc/context.ts",
+          "src/integrations/trpc/inner-context.ts",
+          "src/integrations/trpc/router.ts",
+          "src/integrations/trpc/bookings.ts",
+          "src/integrations/trpc/rooms.ts",
+          "src/integrations/trpc/users.ts",
+          "src/integrations/trpc/ical.ts",
+          "src/integrations/trpc/policies.ts",
+          "src/integrations/trpc/availability.ts"
+        ]
+      },
+      {
+        "name": "shared",
+        "patterns": [
+          "src/lib/**",
+          "src/utils/**",
+          "src/integrations/trpc/react.ts",
+          "src/integrations/trpc/types.ts",
+          "src/integrations/trpc/errors.ts",
+          "src/integrations/trpc/batching.ts"
+        ]
+      }
+    ],
+    "rules": [
+      {
+        "from": "ui",
+        "allow": [
+          "ui",
+          "shared"
+        ]
+      },
+      {
+        "from": "email",
+        "allow": [
+          "email"
+        ]
+      },
+      {
+        "from": "client",
+        "allow": [
+          "ui",
+          "client",
+          "shared"
+        ],
+        "allowTypeOnly": [
+          "server"
+        ]
+      },
+      {
+        "from": "shared",
+        "allow": [
+          "shared"
+        ],
+        "allowTypeOnly": [
+          "server"
+        ]
+      }
+    ]
+  }
+}

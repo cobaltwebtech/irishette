@@ -7,8 +7,6 @@ export type BookingStep =
 	| 'payment'
 	| 'confirmation';
 
-export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
-
 export interface PricingBreakdown {
 	basePrice: number;
 	nights: number;

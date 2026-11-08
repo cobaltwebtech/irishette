@@ -1,14 +1,13 @@
 import { z } from 'zod';
 
-import { icalFeedSources } from '@/db/room-schema';
 import { isoDateSchema } from '@/lib/date-range';
+import { icalFeedSources } from '@/lib/ical-feed-sources';
 import { publicIdSchema } from '@/lib/ids';
 
 // Zod >= 4.6 throws on .omit()/.partial() of refined schemas, so derived
 // schemas start from unrefined base objects and add refinements last.
 
-export const roomStatusSchema = z.enum(['active', 'inactive', 'archived']);
-export type RoomStatus = z.infer<typeof roomStatusSchema>;
+const roomStatusSchema = z.enum(['active', 'inactive', 'archived']);
 
 const rate = (label: string) =>
 	z
@@ -99,12 +98,11 @@ export const deleteBlockedPeriodSchema = z.object({ id: z.string().min(1) });
 
 // --- Pricing rules (inclusive start/end; start = end allowed) ---------------
 
-export const pricingRuleTypeSchema = z.enum([
+const pricingRuleTypeSchema = z.enum([
 	'surcharge_rate',
 	'fixed_amount',
 	'absolute_price',
 ]);
-export type PricingRuleType = z.infer<typeof pricingRuleTypeSchema>;
 
 const pricingRuleBaseSchema = z.object({
 	roomId: z.string().min(1),
@@ -187,9 +185,6 @@ export const testIcalUrlSchema = z.object({ url: feedUrlSchema });
 
 // --- Types ---------------------------------------------------------------------
 
-export type CreateRoom = z.input<typeof createRoomSchema>;
-export type UpdateRoom = z.input<typeof updateRoomSchema>;
-export type GetRoomsQuery = z.infer<typeof getRoomsSchema>;
 export type CreateBlockedPeriod = z.input<typeof createBlockedPeriodSchema>;
 export type UpdateBlockedPeriod = z.input<typeof updateBlockedPeriodSchema>;
 export type RoomBlockedPeriod = CreateBlockedPeriod & { id?: string };

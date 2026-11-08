@@ -3,10 +3,12 @@ import { type CreateEmailOptions, Resend } from 'resend';
 
 import { AdminBookingNotificationEmail } from '@/components/email/AdminBookingNotificationEmail';
 import { BookingConfirmationEmail } from '@/components/email/BookingConfirmationEmail';
+import { MagicLinkEmail } from '@/components/email/MagicLinkEmail';
 import {
 	NotificationEmail,
 	type NotificationEmailProps,
 } from '@/components/email/NotificationEmail';
+import { PasswordReset } from '@/components/email/PasswordReset';
 import type { Database } from '@/db/drizzle-init';
 import type { bookings } from '@/db/schema-export';
 
@@ -18,6 +20,7 @@ import { getAdminEmails } from './admin-query';
 
 const FROM_BOOKINGS = 'Irishette Dev <bookings@contact.cobaltweb.tech>';
 const FROM_ADMIN = 'Irishette <admin@contact.cobaltweb.tech>';
+const FROM_AUTH = 'Irishette <auth@contact.cobaltweb.tech>';
 
 export interface EmailEnv {
 	RESEND_API_KEY: string;
@@ -110,7 +113,7 @@ function notification(
 }
 
 async function sendBatch(
-	env: EmailEnv,
+	env: Pick<EmailEnv, 'RESEND_API_KEY'>,
 	kind: string,
 	emails: CreateEmailOptions[],
 	idempotencyKey?: string,
@@ -284,5 +287,90 @@ export async function sendAdminAlert(
 			}),
 		],
 		alert.idempotencyKey,
+	);
+}
+
+// --- Better Auth emails ------------------------------------------------------
+// Called from Better Auth hooks (src/lib/auth.ts). They throw on failure so
+// Better Auth reports the error to the user instead of claiming success.
+
+type AuthEmailEnv = Pick<EmailEnv, 'RESEND_API_KEY'>;
+
+async function sendAuthEmail(
+	env: AuthEmailEnv,
+	kind: string,
+	email: CreateEmailOptions,
+): Promise<void> {
+	const result = await sendBatch(env, kind, [email]);
+	if (!result.success) {
+		throw new Error(result.error ?? 'Email delivery failed');
+	}
+}
+
+export function sendPasswordResetEmail(
+	env: AuthEmailEnv,
+	to: string,
+	url: string,
+): Promise<void> {
+	return sendAuthEmail(env, 'password reset', {
+		from: FROM_AUTH,
+		to: [to],
+		subject: 'Password Reset',
+		react: React.createElement(PasswordReset, { url }),
+	});
+}
+
+export function sendMagicLinkEmail(
+	env: AuthEmailEnv,
+	to: string,
+	url: string,
+): Promise<void> {
+	return sendAuthEmail(env, 'magic link', {
+		from: FROM_AUTH,
+		to: [to],
+		subject: 'Login to Irishette',
+		react: React.createElement(MagicLinkEmail, { url }),
+	});
+}
+
+export function sendVerificationEmail(
+	env: AuthEmailEnv,
+	to: string,
+	url: string,
+): Promise<void> {
+	return sendAuthEmail(
+		env,
+		'email verification',
+		notification(FROM_AUTH, [to], 'Verify your email | Irishette', {
+			preview: 'Verify your email address',
+			heading: 'Verify your email',
+			paragraphs: [
+				'Click the button below to verify your email address for your Irishette account.',
+				'If you did not request this, you can ignore this email.',
+			],
+			button: { label: 'Verify email', href: url },
+		}),
+	);
+}
+
+/** Sent to the current address when a verified user changes their email. */
+export function sendChangeEmailConfirmation(
+	env: AuthEmailEnv,
+	to: string,
+	newEmail: string,
+	url: string,
+): Promise<void> {
+	return sendAuthEmail(
+		env,
+		'email change confirmation',
+		notification(FROM_AUTH, [to], 'Confirm your email change | Irishette', {
+			preview: 'Confirm your new email address',
+			heading: 'Confirm your email change',
+			paragraphs: [
+				`Someone asked to change the email on your Irishette account to ${newEmail}.`,
+				'If this was you, confirm below. If not, ignore this email and your account stays unchanged.',
+			],
+			button: { label: 'Confirm change', href: url },
+		}),
 	);
 }

@@ -48,28 +48,23 @@ Endpoints created earlier were on `2025-08-27.basil`. Update or recreate them on
 Suggested name: `tRPC Endpoint`. Description: booking system payments; customer
 creation and updates are handled by Better Auth.
 
-**Required.** The handler acts on these:
+**Required.** The handler (`dispatch` in `src/lib/stripe-webhook.ts`) acts on
+these:
 
 | Event | What the app does |
 |---|---|
-| `payment_intent.succeeded` | Confirms the booking (primary event for the in-app checkout) |
-| `payment_intent.payment_failed` | Marks the booking payment as failed |
-| `checkout.session.completed` | Confirms bookings paid via a hosted Checkout Session (legacy flow) |
-| `checkout.session.expired` | Cleans up the pending booking for an expired Checkout Session |
+| `payment_intent.succeeded` | Confirms the booking via `confirmBookingPayment` (backup for the in-browser confirm, e.g. when the guest closes the tab). The booking is found by `metadata.bookingId`, then by `stripePaymentIntentId`. |
+| `charge.refunded` | Sets `paymentStatus` (`refunded` / `partially_refunded`) and `refundAmount`, including refunds made in the Dashboard |
+| `refund.failed` | Logs and emails an admin alert |
+| `refund.updated` | Same as `refund.failed` when the refund's status is `failed`; otherwise ignored |
 
-**Optional.** The handler only logs these, with no action:
+**Optional.** `payment_intent.payment_failed` is only logged (the pending hold
+stays until it expires). Every other event is acknowledged with `200` and
+ignored, so there is no need to subscribe to `charge.*`, `checkout.session.*`
+or `mandate.*` events.
 
-| Event | Notes |
-|---|---|
-| `charge.succeeded`, `charge.updated`, `charge.failed` | Child events of the PaymentIntent, already covered above |
-| `mandate.updated` | Only relevant for saved payment methods |
-
-**Not needed:** `checkout.session.async_payment_succeeded` and
-`checkout.session.async_payment_failed`. They are not handled, and checkout is
-card-only (`allowed_payment_method_types: ['card']`), so they never fire.
-
-Keep this list in sync with the `switch (event.type)` in
-`src/routes/api/stripe.$.ts`.
+Keep this list in sync with the `switch (event.type)` in `dispatch`
+(`src/lib/stripe-webhook.ts`).
 
 ### `/api/auth/stripe/webhook` (Better Auth plugin)
 
@@ -122,11 +117,11 @@ Run each listener in its own terminal and keep it running while you test.
 `2026-10-28.endive`. Current Stripe CLI versions require `--events`,
 `--all-snapshot` or `--all-thin`.
 
-**Terminal A: booking payments (required + optional events):**
+**Terminal A: booking payments:**
 
 ```bash
 stripe listen --latest \
-  --events payment_intent.succeeded,payment_intent.payment_failed,checkout.session.completed,checkout.session.expired,charge.succeeded,charge.updated,charge.failed,mandate.updated \
+  --events payment_intent.succeeded,payment_intent.payment_failed,charge.refunded,refund.failed,refund.updated \
   --forward-to localhost:3000/api/stripe/webhook
 ```
 
@@ -168,7 +163,7 @@ PI_FIX=(--remove payment_intent:payment_method_types
   --add 'payment_intent:automatic_payment_methods[allow_redirects]=never')
 stripe trigger payment_intent.succeeded "${PI_FIX[@]}"
 stripe trigger payment_intent.payment_failed "${PI_FIX[@]}"
-stripe trigger checkout.session.completed
+stripe trigger charge.refunded
 
 # A bad signature must be rejected with 400
 curl -i -X POST localhost:3000/api/stripe/webhook \
@@ -177,14 +172,15 @@ curl -i -X POST localhost:3000/api/stripe/webhook \
   -d '{}'
 ```
 
-Expected: the listener terminal shows `[200]` for each forwarded event, and the
-dev server logs `Stripe webhook received`. `payment_intent.succeeded` also
-produces `charge.succeeded` / `charge.updated` events.
+Expected: the listener terminal shows `[200]` for each forwarded event. For
+triggered events the dev server logs `PaymentIntent pi_...: no booking (not
+ours), ignored` (or nothing, for refunds of unknown charges).
 
 **Full booking flow:** book a room in the browser and pay with test card
 `4242 4242 4242 4242` (any future expiry, any CVC). The resulting
-`payment_intent.succeeded` carries our `booking_id` metadata, so the booking
-should change to `confirmed`.
+`payment_intent.succeeded` carries our `bookingId` metadata; the booking is
+usually already `confirmed` by the browser's confirm call, and the webhook
+reports it as already confirmed.
 
 ### Troubleshooting
 
@@ -192,8 +188,8 @@ should change to `confirmed`.
 |---|---|
 | `must specify events to forward using --events, --all-snapshot, or --all-thin` | Newer CLI; add one of those flags (see above). |
 | Listener shows `[400]`, log says signature verification failed | `.env.local` has a dashboard secret instead of the CLI secret, or `pnpm dev` was not restarted. |
-| Events forwarded but nothing happens to bookings | `stripe trigger` events have no `booking_id` metadata; use a real checkout. |
+| Events forwarded but nothing happens to bookings | `stripe trigger` events have no `bookingId` metadata and match no booking; use a real checkout. |
 | `stripe trigger payment_intent.*` fails with ``The `payment_method_types` parameter is no longer supported`` | Use the `PI_FIX` overrides above. |
-| Listener shows `[500]` for a triggered event | The handler threw; a test event without `booking_id` metadata must be acknowledged with 200, not fail. Check the dev server log. |
+| Listener shows `[500]` for a triggered event | The handler threw (database or Stripe API error); Stripe retries it. Events that match no booking are acknowledged with 200. Check the dev server log. |
 | `Connection refused` in the listener | `pnpm dev` is not running on port 3000. |
 | Events from the wrong account | Run `stripe login` again and pick the sandbox; check with `stripe config --list`. |
