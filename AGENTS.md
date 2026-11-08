@@ -81,7 +81,13 @@ Config is the `fmt` and `lint` blocks in `vite.config.ts`. Oxfmt is scoped to co
 
 ### Vite+ notes
 
-- `package.json` does not declare `vite` (the documented layout for pnpm: `vite-plus` brings the core). `pnpm-workspace.yaml` aliases `vite` to `@voidzero-dev/vite-plus-core` (and pins `vitest`) in `overrides` so every plugin resolves that one copy; this `vite@*` override is required, do not remove it; do not re-add a direct real `vite` (two Vite copies break `vp`, typecheck and the workers tests). Ambient types come from `vite-plus/client` (tsconfig `types` and `src/routes/__root.tsx`), not `vite/client`. `vite-plus` and `vitest` are exact versions in `package.json` (vitest = the version bundled in `vite-plus`). `vp migrate` rewrites these into a `catalog:` layout; that is equivalent, keep either form but not a mix. Keep `vite-plus`, the `vite` alias and `vitest` in lockstep; upgrade with `vp migrate`/the Vite+ upgrade guide, not by bumping one of them alone.
+- **Version pins live in two files: `package.json` and `pnpm-workspace.yaml`. Always check both when updating Vite+ or its related deps.** This is the layout `vp migrate` writes and keeps (re-running it is a no-op); do not hand-convert it to inline versions, because the next `vp migrate` rewrites it back.
+  - `package.json`: `vite-plus` and `vitest` are `"catalog:"` references. It does **not** declare `vite` (documented pnpm layout: `vite-plus` brings the core). Do not add a direct real `vite`: two Vite copies break `vp`, typecheck and the workers tests.
+  - `pnpm-workspace.yaml`: the `catalog:` block holds the real versions (`vite: npm:@voidzero-dev/vite-plus-core@<v>`, `vitest: <bundled v>`, `vite-plus: <v>`). `overrides` (`vite@*`, `vitest@*` -> `catalog:`) and `peerDependencyRules` make every plugin (Cloudflare, TanStack Start, Tailwind, plugin-react) and Vitest resolve that single core. **The `vite@*` override is required; removing it breaks typecheck and 12 of 20 test files while `cf build` still passes.**
+  - The three catalog versions move together (`vite-plus` = core alias version; `vitest` = the version bundled in `vite-plus`, see `vp toolchain vitest`). Never bump one alone, and keep dependency bots from updating them separately.
+  - Upgrading: run `pnpm exec vp migrate --no-interactive --no-hooks --no-agent --no-editor` (it re-pins all three), then diff `package.json`, `pnpm-workspace.yaml` and `pnpm-lock.yaml`, then run the full workflow below. A second `vp migrate` must report "already using Vite+".
+  - Quick lockstep check: every plugin must resolve the core, e.g. `cd $(readlink -f node_modules/@cloudflare/vite-plugin) && node -p "require(require.resolve('vite/package.json')).name"` prints `@voidzero-dev/vite-plus-core`.
+  - Ambient types come from `vite-plus/client` (tsconfig `types`, `src/routes/__root.tsx`), not `vite/client`.
 - Imports in config files (`vite.config.ts`, `vitest.config.ts`) come from `vite-plus`; tests import from `vite-plus/test`.
 - Keep `@vitejs/plugin-react` ^6.1+ and a pinned `oxc-transform-react` (inside the plugin's peer range).
 
@@ -251,7 +257,8 @@ After any non-trivial change (new feature, refactor, deletion, dependency change
 2. `pnpm typecheck` (regenerates Worker types, then `tsc --noEmit`)
 3. `pnpm build`, then `pnpm check:bundle`
 4. If you touched env or secrets: `pnpm env:scan` (and `pnpm env:check`, after telling the user it triggers Touch ID)
-5. **Fallow review** (below)
+5. If you changed dependencies or the toolchain: check `package.json` **and** `pnpm-workspace.yaml` (catalog, `overrides`, `peerDependencyRules`) per [Vite+ notes](#vite-notes), and confirm `pnpm install --frozen-lockfile` passes.
+6. **Fallow review** (below)
 
 Do not claim a task is done until these pass, or state clearly which step failed and why.
 
