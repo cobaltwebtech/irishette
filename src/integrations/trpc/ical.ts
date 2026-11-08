@@ -11,10 +11,18 @@ import {
 	icalSyncLog,
 	room,
 } from '@/db/schema-export';
+import { isUniqueViolation } from '@/lib/db-errors';
 import { icalExportPath } from '@/lib/ical-export';
+import {
+	FEED_TIMEOUT_MS,
+	fetchFeed,
+	readFeedText,
+	UnsafeFeedUrlError,
+} from '@/lib/ical-fetch';
 import { parseIcal } from '@/lib/ical-parse';
-import { syncFeed, syncRoomFeeds } from '@/lib/ical-sync';
-import { newIcalExportToken } from '@/lib/ids';
+import { syncRoomFeeds } from '@/lib/ical-sync';
+import { idSchema, newIcalExportToken } from '@/lib/ids';
+import { BodyTooLargeError } from '@/lib/read-limited';
 import {
 	createIcalFeedSchema,
 	roomIdSchema,
@@ -22,7 +30,7 @@ import {
 	updateIcalFeedSchema,
 } from '@/lib/room-validation';
 
-import { adminProcedure, createTRPCRouter } from './init';
+import { adminProcedure, createTRPCRouter, rateLimit } from './init';
 
 // Admin-only iCal management: import feeds (URLs are third-party secrets and
 // only ever returned here), sync history, and the export URL/token.
@@ -48,11 +56,15 @@ async function requireFeed(db: Database, id: string) {
 	return feed;
 }
 
-const isUniqueViolation = (error: unknown) =>
-	error instanceof Error &&
-	/UNIQUE constraint failed/i.test(
-		`${error.message} ${(error.cause as Error | undefined)?.message ?? ''}`,
-	);
+/** Plain-words reason a feed could not be fetched (no internal details). */
+function feedErrorMessage(error: unknown): string {
+	if (error instanceof UnsafeFeedUrlError) return error.message;
+	if (error instanceof BodyTooLargeError) return 'The feed is too large';
+	if (error instanceof Error && error.name === 'TimeoutError') {
+		return `The feed did not respond within ${FEED_TIMEOUT_MS / 1000} seconds`;
+	}
+	return 'The feed could not be fetched';
+}
 
 const duplicateFeed = () =>
 	new TRPCError({
@@ -154,20 +166,24 @@ export const icalRouter = createTRPCRouter({
 			return { success: true };
 		}),
 
-	/** Fetches a URL and reports whether it is a usable iCal feed. */
+	/**
+	 * Fetches a URL and reports whether it is a usable iCal feed. Same fetch
+	 * rules as the sync: public https only (also after redirects), a timeout
+	 * and a size cap.
+	 */
 	testUrl: adminProcedure
+		.use(rateLimit('API_RATE_LIMITER', 'ical.testUrl'))
 		.input(testIcalUrlSchema)
 		.mutation(async ({ input }) => {
 			try {
-				const response = await fetch(input.url, {
+				const response = await fetchFeed(input.url, {
 					headers: { 'User-Agent': 'Irishette Calendar Test/2.0' },
-					signal: AbortSignal.timeout(10_000),
 				});
 				if (!response.ok) {
 					await response.body?.cancel();
 					return { success: false as const, error: `HTTP ${response.status}` };
 				}
-				const parsed = parseIcal(await response.text());
+				const parsed = parseIcal(await readFeedText(response));
 				if (!parsed.isCalendar) {
 					return {
 						success: false as const,
@@ -182,13 +198,7 @@ export const icalRouter = createTRPCRouter({
 						.length,
 				};
 			} catch (error) {
-				return {
-					success: false as const,
-					error:
-						error instanceof Error && error.name === 'TimeoutError'
-							? 'The feed did not respond within 10 seconds'
-							: 'The feed could not be fetched',
-				};
+				return { success: false as const, error: feedErrorMessage(error) };
 			}
 		}),
 
@@ -203,21 +213,12 @@ export const icalRouter = createTRPCRouter({
 			});
 		}),
 
-	syncFeed: adminProcedure
-		.input(
-			z.object({ id: z.string().min(1), force: z.boolean().default(false) }),
-		)
-		.mutation(async ({ ctx, input }) => {
-			const feed = await requireFeed(ctx.db, input.id);
-			return syncFeed(ctx, feed, { trigger: 'manual', force: input.force });
-		}),
-
 	/** Sync runs, newest first. */
 	getSyncLogs: adminProcedure
 		.input(
 			z.object({
-				roomId: z.string().optional(),
-				feedId: z.string().optional(),
+				roomId: idSchema.optional(),
+				feedId: idSchema.optional(),
 				limit: z.number().int().min(1).max(100).default(20),
 			}),
 		)

@@ -42,6 +42,27 @@ export default defineConfig({
 							compatibilityDate: '2026-11-01',
 							compatibilityFlags: ['nodejs_compat'],
 							d1Databases: { DB: 'irishette-test' },
+							// Same bindings as cloudflare.config.ts, with limits high enough
+							// that other tests never hit them. TEST_RATE_LIMITER is low so
+							// rate-limit.test.ts can reach it.
+							ratelimits: {
+								AUTH_RATE_LIMITER: {
+									namespace_id: '20261',
+									simple: { limit: 10_000, period: 60 },
+								},
+								API_RATE_LIMITER: {
+									namespace_id: '20262',
+									simple: { limit: 10_000, period: 60 },
+								},
+								CSP_REPORT_RATE_LIMITER: {
+									namespace_id: '20263',
+									simple: { limit: 10_000, period: 60 },
+								},
+								TEST_RATE_LIMITER: {
+									namespace_id: '29999',
+									simple: { limit: 3, period: 60 },
+								},
+							},
 							bindings: {
 								TEST_MIGRATIONS: await readD1Migrations('./drizzle'),
 								// Test-only values. Never real keys.

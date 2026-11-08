@@ -1,8 +1,8 @@
 import { TRPCError } from '@trpc/server';
-import { and, between, desc, eq, type SQL } from 'drizzle-orm';
+import { and, between, desc, eq, gte, lte, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { bookings, paymentTransactions, room, user } from '@/db/schema-export';
+import { bookings, room, user } from '@/db/schema-export';
 import {
 	type Booking,
 	bookingRoomColumns,
@@ -14,7 +14,9 @@ import {
 	quoteStay,
 	refreshHold,
 } from '@/lib/booking-service';
+import { isoDateSchema } from '@/lib/date-range';
 import { sendBookingConfirmationEmail } from '@/lib/email-service';
+import { idSchema } from '@/lib/ids';
 import {
 	adminCancelBookingSchema,
 	bookingIdSchema,
@@ -25,11 +27,13 @@ import {
 	createBookingSchema,
 } from '@/lib/payment-validation';
 
+import { isActiveAdmin } from './access';
 import {
 	adminProcedure,
 	createTRPCRouter,
 	protectedProcedure,
 	publicProcedure,
+	rateLimit,
 } from './init';
 import type { TRPCContext } from './inner-context';
 
@@ -54,7 +58,13 @@ async function findAccessibleBooking(
 			? eq(bookings.id, where.id)
 			: eq(bookings.publicId, where.publicId),
 	];
-	if (!(allowAdmin && ctx.user.role === 'admin')) {
+	// Admin access re-checks D1 (the session role may be stale); the query only
+	// runs for sessions that claim the admin role.
+	const actAsAdmin =
+		allowAdmin &&
+		ctx.user.role === 'admin' &&
+		(await isActiveAdmin(ctx.db, ctx.user.id));
+	if (!actAsAdmin) {
 		conditions.push(eq(bookings.userId, ctx.user.id));
 	}
 	const [row] = await ctx.db
@@ -65,20 +75,46 @@ async function findAccessibleBooking(
 	return row;
 }
 
-async function bookingDetails(ctx: AuthedContext, booking: Booking) {
-	const [[roomRow], [payment]] = await Promise.all([
-		ctx.db
-			.select(bookingRoomColumns)
-			.from(room)
-			.where(eq(room.id, booking.roomId)),
-		ctx.db
-			.select()
-			.from(paymentTransactions)
-			.where(eq(paymentTransactions.bookingId, booking.id))
-			.limit(1),
-	]);
-	return { booking, room: roomRow, paymentDetails: payment ?? null };
+/**
+ * The booking fields a guest sees for their own booking: no internal ids,
+ * admin notes or Stripe ids (admins use `adminGetBooking`).
+ */
+const GUEST_BOOKING_FIELDS = [
+	'publicId',
+	'confirmationId',
+	'status',
+	'paymentStatus',
+	'checkInDate',
+	'checkOutDate',
+	'numberOfNights',
+	'numberOfGuests',
+	'baseAmount',
+	'feesAmount',
+	'taxAmount',
+	'totalAmount',
+	'refundAmount',
+	'guestName',
+	'guestEmail',
+	'guestPhone',
+	'specialRequests',
+	'createdAt',
+	'cancelledAt',
+] as const satisfies readonly (keyof Booking)[];
+
+type GuestBookingField = (typeof GUEST_BOOKING_FIELDS)[number];
+
+const guestBookingColumns = Object.fromEntries(
+	GUEST_BOOKING_FIELDS.map((field) => [field, bookings[field]]),
+) as { [K in GuestBookingField]: (typeof bookings)[K] };
+
+function toGuestBooking(booking: Booking): Pick<Booking, GuestBookingField> {
+	return Object.fromEntries(
+		GUEST_BOOKING_FIELDS.map((field) => [field, booking[field]]),
+	) as Pick<Booking, GuestBookingField>;
 }
+
+/** Room fields shown with a guest's booking. */
+const guestRoomColumns = { name: room.name, slug: room.slug };
 
 const listStatusSchema = z
 	.enum(['pending', 'confirmed', 'cancelled', 'completed'])
@@ -87,6 +123,7 @@ const listStatusSchema = z
 export const bookingsRouter = createTRPCRouter({
 	/** Price of a stay (read-only). Same calculation as booking creation. */
 	calculateBooking: publicProcedure
+		.use(rateLimit('API_RATE_LIMITER', 'bookings.calculateBooking'))
 		.input(calculateBookingSchema)
 		.query(async ({ ctx, input }) => {
 			const price = await quoteStay(
@@ -166,25 +203,42 @@ export const bookingsRouter = createTRPCRouter({
 			return { success: true, publicId: booking.publicId };
 		}),
 
-	/** Booking with room and payment. Owner or admin (admins also get the guest). */
+	/** The caller's own booking (guest fields) with its room. */
 	getBooking: protectedProcedure
 		.input(bookingPublicIdSchema)
 		.query(async ({ ctx, input }) => {
-			const booking = await findAccessibleBooking(ctx, input, {
-				allowAdmin: true,
-			});
-			const details = await bookingDetails(ctx, booking);
-			if (ctx.user.role !== 'admin') return { ...details, user: null };
-			const [guest] = await ctx.db
-				.select({
-					id: user.id,
-					publicId: user.publicId,
-					email: user.email,
-					name: user.name,
-				})
-				.from(user)
-				.where(eq(user.id, booking.userId));
-			return { ...details, user: guest ?? null };
+			const booking = await findAccessibleBooking(ctx, input);
+			const [roomRow] = await ctx.db
+				.select(guestRoomColumns)
+				.from(room)
+				.where(eq(room.id, booking.roomId));
+			return { booking: toGuestBooking(booking), room: roomRow };
+		}),
+
+	/** Any booking with every column, its room and the guest account (admin). */
+	adminGetBooking: adminProcedure
+		.input(bookingPublicIdSchema)
+		.query(async ({ ctx, input }) => {
+			const [booking] = await ctx.db
+				.select()
+				.from(bookings)
+				.where(eq(bookings.publicId, input.publicId));
+			if (!booking) throw notFound();
+			const [[roomRow], [guest]] = await Promise.all([
+				ctx.db
+					.select(bookingRoomColumns)
+					.from(room)
+					.where(eq(room.id, booking.roomId)),
+				ctx.db
+					.select({
+						publicId: user.publicId,
+						email: user.email,
+						name: user.name,
+					})
+					.from(user)
+					.where(eq(user.id, booking.userId)),
+			]);
+			return { booking, room: roomRow, user: guest ?? null };
 		}),
 
 	getMyBookings: protectedProcedure
@@ -199,15 +253,7 @@ export const bookingsRouter = createTRPCRouter({
 			const conditions = [eq(bookings.userId, ctx.user.id)];
 			if (input.status) conditions.push(eq(bookings.status, input.status));
 			return ctx.db
-				.select({
-					booking: bookings,
-					room: {
-						id: room.id,
-						name: room.name,
-						slug: room.slug,
-						basePrice: room.basePrice,
-					},
-				})
+				.select({ booking: guestBookingColumns, room: guestRoomColumns })
 				.from(bookings)
 				.innerJoin(room, eq(bookings.roomId, room.id))
 				.where(and(...conditions))
@@ -278,13 +324,11 @@ export const bookingsRouter = createTRPCRouter({
 
 	/** Re-sends the guest confirmation email (owner or admin). */
 	resendConfirmationEmail: protectedProcedure
-		.input(bookingIdSchema)
+		.input(bookingPublicIdSchema)
 		.mutation(async ({ ctx, input }) => {
-			const booking = await findAccessibleBooking(
-				ctx,
-				{ id: input.bookingId },
-				{ allowAdmin: true },
-			);
+			const booking = await findAccessibleBooking(ctx, input, {
+				allowAdmin: true,
+			});
 			if (booking.status !== 'confirmed') {
 				throw new TRPCError({
 					code: 'BAD_REQUEST',
@@ -299,9 +343,12 @@ export const bookingsRouter = createTRPCRouter({
 				name: roomRow?.name ?? 'Room',
 			});
 			if (!result.success) {
+				// The email provider failed (email-service logs why). Not an
+				// INTERNAL_SERVER_ERROR: that would hide this message.
 				throw new TRPCError({
-					code: 'INTERNAL_SERVER_ERROR',
-					message: 'Failed to send the confirmation email',
+					code: 'BAD_GATEWAY',
+					message:
+						'The confirmation email could not be sent. Please try again.',
 				});
 			}
 			return { success: true, message: 'Confirmation email sent successfully' };
@@ -316,9 +363,11 @@ export const bookingsRouter = createTRPCRouter({
 				paymentStatus: z
 					.enum(['pending', 'paid', 'partially_refunded', 'refunded', 'failed'])
 					.optional(),
-				roomId: z.string().optional(),
-				startDate: z.string().optional(),
-				endDate: z.string().optional(),
+				roomId: idSchema.optional(),
+				/** Check-in on or after this date. */
+				startDate: isoDateSchema.optional(),
+				/** Check-in on or before this date. */
+				endDate: isoDateSchema.optional(),
 			}),
 		)
 		.query(async ({ ctx, input }) => {
@@ -328,10 +377,11 @@ export const bookingsRouter = createTRPCRouter({
 				conditions.push(eq(bookings.paymentStatus, input.paymentStatus));
 			}
 			if (input.roomId) conditions.push(eq(bookings.roomId, input.roomId));
-			if (input.startDate && input.endDate) {
-				conditions.push(
-					between(bookings.checkInDate, input.startDate, input.endDate),
-				);
+			if (input.startDate) {
+				conditions.push(gte(bookings.checkInDate, input.startDate));
+			}
+			if (input.endDate) {
+				conditions.push(lte(bookings.checkInDate, input.endDate));
 			}
 			return ctx.db
 				.select({

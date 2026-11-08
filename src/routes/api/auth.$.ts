@@ -1,17 +1,24 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { env } from 'cloudflare:workers';
 
+import { rateLimitRequests } from '@/core/middleware/rate-limit';
 import { auth } from '@/lib/auth';
+import { clientIp, logRateLimited } from '@/lib/rate-limit';
 
-// Better Auth handler for all HTTP methods
-const authHandler = async ({
-	request,
-}: {
-	request: Request;
-	params: Record<string, string>;
-}) => {
+// Better Auth handler for all HTTP methods.
+const authHandler = async ({ request }: { request: Request }) => {
 	try {
 		const authInstance = await auth();
-		return authInstance.handler(request);
+		const response = await authInstance.handler(request);
+		if (response.status === 429) {
+			// Better Auth's own (strict, D1) limit; same log line as the bindings.
+			await logRateLimited(env, {
+				limiter: 'better-auth',
+				path: new URL(request.url).pathname,
+				ip: clientIp(request.headers),
+			});
+		}
+		return response;
 	} catch (error) {
 		console.error('Error in auth handler:', error);
 		return new Response('Auth error', { status: 500 });
@@ -20,6 +27,15 @@ const authHandler = async ({
 
 export const Route = createFileRoute('/api/auth/$')({
 	server: {
+		// Approximate per-IP filter in front of Better Auth's strict limits.
+		// The Better Auth Stripe webhook is called from Stripe's shared IPs and
+		// verified by signature, so it is not counted.
+		middleware: [
+			rateLimitRequests('AUTH_RATE_LIMITER', {
+				scope: 'auth',
+				skip: (pathname) => pathname.startsWith('/api/auth/stripe/'),
+			}),
+		],
 		handlers: {
 			GET: authHandler,
 			POST: authHandler,

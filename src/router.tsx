@@ -1,4 +1,4 @@
-import { QueryClient } from '@tanstack/react-query';
+import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
 import { createRouter } from '@tanstack/react-router';
 import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query';
 import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
@@ -6,6 +6,7 @@ import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import { makeTRPCClient } from '@/integrations/trpc/client';
 import { TRPCProvider } from '@/integrations/trpc/react';
 import type { TRPCRouter } from '@/integrations/trpc/router';
+import { createAuthErrorHandler } from '@/lib/session';
 
 import { routeTree } from './routeTree.gen';
 
@@ -15,7 +16,12 @@ import { routeTree } from './routeTree.gen';
  * request's cache can never be dehydrated into another user's page.
  */
 export const getRouter = () => {
+	// Browser only: an UNAUTHORIZED/FORBIDDEN tRPC answer refreshes the session
+	// and re-runs the guards (see createAuthErrorHandler).
+	const onAuthError = (error: unknown) => handleAuthError(error);
 	const queryClient = new QueryClient({
+		queryCache: new QueryCache({ onError: onAuthError }),
+		mutationCache: new MutationCache({ onError: onAuthError }),
 		defaultOptions: {
 			queries: {
 				staleTime: 60_000,
@@ -32,7 +38,7 @@ export const getRouter = () => {
 
 	const router = createRouter({
 		routeTree,
-		context: { queryClient, trpc, trpcClient },
+		context: { queryClient, trpc },
 		defaultPreload: 'intent',
 		// Let TanStack Query own data freshness for preloads.
 		defaultPreloadStaleTime: 0,
@@ -43,6 +49,8 @@ export const getRouter = () => {
 			</TRPCProvider>
 		),
 	});
+
+	const handleAuthError = createAuthErrorHandler(queryClient, () => router);
 
 	// Provides the QueryClientProvider and SSR dehydration/hydration.
 	setupRouterSsrQueryIntegration({ router, queryClient });

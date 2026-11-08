@@ -3,7 +3,8 @@ import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { newId, newPublicId } from '../lib/ids';
 
 // Better Auth tables. Keep in sync with the Better Auth plugins in
-// src/lib/auth.ts (admin, phoneNumber, stripe) and user.additionalFields.
+// src/lib/auth.ts (admin, phoneNumber, stripe), user.additionalFields and the
+// rateLimit option.
 // Timestamps stay in seconds (mode: 'timestamp').
 
 export const user = sqliteTable('user', {
@@ -91,4 +92,20 @@ export const verification = sqliteTable(
 			.notNull(),
 	},
 	(table) => [index('verification_identifier_idx').on(table.identifier)],
+);
+
+// Better Auth rate limits (rateLimit.storage: 'database', src/lib/auth.ts).
+// One row per client IP + auth path. Better Auth prunes rows older than its
+// longest window itself, so no cron cleanup is needed.
+// Exception to the "timestamps in seconds" rule: `last_request` is Unix
+// milliseconds because Better Auth writes and compares it as Date.now().
+export const rateLimit = sqliteTable(
+	'rate_limit',
+	{
+		id: text('id').primaryKey().$defaultFn(newId),
+		key: text('key').notNull().unique(),
+		count: integer('count').notNull(),
+		lastRequest: integer('last_request', { mode: 'number' }).notNull(),
+	},
+	(table) => [index('rate_limit_lastRequest_idx').on(table.lastRequest)],
 );

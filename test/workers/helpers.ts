@@ -28,8 +28,20 @@ export const db = () => createDrizzle(env.DB);
 
 type SeedUser = typeof ADMIN | typeof GUEST | typeof OTHER_GUEST;
 
+type Role = 'admin' | 'user' | 'other';
+
+/** Session-side user fields a test may override (e.g. a stale role or a ban). */
+export type SessionUserOverrides = Partial<{
+	role: string;
+	banned: boolean;
+	banExpires: Date | null;
+}>;
+
 /** A minimal Better Auth session for a seeded user. */
-function fakeSession(u: SeedUser): NonNullable<AuthSession> {
+function fakeSession(
+	u: SeedUser,
+	overrides: SessionUserOverrides = {},
+): NonNullable<AuthSession> {
 	const now = new Date();
 	return {
 		session: {
@@ -57,6 +69,7 @@ function fakeSession(u: SeedUser): NonNullable<AuthSession> {
 			banExpires: null,
 			phoneNumber: null,
 			phoneNumberVerified: false,
+			...overrides,
 		},
 	} as unknown as NonNullable<AuthSession>;
 }
@@ -76,7 +89,10 @@ export async function settle() {
 	}
 }
 
-export function makeCtx(role: 'admin' | 'user' | 'other' | null) {
+export function makeCtx(
+	role: Role | null,
+	overrides: SessionUserOverrides = {},
+) {
 	const u =
 		role === 'admin'
 			? ADMIN
@@ -86,7 +102,7 @@ export function makeCtx(role: 'admin' | 'user' | 'other' | null) {
 					? OTHER_GUEST
 					: null;
 	return createInnerTRPCContext({
-		session: u ? fakeSession(u) : null,
+		session: u ? fakeSession(u, overrides) : null,
 		waitUntil: (p) => {
 			pending.push(p);
 		},
@@ -108,8 +124,11 @@ export async function fetchWorker(request: Request) {
 	return response;
 }
 
-export function caller(role: 'admin' | 'user' | 'other' | null) {
-	return trpcRouter.createCaller(makeCtx(role));
+export function caller(
+	role: Role | null,
+	overrides: SessionUserOverrides = {},
+) {
+	return trpcRouter.createCaller(makeCtx(role, overrides));
 }
 
 /** Awaits a rejected tRPC call and returns the TRPCError for assertions. */

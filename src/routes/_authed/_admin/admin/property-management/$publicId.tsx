@@ -41,7 +41,7 @@ export const Route = createFileRoute(
 	loader: async ({ context, params }) => {
 		const room = await orNotFound(
 			context.queryClient.ensureQueryData(
-				context.trpc.rooms.get.queryOptions({ publicId: params.publicId }),
+				context.trpc.rooms.adminGet.queryOptions({ publicId: params.publicId }),
 			),
 		);
 		// Fired together, so the browser sends them as one batched request.
@@ -135,7 +135,9 @@ function EditRoom() {
 	const trpc = useTRPC();
 	const queryClient = useQueryClient();
 
-	const roomQuery = useSuspenseQuery(trpc.rooms.get.queryOptions({ publicId }));
+	const roomQuery = useSuspenseQuery(
+		trpc.rooms.adminGet.queryOptions({ publicId }),
+	);
 	const room = roomQuery.data;
 
 	const { data: pricingRulesData } = useSuspenseQuery(
@@ -179,9 +181,9 @@ function EditRoom() {
 	const updateRoomMutation = useMutation(
 		trpc.rooms.update.mutationOptions({
 			onSuccess: () => {
-				// Room name/status also appear in the rooms list and admin sidebar
-				void queryClient.invalidateQueries(trpc.rooms.get.pathFilter());
-				void queryClient.invalidateQueries(trpc.rooms.list.pathFilter());
+				// Every room query (public and admin): name and status also appear
+				// in the sidebar, the property list and the public room pages.
+				void queryClient.invalidateQueries(trpc.rooms.pathFilter());
 				toast.success('Room updated successfully!', {
 					description: `${formData.name} has been updated with the latest settings.`,
 					duration: 4000,

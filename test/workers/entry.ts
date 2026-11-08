@@ -3,6 +3,7 @@
 // the Start Vite plugin. This entry routes the plain HTTP endpoints that tests
 // call through `exports.default.fetch()` to the same handlers the Start server
 // routes use, and forwards cron triggers to the real scheduled handler.
+import { handleCspReport } from '@/lib/csp-report';
 import { handleIcalExportRequest } from '@/lib/ical-export';
 import { handleScheduledEvent } from '@/lib/scheduled-tasks';
 import { handleStripeWebhook } from '@/lib/stripe-webhook';
@@ -15,6 +16,9 @@ export default {
 				env,
 				waitUntil: (p) => ctx.waitUntil(p),
 			});
+		}
+		if (request.method === 'POST' && pathname === '/api/csp-report') {
+			return handleCspReport(request);
 		}
 		if (request.method === 'GET' && pathname.startsWith('/api/ical/')) {
 			return handleIcalExportRequest(request);

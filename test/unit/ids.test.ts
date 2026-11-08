@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test';
 
 import {
+	idSchema,
 	newIcalExportToken,
 	newId,
 	newPublicId,
@@ -19,6 +20,18 @@ describe('newId (UUIDv7)', () => {
 		const ids = Array.from({ length: 200 }, () => newId());
 		expect([...ids].sort()).toEqual(ids);
 		expect(new Set(ids).size).toBe(ids.length);
+	});
+});
+
+describe('idSchema', () => {
+	it('accepts newId() and rejects other strings', () => {
+		expect(idSchema.safeParse(newId()).success).toBe(true);
+		expect(
+			idSchema.safeParse('019a5f00-0000-7000-8000-000000000001').success,
+		).toBe(true);
+		for (const bad of ['', 'abc', newPublicId(), crypto.randomUUID()]) {
+			expect(idSchema.safeParse(bad).success).toBe(false);
+		}
 	});
 });
 

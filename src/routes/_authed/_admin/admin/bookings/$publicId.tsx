@@ -35,7 +35,7 @@ export const Route = createFileRoute(
 	loader: async ({ context, params }) => {
 		const booking = await orNotFound(
 			context.queryClient.ensureQueryData(
-				context.trpc.bookings.getBooking.queryOptions({
+				context.trpc.bookings.adminGetBooking.queryOptions({
 					publicId: params.publicId,
 				}),
 			),
@@ -79,11 +79,11 @@ function AdminBookingDetailPage() {
 	const trpc = useTRPC();
 
 	const { data: booking } = useSuspenseQuery(
-		trpc.bookings.getBooking.queryOptions({ publicId }),
+		trpc.bookings.adminGetBooking.queryOptions({ publicId }),
 	);
 
-	// Guest details for the repeat-guest badge. Admin results always carry
-	// `user`; the type allows null (non-admin shape), hence `enabled`.
+	// Guest details for the repeat-guest badge (`user` is null only if the
+	// account was deleted), hence `enabled`.
 	const guestPublicId = booking.user?.publicId;
 	const { data: guestData } = useQuery(
 		trpc.users.adminGetGuestDetails.queryOptions(
@@ -92,7 +92,7 @@ function AdminBookingDetailPage() {
 		),
 	);
 
-	// Admin can resend for any booking (takes the internal booking id).
+	// Admin can resend for any booking.
 	const resendEmail = useMutation(
 		trpc.bookings.resendConfirmationEmail.mutationOptions({
 			onSuccess: (result) => {
@@ -114,7 +114,7 @@ function AdminBookingDetailPage() {
 	const isResendingEmail = resendEmail.isPending;
 
 	const handleResendEmail = () => {
-		resendEmail.mutate({ bookingId: booking.booking.id });
+		resendEmail.mutate({ publicId: booking.booking.publicId });
 	};
 
 	const bookingCount = guestData?.bookings?.length || 0;

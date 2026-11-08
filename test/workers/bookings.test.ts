@@ -25,6 +25,25 @@ import { ADMIN, ROSE, TEXAS } from './seed';
 
 const guest = () => caller('user');
 
+/** Fields a guest response must never contain (admin-only or internal). */
+const HIDDEN_BOOKING_FIELDS = [
+	'id',
+	'userId',
+	'roomId',
+	'internalNotes',
+	'stripeCustomerId',
+	'stripeSessionId',
+	'stripePaymentIntentId',
+	'stripeRefundId',
+	'cancellationPolicyId',
+];
+
+function expectGuestShape(result: { booking: object }) {
+	for (const field of HIDDEN_BOOKING_FIELDS) {
+		expect(result.booking).not.toHaveProperty(field);
+	}
+}
+
 async function bookingRow(id: string) {
 	const [row] = await db().select().from(bookings).where(eq(bookings.id, id));
 	return row;
@@ -219,22 +238,82 @@ describe('access and ownership', () => {
 		expect(error.code).toBe('NOT_FOUND');
 	});
 
-	it('getBooking: the owner gets user: null, an admin gets the guest', async () => {
+	it('getBooking: the owner gets guest fields only', async () => {
 		const booking = await insertBooking({
 			checkInDate: '2034-06-05',
 			checkOutDate: '2034-06-06',
+			internalNotes: 'Admin-only note',
+			stripeCustomerId: 'cus_test_secret',
+			stripePaymentIntentId: 'pi_test_secret',
 		});
 		const own = await guest().bookings.getBooking({
 			publicId: booking.publicId,
 		});
 		expect(own.booking.publicId).toBe(booking.publicId);
-		expect(own.user).toBeNull();
-		expect(own.room).not.toHaveProperty('icalExportToken');
+		expect(own.booking.confirmationId).toBe(booking.confirmationId);
+		expect(own.booking.guestEmail).toBe(booking.guestEmail);
+		expectGuestShape(own);
+		expect(own).not.toHaveProperty('paymentDetails');
+		expect(own).not.toHaveProperty('user');
+		expect(Object.keys(own.room).sort()).toEqual(['name', 'slug']);
+	});
 
-		const asAdmin = await caller('admin').bookings.getBooking({
+	it('getMyBookings: guest fields only', async () => {
+		await insertBooking({
+			checkInDate: '2034-06-07',
+			checkOutDate: '2034-06-08',
+			internalNotes: 'Admin-only note',
+			stripeCustomerId: 'cus_test_secret',
+		});
+		const rows = await guest().bookings.getMyBookings({ limit: 100 });
+		expect(rows.length).toBeGreaterThan(0);
+		for (const row of rows) {
+			expectGuestShape(row);
+			expect(Object.keys(row.room).sort()).toEqual(['name', 'slug']);
+		}
+	});
+
+	it('getBooking: an admin cannot read another guest’s booking through it', async () => {
+		const booking = await insertBooking({
+			checkInDate: '2034-06-09',
+			checkOutDate: '2034-06-10',
+		});
+		const error = await trpcError(
+			caller('admin').bookings.getBooking({ publicId: booking.publicId }),
+		);
+		expect(error.code).toBe('NOT_FOUND');
+	});
+
+	it('adminGetBooking: the full row and the guest account', async () => {
+		const booking = await insertBooking({
+			checkInDate: '2034-06-11',
+			checkOutDate: '2034-06-12',
+			internalNotes: 'Admin-only note',
+		});
+		const result = await caller('admin').bookings.adminGetBooking({
 			publicId: booking.publicId,
 		});
-		expect(asAdmin.user).toMatchObject({ email: booking.guestEmail });
+		expect(result.booking.id).toBe(booking.id);
+		expect(result.booking.internalNotes).toBe('Admin-only note');
+		expect(result.user).toMatchObject({ email: booking.guestEmail });
+		expect(result.room).not.toHaveProperty('icalExportToken');
+	});
+
+	it('resendConfirmationEmail takes the publicId (owner)', async () => {
+		mockResend();
+		const booking = await insertBooking({
+			checkInDate: '2034-06-13',
+			checkOutDate: '2034-06-14',
+		});
+		await expect(
+			guest().bookings.resendConfirmationEmail({ publicId: booking.publicId }),
+		).resolves.toMatchObject({ success: true });
+		const error = await trpcError(
+			caller('other').bookings.resendConfirmationEmail({
+				publicId: booking.publicId,
+			}),
+		);
+		expect(error.code).toBe('NOT_FOUND');
 	});
 
 	it('cancelBooking: another user’s booking is NOT_FOUND', async () => {

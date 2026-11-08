@@ -26,14 +26,19 @@ contain the platform's secret and are only returned by admin procedures.
 - Before every PaymentIntent (`bookings.createPaymentIntent`): the room's
   feeds, skipping any attempted in the last 2 minutes, 5-second timeout. Then
   availability is checked again.
-- "Sync now" in the admin UI (`ical.syncRoom`, `ical.syncFeed`).
+- "Sync now" in the admin UI (`ical.syncRoom`, all of a room's feeds).
 
 Evaluate a 5-minute cron at production go-live.
 
 ### One sync run (`syncFeed`)
 
-1. **Fetch** with a 10 s timeout and `If-None-Match` / `If-Modified-Since`. A
-   `304` only updates the feed's timestamps.
+1. **Fetch** with a 10 s timeout and `If-None-Match` / `If-Modified-Since`
+   through `fetchFeed` (`src/lib/ical-fetch.ts`): public `https:` URLs only
+   (no IP literals, `localhost` or credentials), checked again on each of up
+   to 5 redirects, and bodies over 5 MB are refused. Feed URLs are validated
+   with the same rule when saved, and the admin "Test URL" action
+   (`ical.testUrl`) uses the same fetch. A `304` only updates the feed's
+   timestamps.
 2. **Validate.** The run is rejected, and stored events are left untouched,
    when the response is not HTTP 200, is not a `VCALENDAR`, has no events
    while the last run had some, or drops by more than half (from 4 or more).

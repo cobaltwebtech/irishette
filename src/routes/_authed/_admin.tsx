@@ -3,10 +3,13 @@ import { createFileRoute, redirect } from '@tanstack/react-router';
 import { freshSessionQueryOptions } from '@/lib/session';
 
 /**
- * Pathless admin layout. Re-checks the session without Better Auth's cookie
- * cache (at most every 5 s) so a revoked admin role takes effect quickly.
+ * Pathless admin layout (UX guard). Reads the session without Better Auth's
+ * cookie cache: on every SSR page load, and at most every 30 minutes during
+ * client navigation (freshSessionQueryOptions). The real enforcement is
+ * tRPC `adminProcedure`, which re-reads the role from D1 on every call; a
+ * FORBIDDEN answer refreshes this session and re-runs the guard.
  * Non-admins go to `/` (not to login, which would bounce back: a redirect
- * loop). tRPC `adminProcedure` is the real enforcement.
+ * loop).
  */
 export const Route = createFileRoute('/_authed/_admin')({
 	beforeLoad: async ({ context, location }) => {

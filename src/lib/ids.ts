@@ -14,6 +14,9 @@ export const newPublicId = customAlphabet(
 	16,
 );
 
+/** Zod schema for an internal primary key (UUIDv7) in admin inputs. */
+export const idSchema = z.uuid({ version: 'v7', message: 'Invalid id' });
+
 const PUBLIC_ID_REGEX = /^[0-9a-z]{16}$/;
 
 /** Zod schema for a `publicId` route param / procedure input. */

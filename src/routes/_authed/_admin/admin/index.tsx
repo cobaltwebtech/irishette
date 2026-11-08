@@ -10,7 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTRPC } from '@/integrations/trpc/react';
 
 // Shared by the loader and the component so the cache keys match.
-const ROOMS_INPUT = { limit: 10, status: 'active' as const };
+// Every room (any status), so bookings for inactive rooms still show the
+// room name. Same input as the admin sidebar (one cache entry).
+const ROOMS_INPUT = { limit: 100 };
 const BOOKINGS_INPUT = { limit: 50, offset: 0 };
 const MONTHLY_STATS_INPUT = { months: 12, status: 'confirmed' as const };
 
@@ -27,7 +29,7 @@ export const Route = createFileRoute('/_authed/_admin/admin/')({
 	loader: ({ context }) =>
 		Promise.all([
 			context.queryClient.ensureQueryData(
-				context.trpc.rooms.list.queryOptions(ROOMS_INPUT),
+				context.trpc.rooms.adminList.queryOptions(ROOMS_INPUT),
 			),
 			context.queryClient.ensureQueryData(
 				context.trpc.bookings.adminListBookings.queryOptions(BOOKINGS_INPUT),
@@ -45,7 +47,7 @@ function AdminDashboard() {
 	const trpc = useTRPC();
 
 	const { data: roomsData } = useSuspenseQuery(
-		trpc.rooms.list.queryOptions(ROOMS_INPUT),
+		trpc.rooms.adminList.queryOptions(ROOMS_INPUT),
 	);
 	const rooms = roomsData.rooms;
 

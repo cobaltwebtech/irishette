@@ -33,7 +33,7 @@ const USER = new Set([
 	'users.updateProfile',
 ]);
 
-/** Removed in Phase 7 (leaks, placeholders or the self-confirm hole). */
+/** Removed procedures (plan 01 Phase 7 leaks/placeholders, plan 02 cleanup). */
 const REMOVED = [
 	'rooms.ping',
 	'rooms.getIcalConfig',
@@ -45,6 +45,8 @@ const REMOVED = [
 	'bookings.createCheckoutSession',
 	'availability.checkRoom',
 	'availability.checkBulk',
+	// Plan 02 Phase 1: unused (the admin UI syncs a whole room).
+	'ical.syncFeed',
 ];
 
 const paths = Object.keys(trpcRouter._def.procedures).sort();

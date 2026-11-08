@@ -13,7 +13,9 @@ auth on the server.
 | Auth emails | `src/lib/email-service.ts` (`sendPasswordResetEmail`, `sendMagicLinkEmail`, `sendVerificationEmail`, `sendChangeEmailConfirmation`) |
 | Session for the page | `src/core/functions/auth-server.ts` (`getSessionFn`), `src/lib/session.ts` |
 | Route guards | `src/routes/__root.tsx`, `src/routes/_authed.tsx`, `src/routes/_authed/_admin.tsx`, `src/lib/redirect.ts` |
-| tRPC auth | `src/integrations/trpc/context.ts`, `inner-context.ts`, `init.ts` |
+| Rate limiting | `src/lib/auth.ts` (`rateLimit`, `AUTH_RATE_LIMIT_RULES`), `src/lib/rate-limit.ts`, `src/core/middleware/rate-limit.ts`, `cloudflare.config.ts` bindings |
+| Security headers, CSRF | `src/start.tsx`, `src/core/middleware/security-headers.ts`, `src/lib/security-headers.ts`, `src/lib/csp-report.ts` |
+| tRPC auth | `src/integrations/trpc/context.ts`, `inner-context.ts`, `init.ts`, `access.ts` |
 | Auth pages | `src/routes/auth/` (login, signup, forgot-password, reset-password, logout) |
 | Form validation | `src/lib/auth-validation.ts` |
 | Tables | `src/db/auth-schema.ts` |
@@ -29,7 +31,7 @@ on creation) and reads secrets and the D1 binding from `cloudflare:workers`.
 | Cookie cache | On, 5 minutes. `getSession` trusts the signed cookie for that long without reading D1 |
 | Ids | `advanced.database.generateId` = `newId()` (UUIDv7, `src/lib/ids.ts`) for every Better Auth table |
 | `user.publicId` | Additional field, `input: false`, default `newPublicId()` (16 chars `[0-9a-z]`). Used in URLs (`/admin/guest/$publicId`) instead of the id |
-| Rate limiting | `rateLimit.enabled: true`, default rules and storage (in memory, so per isolate) |
+| Rate limiting | `rateLimit.enabled: true`, `storage: 'database'` (table `rate_limit`; strict across isolates and locations; Better Auth deletes expired rows itself), `customRules` = `AUTH_RATE_LIMIT_RULES` (see [Rate limiting](#rate-limiting)) |
 | Client IP | `advanced.ipAddress.ipAddressHeaders: ['cf-connecting-ip']` |
 | Email + password | Enabled, `requireEmailVerification: true` |
 | Email verification | `sendOnSignUp`, `autoSignInAfterVerification` |
@@ -124,9 +126,10 @@ the session from D1.
 | Export | Use |
 |---|---|
 | `sessionQueryOptions()` | Query `['auth', 'session']`, `getSessionFn()`, `staleTime` 60 s |
-| `freshSessionQueryOptions()` | Same key, `getSessionFn({ data: { fresh: true } })`, `staleTime` 5 s |
+| `freshSessionQueryOptions()` | Its own key `['auth', 'session', 'fresh']`, `getSessionFn({ data: { fresh: true } })` (bypasses the cookie cache), `staleTime` 30 minutes. Used by the admin layout |
 | `useSession()` | `useSuspenseQuery(sessionQueryOptions()).data`; always resolved because the root preloads it |
-| `refreshSession(queryClient, router)` | Fetches the fresh session (bypassing the 5-minute cookie cache), then `router.invalidate()` to re-run guards and loaders |
+| `refreshSession(queryClient, router)` | Fetches the fresh session (bypassing the 5-minute cookie cache), writes it to both keys, then `router.invalidate()` to re-run guards and loaders |
+| `createAuthErrorHandler(queryClient, getRouter)` | `onError` for the QueryClient's query and mutation caches (`src/router.tsx`). In the browser, a tRPC `UNAUTHORIZED`/`FORBIDDEN` (`isAuthError`) calls `refreshSession`, at most every 10 s, so a revoked role, a ban or an expired session redirects through the guards |
 | `clearSession(queryClient, router)` | Sets the session to `null`, removes every other cached query (it may hold the previous user's data), then `refreshSession` |
 
 ### Guards
@@ -141,10 +144,13 @@ the session from D1.
   `/booking/confirmation/*` and the admin pages. No session: redirect to
   `/auth/login?redirect=<location.href>`. Otherwise it returns `{ user }`, which
   pages read with `Route.useRouteContext()`.
-- **`/_authed/_admin`** (`src/routes/_authed/_admin.tsx`): fetches
-  `freshSessionQueryOptions()` so a revoked role takes effect quickly. No
-  session: login redirect. Not an admin: redirect to `/` (sending a signed-in
-  user to login would bounce back, a redirect loop).
+- **`/_authed/_admin`** (`src/routes/_authed/_admin.tsx`): `fetchQuery`
+  of `freshSessionQueryOptions()`: a database read on every SSR page load
+  (per-request QueryClient) and at most every 30 minutes during client
+  navigation. No session: login redirect. Not an admin: redirect to `/`
+  (sending a signed-in user to login would bounce back, a redirect loop).
+  The real check is `adminProcedure` on every admin tRPC call (below); a
+  `FORBIDDEN` answer refreshes the session and re-runs this guard.
 
 ## tRPC
 
@@ -156,10 +162,95 @@ per request; during SSR the `localLink` client (`client.ts`) builds it once per
 request from the incoming cookies. `ctx.session` is server-only and is never
 returned to clients.
 
-`init.ts`: `publicProcedure`; `protectedProcedure` throws `UNAUTHORIZED` without
-a session and narrows `ctx.user`; `adminProcedure` extends it and throws
-`FORBIDDEN` unless `ctx.user.role === 'admin'`. Ownership checks (a user's own
-bookings) live in each procedure. See the tRPC docs for details.
+`init.ts`:
+
+- `publicProcedure`.
+- `protectedProcedure` throws `UNAUTHORIZED` without a session and narrows
+  `ctx.user`. It throws `FORBIDDEN` when the session user is banned
+  (`isBanActive` in `access.ts`: `banned` and no past `banExpires`). The ban
+  flag rides in the session, so this costs no query; Better Auth also deletes
+  a banned user's sessions.
+- `adminProcedure` extends it and calls `isActiveAdmin` (`access.ts`), which
+  re-reads `role`, `banned` and `banExpires` from D1 on **every call**, so a
+  revoked role or a ban applies to the next call instead of after the
+  5-minute cookie cache. `FORBIDDEN` unless the user is an unbanned admin.
+- `findAccessibleBooking` (`bookings.ts`) uses the same D1 check before
+  letting an admin act on another user's booking.
+
+Ownership checks (a user's own bookings) live in each procedure. See the tRPC
+docs for details.
+
+## Rate limiting
+
+Two layers, both logging every rejection as one structured line in Workers
+Logs: `{ "message": "rate-limited", "limiter", "path", "ipHash" }`
+(`logRateLimited` in `src/lib/rate-limit.ts`; the IP is never logged, only an
+HMAC of it keyed with `BETTER_AUTH_SECRET`). Find them in the dashboard's
+Observability Query Builder with `message = "rate-limited"`.
+
+1. **Cloudflare Rate Limiting bindings** (`cloudflare.config.ts`; fast,
+   approximate, counted per Cloudflare location):
+   - `AUTH_RATE_LIMITER` (30 per minute per IP): route middleware
+     `rateLimitRequests` on `/api/auth/*`, except the Better Auth Stripe
+     webhook (`/api/auth/stripe/*`, verified by signature).
+   - `API_RATE_LIMITER` (60 per minute per user or IP and procedure): the tRPC
+     `rateLimit` middleware on `bookings.calculateBooking`,
+     `rooms.calculatePricing` and `ical.testUrl`.
+   - `CSP_REPORT_RATE_LIMITER` (30 per minute per IP): `/api/csp-report`.
+   - Over the limit: 429 with `Retry-After: 60` (tRPC: `TOO_MANY_REQUESTS`).
+     A missing binding or a binding error never blocks a request.
+   - Namespaces `20261`-`20263` are reserved for this Worker in the account.
+2. **Better Auth's own limits in D1** (strict; `rateLimit.storage:
+   'database'`, table `rate_limit`, keyed by IP + path):
+
+   | Path | Limit |
+   |---|---|
+   | `/sign-in/email` | 5 per 60 s |
+   | `/sign-in/magic-link` | 3 per 60 s |
+   | `/sign-up/email` | 3 per 60 s |
+   | `/request-password-reset` | 3 per 5 min |
+   | `/reset-password` | 5 per 5 min |
+   | `/send-verification-email` | 3 per 5 min |
+   | anything else under `/api/auth` | Better Auth default, 100 per 10 s |
+
+   The auth route logs Better Auth's 429s with `limiter: 'better-auth'`.
+   Better Auth prunes rows older than its longest window, so no cron is
+   needed. `last_request` is Unix **milliseconds** (Better Auth's format), the
+   one exception to the seconds rule for timestamps.
+
+KV was considered and rejected for counters: one write per key per second,
+eventually consistent, and no atomic increment.
+
+## Security headers and CSRF
+
+`src/start.tsx` registers two global request middlewares:
+
+- `securityHeadersMiddleware` (`src/core/middleware/security-headers.ts`,
+  values in `src/lib/security-headers.ts`) adds `X-Content-Type-Options:
+  nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` and
+  `X-Frame-Options: DENY` to every Worker response, and to non-`/api/`
+  responses a **report-only** CSP (`Content-Security-Policy-Report-Only`)
+  plus `Reporting-Endpoints`. The CSP allows Stripe.js and its frames
+  (`js.stripe.com`, `*.js.stripe.com`, `hooks.stripe.com`, `api.stripe.com`),
+  Turnstile (`challenges.cloudflare.com`), Cloudinary images, Iconify's icon
+  API and the Bunny font CSS used by the Payment Element. Script and style
+  sources include `'unsafe-inline'` because Start inlines its hydration
+  scripts; move to nonces before enforcing.
+- Start's `createCsrfMiddleware` for server functions (same-origin only).
+  Start adds it by default only when no request middleware is configured, so
+  it is listed explicitly.
+
+Violation reports go to `POST /api/csp-report` (`src/routes/api/csp-report.ts`,
+`handleCspReport` in `src/lib/csp-report.ts`): both the `report-uri` and the
+Reporting API formats, at most 10 reports and 64 KB per request. Each report
+becomes one `console.warn` line, `{ "message": "csp-violation", directive,
+blocked, documentPath, disposition }`: the blocked origin (or keyword such as
+`inline`) and the document path without query string. Nothing is stored. Find
+them with `message = "csp-violation"` in the Query Builder.
+
+**Enforcing the CSP** is a separate, later change (after testing booking,
+payment including Link, auth and admin): switch the header name to
+`Content-Security-Policy` and replace `'unsafe-inline'` scripts with nonces.
 
 ## After an auth action
 
@@ -196,7 +287,8 @@ Admins read users through `users.adminListGuests` and
 
 - Never send the session token (or IP, user agent) to the client. Only
   `getSessionFn` returns session data to the page, and only `SessionUser`.
-- Check roles on the server: `adminProcedure` for tRPC; `_admin` is UX.
+- Check roles on the server: `adminProcedure` for tRPC (D1 read per call);
+  `_admin` is UX.
 - New pages that need a user go under `src/routes/_authed/`; admin pages under
   `_authed/_admin/`.
 - Read the session with `useSession()` or the `_authed` route context, never
@@ -212,7 +304,11 @@ Admins read users through `users.adminListGuests` and
 | Test | Covers |
 |---|---|
 | `test/workers/trpc-authz.test.ts` | Sweeps every procedure: anything not in `PUBLIC` rejects anonymous callers with `UNAUTHORIZED`; anything not in `PUBLIC` or `USER` rejects normal users with `FORBIDDEN` |
-| `test/workers/helpers.ts` | `makeCtx(role)` builds a context with a synthetic session via `createInnerTRPCContext` (no Better Auth) |
+| `test/workers/helpers.ts` | `makeCtx(role, overrides?)` builds a context with a synthetic session via `createInnerTRPCContext` (no Better Auth); `overrides` sets a stale role or a ban on the session user |
+| `test/workers/access-freshness.test.ts` | `adminProcedure` trusts D1, not the session (stale admin session, revoked role, banned admin); banned sessions are `FORBIDDEN`; an expired ban is not |
+| `test/workers/auth-rate-limit.test.ts` | Better Auth's D1-backed limit returns 429 past the rule and stores rows in `rate_limit` |
+| `test/workers/rate-limit.test.ts` | Binding limit, fail-open, keys, the log line (no raw IP), the tRPC `rateLimit` middleware |
+| `test/workers/csp-report.test.ts`, `test/unit/security-headers.test.ts` | CSP report endpoint and parsing (no query strings), the policy and headers |
 | `test/unit/validation.test.ts` | `redirectSearchParam` keeps same-origin paths and drops unsafe values |
 | `e2e/public.spec.ts` | `/admin` and `/account` send a signed-out visitor to `/auth/login?redirect=<path>` |
 | `e2e/signed-in.spec.ts` | Password login reaches `/account` and survives a hard reload; a non-admin on `/admin` lands on `/` (no loop); hard reload of an own booking page and of admin pages. Needs `E2E_USER_*` / `E2E_ADMIN_*` credentials, otherwise skipped |

@@ -45,7 +45,7 @@ export function BookingInternalNotes({
 			onSuccess: async () => {
 				// Refetch the booking so the updated notes show up
 				await queryClient.invalidateQueries(
-					trpc.bookings.getBooking.pathFilter(),
+					trpc.bookings.adminGetBooking.pathFilter(),
 				);
 				toast.success('Internal notes updated successfully!');
 				setOpen(false);

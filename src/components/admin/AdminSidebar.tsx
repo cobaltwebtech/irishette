@@ -27,10 +27,10 @@ export function AdminSidebar({
 }) {
 	const trpc = useTRPC();
 
-	// Fetch rooms for the Property menu (same input as the property
-	// management page, so they share one cache entry)
+	// Every room (any status) for the Property menu. Same input as the
+	// property management page and the dashboard, so they share one cache entry.
 	const { data: roomsData } = useQuery(
-		trpc.rooms.list.queryOptions({
+		trpc.rooms.adminList.queryOptions({
 			limit: 100,
 		}),
 	);

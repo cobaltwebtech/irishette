@@ -72,6 +72,17 @@ describe('public procedure outputs', () => {
 		);
 	});
 
+	it('bookings.calculateBooking', async () => {
+		expectNoSecrets(
+			await caller(null).bookings.calculateBooking({
+				roomId: ROSE.id,
+				checkInDate: '2036-02-01',
+				checkOutDate: '2036-02-03',
+				guestCount: 1,
+			}),
+		);
+	});
+
 	it('availability.getBySlug returns date ranges only (no booking ids)', async () => {
 		const output = await caller(null).availability.getBySlug({
 			roomSlug: ROSE.slug,

@@ -82,8 +82,15 @@ Better Auth's 5-minute session cookie cache (`src/lib/auth.ts`).
 | Builder | Check | Failure |
 |---|---|---|
 | `publicProcedure` | none | |
-| `protectedProcedure` | `ctx.session` and `ctx.user` set; narrows both to non-null | `UNAUTHORIZED` |
-| `adminProcedure` | `protectedProcedure`, then `ctx.user.role === 'admin'` | `UNAUTHORIZED` (anonymous), `FORBIDDEN` (not admin) |
+| `protectedProcedure` | `ctx.session` and `ctx.user` set (narrows both to non-null); the session user is not banned (`isBanActive`, no query) | `UNAUTHORIZED` (anonymous), `FORBIDDEN` (banned) |
+| `adminProcedure` | `protectedProcedure`, then `isActiveAdmin` re-reads `role`, `banned` and `banExpires` from D1 (one primary-key lookup) | `UNAUTHORIZED`, `FORBIDDEN` (not an unbanned admin in D1) |
+
+`rateLimit(limiter, scope)` (`init.ts`) is a middleware for individual
+procedures: it counts the call against a Cloudflare Rate Limiting binding
+(`src/lib/rate-limit.ts`), keyed by user id when signed in, else by IP, and
+throws `TOO_MANY_REQUESTS` over the limit. Used on `bookings.calculateBooking`,
+`rooms.calculatePricing` and `ical.testUrl` (`API_RATE_LIMITER`, 60 per minute
+per key). The access checks live in `src/integrations/trpc/access.ts`.
 
 ## Errors
 
@@ -104,14 +111,17 @@ Code conventions used by the routers and `src/lib/booking-service.ts`:
 | Code | Used for |
 |---|---|
 | `UNAUTHORIZED` | Not signed in (middleware) |
-| `FORBIDDEN` | Signed in, not admin (middleware) |
+| `FORBIDDEN` | Signed in but banned, or not an admin (middleware). The only auth codes: the browser refreshes the session on either (below) |
+| `TOO_MANY_REQUESTS` | Over a `rateLimit` binding limit |
+| `BAD_GATEWAY` | An external provider failed and the client should see why (`resendConfirmationEmail` when Resend fails) |
 | `NOT_FOUND` | Missing row, **and** a booking that exists but belongs to someone else (no existence leak) |
 | `BAD_REQUEST` | Zod input errors; business rules (past dates, guest count over `maxGuests`, inactive room, end before start, resend for a non-confirmed booking) |
 | `CONFLICT` | Dates taken (`createBooking` sends `cause.conflicts` with dates only), payment confirmed after the dates were taken (refunded), overlapping pricing rule (`cause.conflict`), block over reservations or another block (`cause.conflicts`), unique violations (room slug, feed URL, phone number), stale booking state |
 | `PRECONDITION_FAILED` | Refund requested for a booking without a Stripe payment |
-| `INTERNAL_SERVER_ERROR` | Anything unexpected (logged by `onError`, message hidden) |
+| `INTERNAL_SERVER_ERROR` | Anything unexpected (logged once by `onError`, message hidden). Procedures do not catch and re-log errors themselves |
 
-Client helpers: `orNotFound` (loaders), `isTRPCClientError<TRPCRouter>(error)`
+Client helpers: `orNotFound` (loaders), `isAuthError` (`UNAUTHORIZED` or
+`FORBIDDEN`), `isTRPCClientError<TRPCRouter>(error)`
 and `error.data?.zodError` / `error.data?.conflict(s)` in forms
 (`src/routes/_authed/_admin/admin/cancellation-policy.tsx`,
 `src/components/admin/RoomPricingRules.tsx`,
@@ -129,9 +139,11 @@ Room outputs use `publicRoomColumns` (never `icalExportToken`).
 
 | Procedure | Type | Access | Input | Purpose |
 |---|---|---|---|---|
-| `list` | query | public | `getRoomsSchema` (`limit` 1-100, default 10; `offset`; optional `status`) | Rooms ordered by name, with `pagination` (`total`, `hasMore`). No status filter by default |
-| `get` | query | public | `getRoomSchema` (one of `{ id }`, `{ publicId }`, `{ slug }`) | One room, any status. `NOT_FOUND` if missing |
-| `calculatePricing` | query | public | `calculatePricingSchema` (`roomId`, `checkInDate`, `checkOutDate`; `guestCount` ignored) | Base price per night with applied pricing rules (calendar). Uses `quoteStay` |
+| `list` | query | public | `getRoomsSchema` (`limit` 1-100, default 10; `offset`) | **Active** rooms ordered by name, with `pagination` (`total`, `hasMore`) |
+| `get` | query | public | `getRoomSchema` (one of `{ id }`, `{ publicId }`, `{ slug }`) | One **active** room. `NOT_FOUND` if missing or not active |
+| `adminList` | query | admin | `adminGetRoomsSchema` (`getRoomsSchema` + optional `status`) | Every room (any status); admin sidebar, dashboard and property list |
+| `adminGet` | query | admin | `getRoomSchema` | One room, any status (room editor) |
+| `calculatePricing` | query | public, rate-limited | `calculatePricingSchema` (`roomId`, `checkInDate`, `checkOutDate`; `guestCount` ignored) | Base price per night with applied pricing rules (calendar). Uses `quoteStay` |
 | `create` | mutation | admin | `createRoomSchema` | Create a room; `isActive` follows `status`. `CONFLICT` on duplicate slug |
 | `update` | mutation | admin | `updateRoomSchema` (partial + `id`) | Update a room. `NOT_FOUND`, `CONFLICT` on duplicate slug |
 | `getPricingRules` | query | admin | `getPricingRulesSchema` (`roomId`, optional `isActive`, date range) | A room's pricing rules overlapping the range |
@@ -148,20 +160,30 @@ Room outputs use `publicRoomColumns` (never `icalExportToken`).
 Schemas are in `src/lib/payment-validation.ts`. Owner checks go through
 `findAccessibleBooking`, which returns `NOT_FOUND` for other users' bookings.
 
+Guest responses (`getBooking`, `getMyBookings`) select `GUEST_BOOKING_FIELDS`:
+`publicId`, `confirmationId`, `status`, `paymentStatus`, the dates, nights,
+guests, the amounts (`baseAmount`, `feesAmount`, `taxAmount`, `totalAmount`,
+`refundAmount`), the guest's own name/email/phone/special requests,
+`createdAt`, `cancelledAt`, and the room's `name` and `slug`. Never the
+internal `id`, `userId`, `roomId`, `internalNotes`, Stripe ids,
+`cancellationPolicyId` or the payment transaction. Admin pages use
+`adminGetBooking`.
+
 | Procedure | Type | Access | Input | Purpose |
 |---|---|---|---|---|
-| `calculateBooking` | query | public | `calculateBookingSchema` (`roomId`, dates, `guestCount`) | Full price (base, fees, taxes, nights, applied rules, tax breakdown). Same `quoteStay` as booking creation |
+| `calculateBooking` | query | public, rate-limited | `calculateBookingSchema` (`roomId`, dates, `guestCount`) | Full price (base, fees, taxes, nights, applied rules, tax breakdown). Same `quoteStay` as booking creation |
 | `createBooking` | mutation | user | `createBookingSchema` (room, dates, guest count/name/email/phone, special requests; client prices ignored) | `createHold`: 30-minute pending hold; returns `bookingId`, `publicId` |
 | `createPaymentIntent` | mutation | user (owner) | `bookingIdSchema` | `preparePayment`: PaymentIntent for the Payment Element; returns `clientSecret`, `publishableKey` |
 | `refreshBooking` | mutation | user (owner) | `bookingIdSchema` | `refreshHold`: extend an expired hold if the dates are still free |
 | `confirmPayment` | mutation | user (owner) | `confirmPaymentSchema` (`bookingId`, `paymentIntentId` `pi_...`) | `confirmBookingPayment` after Stripe.js success (idempotent; the webhook is the backup). `CONFLICT` if the dates were taken and the payment was refunded |
-| `getBooking` | query | owner or admin | `bookingPublicIdSchema` | Booking, room (`bookingRoomColumns`) and payment transaction; `user` is the guest for admins, `null` for owners |
-| `getMyBookings` | query | user | `{ limit 1-100 (10), offset, status? }` | The caller's bookings with room summary, newest first |
+| `getBooking` | query | user (owner only) | `bookingPublicIdSchema` | `{ booking, room }` with guest fields only (above) |
+| `adminGetBooking` | query | admin | `bookingPublicIdSchema` | Any booking: the full row, the room (`bookingRoomColumns`) and the guest account (`publicId`, `email`, `name`) |
+| `getMyBookings` | query | user | `{ limit 1-100 (10), offset, status? }` | The caller's bookings (guest fields) with room name and slug, newest first |
 | `getCancellationQuote` | query | owner or admin | `bookingPublicIdSchema` | Whether the booking can be cancelled now and the refund under its policy |
 | `cancelBooking` | mutation | user (owner only) | `cancelBookingSchema` (`publicId`, `reason?`) | Guest cancellation, refund per policy |
 | `adminCancelBooking` | mutation | admin | `adminCancelBookingSchema` (`publicId`, `refund: 'full' \| 'policy' \| 'none'`, `reason?`) | Admin cancellation with chosen refund |
-| `resendConfirmationEmail` | mutation | owner or admin | `bookingIdSchema` | Re-send the confirmation email; `BAD_REQUEST` unless confirmed |
-| `adminListBookings` | query | admin | `{ limit 1-100 (10), offset, status?, paymentStatus?, roomId?, startDate?, endDate? }` | All bookings with room and guest (id, email, name); check-in range applied only when both dates are given |
+| `resendConfirmationEmail` | mutation | owner or admin | `bookingPublicIdSchema` | Re-send the confirmation email; `BAD_REQUEST` unless confirmed, `BAD_GATEWAY` if Resend fails |
+| `adminListBookings` | query | admin | `{ limit 1-100 (10), offset, status?, paymentStatus?, roomId? (idSchema), startDate?, endDate? (isoDateSchema) }` | All bookings with room and guest (id, email, name). `startDate` / `endDate` bound the check-in date and work alone or together |
 | `adminUpdateInternalNotes` | mutation | admin | `{ bookingId, internalNotes (max 5000) }` | Set a booking's internal notes |
 | `adminGetMonthlyStats` | query | admin | `{ months 1-24 (12), status: 'confirmed' \| 'all' }` | Booking count and revenue per check-in month |
 
@@ -179,19 +201,19 @@ returned only here. See `ICAL_SYNC_README.md`.
 | Procedure | Type | Access | Input | Purpose |
 |---|---|---|---|---|
 | `listFeeds` | query | admin | `roomIdSchema` | A room's import feeds (including `url`), sync state and stored event count |
-| `createFeed` | mutation | admin | `createIcalFeedSchema` (`roomId`, `source`, `label?`, http(s) `url`, `isActive`) | Add a feed. `CONFLICT` on duplicate URL for the room |
+| `createFeed` | mutation | admin | `createIcalFeedSchema` (`roomId`, `source`, `label?`, public https `url`, `isActive`) | Add a feed. `CONFLICT` on duplicate URL for the room |
 | `updateFeed` | mutation | admin | `updateIcalFeedSchema` (`id` + optional fields) | Update a feed; a new URL resets etag, last-modified, counts and error |
 | `deleteFeed` | mutation | admin | `{ id }` | Delete a feed and its imported events |
-| `testUrl` | mutation | admin | `testIcalUrlSchema` (`url`) | Fetch a URL (10 s timeout) and report whether it is an iCal feed and its event counts |
+| `testUrl` | mutation | admin, rate-limited | `testIcalUrlSchema` (`url`) | Fetch a URL with the sync's rules (`src/lib/ical-fetch.ts`: https only, no IP literals or localhost, also after redirects; 10 s timeout; 5 MB cap) and report whether it is an iCal feed and its event counts |
 | `syncRoom` | mutation | admin | `roomIdSchema` + `force` (default `false`) | "Sync now" for all of a room's feeds (`syncRoomFeeds`) |
-| `syncFeed` | mutation | admin | `{ id, force (false) }` | Sync one feed (`syncFeed`) |
-| `getSyncLogs` | query | admin | `{ roomId?, feedId?, limit 1-100 (20) }` | Sync runs, newest first, with feed label |
+| `getSyncLogs` | query | admin | `{ roomId?, feedId? (idSchema), limit 1-100 (20) }` | Sync runs, newest first, with feed label |
 | `getSyncChanges` | query | admin | `{ syncLogId }` | What one run changed, with the overlapping booking's `publicId` / `confirmationId` |
 | `getExportUrl` | query | admin | `roomIdSchema` | `BETTER_AUTH_URL` + `/api/ical/<publicId>/<token>.ics` |
 | `regenerateExportToken` | mutation | admin | `roomIdSchema` | New export token; returns the new URL (the old one stops working) |
 
 `roomIdSchema`, `createIcalFeedSchema`, `updateIcalFeedSchema` and
-`testIcalUrlSchema` are in `src/lib/room-validation.ts`.
+`testIcalUrlSchema` are in `src/lib/room-validation.ts`. Feed URLs must pass
+`isSafeFeedUrl` (`src/lib/ical-fetch.ts`).
 
 ### `policies` (`src/integrations/trpc/policies.ts`)
 
@@ -206,8 +228,8 @@ returned only here. See `ICAL_SYNC_README.md`.
 | Procedure | Type | Access | Input | Purpose |
 |---|---|---|---|---|
 | `adminListGuests` | query | admin | `{ limit 1-100 (50), offset }` | Users with role `user`, with non-pending booking count, `total`, `hasMore` |
-| `adminGetGuestDetails` | query | admin | `{ publicId }` (`publicIdSchema`) | A user's row and their non-pending bookings |
-| `updatePhoneNumber` | mutation | user | `{ phoneNumber (min 10) }` | Set the caller's phone number |
+| `adminGetGuestDetails` | query | admin | `{ publicId }` (`publicIdSchema`) | The guest's profile (explicit columns: `publicId`, name, email, `emailVerified`, phone, role, `stripeCustomerId`, `createdAt`; no ban fields or internal id) and their non-pending bookings |
+| `updatePhoneNumber` | mutation | user | `{ phoneNumber (10-20) }` | Set the caller's phone number. `CONFLICT` if taken (merged into `updateProfile` in plan 02 Phase 2) |
 | `updateProfile` | mutation | user | `{ name? (1-100), phoneNumber? (10-20) }` | Update the caller's name and phone. `CONFLICT` if the phone is taken. Email changes go through Better Auth's `changeEmail` |
 
 ## Security model
@@ -220,14 +242,27 @@ returned only here. See `ICAL_SYNC_README.md`.
   `ctx.user.id`; no input field selects the acting user.
 - **Ownership:** `findAccessibleBooking` (`bookings.ts`) adds
   `bookings.userId = ctx.user.id` unless `allowAdmin` is set and the caller is
-  an admin. A booking that exists but is not the caller's is `NOT_FOUND`.
-  `cancelBooking`, `createPaymentIntent`, `refreshBooking` and `confirmPayment`
-  are owner-only even for admins; admins cancel with `adminCancelBooking`.
-- **Admin role:** `adminProcedure` checks `ctx.user.role === 'admin'` (Better
-  Auth `admin` plugin). The session comes from `getSession` with the cookie
-  cache, so a role change can take up to the cache age (5 minutes) to apply to
-  tRPC calls. The admin layout re-checks with `freshSessionQueryOptions`
-  (`src/lib/session.ts`), which bypasses the cache.
+  an admin in D1 (`isActiveAdmin`; only checked when the session claims the
+  admin role). A booking that exists but is not the caller's is `NOT_FOUND`.
+  `getBooking`, `cancelBooking`, `createPaymentIntent`, `refreshBooking` and
+  `confirmPayment` are owner-only even for admins; admins use
+  `adminGetBooking` and `adminCancelBooking`.
+- **Admin role and bans:** the session comes from `getSession` with Better
+  Auth's 5-minute cookie cache. `adminProcedure` therefore re-reads role and
+  ban status from D1 on every call, so revoking a role or banning an admin
+  applies to the next call. `protectedProcedure` rejects a banned session user
+  (Better Auth also deletes a banned user's sessions).
+- **Browser side:** the QueryClient's query and mutation caches
+  (`src/router.tsx`, `createAuthErrorHandler` in `src/lib/session.ts`) refresh
+  the session and re-run the route guards when a call fails with
+  `UNAUTHORIZED` or `FORBIDDEN` (at most every 10 s). The admin layout reads a
+  database-fresh session (`freshSessionQueryOptions`) on each SSR load and at
+  most every 30 minutes during client navigation.
+- **Guest responses** select explicit guest columns (`GUEST_BOOKING_FIELDS`);
+  never the full row or payment transaction.
+- **Rate limits:** see `rateLimit` above, and Better Auth's D1-backed limits
+  plus the `AUTH_RATE_LIMITER` binding in front of `/api/auth/*`
+  (`SECURE_AUTH_IMPLEMENTATION.md`).
 - **Public outputs must never contain** iCal feed URLs, the room
   `icalExportToken`, booking ids, booking `publicId`s or confirmation ids, or
   guest data (name, email, phone, special requests). Public procedures select
@@ -240,7 +275,8 @@ returned only here. See `ICAL_SYNC_README.md`.
 - **Validation:** every procedure that takes input validates it with Zod.
   Shared schemas live in `src/lib/payment-validation.ts`,
   `src/lib/room-validation.ts`, `src/lib/cancellation-policy.ts`;
-  `publicIdSchema` (`src/lib/ids.ts`, 16 chars `[0-9a-z]`) and `isoDateSchema`
+  `publicIdSchema` (`src/lib/ids.ts`, 16 chars `[0-9a-z]`), `idSchema`
+  (UUIDv7 primary keys in admin inputs) and `isoDateSchema`
   (`src/lib/date-range.ts`) are reused. Small inputs are inline.
 - **Errors:** unexpected errors are hidden from clients by `errorFormatter` and
   logged by the handler's `onError`. Do not log input, payment payloads or
@@ -255,7 +291,8 @@ returned only here. See `ICAL_SYNC_README.md`.
 
 | Route | File | Methods | What |
 |---|---|---|---|
-| `/api/auth/*` | `src/routes/api/auth.$.ts` | GET, POST, PUT, DELETE, PATCH, OPTIONS | Better Auth handler (`src/lib/auth.ts`): email/password, magic link, phone number, admin, Stripe customer plugin (its own webhook under `/api/auth`, `STRIPE_BETTER_AUTH_WEBHOOK_SECRET`), Turnstile `captcha` on sign-in, sign-up, magic link and password reset. Returns `500 Auth error` if the handler throws |
+| `/api/auth/*` | `src/routes/api/auth.$.ts` | GET, POST, PUT, DELETE, PATCH, OPTIONS | Better Auth handler (`src/lib/auth.ts`): email/password, magic link, phone number, admin, Stripe customer plugin (its own webhook under `/api/auth`, `STRIPE_BETTER_AUTH_WEBHOOK_SECRET`), Turnstile `captcha` on sign-in, sign-up, magic link and password reset. Route middleware `rateLimitRequests('AUTH_RATE_LIMITER')` (30 per minute per IP; the Stripe webhook path is exempt), then Better Auth's own D1 limits; every 429 is logged as `rate-limited`. Returns `500 Auth error` if the handler throws |
+| `/api/csp-report` | `src/routes/api/csp-report.ts` | POST | CSP violation reports (`report-uri` and `report-to` formats), `handleCspReport` (`src/lib/csp-report.ts`). Logs one `csp-violation` line per report to Workers Logs (directive, blocked origin, document path, disposition); stores nothing. Rate-limited per IP (`CSP_REPORT_RATE_LIMITER`). 204, or 400/413/415 |
 | `/api/stripe/webhook` | `src/routes/api/stripe.$.ts` | POST | Booking webhook, `handleStripeWebhook` (`src/lib/stripe-webhook.ts`). Requires JSON and a `stripe-signature` verified with `STRIPE_TRPC_WEBHOOK_SECRET`. Handles `payment_intent.succeeded` (backup confirm), `payment_intent.payment_failed` (log), `charge.refunded` (payment status), `refund.failed` / failed `refund.updated` (admin alert). Other paths under `/api/stripe` are 404 |
 | `/api/ical/<room publicId>/<token>.ics` | `src/routes/api/ical.$.ts` | GET | iCal export feed, `handleIcalExportRequest` (`src/lib/ical-export.ts`). Token compared in constant time; any mismatch is a plain 404. See `ICAL_SYNC_README.md` |
 | `/api/trpc/*` | `src/routes/api/trpc.$.ts` | GET, POST | tRPC |
@@ -263,6 +300,12 @@ returned only here. See `ICAL_SYNC_README.md`.
 The session for route guards comes from the `getSessionFn` server function
 (`src/core/functions/auth-server.ts`), not from tRPC. It returns a reduced
 `SessionUser` (no token, IP or user agent).
+
+Every response also passes the global request middleware in `src/start.tsx`:
+security headers (`src/lib/security-headers.ts`: `X-Content-Type-Options`,
+`Referrer-Policy`, `X-Frame-Options`, and on non-`/api/` responses a
+`Content-Security-Policy-Report-Only` with `Reporting-Endpoints`) and Start's
+CSRF check for server functions.
 
 ## Calling procedures from the client
 
@@ -320,8 +363,8 @@ function BookingDetailPage() {
 ## Adding a procedure
 
 1. Put the input schema in the matching `src/lib/*-validation.ts` (or inline if
-   it is small and used once). Use `publicIdSchema` / `isoDateSchema` for ids
-   and dates.
+   it is small and used once). Use `publicIdSchema` / `idSchema` /
+   `isoDateSchema` for ids and dates.
 2. Add the procedure to the router file with the narrowest builder:
    `adminProcedure` for admin data, `protectedProcedure` plus an ownership
    check (`findAccessibleBooking` for bookings) for user data,
@@ -329,8 +372,10 @@ function BookingDetailPage() {
 3. Put business logic in a `src/lib` service that takes `ServiceDeps` (pass
    `ctx`), so the webhook, cron and tests can share it.
 4. Throw `TRPCError` with the codes above; put structured details in
-   `cause: { conflict }` or `cause: { conflicts }`. For public procedures,
-   select explicit columns.
+   `cause: { conflict }` or `cause: { conflicts }`. Select explicit columns
+   for public and guest responses. Let unexpected errors propagate (no
+   try/catch that logs and rethrows). Add `.use(rateLimit(...))` to public or
+   expensive procedures.
 5. A new router goes into `trpcRouter` in `src/integrations/trpc/router.ts`.
 6. Tests: public procedures go into `PUBLIC` in
    `test/workers/trpc-authz.test.ts` and get a case in
@@ -343,15 +388,21 @@ function BookingDetailPage() {
 ## Tests
 
 Worker tests (`pnpm test:workers`) call procedures through
-`trpcRouter.createCaller(makeCtx(role))` (`test/workers/helpers.ts`; roles
-`admin`, `user`, `other`, `null`), using `createInnerTRPCContext` with a
-synthetic session.
+`trpcRouter.createCaller(makeCtx(role, overrides?))` (`test/workers/helpers.ts`;
+roles `admin`, `user`, `other`, `null`; `overrides` sets a stale `role` or a
+`banned`/`banExpires` on the session user), using `createInnerTRPCContext` with
+a synthetic session.
 
 | Test | Covers |
 |---|---|
 | `test/workers/trpc-authz.test.ts` | Sweeps every procedure: anything not in `PUBLIC` rejects anonymous callers with `UNAUTHORIZED`; anything not in `PUBLIC` or `USER` rejects normal users with `FORBIDDEN`; removed procedures stay removed |
-| `test/workers/trpc-public-leaks.test.ts` | Public outputs (`rooms.list`, `rooms.get`, `rooms.calculatePricing`, `availability.getBySlug`, `policies.getCancellationPolicy`) contain no feed URL, export token, guest data or booking ids |
-| `test/workers/bookings.test.ts` | Date overlap, pending holds, pricing, ownership (`NOT_FOUND` for other users), cancellation |
+| `test/workers/trpc-public-leaks.test.ts` | Public outputs (`rooms.list`, `rooms.get`, `rooms.calculatePricing`, `bookings.calculateBooking`, `availability.getBySlug`, `policies.getCancellationPolicy`) contain no feed URL, export token, guest data or booking ids |
+| `test/workers/access-freshness.test.ts` | `adminProcedure` reads role/ban from D1 (stale admin session, revoked role, banned admin); `protectedProcedure` rejects banned users |
+| `test/workers/bookings.test.ts` | Date overlap, pending holds, pricing, ownership (`NOT_FOUND` for other users), guest response shape, `adminGetBooking`, resend by `publicId`, cancellation |
+| `test/workers/rooms-visibility.test.ts` | Public `list`/`get` return active rooms only; `adminList`/`adminGet` return every status |
+| `test/workers/admin-inputs.test.ts`, `users.test.ts` | Admin input validation (ids, dates, single date bound); guest details columns; phone `CONFLICT` |
+| `test/workers/ical-test-url.test.ts` | `testUrl` / feed URL rules (https, no IP or localhost, redirects, size cap) |
+| `test/workers/rate-limit.test.ts`, `auth-rate-limit.test.ts`, `csp-report.test.ts` | Rate limiting bindings and the `rateLimit` middleware, Better Auth's D1 limits, the CSP report endpoint |
 | `test/workers/confirm-payment.test.ts` | `confirmPayment` verification, taken-dates refund, idempotency |
 | `test/workers/blocks.test.ts`, `pricing-rules.test.ts`, `rooms-max-guests.test.ts` | Block conflicts, pricing rule overlap and per-night prices, guest limit |
 | `test/workers/ical-route.test.ts`, `ical-sync.test.ts` | Export feed access and contents, admin feed procedures, sync |

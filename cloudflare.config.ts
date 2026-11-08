@@ -57,6 +57,25 @@ export default defineConfig({
 			STRIPE_TRPC_WEBHOOK_SECRET: bindings.secret(),
 			RESEND_API_KEY: bindings.secret(),
 			TURNSTILE_SECRET_KEY: bindings.secret(),
+
+			// Rate Limiting (src/lib/rate-limit.ts). Approximate, per Cloudflare
+			// location; a first filter in front of Better Auth's strict D1 limits.
+			// `namespace` must be a positive integer unique within the Cloudflare
+			// account (bindings sharing one share counters): 20261-20263 are
+			// reserved for this Worker. `period` is 10 or 60 seconds.
+			// Keep the 60 s period in sync with RATE_LIMIT_PERIOD_SECONDS.
+			AUTH_RATE_LIMITER: bindings.rateLimit({
+				namespace: '20261',
+				simple: { limit: 30, period: 60 }, // /api/auth/*, per IP
+			}),
+			API_RATE_LIMITER: bindings.rateLimit({
+				namespace: '20262',
+				simple: { limit: 60, period: 60 }, // selected tRPC procedures, per user or IP
+			}),
+			CSP_REPORT_RATE_LIMITER: bindings.rateLimit({
+				namespace: '20263',
+				simple: { limit: 30, period: 60 }, // /api/csp-report, per IP
+			}),
 		},
 	},
 });

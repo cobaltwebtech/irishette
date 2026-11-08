@@ -9,7 +9,6 @@ import {
 	useRouterState,
 } from '@tanstack/react-router';
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
-import type { TRPCClient } from '@trpc/client';
 import type { TRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import { ReactLenis } from 'lenis/react';
 import type * as React from 'react';
@@ -30,7 +29,6 @@ import appCss from '@/styles/styles.css?url';
 interface RouterContext {
 	queryClient: QueryClient;
 	trpc: TRPCOptionsProxy<TRPCRouter>;
-	trpcClient: TRPCClient<TRPCRouter>;
 }
 
 export const Route = createRootRouteWithContext<RouterContext>()({

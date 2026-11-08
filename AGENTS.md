@@ -15,7 +15,7 @@ Irishette is a room-booking site (rooms, availability, bookings, payments, admin
 | Auth | Better Auth + `@better-auth/stripe` + Drizzle adapter (`src/lib/auth.ts`) |
 | Payments | Stripe PaymentIntents + Payment Element (`src/lib/booking-service.ts`; webhook handler `src/lib/stripe-webhook.ts`, mounted at `src/routes/api/stripe.$.ts`) |
 | Database | Cloudflare D1 (binding `DB`) via Drizzle ORM (SQLite dialect) |
-| Other bindings | None besides text/secret bindings; cron triggers (see `cloudflare.config.ts`). The old `KV_ICAL_SYNC_LOG` KV binding is gone (sync history is in D1). |
+| Other bindings | Rate Limiting bindings `AUTH_RATE_LIMITER`, `API_RATE_LIMITER`, `CSP_REPORT_RATE_LIMITER` (`src/lib/rate-limit.ts`); cron triggers (see `cloudflare.config.ts`). No KV (the old `KV_ICAL_SYNC_LOG` is gone; sync history is in D1). |
 | Email | Resend + react-email templates in `src/components/email/`; every send (booking, admin alerts, Better Auth) goes through `src/lib/email-service.ts` |
 | Bot protection | Cloudflare Turnstile |
 | Env / secrets | **Varlock** (`.env.schema` contract, generated `varlock.d.ts`, local encryption). Cloudflare config via `cf` + `cloudflare.config.ts`; no Wrangler config, no Varlock Cloudflare/Vite integrations (see [Secrets and environment](#secrets-and-environment-varlock)) |
@@ -107,11 +107,12 @@ Config is the `fmt` and `lint` blocks in `vite.config.ts`. Oxfmt is scoped to co
 
 ```
 src/server.ts            Custom Worker entry: fetch -> TanStack Start handler; scheduled -> handleScheduledEvent. DO NOT DELETE.
-src/start.tsx, router.tsx  TanStack Start / Router setup; router.tsx creates a QueryClient and tRPC client PER REQUEST (SSR uses a local in-process link, no HTTP)
+src/start.tsx, router.tsx  TanStack Start / Router setup. start.tsx: global request middleware (security headers + report-only CSP, CSRF for server functions). router.tsx creates a QueryClient and tRPC client PER REQUEST (SSR uses a local in-process link, no HTTP) and refreshes the session on tRPC UNAUTHORIZED/FORBIDDEN
 src/routes/              File-based routes: _authed.tsx (signed-in layout) -> _authed/account/, _authed/booking/, _authed/_admin.tsx -> _authed/_admin/admin/; public auth/, booking/, rooms/; api/
-src/routes/api/          Server routes: auth.$ (Better Auth), trpc.$ (tRPC), stripe.$ (webhook), ical.$ (iCal export feed)
+src/routes/api/          Server routes: auth.$ (Better Auth, rate-limited), trpc.$ (tRPC), stripe.$ (webhook), ical.$ (iCal export feed), csp-report (CSP violation reports -> Workers Logs)
 src/integrations/trpc/   init.ts (public/protected/admin procedures, errorFormatter), context.ts + inner-context.ts (per-request context), router.ts, routers: bookings, rooms, availability, ical, policies, users
 src/core/functions/      TanStack Start server functions (auth-server.ts: getSessionFn)
+src/core/middleware/     TanStack Start middleware: security-headers (global), rate-limit (server routes)
 src/lib/                 Services and validation: auth, auth-client, session (useSession), booking-service, availability, pricing, date-range, cancellation-policy, email-service, stripe(-webhook), ical-sync/-parse/-generate/-export, scheduled-tasks, deps (ServiceDeps), ids, site (domain, contact details, email senders, check-in/out times), *-validation (Zod)
 src/db/                  Drizzle schemas (auth-, booking-, room-, policy-), schema-export.ts, drizzle-init.ts (createDrizzle, Database type)
 src/components/          UI (ui/ = shadcn, admin/, booking/, email/, data-table/)
@@ -126,7 +127,7 @@ db-copy/                 Local DB dumps (gitignored; never commit or edit)
 Conventions:
 - Site constants (domain, contact email/phone, Resend senders, `CHECK_IN_TIME`/`CHECK_OUT_TIME`, display helpers) live in `src/lib/site.ts`. Do not hardcode them elsewhere (the legal pages are the one exception). Email templates (`src/components/email/`, a Fallow zone that imports only `email`) get them as props from `email-service.ts`. The domain, senders and phone change at go-live.
 - Server-only env access uses `import { env } from 'cloudflare:workers'` (see `src/lib/auth.ts`). Do not use `process.env` for Worker secrets, and never import server-only modules into client code.
-- tRPC: use `publicProcedure` / `protectedProcedure` / `adminProcedure` from `src/integrations/trpc/init.ts` (admin checks are server-side, in `adminProcedure`); validate every input with Zod (schemas live in `src/lib/*-validation.ts`); register new routers in `src/integrations/trpc/router.ts`. Public procedures must never return feed URLs, internal booking ids or guest data.
+- tRPC: use `publicProcedure` / `protectedProcedure` / `adminProcedure` from `src/integrations/trpc/init.ts` (admin checks are server-side, in `adminProcedure`); validate every input with Zod (schemas live in `src/lib/*-validation.ts`); register new routers in `src/integrations/trpc/router.ts`. Public procedures must never return feed URLs, internal booking ids or guest data. Guest procedures select explicit columns (`GUEST_BOOKING_FIELDS` in `bookings.ts`), never the full row; admin pages use `admin*` procedures (`bookings.adminGetBooking`, `rooms.adminList`/`adminGet`). Public room lookups return active rooms only. Let unexpected errors propagate (the handler's `onError` logs them once). Add `.use(rateLimit('API_RATE_LIMITER', '<router.proc>'))` to public or expensive procedures.
 - Server services take `ServiceDeps` (`src/lib/deps.ts`: `db`, `env`, `stripe`, `waitUntil`). The tRPC context satisfies it (one Drizzle and one Stripe client per request); webhook and cron handlers build one with `createServiceDeps`. Do not create extra Drizzle/Stripe clients in procedures.
 - Client data fetching uses `@trpc/tanstack-react-query` (`useTRPC()` + `queryOptions`/`mutationOptions`) + TanStack Query; prefer route loaders / `ensureQueryData` for SSR. Never share a QueryClient across requests.
 - Do not call Stripe, D1, or Better Auth server APIs from components; go through tRPC procedures, server functions, or `src/lib` services.
@@ -141,7 +142,8 @@ Conventions:
 
 - Session state comes from the server function `getSessionFn` (`src/core/functions/auth-server.ts`) through TanStack Query: `sessionQueryOptions` / `useSession()` / `refreshSession()` / `clearSession()` in `src/lib/session.ts`. The root route preloads it during SSR.
 - Only the `SessionUser` shape leaves the server. Never put the session token, IP or user agent into route context, loader data or query data (it is dehydrated into the HTML).
-- Protected pages live under the pathless layouts `src/routes/_authed.tsx` (signed in) and `src/routes/_authed/_admin.tsx` (admin; uses `freshSessionQueryOptions`). Put new protected routes under them instead of adding per-route guards.
+- Protected pages live under the pathless layouts `src/routes/_authed.tsx` (signed in) and `src/routes/_authed/_admin.tsx` (admin; uses `freshSessionQueryOptions`: a database-fresh session on every SSR load, cached 30 minutes in the browser). Put new protected routes under them instead of adding per-route guards.
+- Server-side checks: `protectedProcedure` rejects banned users; `adminProcedure` re-reads role and ban from D1 on every call (`src/integrations/trpc/access.ts`). In the browser, a tRPC `UNAUTHORIZED`/`FORBIDDEN` refreshes the session and re-runs the guards (`createAuthErrorHandler`).
 - After sign-in, sign-out or a profile change, call `refreshSession` / `clearSession` so guards and loaders re-run.
 - Server functions: the installed TanStack Start (1.170) uses `createServerFn({ method }).validator(zodSchema).handler(...)`. Check the Start skill before assuming another name (`inputValidator` appears in some docs).
 
@@ -336,7 +338,7 @@ Tuned in Phase 8 of the 2026-11 upgrade plan. Framework entry points (TanStack S
   | `ui` | `src/components/ui/**` | `ui`, `shared` |
   | `email` | `src/components/email/**` | `email` |
   | `client` | other `src/components/**`, `src/stores/**` | `ui`, `client`, `shared`; `server` type-only |
-  | `server` | server-only services in `src/lib/` (auth, booking-service, availability, deps, email-service, stripe, stripe-webhook, ical-sync, ical-export, scheduled-tasks, admin-query, cancellation-policy-store), `src/db/**`, `src/server.ts`, tRPC init/context/routers | anything |
+  | `server` | server-only services in `src/lib/` (auth, booking-service, availability, deps, email-service, stripe, stripe-webhook, ical-sync, ical-export, scheduled-tasks, admin-query, cancellation-policy-store, rate-limit), `src/db/**`, `src/server.ts`, tRPC init/access/context/routers | anything |
   | `shared` | the rest of `src/lib/**`, `src/utils/**`, tRPC `react`/`types`/`errors`/`batching` | `shared`; `server` type-only |
 
   Routes and `src/core/` are unzoned. When you add a server-only module to `src/lib/`, add it to the `server` zone. If client code needs a constant that lives in a server file (e.g. a Drizzle schema), move it into a shared module (see `src/lib/ical-feed-sources.ts`) instead of suppressing the violation.

@@ -192,6 +192,26 @@ Add a TanStack Start global request middleware (`createStart(() => ({ requestMid
 
 Skip it for `/api/ical/*` and `/api/stripe/*` if the headers get in the way. Violations show in the browser console. **Proposed:** also add a small `report-to`/`report-uri` endpoint that logs violation summaries without user data, so testing shows what would break. Enforce the CSP only after the user has tested the booking, payment (including Link), auth and admin flows. That switch is a separate, later change; note it under "After the plan".
 
+### 1.6 Phase 1 decisions (2026-11-08, after the Phase 0 review; these override 1.1–1.5 where they differ)
+
+- **Admin check (1.2):** `adminProcedure` reads `role` and `banned` from D1 for `ctx.user.id` on every admin call (one lookup by primary key) and throws `FORBIDDEN` unless the user is an unbanned admin. `protectedProcedure` rejects banned users using the session's `banned` field (no extra query).
+- **Admin guard in the browser (overrides 2.4's fresh-key idea):** the admin layout uses the cached session with `staleTime` 30 minutes instead of re-reading a fresh session about every 5 s. When a tRPC call returns `FORBIDDEN`/`UNAUTHORIZED`, the client refreshes the session (`refreshSession`) and redirects. The server check above is the real enforcement.
+- **Guest booking responses (1.1, verified):**
+  - `getBooking`/`getMyBookings` return guest columns only, without `paymentDetails` (unused everywhere) or the internal `id`.
+  - The admin booking page moves to a new `bookings.adminGetBooking` (adminProcedure: full row plus user).
+  - `resendConfirmationEmail` takes `publicId` instead of the internal id.
+  - The internal id that `createBooking` returns to the payment flow is handled in Phase 3.
+- **Rooms (1.3, verified):** the admin sidebar, the property list and the room editor use the public `rooms.list`/`rooms.get` and need every status. Add `rooms.adminList`/`rooms.adminGet` (admin), switch those callers to them, then make the public `list`/`get` return active rooms only.
+- **`ical.syncFeed` (1.3):** remove the tRPC procedure (no callers). Keep `syncFeed()` in `ical-sync.ts` (`syncRoomFeeds` uses it) and add the path to the `REMOVED` list in `trpc-authz.test.ts`.
+- **Rate limiting (1.4):**
+  - Better Auth `rateLimit.storage: 'database'` with `customRules`. Strict and atomic in D1. It deletes its own expired rows, so no cron is needed (B1 answered).
+  - The table is `rateLimit` (`key` unique, `count`, `lastRequest` bigint epoch ms; `@better-auth/core` `get-tables`). Add it to `auth-schema.ts` and regenerate the baseline.
+  - Also add a Cloudflare Rate Limiting binding middleware (`bindings.rateLimit({ namespace, simple: { limit, period: 10 | 60 } })` in `cloudflare.config.ts`). It covers `/api/auth/*`, public or expensive tRPC mutations (`bookings.calculateBooking`, admin `ical.testUrl`, and `contact.submit` in Phase 4) and `/api/csp-report`. Key by IP when signed out and by user id when signed in. Return 429 with `Retry-After`.
+  - Every 429 (middleware or Better Auth) logs one structured JSON line to Workers Logs (`message: 'rate-limited'`, limiter, path, a hashed IP; never the raw IP).
+  - **No KV:** 1 write per key per second, eventually consistent, no atomic increment. No Analytics Engine for now.
+  - Declare the binding in `vitest.config.ts` too, with test values.
+- **CSP reports (1.5, B6):** `/api/csp-report` accepts `application/csp-report` and `application/reports+json`. It logs a cleaned, structured `console.warn` (`message: 'csp-violation'`, directive, blocked origin, document path with no query string, disposition) to Workers Logs, is rate-limited, and stores nothing. Send both `report-uri` and `report-to`/`Reporting-Endpoints`. Query the reports in the Observability Query Builder.
+
 **Docs:** `TRPC_QUICK_REFERENCE.md`, `SECURE_AUTH_IMPLEMENTATION.md`.
 **Gate, then commit:** "fix: guest data exposure, fresh admin checks, procedure validation".
 
@@ -809,9 +829,10 @@ Resolved on 2026-11-07 (kept for the record):
 - Better Auth `rateLimit.storage: 'database'` and magic-link `name` (verified)
 - TanStack Start `createStart({ requestMiddleware, functionMiddleware })` (verified)
 
+Resolved on 2026-11-08 (see 1.6): the admin check (D1 read for each admin call; browser cache 30 min), guest booking fields, admin room procedures, removing `ical.syncFeed`, rate limiting (D1 for Better Auth + Cloudflare binding middleware + Workers Logs; no KV), the `rateLimit` table columns and its self-cleanup (B1, part), and CSP reports to Workers Logs (B6).
+
 Still open:
 - B1. Better Auth 1.7.18:
-  - the exact `rateLimit` table columns (generate them; 1.4) and whether old rows are cleaned up
   - `additionalFields.phoneNumber` with `input: true` vs tRPC-only updates (2.1)
   - the captcha endpoint path for send-verification (2.3)
 - B3. Holds created before the 9:00 AM same-day cutoff can still be paid until they expire (3.9).
@@ -819,4 +840,4 @@ Still open:
 - B7. Admin cancel during an open dispute defaults to no refund and needs explicit confirmation to refund (3.4b; confirm with the user).
 - B8. Mirror the existing admin alert emails (iCal sync failures, auto refunds, refund failures) into the inbox as new kinds (Proposed for a later phase; emails stay).
 - B5. `HOLD_MINUTES` 30 → 35 to fit the Stripe session minimum (3.1).
-- B6. A CSP violation report endpoint during the report-only period (1.5).
+- ~~B9. Rate-limit namespace ids~~ Resolved in Phase 1: `20261` (auth), `20262` (API), `20263` (CSP reports), noted in `cloudflare.config.ts`. Check they are unused in the Cloudflare account before the first deploy.

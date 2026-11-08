@@ -104,7 +104,7 @@ function BookingDetailPage() {
 
 	// Handle resending confirmation email
 	const handleResendEmail = () => {
-		resendEmail.mutate({ bookingId: booking.booking.id });
+		resendEmail.mutate({ publicId: booking.booking.publicId });
 	};
 
 	// Final safety check - should not be needed but prevents runtime errors

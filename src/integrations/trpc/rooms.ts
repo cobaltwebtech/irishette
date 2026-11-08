@@ -1,14 +1,27 @@
 import { TRPCError } from '@trpc/server';
-import { and, asc, eq, gte, lte, ne, notExists, sql } from 'drizzle-orm';
+import {
+	and,
+	asc,
+	eq,
+	gte,
+	lte,
+	ne,
+	notExists,
+	type SQL,
+	sql,
+} from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
+import type { z } from 'zod';
 
 import type { Database } from '@/db/drizzle-init';
 import { room, roomBlockedPeriods, roomPricingRules } from '@/db/schema-export';
 import { findBlockConflicts } from '@/lib/availability';
 import { quoteStay } from '@/lib/booking-service';
 import { inclusiveRangesOverlap } from '@/lib/date-range';
+import { isUniqueViolation } from '@/lib/db-errors';
 import { newId } from '@/lib/ids';
 import {
+	adminGetRoomsSchema,
 	calculatePricingSchema,
 	createBlockedPeriodSchema,
 	createPricingRuleSchema,
@@ -25,7 +38,12 @@ import {
 } from '@/lib/room-validation';
 import { todayIn } from '@/lib/timezone';
 
-import { adminProcedure, createTRPCRouter, publicProcedure } from './init';
+import {
+	adminProcedure,
+	createTRPCRouter,
+	publicProcedure,
+	rateLimit,
+} from './init';
 
 /**
  * Room fields safe for anyone. Never the iCal export token; feed URLs live in
@@ -65,12 +83,6 @@ function rejectPastDate(date: string, label: string) {
 		});
 	}
 }
-
-const isUniqueViolation = (error: unknown) =>
-	error instanceof Error &&
-	/UNIQUE constraint failed/i.test(
-		`${error.message} ${(error.cause as Error | undefined)?.message ?? ''}`,
-	);
 
 // --- Pricing rules -----------------------------------------------------------
 
@@ -119,52 +131,90 @@ function overlapError(rule: Rule): TRPCError {
 
 const nowSeconds = (d: Date) => Math.floor(d.getTime() / 1000);
 
-export const roomsRouter = createTRPCRouter({
-	list: publicProcedure.input(getRoomsSchema).query(async ({ ctx, input }) => {
-		const where = input.status ? eq(room.status, input.status) : undefined;
-		const [rooms, [{ total }]] = await Promise.all([
-			ctx.db
-				.select(publicRoomColumns)
-				.from(room)
-				.where(where)
-				.orderBy(asc(room.name))
-				.limit(input.limit)
-				.offset(input.offset),
-			ctx.db
-				.select({ total: sql<number>`count(*)` })
-				.from(room)
-				.where(where),
-		]);
-		return {
-			rooms,
-			pagination: {
-				total,
-				limit: input.limit,
-				offset: input.offset,
-				hasMore: input.offset + input.limit < total,
-			},
-		};
-	}),
-
-	get: publicProcedure.input(getRoomSchema).query(async ({ ctx, input }) => {
-		const [result] = await ctx.db
+/** Rooms page by page, with the total, for `where`. */
+async function listRooms(
+	db: Database,
+	where: SQL | undefined,
+	page: { limit: number; offset: number },
+) {
+	const [rooms, [{ total }]] = await Promise.all([
+		db
 			.select(publicRoomColumns)
 			.from(room)
-			.where(
-				'publicId' in input
-					? eq(room.publicId, input.publicId)
-					: 'slug' in input
-						? eq(room.slug, input.slug)
-						: eq(room.id, input.id),
-			);
-		if (!result) {
-			throw new TRPCError({ code: 'NOT_FOUND', message: 'Room not found' });
-		}
-		return result;
-	}),
+			.where(where)
+			.orderBy(asc(room.name))
+			.limit(page.limit)
+			.offset(page.offset),
+		db
+			.select({ total: sql<number>`count(*)` })
+			.from(room)
+			.where(where),
+	]);
+	return {
+		rooms,
+		pagination: {
+			total,
+			limit: page.limit,
+			offset: page.offset,
+			hasMore: page.offset + page.limit < total,
+		},
+	};
+}
+
+/** One room by internal id, publicId or slug, optionally within `scope`. */
+async function findRoom(
+	db: Database,
+	input: z.infer<typeof getRoomSchema>,
+	scope?: SQL,
+) {
+	const key =
+		'publicId' in input
+			? eq(room.publicId, input.publicId)
+			: 'slug' in input
+				? eq(room.slug, input.slug)
+				: eq(room.id, input.id);
+	const [result] = await db
+		.select(publicRoomColumns)
+		.from(room)
+		.where(scope ? and(key, scope) : key);
+	if (!result) {
+		throw new TRPCError({ code: 'NOT_FOUND', message: 'Room not found' });
+	}
+	return result;
+}
+
+const isActiveRoom = eq(room.status, 'active');
+
+export const roomsRouter = createTRPCRouter({
+	/** Bookable (active) rooms. Admin pages use `adminList`. */
+	list: publicProcedure
+		.input(getRoomsSchema)
+		.query(({ ctx, input }) => listRooms(ctx.db, isActiveRoom, input)),
+
+	/** A bookable (active) room; other statuses are NOT_FOUND. */
+	get: publicProcedure
+		.input(getRoomSchema)
+		.query(({ ctx, input }) => findRoom(ctx.db, input, isActiveRoom)),
+
+	/** Every room (any status), optionally filtered by status. */
+	adminList: adminProcedure
+		.input(adminGetRoomsSchema)
+		.query(({ ctx, input }) =>
+			listRooms(
+				ctx.db,
+				input.status ? eq(room.status, input.status) : undefined,
+				input,
+			),
+		),
+
+	/** Any room, whatever its status (room editor). */
+	adminGet: adminProcedure
+		.input(getRoomSchema)
+		.query(({ ctx, input }) => findRoom(ctx.db, input)),
 
 	/** Room price for a stay (calendar). Same calculation as checkout. */
 	calculatePricing: publicProcedure
+		.use(rateLimit('API_RATE_LIMITER', 'rooms.calculatePricing'))
 		.input(calculatePricingSchema)
 		.query(async ({ ctx, input }) => {
 			const price = await quoteStay(

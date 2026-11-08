@@ -53,7 +53,7 @@ export const Route = createFileRoute(
 	// Auth: the _admin layout. Rooms are preloaded for SSR.
 	loader: ({ context }) =>
 		context.queryClient.ensureQueryData(
-			context.trpc.rooms.list.queryOptions(ROOMS_INPUT),
+			context.trpc.rooms.adminList.queryOptions(ROOMS_INPUT),
 		),
 	component: PropertyManagement,
 });
@@ -61,7 +61,7 @@ export const Route = createFileRoute(
 // Types for room management
 type RoomStatus = 'active' | 'inactive' | 'archived';
 
-type RoomRow = RouterOutputs['rooms']['list']['rooms'][number];
+type RoomRow = RouterOutputs['rooms']['adminList']['rooms'][number];
 
 // Form types
 type RoomFormData = {
@@ -264,7 +264,7 @@ function PropertyManagement() {
 	const queryClient = useQueryClient();
 
 	const { data: roomsData } = useSuspenseQuery(
-		trpc.rooms.list.queryOptions(ROOMS_INPUT),
+		trpc.rooms.adminList.queryOptions(ROOMS_INPUT),
 	);
 
 	const rooms = roomsData.rooms;
@@ -272,6 +272,7 @@ function PropertyManagement() {
 	const createRoomMutation = useMutation(
 		trpc.rooms.create.mutationOptions({
 			onSuccess: () => {
+				void queryClient.invalidateQueries(trpc.rooms.adminList.pathFilter());
 				void queryClient.invalidateQueries(trpc.rooms.list.pathFilter());
 				setEditMode('none');
 			},

@@ -15,6 +15,7 @@ import { holdsDatesCondition } from './availability';
 import { stayOverlapsEvent } from './date-range';
 import type { ServiceDeps } from './deps';
 import { sendAdminAlert } from './email-service';
+import { fetchFeed, readFeedText } from './ical-fetch';
 import { type ImportedEvent, parseIcal } from './ical-parse';
 import { newId } from './ids';
 import { SITE_NAME, SITE_URL } from './site';
@@ -55,7 +56,6 @@ export interface SyncResult {
 type Feed = typeof icalFeeds.$inferSelect;
 
 const USER_AGENT = `${SITE_NAME} Calendar Sync/2.0 (+${SITE_URL})`;
-const DEFAULT_TIMEOUT_MS = 10_000;
 /** Feeds synced this recently are skipped by the pre-payment sync. */
 const CHECKOUT_FRESH_MS = 2 * 60_000;
 /** D1 allows 100 bound parameters per statement. */
@@ -150,10 +150,9 @@ export async function syncFeed(
 		const headers: Record<string, string> = { 'User-Agent': USER_AGENT };
 		if (feed.etag) headers['If-None-Match'] = feed.etag;
 		if (feed.lastModified) headers['If-Modified-Since'] = feed.lastModified;
-		response = await fetch(feed.url, {
+		response = await fetchFeed(feed.url, {
 			headers,
-			signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
-			redirect: 'follow',
+			timeoutMs: options.timeoutMs,
 		});
 	} catch (error) {
 		return recordFailure(
@@ -203,7 +202,7 @@ export async function syncFeed(
 	// 2. Parse and validate
 	let text: string;
 	try {
-		text = await response.text();
+		text = await readFeedText(response);
 	} catch (error) {
 		return recordFailure(
 			'error',

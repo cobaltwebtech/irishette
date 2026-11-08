@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { isoDateSchema } from '@/lib/date-range';
 import { icalFeedSources } from '@/lib/ical-feed-sources';
+import { isSafeFeedUrl } from '@/lib/ical-fetch';
 import { publicIdSchema } from '@/lib/ids';
 
 // Zod >= 4.6 throws on .omit()/.partial() of refined schemas, so derived
@@ -47,9 +48,14 @@ export const getRoomSchema = z.union([
 	z.object({ slug: z.string().min(1).max(100) }),
 ]);
 
+/** Public room list: active rooms only, so no status filter. */
 export const getRoomsSchema = z.object({
 	limit: z.number().min(1).max(100).default(10),
 	offset: z.number().min(0).default(0),
+});
+
+/** Admin room list: every status, optionally filtered. */
+export const adminGetRoomsSchema = getRoomsSchema.extend({
 	status: roomStatusSchema.optional(),
 });
 
@@ -161,9 +167,12 @@ export const calculatePricingSchema = z
 
 const icalFeedSourceSchema = z.enum(icalFeedSources);
 
+/** Public https URL with a host name (see isSafeFeedUrl). */
 const feedUrlSchema = z
-	.url({ protocol: /^https?$/, message: 'Enter an http(s) URL' })
-	.max(2000);
+	.string()
+	.trim()
+	.max(2000)
+	.refine(isSafeFeedUrl, 'Enter a public https URL');
 
 export const createIcalFeedSchema = z.object({
 	roomId: z.string().min(1),
