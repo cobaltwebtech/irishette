@@ -16,7 +16,7 @@ Read `AGENTS.md` first. All its rules apply (secrets, `--local`, no remote/deplo
 ## 0. Ground rules
 
 - **Branch:** `chore/cleanup-2026-11`, created from `updates` in Phase 0 (approved). Do not push or open a PR without asking.
-- **Execution order:** 0, 1, 2, **4, then 3**, 5, 6, 7. Phase 4 (contact form + admin inbox) runs before Phase 3 (payments), because the dispute notifications in 3.4b need the inbox. Section numbers are unchanged.
+- **Execution order:** 0, 1, 2, **4, then 3**, 5, 6, 7. Phase 4 (contact form + admin notification inbox) runs before Phase 3 (payments), because the dispute notifications in 3.4b need the inbox. Section numbers are unchanged.
 - **Commits:**
   - one commit per phase
   - Phase 3 (the largest) may commit in two gated parts: 3.1–3.4 (Checkout Sessions, webhooks, refund emails), then 3.5–3.9 (cancellation, statuses, booking fixes, check-in times). Implement 3.9 (the normalized `check_in_at` / `check_out_at`) first within that part, because 3.5 and 3.6 depend on it.
@@ -76,8 +76,8 @@ Read `AGENTS.md` first. All its rules apply (secrets, `--local`, no remote/deplo
 | Phone auth | **Remove the Better Auth `phoneNumber` plugin.** Keep the phone number as a plain, optional, unique profile field (`additionalFields`), and drop `phone_number_verified`. |
 | Primary sign-in | **Magic link first** on login and signup. Email + password stays as an option, along with password reset. |
 | Route guards | Add `src/lib/auth-check.ts` (`requireAuth`, `requireAdmin`, `optionalAuth`, `requireNoSession`), adapted from the user's airwartrail template to this app's per-request QueryClient and `getSessionFn`. Pathless layouts call it in `beforeLoad`. Add TanStack Start function middleware for protected server functions (see 2.4). |
-| Contact form | A public tRPC mutation with Zod + server-side Turnstile. Messages are stored in D1, and admins are notified with Resend. It has an optional booking confirmation ID field. |
-| Contact inbox | A **generic admin inbox** (contact messages and dispute notifications; other alert kinds can be added later). An admin route with a **server-paginated TanStack Table** and an efficient list query. Features: read/unread + archive with an unread badge, link to the booking (shown on the admin booking page), replies from the dashboard by email with a stored thread, and messages on the guest detail page. Admins can **delete** messages. Messages are **kept until an admin deletes them**. |
+| Contact form | **Revised 2026-11-08 (see 4.0):** a public TanStack Start server function with Zod + server-side Turnstile that only emails the admin (`CONTACT_EMAIL`, guest as reply-to). Nothing is stored. Optional booking confirmation ID field. Storing messages and dashboard replies are deferred (`deferred-email-messaging.md`). |
+| Admin inbox | **Revised 2026-11-08 (see 4.0):** an **internal notification inbox** for Stripe and system events only (disputes, refund problems, calendar sync problems, double bookings), tagged by `source`. An admin route with a **server-paginated TanStack Table** and an efficient list query. Read/unread + archive with a cached unread badge (5-minute poll), links to the booking and guest pages, per-booking and per-guest panels. Admins can **delete** items; items are **kept until deleted**. No guest messages (deferred). |
 | Branch | `chore/cleanup-2026-11` from `updates`. |
 
 ---
@@ -206,7 +206,7 @@ Skip it for `/api/ical/*` and `/api/stripe/*` if the headers get in the way. Vio
 - **Rate limiting (1.4):**
   - Better Auth `rateLimit.storage: 'database'` with `customRules`. Strict and atomic in D1. It deletes its own expired rows, so no cron is needed (B1 answered).
   - The table is `rateLimit` (`key` unique, `count`, `lastRequest` bigint epoch ms; `@better-auth/core` `get-tables`). Add it to `auth-schema.ts` and regenerate the baseline.
-  - Also add a Cloudflare Rate Limiting binding middleware (`bindings.rateLimit({ namespace, simple: { limit, period: 10 | 60 } })` in `cloudflare.config.ts`). It covers `/api/auth/*`, public or expensive tRPC mutations (`bookings.calculateBooking`, admin `ical.testUrl`, and `contact.submit` in Phase 4) and `/api/csp-report`. Key by IP when signed out and by user id when signed in. Return 429 with `Retry-After`.
+  - Also add a Cloudflare Rate Limiting binding middleware (`bindings.rateLimit({ namespace, simple: { limit, period: 10 | 60 } })` in `cloudflare.config.ts`). It covers `/api/auth/*`, public or expensive tRPC mutations (`bookings.calculateBooking`, admin `ical.testUrl`) and, in Phase 4, the contact server function (`contact.submit` scope) and `/api/csp-report`. Key by IP when signed out and by user id when signed in. Return 429 with `Retry-After`.
   - Every 429 (middleware or Better Auth) logs one structured JSON line to Workers Logs (`message: 'rate-limited'`, limiter, path, a hashed IP; never the raw IP).
   - **No KV:** 1 write per key per second, eventually consistent, no atomic increment. No Analytics Engine for now.
   - Declare the binding in `vitest.config.ts` too, with test values.
@@ -434,7 +434,7 @@ The Stripe docs recommend `refund.created` as the minimum. `charge.refunded` doe
   - `created_at`, `updated_at`
   - Indexes: `booking_id`, `user_id`, `(status, evidence_due_by)`.
 - **Linking:** take `dispute.payment_intent`, retrieve the PaymentIntent and read `metadata.bookingId` (decision). Fall back to `payment_transactions.stripe_charge_id` / `bookings.stripePaymentIntentId`, then set `user_id` from the booking. If nothing matches, still store the dispute and notify with "unlinked payment".
-- **Inbox:** a `dispute` item (Phase 4 inbox) with the title "Dispute: <confirmationId>, <amount>, <reason>, respond by <due date CT>". It links to the booking page and the Stripe Dashboard dispute URL. No email (decision).
+- **Inbox:** a `stripe` / `payment_dispute` item (Phase 4 inbox, `createInboxItem` with `dedupe_key` `dispute:<stripeDisputeId>` and the new `payment_dispute_id` column) with the title "Dispute: <confirmationId>, <amount>, <reason>, respond by <due date CT>". It links to the booking page and the Stripe Dashboard dispute URL. No email (decision).
 - **UI:**
   - The admin booking page and the admin guest page get a "Payment disputes" panel showing status, amount, reason, the due date (CT) and the outcome.
   - A badge on the booking in the admin lists while a dispute is open.
@@ -574,113 +574,102 @@ Decision: check-in is **4:00 PM (16:00) America/Chicago** for all logic.
 
 ---
 
-## Phase 4: Contact form and admin inbox (runs before Phase 3)
+## Phase 4: Contact form (email only) and admin notification inbox (runs before Phase 3)
 
-### 4.1 Schema (`src/db/contact-schema.ts` and `src/db/inbox-schema.ts`, registered in `schema-export.ts`, baseline regenerated)
+### 4.0 Phase 4 decisions (2026-11-08; these replace the earlier 4.1–4.4 draft)
 
-**`admin_inbox_items`** (one table for the list, so it stays a single indexed query):
+- **Scope cut:** storing contact messages, replying from the dashboard and two-way guest email are **deferred** to `.agents/plans/deferred-email-messaging.md` (the client has not asked for them). Phase 4 ships:
+  1. a contact form that only **emails the admin** (nothing stored), and
+  2. an **internal admin notification inbox** for Stripe and system events.
+- **Contact form:** a public TanStack Start **server function** (not a tRPC mutation) with a Zod `.validator()`. The handler verifies the Turnstile token with Siteverify, then sends one email to `CONTACT_EMAIL` (`src/lib/site.ts`) with the form data and `replyTo` set to the guest's address, so the admin answers from their own mail client. **No email to the guest.** No D1 row, no inbox item.
+- **Rate limit:** start loose: the existing `API_RATE_LIMITER` binding (30/60 s per IP) under the key scope `contact.submit`, via a new function-middleware variant. Tighten only if the "rate-limited" log lines show abuse.
+- **Inbox sources and tags:** every item has a `source` (`stripe` | `system`; `guest` is reserved for the deferred plan) and a `kind`. The UI filters by source, so admins can tell Stripe events from system notices.
+- **B8 (answered):** the four existing admin alert emails also create inbox items in Phase 4. The emails stay.
+- **Unread badge:** cached with TanStack Query (`inbox.adminUnreadCount`, `refetchInterval` 5 minutes, refetch on window focus). Opening an item runs `inbox.adminSetStatus` (read) with an optimistic update of the row and the badge, then invalidates the inbox queries (`pathFilter`) so the server value wins.
+- **Status is shared** between admins (at most two): one `status` per item, not per admin.
+- **Retention:** items are kept until an admin deletes them (no cron).
+
+### 4.1 Schema (`src/db/inbox-schema.ts`, registered in `schema-export.ts`, baseline regenerated)
+
+**`admin_inbox_items`** (one table, single indexed list query):
 - `id` (UUIDv7), `public_id` (nanoid)
-- `kind` (`contact_message` | `payment_dispute`; more later, e.g. `refund_failed`, `ical_conflict`)
-- `title`, `summary` (short, for the list)
+- `source` (`stripe` | `system`)
+- `kind`:
+  - Phase 4: `refund_auto` (dates taken, payment refunded), `refund_failed`, `ical_sync_failed`, `ical_conflict`
+  - Phase 3 adds `payment_dispute`
+- `title`, `summary` (short, for the list; no guest message bodies, no card data)
+- `details` (small JSON text: kind-specific fields such as amounts, Stripe ids, feed id, due dates; no secrets, no full webhook payloads)
 - `status` (`new` | `read` | `archived`), `read_at`, `archived_at`
 - `booking_id` (nullable FK, `SET NULL`), `user_id` (nullable FK, `SET NULL`)
-- `contact_message_id` (nullable FK, `CASCADE`), `payment_dispute_id` (nullable FK, `SET NULL`)
+- `dedupe_key` (nullable, unique): makes creation idempotent across webhook replays and cron retries, e.g. `refund_failed:<refundId>`, `ical_sync_failed:<feedId>:<YYYY-MM-DD>`; Phase 3 uses `dispute:<stripeDisputeId>`
 - `created_at`, `updated_at`
 
 Indexes:
 - `(status, created_at DESC, id)`
-- `(kind, status, created_at DESC)`
-- `(user_id, created_at DESC)`
+- `(source, status, created_at DESC)`
 - `(booking_id, created_at DESC)`
-- unique `(kind, payment_dispute_id)`, so the dispute webhook upsert is idempotent
+- `(user_id, created_at DESC)`
+- unique `(dedupe_key)`
 
-The read/archive status lives on the inbox item, not on `contact_messages`.
-
-**`contact_messages`:**
-- `id` (UUIDv7), `public_id` (nanoid)
-- `name`, `email`, `phone` (optional), `subject`, `message`
-- `confirmation_id` (optional, as entered)
-- `booking_id` (nullable FK, `ON DELETE SET NULL`), `user_id` (nullable FK, `ON DELETE SET NULL`)
-- `created_at`, `updated_at` (status lives on its inbox item)
-
-**`contact_message_replies`:**
-- `id`
-- `message_id` (FK, `ON DELETE CASCADE`)
-- `admin_user_id` (FK)
-- `body`
-- `resend_email_id`
-- `sent_at`, `created_at`
-
-Index on `(message_id, created_at)`.
-
-No IP or user agent is stored. Messages are kept until an admin deletes them (no retention cron). Deleting a contact inbox item deletes the message and its replies. Deleting a dispute inbox item removes only the notification; the `payment_disputes` record stays (financial record).
+Phase 3 adds `payment_dispute_id` (nullable FK to `payment_disputes`, `SET NULL`) when it creates that table. Deleting a dispute inbox item removes only the notification; the dispute record stays (financial record).
 
 ### 4.2 Server
 
-- **`src/lib/contact-validation.ts`:** Zod schemas for submit and for the admin inputs (list filters, cursor, reply body).
-- **`src/lib/turnstile.ts`** (add to the Fallow `server` zone): Siteverify with `TURNSTILE_SECRET_KEY`, `remoteip` from `cf-connecting-ip`, a timeout, and an `action`/`hostname` check.
-- **`src/integrations/trpc/contact.ts`:**
-  - **`contact.submit`** (public mutation):
-    1. Turnstile check.
-    2. Throttle per email address (**Proposed:** 5 per hour, counted in D1).
-    3. Link `user_id` (session user, or the user with the same email) and `booking_id` (by confirmation id).
-    4. Insert the message and its `contact_message` inbox item in one `db.batch`.
-    5. `inBackground` → `sendContactNotification` to the admins.
-
-    The response is `{ ok: true }` only. An unknown confirmation id is accepted silently (it isn't linked, and the response gives no hint).
-  - Admin procedures live in an **`inbox` router** (`src/integrations/trpc/inbox.ts`), not in `contact`, so new kinds need no new list API. `inbox.adminList` / `adminUnreadCount` / `adminGet` / `adminSetStatus` / `adminDelete` / `adminListForUser` / `adminListForBooking` take the item `publicId`. `adminGet` returns a kind-specific payload: the message with replies, or the dispute details. `contact.adminReply` stays in `contact`.
-  - **`inbox.adminList`:** server-side pagination for TanStack Table (also filters by `kind`).
-    - Input: `{ status?: 'new'|'read'|'archived'|'inbox', search?, pageSize (≤100), cursor? }`. `inbox` = new + read.
-    - Keyset pagination on `(created_at, id)`, which uses the index. **Proposed** over offset paging. If the table needs page numbers, return `totalCount` from a separate `COUNT(*)` that runs only on filter changes (TanStack Query caches it).
-    - Selects only list columns from `admin_inbox_items`, plus a left join for the booking confirmation id and the user name: publicId, kind, title, summary, status, createdAt. Reply counts come from a grouped subquery (not N+1).
-    - Search uses `LIKE` on title and summary (bounded; contact summaries include the sender name and email). Consider an FTS5 table later if volume grows.
-  - **`inbox.adminUnreadCount`:** `COUNT(*) WHERE status = 'new'` (uses the index).
-  - **`inbox.adminGet`:** the message, its replies, and the linked user and booking summaries.
-  - **`inbox.adminSetStatus`:** read / unread / archived / unarchived, with batch ids for bulk actions.
-  - **`inbox.adminDelete`:** batch; per-kind delete rules above.
-  - **`contact.adminReply`:** Resend with `replyTo` set to the admin inbox address, store the reply, mark the message read.
-  - **`inbox.adminListForUser`** and **`inbox.adminListForBooking`:** small, limited lists.
-- **`email-service.ts`:** `sendContactNotification` and `sendContactReply` (with `NotificationEmail`; idempotency key per reply id). Logs carry only the `publicId`.
-- Register the router, and update `trpc-authz.test.ts` and `trpc-public-leaks.test.ts`.
+- **`src/lib/inbox-service.ts`** (Fallow `server` zone): `createInboxItem(deps, item)`: insert, or on a `dedupe_key` conflict update the title, summary and details and set `status` back to `new` (a repeated problem resurfaces). Used by webhooks, cron handlers and later Phase 3. Never throws into the caller's main work: run it like the alert emails (`inBackground` / `waitUntil`), and log failures with the item's kind and dedupe key only.
+- **Mirror the existing alerts (B8)** next to each `sendAdminAlert` call:
+  - `src/lib/booking-service.ts`: automatic refund when the dates were taken → `system` / `refund_auto` (booking linked)
+  - `src/lib/stripe-webhook.ts`: `refund.failed` → `stripe` / `refund_failed` (booking linked when found)
+  - `src/lib/ical-sync.ts` `alertFeedProblem` → `system` / `ical_sync_failed`
+  - `src/lib/ical-sync.ts` `alertConflicts` → `system` / `ical_conflict` (bookings linked)
+- **`src/integrations/trpc/inbox.ts`** (all `adminProcedure`, inputs by item `publicId`):
+  - **`adminList`:** server-side pagination for TanStack Table. Input `{ status?: 'new'|'read'|'archived'|'inbox', source?, kind?, search?, pageSize (≤100), cursor? }` (`inbox` = new + read). Keyset pagination on `(created_at, id)` (**Proposed** over offset). If the table needs page numbers, a separate `COUNT(*)` runs only when filters change. Selects list columns only, plus a left join for the booking confirmation id and guest name. Search is a bounded `LIKE` on title and summary.
+  - **`adminUnreadCount`:** `COUNT(*) WHERE status = 'new'`.
+  - **`adminGet`:** the item, its parsed `details`, and linked booking/guest summaries.
+  - **`adminSetStatus`:** read / unread / archived / unarchived, batch ids.
+  - **`adminDelete`:** batch.
+  - **`adminListForBooking`**, **`adminListForUser`:** small limited lists for the admin booking and guest pages.
+  - Register the router; add every procedure to `trpc-authz.test.ts` (none are public).
+- **Contact form:**
+  - `src/lib/contact-validation.ts`: `contactSchema`: name (2–100), email, optional phone (`phoneNumberSchema`), subject (max 150, no line breaks), message (10–5000), optional booking confirmation id (format-checked only, never looked up), Turnstile token.
+  - `src/lib/turnstile.ts` (Fallow `server` zone): Siteverify with `TURNSTILE_SECRET_KEY`, `remoteip` from `cf-connecting-ip`, a timeout, fail closed. **Proposed:** also check `hostname` against the site host and an `action` of `contact` (set on the widget).
+  - `src/lib/contact-service.ts` (Fallow `server` zone): `submitContactForm(deps, input, ip)`: Turnstile, then `sendContactNotification`. Testable without Start.
+  - `src/core/functions/contact.ts`: `submitContactFn = createServerFn({ method: 'POST' }).middleware([rateLimitFnMiddleware('API_RATE_LIMITER', 'contact.submit')]).validator(contactSchema).handler(...)`. Public on purpose (no private data), so no session middleware; note this next to the AGENTS.md rule.
+  - `src/core/middleware/rate-limit.ts`: add `rateLimitFnMiddleware` (function middleware: 429 via `setResponseStatus`, keyed by IP, same log line as today).
+  - `email-service.ts`: `sendContactNotification` (subject "Contact form: <subject>", `NotificationEmail` with the fields, `replyTo` = guest email). Logs never include the message body or the guest's email.
+  - Response: `{ ok: true }` or a generic error with "email us directly at CONTACT_EMAIL". A failed Turnstile check returns a mapped message, like the auth forms.
 
 ### 4.3 Client
 
 - **`src/routes/contact.tsx`:**
-  - Form fields: name, email, phone (optional), subject, message, booking confirmation ID (optional, prefilled from `?booking=`).
-  - Turnstile (reset on error), prefilled for signed-in users, a success state.
-- **`_authed/_admin/admin/inbox/index.tsx`** (sidebar label "Inbox"):
-  - TanStack Table in manual mode (`manualPagination`, `manualFiltering`).
-  - Search params validated with Zod (`status`, `q`, `cursor`, `pageSize`) drive `useQuery(trpc.inbox.adminList.queryOptions(...))` with `placeholderData: keepPreviousData`, so pages switch without a flash.
-  - The route loader calls `ensureQueryData` for SSR, and the next page is prefetched.
-  - Row selection for bulk read/archive/delete, unread rows in bold, a status tab bar, a kind filter (Messages / Disputes) and a kind icon per row.
-  - Reuse `src/components/data-table/`.
-- **`inbox/$publicId.tsx`** renders by kind. Contact messages show:
-  - the message, linked guest and booking cards
-  - the reply thread and a reply form
-  - read/unread, archive and delete (with a confirmation dialog)
-- Disputes (after Phase 3) show the stored dispute details, booking and guest cards, and a "Respond in Stripe" link. No reply form.
-- **Unread badge:** `inbox.adminUnreadCount` in `AdminSidebar`/`AdminNavigation`, invalidated after actions (`pathFilter`). No polling.
-- **Admin booking page:** an "Inbox" panel (`inbox.adminListForBooking`).
-- **Admin guest page:** an "Inbox" panel (`inbox.adminListForUser`).
+  - Fields: name, email, phone (optional), subject, message, booking confirmation ID (optional, prefilled from `?booking=`; Phase 3's "Contact Support" link uses it).
+  - Prefilled name/email/phone for signed-in users.
+  - Reuse the auth form pieces: `TurnstileField` + `useTurnstile` (reset after every request), `AuthError`, and a `useAuthRequest`-style submit hook (generalize it if needed instead of copying). A success state ("Thanks, we'll reply by email").
+- **`_authed/_admin/admin/inbox/index.tsx`** (sidebar label "Notifications" or "Inbox"; **ask the user**):
+  - TanStack Table in manual mode (`manualPagination`, `manualFiltering`), reusing `src/components/data-table/`.
+  - Search params validated with Zod (`status`, `source`, `kind`, `q`, `cursor`, `pageSize`) drive `useQuery(trpc.inbox.adminList.queryOptions(...))` with `placeholderData: keepPreviousData`. The loader calls `ensureQueryData` for SSR; the next page is prefetched.
+  - Status tabs (Inbox / Archived), a source filter (All / Stripe / System) with a tag per row, unread rows in bold, bulk read / archive / delete with a confirmation dialog.
+- **`inbox/$publicId.tsx`:** renders by kind: the summary, the details, links to the booking and guest pages (and the Stripe Dashboard for Stripe items). Opening it marks it read (optimistic, see 4.0).
+- **Unread badge** in `AdminSidebar` / `AdminNavigation` (see 4.0).
+- **Admin booking and guest pages:** a small "Notifications" panel (`adminListForBooking` / `adminListForUser`).
 
 ### 4.4 Tests
 
-Workers tests:
-- submit: Turnstile pass, fail and timeout (msw)
-- the throttle
-- linking by session, email and confirmation id
-- the response leaks nothing
-- admin-only access
-- pagination order and cursor stability
-- bulk status changes and delete (cascade)
-- reply (Resend mocked)
-- the unread count
-- an inbox item for a non-contact kind (insert a fake `payment_dispute` row) lists and opens correctly, so Phase 3 can plug in
+Workers:
+- `submitContactForm`: Turnstile pass, fail and timeout (msw); the admin email goes to `CONTACT_EMAIL` with `replyTo` = guest (Resend mocked); nothing is written to D1; the error leaks nothing.
+- `createInboxItem`: insert, dedupe (same key updates and resurfaces), linking.
+- Each mirrored alert creates its inbox item (automatic refund, `refund.failed` webhook, feed failure, conflict).
+- `inbox.*`: admin-only access (authz sweep), pagination order and cursor stability, filters by source/kind/status, unread count, bulk status changes, delete, per-booking and per-user lists.
 
-E2E: the contact form with the Turnstile test keys (**VERIFY** how the test sitekey is set up locally).
+Unit:
+- `contactSchema` (line breaks in subject, lengths, phone).
+- `rateLimitFnMiddleware` wiring (mocked, like `test/unit/server-fn-middleware.test.ts`).
 
-**Docs:** new `docs/ADMIN_INBOX.md` (contact messages, item kinds, how to add a kind), plus `TRPC_QUICK_REFERENCE.md` and `AGENTS.md` (architecture map, docs list).
-**Gate, then commit:** "feat: contact form and admin inbox".
+E2E:
+- The contact form renders, validates and shows Turnstile errors. **Submitting sends a real email** through Resend in `pnpm dev`, so the submit test runs only with `E2E_CONTACT=1` (skipped otherwise).
+- The admin inbox page loads and hard-reloads cleanly (with the admin credentials).
+
+**Docs:** new `docs/ADMIN_INBOX.md` (sources, kinds, dedupe keys, how to add a kind), the contact form in `docs/SECURE_AUTH_IMPLEMENTATION.md` or a short `docs/CONTACT_FORM.md` (**Proposed:** a section in `ADMIN_INBOX.md`), plus `TRPC_QUICK_REFERENCE.md` and `AGENTS.md` (architecture map, docs list, Fallow `server` zone list).
+**Gate, then commit:** "feat: contact form and admin notification inbox".
 
 ---
 
@@ -771,7 +760,7 @@ These changes must not change behaviour; tests stay green after each step.
     - the placeholder phone `(123) 456-7890` (update once the client provides it)
   - Re-run `grep -rn "cobaltweb\|workers.dev\|irishette.com" src docs` and check each hit.
 - A CMS for legal pages (later).
-- Guest-facing message history in `/account` (later).
+- Guest email messaging (stored contact messages, dashboard replies, inbound guest replies, message history in `/account`): **deferred**, see `.agents/plans/deferred-email-messaging.md`.
 - Effect evaluation (plan 01 Appendix C).
 
 ---
@@ -829,6 +818,8 @@ Resolved on 2026-11-07 (kept for the record):
 - Better Auth `rateLimit.storage: 'database'` and magic-link `name` (verified)
 - TanStack Start `createStart({ requestMiddleware, functionMiddleware })` (verified)
 
+Resolved on 2026-11-08 (see 4.0): B8 (the four existing admin alert emails also create inbox items in Phase 4; emails stay), the contact form as an email-only server function, the inbox as Stripe/system notifications only, the cached unread badge, and the deferral of guest email messaging.
+
 Resolved on 2026-11-08 (see 1.6): the admin check (D1 read for each admin call; browser cache 30 min), guest booking fields, admin room procedures, removing `ical.syncFeed`, rate limiting (D1 for Better Auth + Cloudflare binding middleware + Workers Logs; no KV), the `rateLimit` table columns and its self-cleanup (B1, part), and CSP reports to Workers Logs (B6).
 
 Still open:
@@ -838,6 +829,5 @@ Still open:
 - B3. Holds created before the 9:00 AM same-day cutoff can still be paid until they expire (3.9).
 - B4. After 3.0 (doc) and again after Phase 3, the user updates the sandbox webhook endpoint's events and checks that Link is enabled in the payment method settings.
 - B7. Admin cancel during an open dispute defaults to no refund and needs explicit confirmation to refund (3.4b; confirm with the user).
-- B8. Mirror the existing admin alert emails (iCal sync failures, auto refunds, refund failures) into the inbox as new kinds (Proposed for a later phase; emails stay).
 - B5. `HOLD_MINUTES` 30 → 35 to fit the Stripe session minimum (3.1).
 - ~~B9. Rate-limit namespace ids~~ Resolved in Phase 1: `20261` (auth), `20262` (API), `20263` (CSP reports), noted in `cloudflare.config.ts`. Check they are unused in the Cloudflare account before the first deploy.
