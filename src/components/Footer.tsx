@@ -16,9 +16,16 @@ export default function Footer() {
 					<div className="space-y-4">
 						<Link
 							to="/"
-							className="inline-block text-2xl font-bold text-primary transition-colors hover:text-primary/80"
+							className="inline-block transition-opacity hover:opacity-80"
 						>
-							Irishette (Logo goes here)
+							<img
+								src="/irishette-logo.png"
+								alt="Irishette logo"
+								width={384}
+								height={384}
+								className="size-24 rounded-full"
+							/>
+							<span className="sr-only">Irishette</span>
 						</Link>
 						<p className="text-sm leading-relaxed">
 							Experience authentic Irish hospitality in the heart of Dublin,

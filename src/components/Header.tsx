@@ -31,15 +31,20 @@ export default function Header() {
 	return (
 		<header className="sticky top-0 z-50 bg-linear-to-b from-secondary-foreground to-primary">
 			<div className="container mx-auto px-4 py-2">
-				<div className="flex h-16 items-center justify-between">
+				<div className="flex items-center justify-between">
 					{/* Logo/Brand */}
 					<Link
 						to="/"
-						className="text-2xl font-extrabold text-background transition-colors hover:text-background/80"
+						className="flex items-center transition-opacity hover:opacity-80"
 					>
-						Irishette
-						<span className="sr-only">Home</span>
-						<span className="block text-xs"> Logo goes here</span>
+						<img
+							src="/irishette-logo.png"
+							alt="Irishette logo"
+							width={384}
+							height={384}
+							className="size-28 rounded-full"
+						/>
+						<span className="sr-only">Irishette</span>
 					</Link>
 
 					{/* Navigation */}
