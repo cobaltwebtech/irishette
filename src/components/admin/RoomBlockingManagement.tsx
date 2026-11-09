@@ -1,7 +1,6 @@
 import { Icon } from '@iconify/react';
 import { Link } from '@tanstack/react-router';
 import { isTRPCClientError } from '@trpc/client';
-import { startOfDay } from 'date-fns';
 import { useId, useState } from 'react';
 
 import {
@@ -46,15 +45,11 @@ import type {
 	RoomBlockedPeriod,
 	UpdateBlockedPeriod,
 } from '@/lib/room-validation';
-import { useNow } from '@/utils/use-now';
+import { formatStayDate } from '@/lib/timezone';
+import { useTodayCT } from '@/utils/use-now';
 
-// Helper function to format date strings without timezone offset issues
-function formatDateString(dateString: string): string {
-	// Parse the date string (YYYY-MM-DD) and format it without timezone conversion
-	const [year, month, day] = dateString.split('-').map(Number);
-	const date = new Date(year, month - 1, day); // month is 0-indexed
-	return date.toLocaleDateString();
-}
+/** A block or stay date (YYYY-MM-DD), shown the same for everyone. */
+const formatDateString = (dateString: string) => formatStayDate(dateString);
 
 /** A reservation a block would overlap (CONFLICT data.conflicts). */
 interface BlockConflict {
@@ -276,10 +271,11 @@ export function RoomBlockingManagement({
 		setDeletingPeriod(null);
 	};
 
-	// Filter blocked periods to show only current and future periods
-	const today = startOfDay(useNow());
+	// Current and future periods only (today in Central Time; dates are
+	// inclusive YYYY-MM-DD strings, compared as strings).
+	const today = useTodayCT();
 	const filteredBlockedPeriods = blockedPeriods.filter(
-		(period) => new Date(`${period.endDate}T23:59:59`) >= today,
+		(period) => period.endDate >= today,
 	);
 
 	const columns = makeColumns({

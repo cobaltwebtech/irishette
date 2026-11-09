@@ -28,6 +28,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
+import { formatDateCT, formatStayDate } from '@/lib/timezone';
 
 type BookingRow =
 	RouterOutputs['users']['adminGetGuestDetails']['bookings'][number];
@@ -53,14 +54,9 @@ const columns = columnHelper.columns([
 		),
 		cell: (info) => (
 			<div>
-				<div>
-					{new Date(`${info.getValue()}T00:00:00`).toLocaleDateString()}
-				</div>
+				<div>{formatStayDate(info.getValue())}</div>
 				<div className="text-sm text-muted-foreground">
-					to{' '}
-					{new Date(
-						`${info.row.original.checkOutDate}T00:00:00`,
-					).toLocaleDateString()}
+					to {formatStayDate(info.row.original.checkOutDate)}
 				</div>
 			</div>
 		),
@@ -224,11 +220,7 @@ function AdminGuestDetail() {
 								Member Since
 							</p>
 							<p className="font-semibold">
-								{new Date(user.createdAt).toLocaleDateString('en-US', {
-									year: 'numeric',
-									month: 'long',
-									day: 'numeric',
-								})}
+								{formatDateCT(user.createdAt, 'long')}
 							</p>
 						</div>
 						{user.stripeCustomerId && (

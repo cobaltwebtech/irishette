@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/table';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
+import { formatDateCT } from '@/lib/timezone';
 
 // Same input as the admin sidebar, so both share one cache entry.
 const ROOMS_INPUT = { limit: 100 };
@@ -143,7 +144,7 @@ const columns = columnHelper.columns([
 		),
 		cell: (info) => (
 			<span className="hidden text-sm sm:inline">
-				{new Date(info.getValue()).toLocaleDateString()}
+				{formatDateCT(info.getValue())}
 			</span>
 		),
 	}),

@@ -26,6 +26,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
+import { formatDateCT, formatStayDate } from '@/lib/timezone';
 import { cn } from '@/utils/twMerge';
 
 type BookingRow = RouterOutputs['bookings']['getMyBookings'][number];
@@ -54,14 +55,9 @@ const columns = columnHelper.columns([
 		),
 		cell: (info) => (
 			<div>
-				<div className="font-medium">
-					{new Date(`${info.getValue()}T00:00:00`).toLocaleDateString()}
-				</div>
+				<div className="font-medium">{formatStayDate(info.getValue())}</div>
 				<div className="text-sm text-muted-foreground">
-					to{' '}
-					{new Date(
-						`${info.row.original.booking.checkOutDate}T00:00:00`,
-					).toLocaleDateString()}
+					to {formatStayDate(info.row.original.booking.checkOutDate)}
 				</div>
 			</div>
 		),
@@ -285,11 +281,7 @@ function AccountPage() {
 								<div>
 									<p className="text-sm text-muted-foreground">Member Since</p>
 									<p className="font-semibold text-foreground">
-										{new Date(user.createdAt).toLocaleDateString('en-US', {
-											year: 'numeric',
-											month: 'long',
-											day: 'numeric',
-										})}
+										{formatDateCT(user.createdAt, 'long')}
 									</p>
 								</div>
 							</div>

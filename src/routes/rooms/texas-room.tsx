@@ -16,6 +16,7 @@ import {
 	CardTitle,
 } from '@/components/ui/card';
 import { useBookingStore } from '@/stores';
+import { toISODateString } from '@/utils/booking-utils';
 import { cn } from '@/utils/twMerge';
 
 export const Route = createFileRoute('/rooms/texas-room')({
@@ -110,8 +111,8 @@ function TexasRoomPage() {
 		// Update booking store with selected dates
 		if (dateRange?.from && dateRange?.to) {
 			// Convert dates to ISO strings for storage without timezone shift
-			const checkInDate = `${dateRange.from.getFullYear()}-${String(dateRange.from.getMonth() + 1).padStart(2, '0')}-${String(dateRange.from.getDate()).padStart(2, '0')}`;
-			const checkOutDate = `${dateRange.to.getFullYear()}-${String(dateRange.to.getMonth() + 1).padStart(2, '0')}-${String(dateRange.to.getDate()).padStart(2, '0')}`;
+			const checkInDate = toISODateString(dateRange.from);
+			const checkOutDate = toISODateString(dateRange.to);
 
 			booking.actions.setDates(checkInDate, checkOutDate);
 

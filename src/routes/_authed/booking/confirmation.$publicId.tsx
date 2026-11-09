@@ -15,8 +15,8 @@ import { toast } from '@/components/ui/toast';
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
 import { CHECK_IN_TIME_LABEL, CHECK_OUT_TIME_LABEL } from '@/lib/site';
+import { formatStayDate } from '@/lib/timezone';
 import { bookingActions } from '@/stores';
-import { parseISODateString } from '@/utils/booking-utils';
 import { cn } from '@/utils/twMerge';
 
 export const Route = createFileRoute('/_authed/booking/confirmation/$publicId')(
@@ -158,12 +158,7 @@ function BookingConfirmation() {
 	const { booking, room: roomData } = bookingData;
 	const banner = BANNERS[bannerKind(booking.status, booking.paymentStatus)];
 
-	// Calculate number of nights
-	const checkIn = parseISODateString(booking.checkInDate);
-	const checkOut = parseISODateString(booking.checkOutDate);
-	const nights = Math.ceil(
-		(checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24),
-	);
+	const nights = Math.max(1, booking.numberOfNights);
 
 	return (
 		<section>
@@ -186,16 +181,7 @@ function BookingConfirmation() {
 						{booking.status === 'cancelled'
 							? 'Your stay was planned for '
 							: 'We look forward to seeing you on '}
-						{new Date(`${booking.checkInDate}T00:00:00`).toLocaleDateString(
-							'en-US',
-							{
-								weekday: 'long',
-								year: 'numeric',
-								month: 'long',
-								day: 'numeric',
-							},
-						)}
-						.
+						{formatStayDate(booking.checkInDate, 'full')}.
 					</p>
 				</div>
 			</div>
@@ -234,14 +220,7 @@ function BookingConfirmation() {
 										Check-in
 									</p>
 									<p className="font-semibold">
-										{new Date(
-											`${booking.checkInDate}T00:00:00`,
-										).toLocaleDateString('en-US', {
-											weekday: 'long',
-											year: 'numeric',
-											month: 'long',
-											day: 'numeric',
-										})}
+										{formatStayDate(booking.checkInDate, 'full')}
 									</p>
 									<p className="text-sm text-muted-foreground">
 										From {CHECK_IN_TIME_LABEL}
@@ -252,14 +231,7 @@ function BookingConfirmation() {
 										Check-out
 									</p>
 									<p className="font-semibold">
-										{new Date(
-											`${booking.checkOutDate}T00:00:00`,
-										).toLocaleDateString('en-US', {
-											weekday: 'long',
-											year: 'numeric',
-											month: 'long',
-											day: 'numeric',
-										})}
+										{formatStayDate(booking.checkOutDate, 'full')}
 									</p>
 									<p className="text-sm text-muted-foreground">
 										Before {CHECK_OUT_TIME_LABEL}

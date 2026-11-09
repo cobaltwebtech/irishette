@@ -1,5 +1,8 @@
 import { useState } from 'react';
 
+import type { IsoDate } from '@/lib/date-range';
+import { todayIn } from '@/lib/timezone';
+
 /**
  * The time of the component's first render, stable across re-renders.
  *
@@ -11,4 +14,9 @@ import { useState } from 'react';
 export function useNow(): Date {
 	const [now] = useState(() => new Date());
 	return now;
+}
+
+/** Today's date in US Central Time (property time), stable across renders. */
+export function useTodayCT(): IsoDate {
+	return todayIn(undefined, useNow());
 }

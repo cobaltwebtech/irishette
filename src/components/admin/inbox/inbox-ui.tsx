@@ -7,7 +7,7 @@ import {
 	type InboxKind,
 	type InboxSource,
 } from '@/lib/inbox';
-import { PROPERTY_TIMEZONE } from '@/lib/timezone';
+import { formatDateTimeCT } from '@/lib/timezone';
 import { cn } from '@/utils/twMerge';
 
 // Small shared pieces of the admin notification pages and panels.
@@ -60,13 +60,5 @@ export function UnreadDot({ unread }: { unread: boolean }) {
 	);
 }
 
-const dateTimeFormat = new Intl.DateTimeFormat('en-US', {
-	dateStyle: 'medium',
-	timeStyle: 'short',
-	timeZone: PROPERTY_TIMEZONE,
-});
-
 /** "Nov 8, 2026, 3:04 PM CT" (property time, same on server and client). */
-export function formatInboxDate(date: Date | string) {
-	return `${dateTimeFormat.format(new Date(date))} CT`;
-}
+export const formatInboxDate = (date: Date | string) => formatDateTimeCT(date);

@@ -319,6 +319,13 @@ until 9:00 AM CT, else tomorrow: "Same-day bookings close at 9:00 AM CT"), at
 most `MAX_NIGHTS` (30) nights, check-out within `BOOKING_WINDOW_MONTHS` (10)
 months. A hold created in time stays payable until it expires (B3).
 
+**Display:** every date and time on the site and in emails is shown in US
+Central Time, en-US, whatever the guest's time zone: stay dates with
+`formatStayDate` (a calendar date, the same for everyone), instants (created,
+updated, member since, notifications, cutoffs) with `formatDateCT` /
+`formatDateTimeCT` / `formatInstantCT`, and "today" in admin forms, lists and
+charts with `useTodayCT()`.
+
 The iCal export stays all-day (date-only) events.
 
 ### Cancellations and refunds

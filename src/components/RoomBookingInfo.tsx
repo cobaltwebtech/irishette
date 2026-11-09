@@ -10,6 +10,8 @@ import {
 	CardHeader,
 	CardTitle,
 } from '@/components/ui/card';
+import { formatStayDate } from '@/lib/timezone';
+import { toISODateString } from '@/utils/booking-utils';
 
 interface BookingInfoProps {
 	selectedDateRange: DateRange | undefined;
@@ -28,14 +30,9 @@ export default function BookingInfo({
 	roomName,
 	className = '',
 }: BookingInfoProps) {
-	const formatDate = (date: Date) => {
-		return date.toLocaleDateString('en-US', {
-			weekday: 'short',
-			year: 'numeric',
-			month: 'short',
-			day: 'numeric',
-		});
-	};
+	// The picker's calendar day, shown as a property-local stay date.
+	const formatDate = (date: Date) =>
+		formatStayDate(toISODateString(date), 'mediumWeekday');
 
 	const renderDateDisplay = () => {
 		if (!selectedDateRange?.from || !selectedDateRange?.to) return null;

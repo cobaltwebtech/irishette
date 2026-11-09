@@ -1,5 +1,7 @@
 import { useStore } from '@tanstack/react-store';
 
+import { formatStayDate } from '@/lib/timezone';
+
 import {
 	type BookingStep,
 	bookingActions,
@@ -112,8 +114,8 @@ export function useBookingStore() {
 				(checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24),
 			),
 			formatted: {
-				checkIn: checkIn.toLocaleDateString(),
-				checkOut: checkOut.toLocaleDateString(),
+				checkIn: formatStayDate(state.checkInDate),
+				checkOut: formatStayDate(state.checkOutDate),
 			},
 		};
 	};

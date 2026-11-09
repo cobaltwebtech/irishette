@@ -119,3 +119,36 @@ describe('isPricingComplete', () => {
 		expect(isPricingComplete({ ...base, numberOfNights: 0 })).toBe(false);
 	});
 });
+
+describe('display formatters (US Central Time, en-US)', () => {
+	const original = process.env.TZ;
+
+	it('stay dates are calendar dates, the same in every time zone', async () => {
+		const { formatStayDate } = await import('@/lib/timezone');
+		for (const tz of ['UTC', 'Asia/Tokyo', 'Pacific/Honolulu']) {
+			process.env.TZ = tz;
+			expect(formatStayDate('2030-06-10')).toBe('Jun 10, 2030');
+			expect(formatStayDate('2030-06-10', 'full')).toBe(
+				'Monday, June 10, 2030',
+			);
+			expect(formatStayDate('2030-06-10', 'mediumWeekday')).toBe(
+				'Mon, Jun 10, 2030',
+			);
+		}
+		process.env.TZ = original;
+	});
+
+	it('instants are shown in Central Time', async () => {
+		const { formatDateCT, formatDateTimeCT, yearCT } =
+			await import('@/lib/timezone');
+		// 03:30Z on Jun 11 is still Jun 10 (10:30 PM CDT) at the property.
+		expect(formatDateCT('2030-06-11T03:30:00Z')).toBe('Jun 10, 2030');
+		expect(formatDateTimeCT('2030-06-11T03:30:00Z')).toBe(
+			'Jun 10, 2030, 10:30 PM CT',
+		);
+		expect(formatDateTimeCT('2030-01-11T03:30:00Z')).toBe(
+			'Jan 10, 2030, 9:30 PM CT',
+		);
+		expect(yearCT('2031-01-01T03:00:00Z')).toBe('2030');
+	});
+});

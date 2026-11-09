@@ -18,6 +18,7 @@ import {
 	type Unavailability,
 } from '@/lib/date-range';
 import { SAME_DAY_CUTOFF_LABEL } from '@/lib/site';
+import { parseISODateString, toISODateString } from '@/utils/booking-utils';
 
 interface RoomAvailabilityCalendarProps {
 	roomSlug: string;
@@ -32,16 +33,10 @@ interface RoomAvailabilityCalendarProps {
 	maxNights?: number;
 }
 
-/** Local calendar date → YYYY-MM-DD (no timezone shift). */
-function toIso(date: Date): string {
-	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-/** YYYY-MM-DD → local midnight (the day picker works in local dates). */
-function fromIso(iso: string): Date {
-	const [y, m, d] = iso.split('-').map(Number);
-	return new Date(y, m - 1, d);
-}
+// The day picker works in local calendar dates; these convert them to and
+// from property-local YYYY-MM-DD stay dates without any time zone shift.
+const toIso = toISODateString;
+const fromIso = parseISODateString;
 
 const EMPTY: Unavailability = { stays: [], events: [], blocks: [] };
 

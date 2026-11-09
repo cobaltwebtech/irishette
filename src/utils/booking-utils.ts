@@ -8,6 +8,14 @@ export function parseISODateString(dateString: string): Date {
 	return new Date(year, month - 1, day); // month is 0-indexed
 }
 
+/**
+ * A day picker's local calendar date as `YYYY-MM-DD` (no time zone shift;
+ * the inverse of parseISODateString).
+ */
+export function toISODateString(date: Date): string {
+	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 export interface BookingStepItem {
 	step: string;
 	label: string;

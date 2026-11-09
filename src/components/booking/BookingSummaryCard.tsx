@@ -3,8 +3,8 @@ import { useNavigate } from '@tanstack/react-router';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatStayDate } from '@/lib/timezone';
 import { useBookingStore } from '@/stores';
-import { parseISODateString } from '@/utils/booking-utils';
 
 export function BookingSummaryCard() {
 	const booking = useBookingStore();
@@ -66,12 +66,10 @@ export function BookingSummaryCard() {
 				<div>
 					<h4 className="font-semibold">Dates</h4>
 					<p className="text-sm text-muted-foreground">
-						Check-in:{' '}
-						{parseISODateString(summary.checkInDate).toLocaleDateString()}
+						Check-in: {formatStayDate(summary.checkInDate)}
 					</p>
 					<p className="text-sm text-muted-foreground">
-						Check-out:{' '}
-						{parseISODateString(summary.checkOutDate).toLocaleDateString()}
+						Check-out: {formatStayDate(summary.checkOutDate)}
 					</p>
 					<p className="text-sm text-muted-foreground">
 						{summary.totalNights} night{summary.totalNights !== 1 ? 's' : ''}

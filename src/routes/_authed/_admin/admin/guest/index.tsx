@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
+import { formatDateCT } from '@/lib/timezone';
 
 type GuestRow = RouterOutputs['users']['adminListGuests']['guests'][number];
 
@@ -37,8 +38,7 @@ const columns = columnHelper.columns([
 				<div>
 					<div className="font-medium">{info.getValue()}</div>
 					<div className="text-xs text-muted-foreground">
-						Member since{' '}
-						{new Date(info.row.original.user.createdAt).toLocaleDateString()}
+						Member since {formatDateCT(info.row.original.user.createdAt)}
 					</div>
 				</div>
 			</div>

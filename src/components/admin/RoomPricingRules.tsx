@@ -1,6 +1,5 @@
 import { Icon } from '@iconify/react';
 import { isTRPCClientError } from '@trpc/client';
-import { startOfDay } from 'date-fns';
 import { useId, useState } from 'react';
 
 import {
@@ -43,7 +42,8 @@ import type {
 	RoomPricingRule,
 	UpdatePricingRule,
 } from '@/lib/room-validation';
-import { useNow } from '@/utils/use-now';
+import { formatStayDate } from '@/lib/timezone';
+import { useTodayCT } from '@/utils/use-now';
 
 /** Overlap details from a CONFLICT error (data.conflict). */
 interface RuleConflict {
@@ -127,8 +127,8 @@ const getRuleBadgeVariant = (ruleType: string) => {
 
 const formatDateRange = (startDate: string, endDate: string) => {
 	// Parse dates without timezone issues by treating them as local dates
-	const start = new Date(`${startDate}T00:00:00`).toLocaleDateString();
-	const end = new Date(`${endDate}T00:00:00`).toLocaleDateString();
+	const start = formatStayDate(startDate);
+	const end = formatStayDate(endDate);
 	return `${start} - ${end}`;
 };
 
@@ -257,11 +257,9 @@ export function PricingRulesManagement({
 	// Rule highlighted after an overlap error ("Show rule").
 	const [highlightId, setHighlightId] = useState<string | null>(null);
 
-	// Only current and future rules are displayed
-	const today = startOfDay(useNow());
-	const filteredRules = pricingRules.filter(
-		(rule) => new Date(`${rule.endDate}T00:00:00`) >= today,
-	);
+	// Only current and future rules are displayed (today in Central Time).
+	const today = useTodayCT();
+	const filteredRules = pricingRules.filter((rule) => rule.endDate >= today);
 
 	const columns = makeColumns({
 		basePrice,
@@ -486,9 +484,8 @@ function PricingRuleForm({
 		Record<string, string[] | undefined>
 	>({});
 
-	// Today (local) as YYYY-MM-DD, for the date inputs' min.
-	const now = useNow();
-	const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+	// Today in Central Time as YYYY-MM-DD, for the date inputs' min.
+	const today = useTodayCT();
 
 	const [formData, setFormData] = useState<CreatePricingRule>({
 		roomId,

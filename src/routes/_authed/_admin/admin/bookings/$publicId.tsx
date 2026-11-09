@@ -22,6 +22,7 @@ import { toast } from '@/components/ui/toast';
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
 import { CHECK_IN_TIME_LABEL, CHECK_OUT_TIME_LABEL } from '@/lib/site';
+import { formatDateTimeCT, formatStayDate } from '@/lib/timezone';
 import { cn } from '@/utils/twMerge';
 
 export const Route = createFileRoute(
@@ -188,14 +189,7 @@ function AdminBookingDetailPage() {
 								Check-in
 							</p>
 							<p className="font-semibold">
-								{new Date(
-									`${booking.booking.checkInDate}T00:00:00`,
-								).toLocaleDateString('en-US', {
-									weekday: 'long',
-									year: 'numeric',
-									month: 'long',
-									day: 'numeric',
-								})}
+								{formatStayDate(booking.booking.checkInDate, 'full')}
 							</p>
 							<p className="text-sm text-muted-foreground">
 								From {CHECK_IN_TIME_LABEL}
@@ -206,14 +200,7 @@ function AdminBookingDetailPage() {
 								Check-out
 							</p>
 							<p className="font-semibold">
-								{new Date(
-									`${booking.booking.checkOutDate}T00:00:00`,
-								).toLocaleDateString('en-US', {
-									weekday: 'long',
-									year: 'numeric',
-									month: 'long',
-									day: 'numeric',
-								})}
+								{formatStayDate(booking.booking.checkOutDate, 'full')}
 							</p>
 							<p className="text-sm text-muted-foreground">
 								Before {CHECK_OUT_TIME_LABEL}
@@ -463,7 +450,7 @@ function AdminBookingDetailPage() {
 									Created At
 								</p>
 								<p className="font-mono text-sm">
-									{new Date(booking.booking.createdAt).toLocaleString()}
+									{formatDateTimeCT(booking.booking.createdAt)}
 								</p>
 							</div>
 							<div>
@@ -471,7 +458,7 @@ function AdminBookingDetailPage() {
 									Updated At
 								</p>
 								<p className="font-mono text-sm">
-									{new Date(booking.booking.updatedAt).toLocaleString()}
+									{formatDateTimeCT(booking.booking.updatedAt)}
 								</p>
 							</div>
 						</div>

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { SITE_URL } from '@/lib/site';
+import { formatDateCT } from '@/lib/timezone';
 
 interface RoomDetailsProps {
 	name: string;
@@ -113,13 +114,13 @@ export function RoomDetails({
 						<div>
 							Created:{' '}
 							<span className="font-mono font-semibold">
-								{new Date(createdAt).toLocaleDateString()}
+								{formatDateCT(createdAt)}
 							</span>
 						</div>
 						<div>
 							Last Updated:{' '}
 							<span className="font-mono font-semibold">
-								{new Date(updatedAt).toLocaleDateString()}
+								{formatDateCT(updatedAt)}
 							</span>
 						</div>
 						<div>

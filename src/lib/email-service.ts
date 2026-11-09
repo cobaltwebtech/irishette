@@ -32,7 +32,7 @@ import {
 	formatTimeOfDay,
 	SITE_URL,
 } from './site';
-import { formatInstantCT } from './timezone';
+import { formatInstantCT, formatStayDate } from './timezone';
 
 // All transactional email goes through here. Logs never include email
 // addresses or guest details: only the kind of email and the booking's
@@ -56,18 +56,6 @@ export interface EmailResult {
 
 const currency = formatMoney;
 
-const stayDate = new Intl.DateTimeFormat('en-US', {
-	timeZone: 'UTC',
-	weekday: 'long',
-	year: 'numeric',
-	month: 'long',
-	day: 'numeric',
-});
-
-/** "2030-06-10" -> "Monday, June 10, 2030" (a property-local stay date). */
-const formatStayDate = (date: string) =>
-	stayDate.format(new Date(`${date}T00:00:00Z`));
-
 /** The booking details every booking email shows (shared email section). */
 export function emailBookingDetails(
 	booking: Booking,
@@ -76,9 +64,9 @@ export function emailBookingDetails(
 	return {
 		confirmationId: booking.confirmationId,
 		roomName: room.name,
-		checkInDate: formatStayDate(booking.checkInDate),
+		checkInDate: formatStayDate(booking.checkInDate, 'full'),
 		checkInTime: formatTimeOfDay(CHECK_IN_TIME, { withZone: true }),
-		checkOutDate: formatStayDate(booking.checkOutDate),
+		checkOutDate: formatStayDate(booking.checkOutDate, 'full'),
 		checkOutTime: formatTimeOfDay(CHECK_OUT_TIME, { withZone: true }),
 		numberOfNights: booking.numberOfNights,
 		numberOfGuests: booking.numberOfGuests,

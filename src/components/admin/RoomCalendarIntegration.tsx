@@ -30,6 +30,7 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/toast';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
+import { formatDateTimeCT } from '@/lib/timezone';
 
 type Feed = RouterOutputs['ical']['listFeeds'][number];
 type FeedSource = Feed['source'];
@@ -46,7 +47,7 @@ const sourceLabel = (source: string) =>
 	SOURCES.find((s) => s.value === source)?.label ?? source;
 
 const formatTime = (date: Date | null | undefined) =>
-	date ? new Date(date).toLocaleString() : 'Never';
+	date ? formatDateTimeCT(date) : 'Never';
 
 function syncSummary(results: SyncResult[]) {
 	const failed = results.filter(

@@ -2,10 +2,12 @@ import { Icon } from '@iconify/react';
 import { Link } from '@tanstack/react-router';
 
 import { CONTACT_PHONE, CONTACT_PHONE_HREF } from '@/lib/site';
+import { yearCT } from '@/lib/timezone';
 import { useNow } from '@/utils/use-now';
 
 export default function Footer() {
-	const now = useNow();
+	// Central Time, like every date on the site.
+	const year = yearCT(useNow());
 	return (
 		<footer className="mt-auto border-t border-border bg-muted">
 			<div className="container mx-auto px-4 py-8">
@@ -87,8 +89,7 @@ export default function Footer() {
 				<div className="mt-4 border-t border-accent pt-4">
 					<div className="flex flex-col items-center justify-between space-y-4 md:flex-row md:space-y-0">
 						<div className="text-sm text-muted-foreground">
-							© {now.getFullYear()} Irishette Bed & Breakfast. All rights
-							reserved.
+							© {year} Irishette Bed & Breakfast. All rights reserved.
 						</div>
 						<div className="flex items-center space-x-6 text-sm text-muted-foreground">
 							<Link

@@ -140,6 +140,7 @@ Conventions:
 
 - **Every instant in D1 is UTC Unix seconds** (`integer(..., { mode: 'timestamp' })`). Never `timestamp_ms`, local-time text or ISO strings. Check new timestamp columns in review.
 - **Stay dates are property-local `YYYY-MM-DD` text.** Bookings also store the normalized `check_in_at` (4:00 PM CT) and `check_out_at` (11:00 AM CT) instants; compare those, don't rebuild local times.
+- **Every date and time the site shows is US Central Time (America/Chicago), in en-US**, whatever the guest's browser zone: guests check in at the property. Use the shared formatters in `src/lib/timezone.ts`: `formatStayDate(date, style)` for stay/block/rule dates (`YYYY-MM-DD`, zone-free), `formatDateCT` / `formatDateTimeCT` / `formatInstantCT` for instants, `yearCT`, and `useTodayCT()` (`src/utils/use-now.ts`) for "today". Never `toLocaleDateString()` / `toLocaleString()` / `new Date().getDate()` for display or "today". Day pickers convert with `toISODateString` / `parseISODateString` (`src/utils/booking-utils.ts`).
 - **Times of day exist only as constants** in `src/lib/site.ts` (`CHECK_IN_TIME`, `CHECK_OUT_TIME`, `SAME_DAY_CUTOFF_TIME`, and their `*_LABEL`s). All rules use America/Chicago wall-clock time via `src/lib/stay-times.ts` / `src/lib/timezone.ts` (`zonedTimeToUtc`, `formatInstantCT`), never the server's or browser's time zone.
 
 ### IDs

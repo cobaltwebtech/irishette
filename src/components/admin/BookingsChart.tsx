@@ -15,7 +15,8 @@ import {
 	ChartTooltip,
 	ChartTooltipContent,
 } from '@/components/ui/chart';
-import { useNow } from '@/utils/use-now';
+import { parseISODateString } from '@/utils/booking-utils';
+import { useTodayCT } from '@/utils/use-now';
 
 // Type for the monthly booking data from tRPC
 type MonthlyBookingData = {
@@ -38,7 +39,8 @@ interface BookingsChartProps {
 }
 
 export function BookingsChart({ data, isLoading }: BookingsChartProps) {
-	const now = useNow();
+	// The current month in Central Time (property time).
+	const now = parseISODateString(useTodayCT());
 	// Generate all 12 months from 11 months ago to current month
 	const generateLast12Months = () => {
 		const months: string[] = [];

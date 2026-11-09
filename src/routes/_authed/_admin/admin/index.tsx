@@ -8,7 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTRPC } from '@/integrations/trpc/react';
-import { useNow } from '@/utils/use-now';
+import { formatStayDate } from '@/lib/timezone';
+import { useTodayCT } from '@/utils/use-now';
 
 // Shared by the loader and the component so the cache keys match.
 // Every room (any status), so bookings for inactive rooms still show the
@@ -61,8 +62,8 @@ function AdminDashboard() {
 	);
 
 	// Filter bookings to get confirmed ones with check-in date today or in the future
-	const today = useNow();
-	const todayDateString = today.toISOString().slice(0, 10); // 'YYYY-MM-DD'
+	// Today in Central Time (property time), not UTC or the browser's zone.
+	const todayDateString = useTodayCT();
 
 	// Create a map of room IDs to room names for lookup
 	const roomMap = rooms.reduce((acc: Record<string, string>, room) => {
@@ -121,9 +122,7 @@ function AdminDashboard() {
 											<div className="flex items-center justify-between rounded-lg border bg-muted/50 p-2 transition-colors hover:bg-muted">
 												<div>
 													<h3 className="font-medium">
-														{new Date(
-															`${booking.checkInDate}T00:00:00`,
-														).toLocaleDateString()}
+														{formatStayDate(booking.checkInDate)}
 													</h3>
 													<p className="text-sm font-semibold text-muted-foreground">
 														{roomMap[bookingData.booking.roomId] ||

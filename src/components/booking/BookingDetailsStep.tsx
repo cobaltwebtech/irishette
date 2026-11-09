@@ -11,9 +11,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { useTRPC } from '@/integrations/trpc/react';
 import { guestDetailsSchema } from '@/lib/payment-validation';
 import { refreshSession, useSession } from '@/lib/session';
+import { formatStayDate } from '@/lib/timezone';
 import { useBookingStore } from '@/stores';
 import { bookingActions, bookingStore } from '@/stores/booking-store';
-import { isPricingComplete, parseISODateString } from '@/utils/booking-utils';
+import { isPricingComplete } from '@/utils/booking-utils';
 
 /** Friendlier messages than Zod's defaults for the form fields. */
 const FIELD_MESSAGES: Record<string, string> = {
@@ -469,29 +470,13 @@ export function BookingDetailsStep() {
 							<p>
 								<span className="font-light">Check-in:</span>{' '}
 								{booking.checkInDate
-									? parseISODateString(booking.checkInDate).toLocaleDateString(
-											'en-US',
-											{
-												weekday: 'short',
-												month: 'short',
-												day: 'numeric',
-												year: 'numeric',
-											},
-										)
+									? formatStayDate(booking.checkInDate, 'mediumWeekday')
 									: 'N/A'}
 							</p>
 							<p>
 								<span className="font-light">Check-out:</span>{' '}
 								{booking.checkOutDate
-									? parseISODateString(booking.checkOutDate).toLocaleDateString(
-											'en-US',
-											{
-												weekday: 'short',
-												month: 'short',
-												day: 'numeric',
-												year: 'numeric',
-											},
-										)
+									? formatStayDate(booking.checkOutDate, 'mediumWeekday')
 									: 'N/A'}
 							</p>
 							<p>

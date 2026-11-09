@@ -80,6 +80,82 @@ export function zonedTimeToUtc(
 	return new Date(utc);
 }
 
+// --- Display (all pages and emails show US Central Time) ----------------------
+// Guests check in at the property, so every date and time is shown in
+// America/Chicago, never in the browser's or the server's time zone, and
+// always in en-US (the server-rendered HTML and the browser agree).
+
+export type DateStyle = 'short' | 'medium' | 'mediumWeekday' | 'long' | 'full';
+
+const DATE_STYLES: Record<DateStyle, Intl.DateTimeFormatOptions> = {
+	/** 6/10/2030 */
+	short: { month: 'numeric', day: 'numeric', year: 'numeric' },
+	/** Jun 10, 2030 */
+	medium: { month: 'short', day: 'numeric', year: 'numeric' },
+	/** Mon, Jun 10, 2030 */
+	mediumWeekday: {
+		weekday: 'short',
+		month: 'short',
+		day: 'numeric',
+		year: 'numeric',
+	},
+	/** June 10, 2030 */
+	long: { month: 'long', day: 'numeric', year: 'numeric' },
+	/** Monday, June 10, 2030 */
+	full: { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' },
+};
+
+const displayFormatters = new Map<string, Intl.DateTimeFormat>();
+
+function displayFormatter(
+	timeZone: string,
+	options: Intl.DateTimeFormatOptions,
+	key: string,
+) {
+	const id = `${timeZone}|${key}`;
+	let f = displayFormatters.get(id);
+	if (!f) {
+		f = new Intl.DateTimeFormat('en-US', { ...options, timeZone });
+		displayFormatters.set(id, f);
+	}
+	return f;
+}
+
+/**
+ * A property-local stay date (`YYYY-MM-DD`, e.g. check-in) for display. It is
+ * a calendar date, not an instant: the same day for everyone.
+ */
+export function formatStayDate(date: IsoDate, style: DateStyle = 'medium') {
+	return displayFormatter('UTC', DATE_STYLES[style], style).format(
+		new Date(`${date}T00:00:00Z`),
+	);
+}
+
+/** The Central Time calendar date of an instant (e.g. "Member since"). */
+export function formatDateCT(
+	instant: Date | string | number,
+	style: DateStyle = 'medium',
+) {
+	return displayFormatter(PROPERTY_TIMEZONE, DATE_STYLES[style], style).format(
+		new Date(instant),
+	);
+}
+
+/** An instant as "Nov 8, 2026, 3:04 PM CT". */
+export function formatDateTimeCT(instant: Date | string | number) {
+	const f = displayFormatter(
+		PROPERTY_TIMEZONE,
+		{ dateStyle: 'medium', timeStyle: 'short' },
+		'dateTime',
+	);
+	return `${f.format(new Date(instant))} CT`;
+}
+
+/** The Central Time year of an instant (footer copyright). */
+export function yearCT(instant: Date | string | number) {
+	return dateInZone(new Date(instant)).slice(0, 4);
+}
+
 const instantFormatter = new Intl.DateTimeFormat('en-US', {
 	timeZone: PROPERTY_TIMEZONE,
 	weekday: 'short',
