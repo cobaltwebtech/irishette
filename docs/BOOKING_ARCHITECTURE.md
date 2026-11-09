@@ -359,7 +359,7 @@ reference as read-only text.
 | `pending` (hold) | Expires the open Checkout Session (`CONFLICT` if it was paid or the payment is processing), sets `cancelled`, refund 0, no email. |
 | `confirmed`, guest | Policy refund; rejected from check-in on. |
 | `confirmed`, admin | `full` (what is still paid), `policy`, or `none`; allowed after check-in. |
-| `confirmed`, open dispute | Guests: `CONFLICT` ("contact us"). Admins: the dialog defaults to no refund; a refund needs `confirmDisputeRefund` (Stripe warns it can credit the guest twice). |
+| `confirmed`, open dispute | Guests: `canCancel: false` and `CONFLICT` ("cannot be cancelled online, please contact us"); guest pages never show or mention the dispute (decision 2026-11-08). Admins: the dialog defaults to no refund; a refund needs `confirmDisputeRefund` (Stripe warns it can credit the guest twice). |
 | Quote drift | If `expectedRefundAmount` (what the dialog showed) differs from the server's amount (a window passed), `CONFLICT` with the new amount; nothing changes. |
 
 **Save first, then refund** (`cancelConfirmed`, plan 02 3.7):

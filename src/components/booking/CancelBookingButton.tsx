@@ -163,8 +163,7 @@ export function CancelBookingButton({
 								pending ||
 								!quote.data ||
 								needsDisputeConfirm ||
-								(mode === 'guest' &&
-									(!quote.data.canCancel || quote.data.hasOpenDispute))
+								(mode === 'guest' && !quote.data.canCancel)
 							}
 						>
 							{pending ? 'Cancelling...' : 'Cancel booking'}
@@ -211,19 +210,9 @@ function QuoteDetails({
 	if (!quote.data.canCancel && mode === 'guest') {
 		return (
 			<p className="text-sm text-destructive">
-				Check-in time has passed, so this booking can no longer be cancelled
-				online. Please{' '}
-				<Link to="/contact" className="underline">
-					contact us
-				</Link>
-				.
-			</p>
-		);
-	}
-	if (quote.data.hasOpenDispute && mode === 'guest') {
-		return (
-			<p className="text-sm text-destructive">
-				This booking's payment is under review, so it can't be cancelled online.
+				{quote.data.cancelBlocked === 'check_in_passed'
+					? 'Check-in time has passed, so this booking can no longer be cancelled online.'
+					: 'This booking cannot be cancelled online.'}{' '}
 				Please{' '}
 				<Link to="/contact" className="underline">
 					contact us

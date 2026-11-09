@@ -131,26 +131,37 @@ const guestBookingColumns = Object.fromEntries(
 /**
  * Derived timing for a guest booking (plan 02, 3.6): the stay phase in
  * property time, whether it can still be cancelled online, and until when
- * (check-in at 4:00 PM CT). Open disputes are checked when cancelling.
+ * (check-in at 4:00 PM CT). `blocked` (an open payment dispute) also turns
+ * `canCancel` off; guests are never told why (decision 2026-11-08: no
+ * dispute information on guest pages).
  */
 function withTiming<
 	B extends Pick<Booking, 'status' | 'checkInAt' | 'checkOutAt'>,
->(booking: B, now = new Date()) {
+>(booking: B, now = new Date(), blocked = false) {
 	return {
 		...booking,
 		stayPhase: stayPhase(booking, now),
-		canCancel: booking.status !== 'cancelled' && now < booking.checkInAt,
+		canCancel:
+			booking.status !== 'cancelled' && now < booking.checkInAt && !blocked,
 		cancelUntil: booking.checkInAt,
 	};
 }
 
-function toGuestBooking(booking: Booking) {
+function toGuestBooking(booking: Booking, blocked = false) {
 	return withTiming(
 		Object.fromEntries(
 			GUEST_BOOKING_FIELDS.map((field) => [field, booking[field]]),
 		) as Pick<Booking, GuestBookingField>,
+		new Date(),
+		blocked,
 	);
 }
+
+/** An open dispute blocks online cancellation (confirmed bookings only). */
+const disputeBlocks = (db: TRPCContext['db'], booking: Booking) =>
+	booking.status === 'confirmed'
+		? hasOpenDispute(db, booking.id)
+		: Promise.resolve(false);
 
 /** SQL filter for a stay phase (uses the stored check-in/out instants). */
 function phaseCondition(phase: 'upcoming' | 'current' | 'past', now: Date) {
@@ -266,7 +277,7 @@ export const bookingsRouter = createTRPCRouter({
 				booking.cancellationPolicyId,
 			);
 			return {
-				booking: toGuestBooking(booking),
+				booking: toGuestBooking(booking, await disputeBlocks(ctx.db, booking)),
 				room: roomRow,
 				cancellationPolicy: { name: policy.name, tiers: policy.tiers },
 			};
@@ -314,7 +325,11 @@ export const bookingsRouter = createTRPCRouter({
 			if (input.status) conditions.push(eq(bookings.status, input.status));
 			if (input.phase) conditions.push(phaseCondition(input.phase, now));
 			const rows = await ctx.db
-				.select({ booking: guestBookingColumns, room: guestRoomColumns })
+				.select({
+					booking: guestBookingColumns,
+					room: guestRoomColumns,
+					disputed: openDisputeExists,
+				})
 				.from(bookings)
 				.innerJoin(room, eq(bookings.roomId, room.id))
 				.where(and(...conditions))
@@ -325,7 +340,10 @@ export const bookingsRouter = createTRPCRouter({
 				)
 				.limit(input.limit)
 				.offset(input.offset);
-			return rows.map((r) => ({ ...r, booking: withTiming(r.booking, now) }));
+			return rows.map(({ disputed, ...r }) => ({
+				...r,
+				booking: withTiming(r.booking, now, Boolean(disputed)),
+			}));
 		}),
 
 	/** What cancelling now would refund (owner or admin). */
@@ -337,17 +355,26 @@ export const bookingsRouter = createTRPCRouter({
 			});
 			const quote = await quoteBookingCancellation(ctx.db, booking);
 			const pending = booking.status === 'pending';
+			// Admins see an open dispute (refund only with explicit
+			// confirmation, B7). Guests only see that online cancellation is
+			// closed, never why (decision 2026-11-08).
+			const disputed = await disputeBlocks(ctx.db, booking);
+			const asAdmin =
+				ctx.user.role === 'admin' && (await isActiveAdmin(ctx.db, ctx.user.id));
+			const timeAllows =
+				booking.status !== 'cancelled' &&
+				(booking.status === 'pending' || quote.canCancel);
 			return {
 				status: booking.status,
-				// Guests can't cancel online while it is open; admins refund only
-				// with explicit confirmation (plan 02, 3.4b / B7).
-				hasOpenDispute:
-					booking.status === 'confirmed' &&
-					(await hasOpenDispute(ctx.db, booking.id)),
+				hasOpenDispute: asAdmin && disputed,
 				paymentStatus: booking.paymentStatus,
-				canCancel:
-					booking.status !== 'cancelled' &&
-					(booking.status === 'pending' || quote.canCancel),
+				canCancel: timeAllows && (asAdmin || !disputed),
+				/** Why guests can't cancel online now (null: they can). */
+				cancelBlocked: !timeAllows
+					? ('check_in_passed' as const)
+					: !asAdmin && disputed
+						? ('contact_us' as const)
+						: null,
 				amountPaid: quote.amountPaid,
 				alreadyRefunded: quote.alreadyRefunded,
 				/** What a full refund would return now (after partial refunds). */

@@ -227,7 +227,9 @@ releases pending holds past `expiresAt` that are not processing
   dialog showed (`expectedRefundAmount`) is `CONFLICT` before anything
   changes. See `BOOKING_ARCHITECTURE.md` for the windows (4:00 PM CT,
   wall-clock cutoffs).
-- **Open dispute** (`hasOpenDispute`): guests get `CONFLICT` ("contact us");
+- **Open dispute** (`hasOpenDispute`): guests get `canCancel: false` and
+  `CONFLICT` ("cannot be cancelled online, please contact us"), with no
+  mention of the dispute anywhere on guest pages or responses;
   admins default to no refund and must pass `confirmDisputeRefund: true` to
   refund (Stripe warns a refund on a disputed charge can credit the guest
   twice).

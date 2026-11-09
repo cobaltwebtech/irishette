@@ -382,8 +382,10 @@ function BookingDetailPage() {
 							) : (
 								booking.booking.status === 'confirmed' && (
 									<p className="text-sm text-muted-foreground">
-										Check-in time has passed, so this booking can no longer be
-										cancelled online. Please contact us.
+										{booking.booking.stayPhase === 'upcoming'
+											? 'This booking cannot be cancelled online.'
+											: 'Check-in time has passed, so this booking can no longer be cancelled online.'}{' '}
+										Please contact us.
 									</p>
 								)
 							)}

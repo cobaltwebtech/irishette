@@ -166,8 +166,10 @@ instants (`checkInAt`, `checkOutAt`), nights, guests, the amounts
 (`baseAmount`, `feesAmount`, `taxAmount`, `totalAmount`, `refundAmount`), the
 guest's own name/email/phone/special requests, `createdAt`, `cancelledAt`, and
 the room's `name` and `slug`; plus the derived `stayPhase`
-(`upcoming` / `in_stay` / `past`, property time), `canCancel` and
-`cancelUntil` (check-in, 4:00 PM CT). `getBooking` also returns the booking's
+(`upcoming` / `in_stay` / `past`, property time), `canCancel` (false from
+check-in on, and while the payment has an open dispute) and `cancelUntil`
+(check-in, 4:00 PM CT). **Guests never get dispute information** (decision
+2026-11-08): no dispute fields, and blocked cancellations are not explained. `getBooking` also returns the booking's
 `cancellationPolicy` (`name`, `tiers`). Never the
 internal `id`, `userId`, `roomId`, `internalNotes`, Stripe ids,
 `cancellationPolicyId` or the payment transaction. Admin pages use
@@ -183,8 +185,8 @@ internal `id`, `userId`, `roomId`, `internalNotes`, Stripe ids,
 | `getBooking` | query | user (owner only) | `bookingPublicIdSchema` | `{ booking, room }` with guest fields only (above) |
 | `adminGetBooking` | query | admin | `bookingPublicIdSchema` | Any booking: the full row, the room (`bookingRoomColumns`), the guest account (`publicId`, `email`, `name`) and its payment `disputes` (panel fields, no internal ids) |
 | `getMyBookings` | query | user | `{ limit 1-100 (10), offset, status? (pending/confirmed/cancelled), phase? ('upcoming' \| 'current' \| 'past', by `check_in_at`/`check_out_at`) }` | The caller's bookings (guest fields + `stayPhase`, `canCancel`, `cancelUntil`) with room name and slug, by check-in |
-| `getCancellationQuote` | query | owner or admin | `bookingPublicIdSchema` | Whether the booking can be cancelled now, the refund under its policy (`refundAmount`, `refundPercent`, `amountPaid`, `alreadyRefunded`, `refundableAmount`), `checkInDate`, `checkInAt`, every tier's cutoff as a UTC instant (`refundCutoffs: [{ refundPercent, minHoursBefore, until }]`), the policy (`name`, `tiers`) and `hasOpenDispute` |
-| `cancelBooking` | mutation | user (owner only) | `cancelBookingSchema` (`publicId`, `reason?`, `expectedRefundAmount?`) | Guest cancellation, refund per policy (saved first, then refunded). `CONFLICT` while the payment has an open dispute, or when the refund differs from `expectedRefundAmount` (a window passed). Returns `refundAmount`, `refundPercent`, `refundFailed?` |
+| `getCancellationQuote` | query | owner or admin | `bookingPublicIdSchema` | Whether the booking can be cancelled now, the refund under its policy (`refundAmount`, `refundPercent`, `amountPaid`, `alreadyRefunded`, `refundableAmount`), `checkInDate`, `checkInAt`, every tier's cutoff as a UTC instant (`refundCutoffs: [{ refundPercent, minHoursBefore, until }]`), the policy (`name`, `tiers`), `cancelBlocked` (`'check_in_passed' \| 'contact_us' \| null`, for the guest message) and `hasOpenDispute` (**admins only**; always `false` for guests, who only get `canCancel: false` and `contact_us`) |
+| `cancelBooking` | mutation | user (owner only) | `cancelBookingSchema` (`publicId`, `reason?`, `expectedRefundAmount?`) | Guest cancellation, refund per policy (saved first, then refunded). `CONFLICT` ("cannot be cancelled online, please contact us"; the dispute is not mentioned) while the payment has an open dispute, or when the refund differs from `expectedRefundAmount` (a window passed). Returns `refundAmount`, `refundPercent`, `refundFailed?` |
 | `adminCancelBooking` | mutation | admin | `adminCancelBookingSchema` (`publicId`, `refund: 'full' \| 'policy' \| 'none'`, `reason?`, `confirmDisputeRefund?`, `expectedRefundAmount?`) | Admin cancellation with chosen refund (`full` = what is still paid). With an open dispute, a refund needs `confirmDisputeRefund: true` (else `CONFLICT`) |
 | `resendConfirmationEmail` | mutation | owner or admin | `bookingPublicIdSchema` | Re-send the confirmation email; `BAD_REQUEST` unless confirmed, `BAD_GATEWAY` if Resend fails |
 | `adminListBookings` | query | admin | `{ limit 1-100 (10), offset, status?, paymentStatus? (shared enums), phase?, roomId? (idSchema), startDate?, endDate? (isoDateSchema) }` | All bookings with room, guest (id, email, name), `hasOpenDispute` and `stayPhase`. `startDate` / `endDate` bound the check-in date and work alone or together |

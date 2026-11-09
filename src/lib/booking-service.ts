@@ -611,7 +611,8 @@ async function assertDisputeAllows(
 		throw new TRPCError({
 			code: 'CONFLICT',
 			message:
-				'This booking has an open payment dispute, so it cannot be cancelled online. Please contact us.',
+				// Guests are not told about disputes (decision 2026-11-08).
+				'This booking cannot be cancelled online. Please contact us.',
 		});
 	}
 	if (options.refund !== 'none' && !options.confirmDisputeRefund) {
