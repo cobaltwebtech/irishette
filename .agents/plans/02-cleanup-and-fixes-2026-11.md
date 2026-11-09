@@ -57,14 +57,14 @@ Read `AGENTS.md` first. All its rules apply (secrets, `--local`, no remote/deplo
 | Legal pages | **Stay hardcoded** as they are (a small CMS may come later). No content refactor. |
 | Payments | **Migrate to Stripe Checkout Sessions with `ui_mode: 'elements'`.** On the client, use `CheckoutElementsProvider` / `useCheckoutElements` / `PaymentElement` from `@stripe/react-stripe-js/checkout`, and confirm with `checkout.confirm()`. Refunds still go through the session's PaymentIntent. `bookings.stripeSessionId` becomes the real session link. |
 | Booking priority | **First hold wins while it is live.** A live pending hold blocks other holds on the same dates. Refreshing it during payment extends it. Once it expires, another guest may hold the dates, and the expired hold's Checkout Session is expired at that moment so it can't be paid. Nobody pays and then gets refunded. |
-| Dashboard refunds | Handle `refund.created`, `refund.updated` and `refund.failed`, plus `charge.refunded` for totals. A **full** refund cancels the booking (`cancelledBy: 'system'`) and frees its dates. A **partial** refund updates the amounts. **Email the guest and the admins** with the full refund details from the webhook (see 3.4). |
+| Dashboard refunds | Handle `refund.created`, `refund.updated` and `refund.failed`, plus `charge.refunded` for totals. A **full** refund cancels the booking (`cancelledBy: 'system'`) and frees its dates. A **partial** refund updates the amounts. **Email the guest and the admins** with the full refund details from the webhook and the full booking details, like the confirmation email, and create a `refund_issued` inbox item (see 3.00, 3.4). |
 | Cancellation refunds | Percent of the **booking total including taxes and fees** (current behaviour). For a booking already partly refunded, the refund is the policy percent of the **original total**, capped at what is still paid (`totalAmount - refundAmount`). |
 | Check-in / check-out time | **Check-in is 4:00 PM (16:00) America/Chicago** for all logic: cancellation windows, the "can cancel" cutoff, `stayPhase` and the times shown in the UI and emails. It is a single constant, no longer a per-policy setting (see 3.9). **Check-out is 11:00 AM (11:00) America/Chicago** (confirmed), also a constant. |
 | Cancellation windows | Windows count back from **check-in at 4:00 PM (16:00) America/Chicago** on the check-in date. Default policy: **100% refund if cancelled at or before 4:00 PM CT three days before check-in ("72 hours"), 50% until 4:00 PM CT the day before ("24 hours"), 0% after that.** From 4:00 PM CT on the check-in date, guests can't cancel online. At exactly a cutoff, the **higher** refund applies. |
 | Time zone and DST | **All date/time rules use America/Chicago wall-clock time, always.** This includes cancellation cutoffs, check-in/out, the same-day cutoff, "today" and stay phase, whatever the server's or user's time zone. Tier cutoffs are wall-clock: "72 hours before" is 4:00 PM CT three calendar days earlier, so across a DST change the cutoff stays at 4:00 PM local (that day has 71 or 73 elapsed hours). The API converts each local cutoff to a UTC instant for that date with the Chicago offset in effect then, using `zonedTimeToUtc`. |
 | Timestamp normalization | Every instant in D1 is **UTC Unix seconds** (`integer(..., { mode: 'timestamp' })`, as today). Stay dates stay property-local `YYYY-MM-DD`. Each booking also stores its **normalized check-in and check-out instants** (`check_in_at` = check-in date at 16:00 CT, `check_out_at` = check-out date at 11:00 CT, both in UTC). Cancellation, refund and stay-phase checks compare UTC instants from the database instead of rebuilding local times (see 3.9). |
 | Stripe ↔ booking link | Every Stripe object the app creates carries **our booking ids in metadata**, so any event can be traced back to the booking: Checkout Session (`client_reference_id` = booking `id`; `metadata`), PaymentIntent (`payment_intent_data.metadata`, plus a `description` with the confirmation id), refunds (`metadata`). Metadata keys: `bookingId` (UUIDv7 primary key), `bookingPublicId`, `confirmationId`, `source: 'irishette'`. **No guest personal data in metadata.** Webhook handlers look up the booking by `metadata.bookingId` first, then by stored Stripe ids. |
-| Disputes | Handle Stripe disputes (`charge.dispute.*`). **No email from the app** (Stripe already emails the account owner). Show an **in-app notification in the admin inbox**. Store every dispute detail from the webhook, linked to the booking and the guest's user profile, and show it on the admin booking page and guest page (see 3.4b, 4). |
+| Disputes | Handle Stripe disputes (`charge.dispute.*`). **No email from the app** (Stripe already emails the account owner). Show an **in-app notification in the admin inbox** that turns unread again on every new Stripe event for the dispute (3.00). Store every dispute detail from the webhook, linked to the booking and the guest's user profile, and show it on the admin booking page and guest page (see 3.4b, 4). |
 | Webhook events doc | At the start of Phase 3, write the required Stripe events for the Checkout Sessions flow in their own section of `docs/STRIPE_WEBHOOKS.md`, before writing the handlers, so the dashboard and CLI can be set up. Update that doc again when Phase 3 is done (see 3.0). |
 | Same-day bookings | Check-in **today** (property date) is allowed only **until 9:00 AM (09:00) America/Chicago**. After that, the earliest check-in is tomorrow. Enforced on the server and shown in the calendar (see 3.9). |
 | Saved cards | **Don't save cards.** Remove `setup_future_usage`, and leave Checkout's `saved_payment_method_options.payment_method_save` at `disabled` (set it explicitly). Refunds still go back to the card used. Guests can still use **Stripe Link** inside the Payment Element; Link stores their details in their own Link account, handled entirely by Stripe. |
@@ -294,6 +294,18 @@ Tests:
 
 Read `stripe-best-practices` (references/payments.md) and the Stripe docs "Accept a payment" with Checkout Sessions + Elements + React (`docs.stripe.com/payments/accept-a-payment.md?payment-ui=elements&api-integration=checkout&client=react`). API version `2026-10-28.endive`, sandbox only.
 
+### 3.00 Phase 3 decisions (2026-11-08, after Phase 4; these override 3.0–3.9 where they differ)
+
+| Topic | Decision |
+|---|---|
+| Dispute notifications | **Every new Stripe event on a dispute marks its inbox item unread again** (`charge.dispute.created`, `.updated`, `.closed`, `.funds_withdrawn`, `.funds_reinstated`). The item's title and summary show the latest change. A replay of an event already applied, or an event older than the last one applied (out of order), updates nothing and does not resurface. `payment_disputes` stores `last_stripe_event_id` and `last_stripe_event_created` for this check; call `createInboxItem` (dedupe `dispute:<stripeDisputeId>`, `resurfaceAfterSeconds: 0`) only after the dispute upsert reports a newer event. |
+| Refund emails | **Keep sending the app's own refund emails** to the guest and the admins for refunds made in the Stripe Dashboard (3.4), even though Stripe sends its own receipt. They carry **the full booking details, like the confirmation email**: confirmation id, guest name, email and phone, room, check-in and check-out dates with times, nights, guests, special requests, and the price breakdown (base, taxes, fees, total paid), followed by the refund section. Build one shared booking-details email section and use it in the confirmation, cancellation and refund emails. |
+| Refund notifications | Dashboard refunds also create an inbox item: kind **`refund_issued`** (source `stripe`), dedupe `refund:<refundId>`, linked to the booking and guest, resurfaced on each refund status change. Refunds the app makes (cancellations) still get no second email and no inbox item; `refund_auto` and `refund_failed` stay as they are. |
+| B3 | **Closed:** a hold created before the 9:00 AM CT same-day cutoff can still be paid until it expires. `confirmBookingPayment` and the Checkout fulfilment do not re-check the cutoff. |
+| B4 | **Closed:** after the 3.0 doc and again when Phase 3 is done, the agent gives the user the exact event list for the sandbox webhook endpoint and the Link check; the user makes those Dashboard changes (listed in the Phase 3 report). |
+| B5 | **Closed:** `HOLD_MINUTES` goes from 30 to 35, and the Checkout Session `expires_at` equals the hold expiry. |
+| B7 | **Closed:** the admin cancel dialog for a booking with an open dispute shows a warning, defaults the refund to "none", and needs an explicit confirmation to refund. |
+
 ### 3.0 Document the webhook events first (`docs/STRIPE_WEBHOOKS.md`)
 
 Before writing the Checkout Session code, add a separate section to `docs/STRIPE_WEBHOOKS.md`, "Booking payments with Checkout Sessions (Phase 3)". It lists what the `/api/stripe/webhook` endpoint must subscribe to, and what the app will do with each event:
@@ -309,9 +321,9 @@ Before writing the Checkout Session code, add a separate section to `docs/STRIPE
 | `refund.failed` | yes | Admin alert with `failure_reason`. |
 | `charge.refunded` | yes | Totals sync (`amount_refunded`); no email. |
 | `charge.dispute.created` | yes | Store the dispute (3.4b), link it to the booking and user, create an admin inbox notification (no email). |
-| `charge.dispute.updated` | yes | Update the stored dispute (status, evidence due date, reason). Inbox only when the status changes. |
+| `charge.dispute.updated` | yes | Update the stored dispute (status, evidence due date, reason) and mark the inbox item unread again (3.00). |
 | `charge.dispute.closed` | yes | Store the outcome (`won` / `lost` / `warning_closed`) and mark the inbox item unread again with the result. |
-| `charge.dispute.funds_withdrawn` / `charge.dispute.funds_reinstated` | yes | Update the stored dispute's balance info. No new notification. |
+| `charge.dispute.funds_withdrawn` / `charge.dispute.funds_reinstated` | yes | Update the stored dispute's balance info and mark the inbox item unread again (3.00). |
 | `payment_intent.payment_failed` | optional | Log only. The Payment Element shows the error, and the hold stays until it expires. |
 
 The section also covers:
@@ -343,7 +355,7 @@ The server creates one Checkout Session per hold:
 - **No saved cards (decision).** Don't send `payment_intent_data.setup_future_usage` (today's `preparePayment` sends `setup_future_usage: 'off_session'`). Set `saved_payment_method_options: { payment_method_save: 'disabled' }` explicitly (it is the default; stripe 23.1.0 types).
 - **Link:** dynamic payment methods show Link in the Payment Element when it is enabled in the Dashboard payment method settings. The session's `customer` email lets Link recognise returning Link users. Nothing is stored on our side. Add a note to `STRIPE_PAYMENT_INTEGRATION.md` and ask the user to check that Link is enabled in the sandbox. The `ContactDetailsElement` isn't needed, because the customer email comes from the session.
 - `return_url`: `<BETTER_AUTH_URL>/booking/confirmation/<publicId>?session_id={CHECKOUT_SESSION_ID}`
-- `expires_at` = the hold's expiry. Stripe allows 30 minutes to 24 hours after creation (confirmed). `HOLD_MINUTES` is 30 today (`src/lib/availability.ts`). **Proposed:** raise it to 35, so that `expires_at` is always at least 30 minutes after the session is created, even with clock skew and the time spent creating the session. Hold and session expire at the same moment.
+- `expires_at` = the hold's expiry. Stripe allows 30 minutes to 24 hours after creation (confirmed). `HOLD_MINUTES` is 30 today (`src/lib/availability.ts`). **Decision (B5):** raise it to 35, so that `expires_at` is always at least 30 minutes after the session is created, even with clock skew and the time spent creating the session. Hold and session expire at the same moment.
 - `integration_identifier`: e.g. `irishette_booking_<8 random letters>`
 - idempotency key `checkout/<bookingId>/<holdExpiresAt>/<amountCents>`
 - no `payment_method_types` (dynamic payment methods)
@@ -402,7 +414,7 @@ The Stripe docs recommend `refund.created` as the minimum. `charge.refunded` doe
     - Partial refund: update `refundAmount` (total refunded so far) and `paymentStatus: 'partially_refunded'`.
     - Both: update `payment_transactions`.
   - **Email** the guest and the admins (new `sendRefundEmails` in `email-service.ts`, idempotency key `refund/<refundId>/<status>`).
-    - Booking details: confirmation id, room, check-in/out, nights, guests, total paid.
+    - Booking details: the full set from the confirmation email, through the shared booking-details section (3.00): confirmation id, guest name, email and phone, room, check-in/out with times, nights, guests, special requests, base, taxes, fees and total paid.
     - Refund details from the webhook:
       - refund amount and currency
       - total refunded so far and the remaining paid amount
@@ -414,9 +426,10 @@ The Stripe docs recommend `refund.created` as the minimum. `charge.refunded` doe
     - The new booking status (cancelled, or still confirmed after a partial refund).
     - Guest copy says refunds take 5–10 business days (Stripe docs). Fix the existing cancellation email, which says 3–5.
     - Admin copy links to the booking.
+  - **Inbox:** a `refund_issued` item (3.00), dedupe `refund:<refundId>`, resurfaced on each status change.
   - **`refund.failed`:** keep the admin alert and add `failure_reason`. The guest is not emailed (an admin follows up).
 - **`charge.refunded`:** keep it as a totals sync only (no email). Make every handler idempotent on refund id plus status.
-- **Proposed:** send a guest email for `refund.updated` only when the status changes to `succeeded` or `failed`, or when a reference becomes available. Don't email for metadata-only updates.
+- **Decision:** send the refund emails for `refund.updated` only when the status changes to `succeeded` or `failed`, or when a reference becomes available. Don't email for metadata-only updates.
 
 ### 3.4b Disputes (decision)
 
@@ -440,8 +453,8 @@ The Stripe docs recommend `refund.created` as the minimum. `charge.refunded` doe
   - A badge on the booking in the admin lists while a dispute is open.
 - **Refunds during a dispute:** Stripe warns that refunding a disputed charge can credit the guest twice (`charge_for_pending_refund_disputed`).
   - Guest online cancellation of a booking with an open dispute returns `CONFLICT` ("Please contact us").
-  - The admin cancel dialog shows a warning, defaults the refund to "none", and needs explicit confirmation to refund.
-- **Idempotency:** upsert by `stripe_dispute_id`. Replays and out-of-order events (updated before created) don't create duplicate inbox items.
+  - The admin cancel dialog shows a warning, defaults the refund to "none", and needs explicit confirmation to refund (B7, decided).
+- **Idempotency:** upsert by `stripe_dispute_id`. Replays and out-of-order events (updated before created) don't create duplicate inbox items. Each newer event marks the item unread again; a replay or an older event does not (`last_stripe_event_id` / `last_stripe_event_created`, 3.00).
 - **Tests (msw + signed fixtures):**
   - created → stored, linked and an inbox item made
   - updated and closed (won/lost)
@@ -555,7 +568,7 @@ Decision: check-in is **4:00 PM (16:00) America/Chicago** for all logic.
 - **Same-day cutoff (decision): 9:00 AM CT.**
   - Add `SAME_DAY_CUTOFF_TIME = '09:00'` to `site.ts`, and `earliestCheckInDate(now)` to `date-range.ts`: today if `now` is before 09:00 CT on today's property date, else tomorrow.
   - Server: `createHold` and `calculateBooking` reject a check-in before `earliestCheckInDate(now)` with `BAD_REQUEST` ("Same-day bookings close at 9:00 AM CT").
-  - **Proposed:** a hold created before 9:00 AM can still be paid until it expires (the guest started in time). `confirmBookingPayment` doesn't re-check the cutoff.
+  - **Decision (B3):** a hold created before 9:00 AM can still be paid until it expires (the guest started in time). `confirmBookingPayment` doesn't re-check the cutoff.
   - Client: `availability.getBySlug` returns `earliestCheckIn` (with `today`). The calendar disables earlier days and shows a short note on today after the cutoff. Use the server value, not the browser clock.
   - Tests: 08:59 vs 09:00 CT, across a DST date, with the unit project in UTC.
   - Show the rule on the room page / calendar note. The legal pages are unchanged.
@@ -598,7 +611,7 @@ Decision: check-in is **4:00 PM (16:00) America/Chicago** for all logic.
 - `source` (`stripe` | `system`)
 - `kind`:
   - Phase 4: `refund_auto` (dates taken, payment refunded), `refund_failed`, `ical_sync_failed`, `ical_conflict`
-  - Phase 3 adds `payment_dispute`
+  - Phase 3 adds `payment_dispute` and `refund_issued` (3.00)
 - `title`, `summary` (short, for the list; no guest message bodies, no card data)
 - `details` (small JSON text: kind-specific fields such as amounts, Stripe ids, feed id, due dates; no secrets, no full webhook payloads)
 - `status` (`new` | `read` | `archived`), `read_at`, `archived_at`
@@ -824,12 +837,10 @@ Resolved on 2026-11-08 (see 4.0): B8 (the four existing admin alert emails also 
 
 Resolved on 2026-11-08 (see 1.6): the admin check (D1 read for each admin call; browser cache 30 min), guest booking fields, admin room procedures, removing `ical.syncFeed`, rate limiting (D1 for Better Auth + Cloudflare binding middleware + Workers Logs; no KV), the `rateLimit` table columns and its self-cleanup (B1, part), and CSP reports to Workers Logs (B6).
 
+Resolved on 2026-11-08 (see 3.00): dispute items resurface on every new Stripe event; Dashboard refunds send the app's guest and admin emails with the full booking details and create a `refund_issued` inbox item; B3 (holds created before the cutoff stay payable), B4 (agent supplies the event list, user updates the sandbox endpoint and checks Link), B5 (`HOLD_MINUTES` 35), B7 (admin cancel during a dispute defaults to no refund).
+
 Still open:
 - B1. Better Auth 1.7.18:
   - `additionalFields.phoneNumber` with `input: true` vs tRPC-only updates (2.1)
   - the captcha endpoint path for send-verification (2.3)
-- B3. Holds created before the 9:00 AM same-day cutoff can still be paid until they expire (3.9).
-- B4. After 3.0 (doc) and again after Phase 3, the user updates the sandbox webhook endpoint's events and checks that Link is enabled in the payment method settings.
-- B7. Admin cancel during an open dispute defaults to no refund and needs explicit confirmation to refund (3.4b; confirm with the user).
-- B5. `HOLD_MINUTES` 30 → 35 to fit the Stripe session minimum (3.1).
 - ~~B9. Rate-limit namespace ids~~ Resolved in Phase 1: `20261` (auth), `20262` (API), `20263` (CSP reports), noted in `cloudflare.config.ts`. Check they are unused in the Cloudflare account before the first deploy.
