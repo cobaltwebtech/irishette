@@ -85,7 +85,7 @@ Config is the `fmt` and `lint` blocks in `vite.config.ts`. Oxfmt is scoped to co
 
 - **Tabs** for indentation, **single quotes** for JS/TS (CSS keeps double quotes), print width 80.
 - Oxfmt sorts imports (`@/` is internal) and Tailwind classes (in `class`/`className` and `cn`/`cva`/`clsx` calls, using `src/styles/styles.css`). Run `pnpm check:fix` to apply; do not hand-sort.
-- Lint: Oxlint with the `typescript`, `unicorn`, `oxc`, `react`, `jsx-a11y` plugins, `correctness` as errors, plus type-aware rules (`typeAware`/`typeCheck`). `react/purity` and `react/set-state-in-effect` are warnings until the last booking pages are fixed (then they become errors); do not add new violations. Read the clock with `useNow()` (`src/utils/use-now.ts`), never `new Date()` during render.
+- Lint: Oxlint with the `typescript`, `unicorn`, `oxc`, `react`, `jsx-a11y` plugins, `correctness` as errors, plus type-aware rules (`typeAware`/`typeCheck`). `react/purity` and `react/set-state-in-effect` are errors (the React Compiler skips components that break them). Read the clock with `useNow()` (`src/utils/use-now.ts`), never `new Date()` during render.
 - Suppress with `// oxlint-disable-next-line <rule> -- <reason>` and always give a reason.
 - Fire-and-forget promises need `void` (`typescript/no-floating-promises`).
 - Do not add ESLint, Prettier or Biome, or their config files. Do not reformat unrelated files; run `pnpm check:fix` and review the diff.

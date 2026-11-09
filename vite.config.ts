@@ -57,11 +57,10 @@ const config = defineConfig({
 		rules: {
 			'vite-plus/prefer-vite-plus-imports': 'error',
 			'unicorn/no-document-cookie': 'error',
-			// Known follow-ups, not blockers: `new Date()` during render (16 sites)
-			// and setState in effects (3). The React Compiler skips these
-			// components. Promote to 'error' once they are refactored.
-			'react/purity': 'warn',
-			'react/set-state-in-effect': 'warn',
+			// The React Compiler skips components that break these rules. Read the
+			// clock with useNow() (src/utils/use-now.ts), not `new Date()` in render.
+			'react/purity': 'error',
+			'react/set-state-in-effect': 'error',
 		},
 		options: { typeAware: true, typeCheck: true },
 	},
