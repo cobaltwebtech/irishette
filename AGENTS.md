@@ -116,7 +116,7 @@ src/core/functions/      TanStack Start server functions (auth-server.ts: getSes
 src/core/middleware/     TanStack Start middleware: security-headers (global), rate-limit (server routes + rateLimitFnMiddleware for server functions), auth (requireSession/requireAdmin function middleware)
 src/lib/                 Services and validation: auth, auth-client, auth-check (route guards), server-auth (server fn checks), session (useSession), session-user, booking-service, checkout-service, refund-service, dispute-service, booking-status (status enums), stay-times (check-in/out instants, same-day cutoff, stay phase), format, availability, pricing, date-range, cancellation-policy, email-service, stripe(-webhook), ical-sync/-parse/-generate/-export, scheduled-tasks, deps (ServiceDeps), ids, site (domain, contact details, email senders, check-in/out times), inbox (kinds, details types) + inbox-service (createInboxItem), contact-service + turnstile (contact form, Siteverify), *-validation (Zod)
 src/db/                  Drizzle schemas (auth-, booking-, room-, policy-, inbox-), schema-export.ts, drizzle-init.ts (createDrizzle, Database type)
-src/components/          UI (ui/ = shadcn, admin/ (admin/inbox/ = notifications), booking/, email/, data-table/)
+src/components/          UI (ui/ = shadcn, admin/ (admin/inbox/ = notifications), booking/ (booking/detail/ = cards shared by the admin, account and confirmation pages; BookingsTable = booking lists), rooms/ (room page sections), auth/, email/, data-table/)
 src/stores/              TanStack Store booking state
 drizzle/                 Generated SQL migrations: a single fresh baseline 0000_init.sql (applied via `cf d1 migrations apply`)
 scripts/                 d1-local.mjs (local D1 helpers), smoke.mjs, check-client-bundle.mjs (post-build secret-name check)
@@ -257,7 +257,7 @@ Skills are installed in **`.agents/skills/`** (locked in `skills-lock.json`; `.c
 | Fallow install/config/CI/agent hooks | `fallow-setup` |
 | Fallow Cloud runtime coverage | `fallow-cloud-setup` (only if the user asks) |
 | shadcn/ui components, CLI (`info`, `add --dry-run --diff`, `docs`), styling/composition rules | `shadcn` (from `shadcn/ui`; run the CLI as `pnpm dlx shadcn@latest`) |
-| Radix UI -> Base UI migration of the shadcn wrappers and their consumers | `migrate-radix-to-base` (from `shadcn/ui`; one component per commit, reports in `.migration/`) |
+| Radix UI -> Base UI migration of the shadcn wrappers and their consumers | `migrate-radix-to-base` (from `shadcn/ui`; one component per commit, reports in `.migration/`; the Base UI migration is finished and its reports were removed) |
 
 Not applicable here (do not use): `cargo-fallow` (Rust), `fallow-codex-onboarding` (Codex-specific).
 
@@ -340,10 +340,11 @@ Report to the user: the audit verdict, new findings you introduced (fixed or jus
 
 ### Fallow config: `.fallowrc.json`
 
-Tuned in Phase 8 of the 2026-11 upgrade plan. Framework entry points (TanStack Start/Router routes, `src/server.ts`, Vitest, Playwright) are auto-detected; no `entry` overrides are needed. Ask the user before loosening the config.
+Tuned in Phase 8 of the 2026-11 upgrade plan and tightened in plan 02 (Phase 7). Framework entry points (TanStack Start/Router routes, `src/server.ts`, Vitest, Playwright) are auto-detected; no `entry` overrides are needed. Ask the user before loosening the config.
 
 - `ignoreExportsUsedInFile: true`.
-- `rules`: `unused-exports` and `unused-types` are `warn` (promote to `error` once they stay clean); `boundary-violation` is `error`; `policy-violation` is `off` (no rule packs).
+- `rules`: `unused-exports`, `unused-types` and `boundary-violation` are `error`; `policy-violation` is `off` (no rule packs). Remove or trace an unused export instead of suppressing it.
+- `duplicates.threshold: 6`: `fallow dupes` exits 1 above 6% duplicated lines. It does not affect `fallow audit` or bare `fallow`, so it is a warning for the gate; lower it as duplication drops.
 - `overrides`: `src/components/ui/**` (vendored shadcn library) has `unused-exports`/`unused-types` off.
 - `boundaries` (zones are matched in order):
 
@@ -357,7 +358,7 @@ Tuned in Phase 8 of the 2026-11 upgrade plan. Framework entry points (TanStack S
 
   Routes and `src/core/` are unzoned. When you add a server-only module to `src/lib/`, add it to the `server` zone. If client code needs a constant that lives in a server file (e.g. a Drizzle schema), move it into a shared module (see `src/lib/ical-feed-sources.ts`) instead of suppressing the violation.
 
-Remaining known findings: `fallow dupes` reports ~15% duplicated lines, mostly page-level JSX (the two room pages, the admin vs account booking detail pages, login vs signup, the legal pages). Treat these as refactoring candidates, not gate failures.
+Remaining known findings (2026-11-09): `fallow dupes` reports ~4.8% duplicated lines, mostly the hardcoded legal pages (kept as they are by decision), the admin charts, the room pricing/blocking forms and Drizzle schema column blocks. `fallow health` (score ~87, A) still lists complexity findings: most are CRAP scores (no test coverage), plus a few inherited functions above cognitive 15 (`BookingFlow`, `PricingRuleForm`, `FeedDialog`, `EditProfileModal`, `syncFeed`). Treat these as refactoring candidates, not gate failures.
 
 Rules of thumb (verify each, do not assume):
 - Drizzle schema exports consumed only by `drizzle-kit` (`src/db/schema-export.ts`), react-email templates, and Better Auth / tRPC types used only for inference can look unused.

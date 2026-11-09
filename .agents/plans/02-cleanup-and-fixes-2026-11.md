@@ -1,6 +1,6 @@
 # Irishette Cleanup and Fixes Plan (2026-11, plan 02)
 
-Status: **APPROVED** (decisions agreed 2026-11-07, clarifications added the same day). Items marked **Proposed** are the author's default for a detail the user has not decided. Follow them unless the user says otherwise, and mention them in the phase report. Run one phase per session.
+Status: **DONE** (2026-11-09; approved 2026-11-07). See [Outcome](#outcome) below. Items marked **Proposed** were the author's default for a detail the user had not decided.
 
 Context: this plan follows `01-upgrade-2026-11.md`, which finished at commit `1ea0440` "chore: cleanup and docs" on branch `updates`. The findings come from the plan 01 Phase 8 docs review (four agents rewrote the booking, tRPC, auth and Stripe docs against the code) and from a review on 2026-11-07 of:
 - the cancellation window
@@ -748,6 +748,39 @@ These changes must not change behaviour; tests stay green after each step.
 - Update `AGENTS.md` and the docs. Mark this plan **DONE** with an outcome section.
 - Run the full gate. `fallow audit --base updates` should pass, or report each remaining inherited finding.
 - Commit: "chore: plan 02 wrap-up".
+
+---
+
+## Outcome
+
+Branch `chore/cleanup-2026-11`, phases 0-7 complete (the Base UI work ran on `chore/base-ui-2026-11` and was merged back). Not pushed; no PR yet.
+
+| Phase | Commit(s) |
+|---|---|
+| 0 Branch, skills, site constants | `deccd05` |
+| 1 Data exposure and authorization | `0761b62` |
+| 2 Auth (guards, magic link first, phone plugin removed) | `9467845` |
+| 4 Contact form and admin notification inbox | `705238d` |
+| 3 Checkout Sessions, refunds, disputes; check-in times, cancellation windows, statuses | `f8f1efc`, `3efd9ef`, `1da03b1` |
+| 5 Base UI migration, React rule warnings | `5d92836` .. `b64c272` (one commit per component), `60e12bb` |
+| 6 Refactors and duplication | `bc39eef` |
+| 7 Wrap-up | "chore: plan 02 wrap-up" |
+
+Numbers (start of plan -> end):
+- Tests: 293 -> 507 (41 files). Smoke 10/10. E2E 14 passed, 11 skipped (signed-in and Stripe tests need the `E2E_*` vars).
+- `pnpm check`: 19 warnings -> 0; `react/purity` and `react/set-state-in-effect` are errors.
+- `fallow dupes`: ~15% at plan start; 9.82% (3,542 lines, 74 groups) before Phase 6 -> 4.76% (1,693 lines, 46 groups).
+- `fallow health`: 82.0 (B) before Phase 6 -> 86.8 (A). Phase 6 targets now at cognitive <= 15: `BookingDetailsStep` 36 -> 5, `parseIcal` 30 -> <10, `LoginPage` 25 -> 5, `SignupPage` 23 -> 15, `AdminBookingDetailPage` 23 -> 9, booking detail 22 -> 6, confirmation 20 -> 9.
+- `fallow dead-code`: 0. `unused-exports` / `unused-types` promoted to `error`; `duplicates.threshold: 6` added (fails `fallow dupes` only, not `fallow audit`).
+- Worker size (`pnpm deploy:dry`): 8,660 KiB, 1,921 KiB gzip, well under the Workers limits; the `email-service` chunk is 1.12 MB (was 1.7 MB), so no import trimming was needed.
+
+`fallow audit --base updates`: **fail** (new-only gate; 300 changed files, so findings in every touched file count). Remaining findings:
+- Complexity above cognitive 15 in code this plan added: `CancelBookingButton` (18; `QuoteDetails` 19, `handleCancel` 16), `RoomAvailabilityCalendar` (16), `prepareCheckout` (16). The rest are CRAP-only (no test coverage).
+- Duplication flagged as introduced only because the files were touched: legal pages (kept by decision), Drizzle schema column blocks, `BookingsChart` vs `RevenueChart`, `RoomBlockingManagement` vs `RoomPricingRules`, `AdminUser`, `routeTree.gen.ts`, and 10 lines of route boilerplate between the admin current/past booking lists.
+- Diff risk (all intentional): `e2e/contact.spec.ts` skips unless `E2E_CONTACT=1` (it sends a real email); two reasoned `oxlint-disable` lines (`AdminSidebar.tsx`, `ui/label.tsx`).
+- Inherited, not touched by this plan: `BookingFlow` (26), `PricingRuleForm` (23), `FeedDialog` (23), `EditProfileModal` (23), `syncFeed` (22), `getValidationErrors` (20), `EditRoom` (19).
+
+Known leftovers: a stray "4" and an "(need to update these images)" note in the Texas Room special-features section, and the "DO WE NEED ANYTHING ABOUT PETS..." placeholder on both room pages (content for the client to supply; kept as is).
 
 ---
 

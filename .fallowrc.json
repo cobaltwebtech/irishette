@@ -2,10 +2,13 @@
   "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
   "ignoreExportsUsedInFile": true,
   "rules": {
-    "unused-exports": "warn",
-    "unused-types": "warn",
+    "unused-exports": "error",
+    "unused-types": "error",
     "boundary-violation": "error",
     "policy-violation": "off"
+  },
+  "duplicates": {
+    "threshold": 6
   },
   "overrides": [
     {
