@@ -1,14 +1,44 @@
 import { TRPCError } from '@trpc/server';
 import { and, count, eq, ne } from 'drizzle-orm';
 import { z } from 'zod';
-import { createDrizzle } from '@/db/drizzle-init';
+
+import type { Database } from '@/db/drizzle-init';
 import { bookings, user } from '@/db/schema-export';
+import { isUniqueViolation } from '@/lib/db-errors';
+import { listDisputes } from '@/lib/dispute-service';
+import { publicIdSchema } from '@/lib/ids';
+import { stayPhase } from '@/lib/stay-times';
+import { updateProfileSchema } from '@/lib/user-validation';
+
 import { adminProcedure, createTRPCRouter, protectedProcedure } from './init';
 
+// Unexpected errors propagate: errorFormatter hides them from the client and
+// the tRPC handler's onError logs them once (src/routes/api/trpc.$.ts).
+
+const phoneInUse = () =>
+	new TRPCError({
+		code: 'CONFLICT',
+		message: 'This phone number is already used by another account',
+	});
+
+/** Updates the caller's own user row; a duplicate phone number is CONFLICT. */
+async function updateOwnUser(
+	ctx: { db: Database; user: { id: string } },
+	changes: Partial<Pick<typeof user.$inferInsert, 'name' | 'phoneNumber'>>,
+) {
+	try {
+		await ctx.db
+			.update(user)
+			.set({ ...changes, updatedAt: new Date() })
+			.where(eq(user.id, ctx.user.id));
+	} catch (error) {
+		if (isUniqueViolation(error)) throw phoneInUse();
+		throw error;
+	}
+}
+
 export const usersRouter = createTRPCRouter({
-	/**
-	 * Admin: Get all users with role 'user' (customers/guests) with booking count
-	 */
+	/** Guests (role 'user') with their booking count (pending holds excluded). */
 	adminListGuests: adminProcedure
 		.input(
 			z.object({
@@ -17,19 +47,17 @@ export const usersRouter = createTRPCRouter({
 			}),
 		)
 		.query(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
-
-			try {
-				// Get all users with role 'user' with their booking count (excluding pending bookings)
-				const guests = await db
+			const [guests, [{ total }]] = await Promise.all([
+				ctx.db
 					.select({
 						user: {
 							id: user.id,
+							publicId: user.publicId,
 							name: user.name,
 							email: user.email,
 							createdAt: user.createdAt,
 							stripeCustomerId: user.stripeCustomerId,
-							phoneNumber: user.phoneNumber, // Use phone from user table
+							phoneNumber: user.phoneNumber,
 						},
 						bookingCount: count(bookings.id),
 					})
@@ -42,182 +70,74 @@ export const usersRouter = createTRPCRouter({
 					.groupBy(user.id)
 					.orderBy(user.name)
 					.limit(input.limit)
-					.offset(input.offset);
-
-				// Get total count for pagination
-				const totalResult = await db
-					.select({ count: count() })
+					.offset(input.offset),
+				ctx.db
+					.select({ total: count() })
 					.from(user)
-					.where(eq(user.role, 'user'));
-
-				const total = totalResult[0]?.count || 0;
-
-				return {
-					guests,
-					total,
-					hasMore: input.offset + input.limit < total,
-				};
-			} catch (error) {
-				console.error('Failed to get guests:', error);
-				throw new TRPCError({
-					code: 'INTERNAL_SERVER_ERROR',
-					message: 'Failed to get guest list',
-				});
-			}
+					.where(eq(user.role, 'user')),
+			]);
+			return {
+				guests,
+				total,
+				hasMore: input.offset + input.limit < total,
+			};
 		}),
 
-	/**
-	 * Admin: Get detailed guest information including all their bookings
-	 */
+	/** A guest's profile (explicit columns) and their bookings (no holds). */
 	adminGetGuestDetails: adminProcedure
-		.input(
-			z.object({
-				userId: z.string(),
-			}),
-		)
+		.input(z.object({ publicId: publicIdSchema }))
 		.query(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
-
-			try {
-				// Get user details
-				const userResult = await db
-					.select()
-					.from(user)
-					.where(eq(user.id, input.userId));
-
-				if (!userResult[0]) {
-					throw new TRPCError({
-						code: 'NOT_FOUND',
-						message: 'Guest not found',
-					});
-				}
-
-				// Get all bookings for this user (excluding pending bookings)
-				const userBookings = await db
-					.select()
-					.from(bookings)
-					.where(
-						and(
-							eq(bookings.userId, input.userId),
-							ne(bookings.status, 'pending'),
-						),
-					)
-					.orderBy(bookings.createdAt);
-
-				return {
-					user: userResult[0],
-					bookings: userBookings,
-				};
-			} catch (error) {
-				console.error('Failed to get guest details:', error);
-				throw new TRPCError({
-					code: 'INTERNAL_SERVER_ERROR',
-					message:
-						error instanceof Error
-							? error.message
-							: 'Failed to get guest details',
-				});
+			const [guest] = await ctx.db
+				.select({
+					publicId: user.publicId,
+					name: user.name,
+					email: user.email,
+					emailVerified: user.emailVerified,
+					phoneNumber: user.phoneNumber,
+					role: user.role,
+					stripeCustomerId: user.stripeCustomerId,
+					createdAt: user.createdAt,
+					internalId: user.id,
+				})
+				.from(user)
+				.where(eq(user.publicId, input.publicId));
+			if (!guest) {
+				throw new TRPCError({ code: 'NOT_FOUND', message: 'Guest not found' });
 			}
+			const { internalId, ...profile } = guest;
+			const userBookings = await ctx.db
+				.select()
+				.from(bookings)
+				.where(
+					and(eq(bookings.userId, internalId), ne(bookings.status, 'pending')),
+				)
+				.orderBy(bookings.createdAt);
+			const disputes = await listDisputes(ctx.db, { userId: internalId });
+			const now = new Date();
+			return {
+				user: profile,
+				bookings: userBookings.map((b) => ({
+					...b,
+					stayPhase: stayPhase(b, now),
+				})),
+				disputes,
+			};
 		}),
 
 	/**
-	 * Update user's phone number (for logged-in users)
-	 */
-	updatePhoneNumber: protectedProcedure
-		.input(
-			z.object({
-				phoneNumber: z
-					.string()
-					.min(10, 'Phone number must be at least 10 digits'),
-			}),
-		)
-		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
-
-			try {
-				// Use authenticated user's ID from session
-				const userId = ctx.user.id;
-
-				// Update the user's phone number
-				await db
-					.update(user)
-					.set({
-						phoneNumber: input.phoneNumber,
-						updatedAt: new Date(),
-					})
-					.where(eq(user.id, userId));
-
-				return {
-					success: true,
-					message: 'Phone number updated successfully',
-				};
-			} catch (error) {
-				console.error('Failed to update phone number:', error);
-				throw new TRPCError({
-					code: 'INTERNAL_SERVER_ERROR',
-					message:
-						error instanceof Error
-							? error.message
-							: 'Failed to update phone number',
-				});
-			}
-		}),
-
-	/**
-	 * Update user profile (name, email, phone number)
+	 * The caller's own name and phone number (the only way to change the
+	 * phone: Better Auth's user.additionalFields.phoneNumber has input: false).
+	 * A phone number used by another account is CONFLICT.
 	 */
 	updateProfile: protectedProcedure
-		.input(
-			z.object({
-				name: z.string().min(1, 'Name is required').optional(),
-				email: z.email('Invalid email address').optional(),
-				phoneNumber: z
-					.string()
-					.min(10, 'Phone number must be at least 10 digits')
-					.optional(),
-			}),
-		)
+		.input(updateProfileSchema)
 		.mutation(async ({ ctx, input }) => {
-			const db = createDrizzle(ctx.db);
-
-			try {
-				// Use authenticated user's ID from session
-				const userId = ctx.user.id;
-
-				// Build the update object dynamically
-				const updateData: {
-					name?: string;
-					email?: string;
-					phoneNumber?: string;
-					updatedAt: Date;
-				} = {
-					updatedAt: new Date(),
-				};
-
-				if (input.name !== undefined) {
-					updateData.name = input.name;
-				}
-				if (input.email !== undefined) {
-					updateData.email = input.email;
-				}
-				if (input.phoneNumber !== undefined) {
-					updateData.phoneNumber = input.phoneNumber;
-				}
-
-				// Update the user's profile
-				await db.update(user).set(updateData).where(eq(user.id, userId));
-
-				return {
-					success: true,
-					message: 'Profile updated successfully',
-				};
-			} catch (error) {
-				console.error('Failed to update profile:', error);
-				throw new TRPCError({
-					code: 'INTERNAL_SERVER_ERROR',
-					message:
-						error instanceof Error ? error.message : 'Failed to update profile',
-				});
-			}
+			await updateOwnUser(ctx, {
+				...(input.name !== undefined ? { name: input.name } : {}),
+				...(input.phoneNumber !== undefined
+					? { phoneNumber: input.phoneNumber }
+					: {}),
+			});
+			return { success: true, message: 'Profile updated successfully' };
 		}),
 });

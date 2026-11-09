@@ -1,17 +1,23 @@
 // Re-export all schema tables for Drizzle
 export * from './auth-schema';
 export * from './booking-schema';
+export * from './inbox-schema';
+export * from './policy-schema';
 export * from './room-schema';
 
 // Organized exports for better imports in your app
 import * as authSchema from './auth-schema';
 import * as bookingSchema from './booking-schema';
+import * as inboxSchema from './inbox-schema';
+import * as policySchema from './policy-schema';
 import * as roomSchema from './room-schema';
 
 // Export organized schema groups
 export const schemas = {
 	auth: authSchema,
 	booking: bookingSchema,
+	inbox: inboxSchema,
+	policy: policySchema,
 	room: roomSchema,
 };
 
@@ -21,6 +27,10 @@ export const allTables = {
 	...authSchema,
 	// Booking tables
 	...bookingSchema,
+	// Admin notification inbox
+	...inboxSchema,
+	// Policy tables
+	...policySchema,
 	// Room tables
 	...roomSchema,
 };

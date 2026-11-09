@@ -2,14 +2,16 @@ import { Icon } from '@iconify/react';
 import type { ErrorComponentProps } from '@tanstack/react-router';
 import { Link, rootRouteId, useMatch, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
+
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
 	Collapsible,
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import { cn } from '@/utils/twMerge';
 
 export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
 	const router = useRouter();
@@ -22,16 +24,18 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
 	console.error(error);
 
 	// Format error details for display
-	const errorMessage = error?.message || 'An unexpected error occurred';
-	const errorStack = error?.stack || '';
+	// Router types `error` as `unknown`; only Error instances carry message/stack.
+	const err = error instanceof Error ? error : undefined;
+	const errorMessage = err?.message || 'An unexpected error occurred';
+	const errorStack = err?.stack || '';
 	const hasStack = errorStack.length > 0;
 
 	return (
-		<div className="flex flex-col flex-auto items-center justify-center p-4">
+		<div className="flex flex-auto flex-col items-center justify-center p-4">
 			<Card className="w-full max-w-2xl">
 				<CardHeader>
 					<div className="flex items-center space-x-2">
-						<div className="flex items-center justify-center size-12 rounded-full bg-destructive/30">
+						<div className="flex size-12 items-center justify-center rounded-full bg-destructive/30">
 							<Icon
 								icon="tabler:alert-octagon-filled"
 								className="size-7 text-destructive"
@@ -65,12 +69,10 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
 						</Button>
 
 						{isRoot ? (
-							<Button asChild>
-								<Link to="/">
-									<Icon icon="tabler:home" />
-									Go to Home
-								</Link>
-							</Button>
+							<Link to="/" data-slot="button" className={cn(buttonVariants())}>
+								<Icon icon="tabler:home" />
+								Go to Home
+							</Link>
 						) : (
 							<Button variant="outline" onClick={() => window.history.back()}>
 								← Go Back
@@ -81,22 +83,20 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
 					{/* Error Details (Collapsible) */}
 					{hasStack && (
 						<Collapsible open={showDetails} onOpenChange={setShowDetails}>
-							<CollapsibleTrigger asChild>
-								<Button variant="link" size="sm">
-									<Icon icon="tabler:bug" />
-									Technical Details
-									<Icon
-										icon="tabler:chevron-down"
-										className={`size-4 transition-transform duration-200 ${showDetails ? 'rotate-180' : ''}`}
-									/>
-								</Button>
+							<CollapsibleTrigger render={<Button variant="link" size="sm" />}>
+								<Icon icon="tabler:bug" />
+								Technical Details
+								<Icon
+									icon="tabler:chevron-down"
+									className={`size-4 transition-transform duration-200 ${showDetails ? 'rotate-180' : ''}`}
+								/>
 							</CollapsibleTrigger>
 							<CollapsibleContent className="space-y-2">
 								<div className="rounded-lg bg-destructive/20 p-4">
-									<h4 className="text-sm font-medium mb-2">
+									<h4 className="mb-2 text-sm font-medium">
 										Error Stack Trace:
 									</h4>
-									<pre className="text-xs text-muted-foreground whitespace-pre-wrap wrap-break-word max-h-40 overflow-y-auto">
+									<pre className="max-h-40 overflow-y-auto text-xs wrap-break-word whitespace-pre-wrap text-muted-foreground">
 										{errorStack}
 									</pre>
 								</div>

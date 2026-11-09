@@ -1,5 +1,6 @@
 import { format, parse, startOfMonth, subMonths } from 'date-fns';
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
 	type ChartConfig,
@@ -7,6 +8,8 @@ import {
 	ChartTooltip,
 	ChartTooltipContent,
 } from '@/components/ui/chart';
+import { parseISODateString } from '@/utils/booking-utils';
+import { useTodayCT } from '@/utils/use-now';
 
 // Type for the monthly revenue data from tRPC
 type MonthlyRevenueData = {
@@ -28,10 +31,12 @@ interface RevenueChartProps {
 }
 
 export function RevenueChart({ data, isLoading }: RevenueChartProps) {
+	// The current month in Central Time (property time).
+	const now = parseISODateString(useTodayCT());
 	// Generate all 12 months from 11 months ago to current month
 	const generateLast12Months = () => {
 		const months: string[] = [];
-		const currentDate = startOfMonth(new Date());
+		const currentDate = startOfMonth(now);
 
 		for (let i = 11; i >= 0; i--) {
 			const monthDate = subMonths(currentDate, i);
@@ -55,7 +60,7 @@ export function RevenueChart({ data, isLoading }: RevenueChartProps) {
 	const formattedData = completeData.map((item) => {
 		try {
 			// Parse 'YYYY-MM' format and format as 'MMM yyyy' (e.g., "Jan 2024")
-			const date = parse(item.month, 'yyyy-MM', new Date());
+			const date = parse(item.month, 'yyyy-MM', now);
 			return {
 				...item,
 				monthLabel: format(date, 'MMM yyyy'),
@@ -85,7 +90,7 @@ export function RevenueChart({ data, isLoading }: RevenueChartProps) {
 					</p>
 				</CardHeader>
 				<CardContent>
-					<div className="flex items-center justify-center h-[300px] md:h-[400px] text-muted-foreground">
+					<div className="flex h-[300px] items-center justify-center text-muted-foreground md:h-[400px]">
 						Loading chart data...
 					</div>
 				</CardContent>
@@ -154,12 +159,12 @@ export function RevenueChart({ data, isLoading }: RevenueChartProps) {
 						/>
 					</AreaChart>
 				</ChartContainer>
-				<div className="mt-4 pt-4 border-t">
+				<div className="mt-4 border-t pt-4">
 					<div className="flex items-center justify-between text-sm">
 						<span className="text-muted-foreground">
 							Total Revenue (12 months)
 						</span>
-						<span className="font-semibold text-lg">
+						<span className="text-lg font-semibold">
 							$
 							{totalRevenue.toLocaleString(undefined, {
 								minimumFractionDigits: 2,

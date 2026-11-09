@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import {
 	Body,
 	Button,
@@ -11,8 +12,7 @@ import {
 	Section,
 	Tailwind,
 	Text,
-} from '@react-email/components';
-import type * as React from 'react';
+} from 'react-email';
 
 interface AdminBookingNotificationEmailProps {
 	confirmationId: string;
@@ -72,21 +72,21 @@ export const AdminBookingNotificationEmail: React.FC<
 					<Container className="mx-auto my-[40px] max-w-[500px] rounded border border-solid border-blue-300 bg-blue-50 p-[20px]">
 						{/* Header */}
 						<Section className="my-[20px] text-center">
-							<Heading as="h1" className="text-2xl text-blue-900 mb-2">
+							<Heading as="h1" className="mb-2 text-2xl text-blue-900">
 								🏨 New Booking Alert
 							</Heading>
-							<Text className="text-sm text-blue-700 mb-0">
+							<Text className="mb-0 text-sm text-blue-700">
 								Irishette Bed & Breakfast - Admin Notification
 							</Text>
 						</Section>
 
 						{/* Booking Summary */}
-						<Section className="mb-[24px] bg-white border border-blue-200 rounded-lg p-4">
+						<Section className="mb-[24px] rounded-lg border border-blue-200 bg-white p-4">
 							<Row>
 								<Column>
 									<Heading
 										as="h2"
-										className="text-lg font-bold text-blue-900 mb-3"
+										className="mb-3 text-lg font-bold text-blue-900"
 									>
 										Booking Details
 									</Heading>
@@ -96,10 +96,10 @@ export const AdminBookingNotificationEmail: React.FC<
 							{/* Confirmation ID */}
 							<Row className="mb-3">
 								<Column>
-									<Text className="text-xs font-semibold text-blue-700 mb-1">
+									<Text className="mb-1 text-xs font-semibold text-blue-700">
 										CONFIRMATION ID
 									</Text>
-									<Text className="text-sm font-bold text-blue-900 mb-0">
+									<Text className="mb-0 text-sm font-bold text-blue-900">
 										{confirmationId}
 									</Text>
 								</Column>
@@ -108,10 +108,10 @@ export const AdminBookingNotificationEmail: React.FC<
 							{/* Guest & Room Info */}
 							<Row className="mb-3">
 								<Column className="w-1/2 pr-2">
-									<Text className="text-xs font-semibold text-blue-700 mb-1">
+									<Text className="mb-1 text-xs font-semibold text-blue-700">
 										GUEST
 									</Text>
-									<Text className="text-sm text-blue-900 mb-1">
+									<Text className="mb-1 text-sm text-blue-900">
 										{guestName}
 									</Text>
 									<Text className="text-xs text-blue-600">{guestEmail}</Text>
@@ -120,10 +120,10 @@ export const AdminBookingNotificationEmail: React.FC<
 									)}
 								</Column>
 								<Column className="w-1/2 pl-2">
-									<Text className="text-xs font-semibold text-blue-700 mb-1">
+									<Text className="mb-1 text-xs font-semibold text-blue-700">
 										ROOM
 									</Text>
-									<Text className="text-sm text-blue-900 mb-1">{roomName}</Text>
+									<Text className="mb-1 text-sm text-blue-900">{roomName}</Text>
 									<Text className="text-xs text-blue-600">
 										{numberOfGuests} guest{numberOfGuests !== 1 ? 's' : ''}
 									</Text>
@@ -133,13 +133,13 @@ export const AdminBookingNotificationEmail: React.FC<
 							{/* Dates & Amount */}
 							<Row className="mb-3">
 								<Column className="w-1/2 pr-2">
-									<Text className="text-xs font-semibold text-blue-700 mb-1">
+									<Text className="mb-1 text-xs font-semibold text-blue-700">
 										DATES
 									</Text>
-									<Text className="text-sm text-blue-900 mb-1">
+									<Text className="mb-1 text-sm text-blue-900">
 										{formatDate(checkInDate)}
 									</Text>
-									<Text className="text-sm text-blue-900 mb-1">
+									<Text className="mb-1 text-sm text-blue-900">
 										to {formatDate(checkOutDate)}
 									</Text>
 									<Text className="text-xs text-blue-600">
@@ -147,7 +147,7 @@ export const AdminBookingNotificationEmail: React.FC<
 									</Text>
 								</Column>
 								<Column className="w-1/2 pl-2">
-									<Text className="text-xs font-semibold text-blue-700 mb-1">
+									<Text className="mb-1 text-xs font-semibold text-blue-700">
 										TOTAL PAID
 									</Text>
 									<Text className="text-lg font-bold text-green-600">
@@ -160,7 +160,7 @@ export const AdminBookingNotificationEmail: React.FC<
 							{specialRequests && (
 								<Row className="mb-2">
 									<Column>
-										<Text className="text-xs font-semibold text-blue-700 mb-1">
+										<Text className="mb-1 text-xs font-semibold text-blue-700">
 											SPECIAL REQUESTS
 										</Text>
 										<Text className="text-sm text-blue-900 italic">
@@ -176,7 +176,7 @@ export const AdminBookingNotificationEmail: React.FC<
 							<Row>
 								<Column>
 									<Button
-										className="box-border w-full rounded-[6px] bg-blue-700 px-4 py-3 font-semibold text-white text-sm"
+										className="box-border w-full rounded-[6px] bg-blue-700 px-4 py-3 text-sm font-semibold text-white"
 										href={adminDashboardUrl}
 									>
 										View in Admin Dashboard
@@ -186,19 +186,19 @@ export const AdminBookingNotificationEmail: React.FC<
 						</Section>
 
 						{/* Quick Actions */}
-						<Section className="mb-[20px] bg-gray-50 border border-gray-200 rounded-lg p-3">
+						<Section className="mb-[20px] rounded-lg border border-gray-200 bg-gray-50 p-3">
 							<Row>
 								<Column>
-									<Text className="text-xs font-semibold text-gray-700 mb-2">
+									<Text className="mb-2 text-xs font-semibold text-gray-700">
 										QUICK ACTIONS
 									</Text>
-									<Text className="text-xs text-gray-600 mb-1">
+									<Text className="mb-1 text-xs text-gray-600">
 										• Check room availability calendar
 									</Text>
-									<Text className="text-xs text-gray-600 mb-1">
+									<Text className="mb-1 text-xs text-gray-600">
 										• Prepare welcome materials
 									</Text>
-									<Text className="text-xs text-gray-600 mb-0">
+									<Text className="mb-0 text-xs text-gray-600">
 										• Update housekeeping schedule
 									</Text>
 								</Column>
@@ -206,10 +206,10 @@ export const AdminBookingNotificationEmail: React.FC<
 						</Section>
 
 						{/* Footer */}
-						<Section className="my-[16px] py-[16px] text-center border-t border-blue-200">
+						<Section className="my-[16px] border-t border-blue-200 py-[16px] text-center">
 							<Row>
 								<Column>
-									<Text className="text-xs text-blue-600 mb-1">
+									<Text className="mb-1 text-xs text-blue-600">
 										Irishette Bed & Breakfast Admin System
 									</Text>
 									<Text className="text-xs text-blue-500">

@@ -1,6 +1,10 @@
 import { Icon } from '@iconify/react';
 import { createFileRoute } from '@tanstack/react-router';
-import { useId } from 'react';
+import { type ComponentProps, type FormEvent, useId, useState } from 'react';
+import { z } from 'zod';
+
+import { AuthError } from '@/components/auth/AuthCard';
+import { TurnstileField, useTurnstile } from '@/components/auth/TurnstileField';
 import { Button } from '@/components/ui/button';
 import {
 	Card,
@@ -11,8 +15,24 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { submitContactFn } from '@/core/functions/contact';
+import type { ContactResult } from '@/lib/contact-service';
+import { contactSchema } from '@/lib/contact-validation';
+import { useSession } from '@/lib/session';
+import {
+	CHECK_IN_TIME_LABEL,
+	CHECK_OUT_TIME_LABEL,
+	CONTACT_EMAIL,
+	CONTACT_PHONE,
+	CONTACT_PHONE_HREF,
+} from '@/lib/site';
 
 export const Route = createFileRoute('/contact')({
+	// ?booking=ABC123 prefills the confirmation ID ("Contact support" links).
+	validateSearch: z.object({
+		booking: z.string().trim().max(20).optional().catch(undefined),
+	}),
 	head: () => ({
 		meta: [
 			{
@@ -29,23 +49,10 @@ export const Route = createFileRoute('/contact')({
 });
 
 function ContactPage() {
-	const firstNameId = useId();
-	const lastNameId = useId();
-	const emailId = useId();
-	const phoneId = useId();
-	const subjectId = useId();
-	const messageId = useId();
-
-	const handleSubmit = (e: React.FormEvent) => {
-		e.preventDefault();
-		// TODO: Integrate with Resend email service
-		console.log('Contact form submitted - TODO: Implement Resend integration');
-	};
-
 	return (
 		<div className="bg-background">
 			{/* Hero Section */}
-			<section className="relative h-[40vh] min-h-[400px] flex items-center justify-center overflow-hidden shadow-lg shadow-foreground/50">
+			<section className="relative flex h-[40vh] min-h-[400px] items-center justify-center overflow-hidden shadow-lg shadow-foreground/50">
 				{/* Background Image - using one of the existing room images as placeholder */}
 				<div
 					className="absolute inset-0 bg-cover bg-center bg-no-repeat"
@@ -58,25 +65,25 @@ function ContactPage() {
 				<div className="absolute inset-0 bg-black/60" />
 
 				{/* Content */}
-				<div className="relative z-10 container mx-auto max-w-4xl text-center px-4">
-					<h1 className="text-4xl md:text-6xl lg:text-7xl font-black mb-6 text-white">
+				<div className="relative z-10 container mx-auto max-w-4xl px-4 text-center">
+					<h1 className="mb-6 text-4xl font-black text-white md:text-6xl lg:text-7xl">
 						Contact Us
 					</h1>
-					<p className="text-xl md:text-2xl italic text-popover mb-8 font-medium drop-shadow-md max-w-3xl mx-auto">
+					<p className="mx-auto mb-8 max-w-3xl text-xl font-medium text-popover italic drop-shadow-md md:text-2xl">
 						We're here to help make your stay at Irishette unforgettable
 					</p>
 				</div>
 			</section>
 
 			{/* Contact Information & Form */}
-			<section className="py-16 px-4">
+			<section className="px-4 py-16">
 				<div className="container mx-auto max-w-6xl">
-					<div className="grid lg:grid-cols-2 gap-12">
+					<div className="grid gap-12 lg:grid-cols-2">
 						{/* Contact Information */}
 						<div className="space-y-8">
 							<div>
-								<h2 className="text-3xl font-bold mb-6">Get in Touch</h2>
-								<p className="text-muted-foreground text-lg leading-relaxed mb-8">
+								<h2 className="mb-6 text-3xl font-bold">Get in Touch</h2>
+								<p className="mb-8 text-lg leading-relaxed text-muted-foreground">
 									Have questions about your stay, need help with booking, or
 									want to know more about our amenities? We'd love to hear from
 									you! Our team is here to ensure you have the perfect Dublin,
@@ -91,18 +98,18 @@ function ContactPage() {
 										<div className="flex items-start gap-4">
 											<Icon
 												icon="tabler:mail"
-												className="size-6 text-accent mt-1"
+												className="mt-1 size-6 text-accent"
 											/>
 											<div>
-												<h3 className="font-semibold text-lg mb-2">Email Us</h3>
-												<p className="text-muted-foreground mb-2">
+												<h3 className="mb-2 text-lg font-semibold">Email Us</h3>
+												<p className="mb-2 text-muted-foreground">
 													For general inquiries and booking questions
 												</p>
 												<a
-													href="mailto:info@irishette.com"
-													className="text-accent hover:text-accent/80 font-medium"
+													href={`mailto:${CONTACT_EMAIL}`}
+													className="font-medium text-accent hover:text-accent/80"
 												>
-													info@irishette.com
+													{CONTACT_EMAIL}
 												</a>
 											</div>
 										</div>
@@ -114,18 +121,18 @@ function ContactPage() {
 										<div className="flex items-start gap-4">
 											<Icon
 												icon="tabler:phone"
-												className="size-6 text-accent mt-1"
+												className="mt-1 size-6 text-accent"
 											/>
 											<div>
-												<h3 className="font-semibold text-lg mb-2">Call Us</h3>
-												<p className="text-muted-foreground mb-2">
+												<h3 className="mb-2 text-lg font-semibold">Call Us</h3>
+												<p className="mb-2 text-muted-foreground">
 													Speak directly with our friendly staff
 												</p>
 												<a
-													href="tel:+1234567890"
-													className="text-accent hover:text-accent/80 font-medium"
+													href={CONTACT_PHONE_HREF}
+													className="font-medium text-accent hover:text-accent/80"
 												>
-													(123) 456-7890
+													{CONTACT_PHONE}
 												</a>
 											</div>
 										</div>
@@ -137,11 +144,11 @@ function ContactPage() {
 										<div className="flex items-start gap-4">
 											<Icon
 												icon="tabler:map-pin"
-												className="size-6 text-accent mt-1"
+												className="mt-1 size-6 text-accent"
 											/>
 											<div>
-												<h3 className="font-semibold text-lg mb-2">Visit Us</h3>
-												<p className="text-muted-foreground mb-2">
+												<h3 className="mb-2 text-lg font-semibold">Visit Us</h3>
+												<p className="mb-2 text-muted-foreground">
 													Located in historic Dublin, Texas
 												</p>
 												<address className="text-accent not-italic">
@@ -167,81 +174,7 @@ function ContactPage() {
 									</CardDescription>
 								</CardHeader>
 								<CardContent>
-									<form onSubmit={handleSubmit} className="space-y-6">
-										<div className="grid md:grid-cols-2 gap-4">
-											<div className="space-y-2">
-												<Label htmlFor={firstNameId}>First Name *</Label>
-												<Input
-													id={firstNameId}
-													name="firstName"
-													required
-													placeholder="Your first name"
-												/>
-											</div>
-											<div className="space-y-2">
-												<Label htmlFor={lastNameId}>Last Name *</Label>
-												<Input
-													id={lastNameId}
-													name="lastName"
-													required
-													placeholder="Your last name"
-												/>
-											</div>
-										</div>
-
-										<div className="space-y-2">
-											<Label htmlFor={emailId}>Email Address *</Label>
-											<Input
-												id={emailId}
-												name="email"
-												type="email"
-												required
-												placeholder="your.email@example.com"
-											/>
-										</div>
-
-										<div className="space-y-2">
-											<Label htmlFor={phoneId}>Phone Number</Label>
-											<Input
-												id={phoneId}
-												name="phone"
-												type="tel"
-												placeholder="(123) 456-7890"
-											/>
-										</div>
-
-										<div className="space-y-2">
-											<Label htmlFor={subjectId}>Subject *</Label>
-											<Input
-												id={subjectId}
-												name="subject"
-												required
-												placeholder="What can we help you with?"
-											/>
-										</div>
-
-										<div className="space-y-2">
-											<Label htmlFor={messageId}>Message *</Label>
-											<textarea
-												id={messageId}
-												name="message"
-												required
-												rows={5}
-												className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-												placeholder="Tell us more about your inquiry..."
-											/>
-										</div>
-
-										<div className="space-y-4">
-											<Button type="submit" className="w-full" size="lg">
-												<Icon icon="tabler:send" className="size-5" />
-												Send Message
-											</Button>
-											<p className="text-sm text-muted-foreground text-center">
-												* Required fields. We typically respond within 24 hours.
-											</p>
-										</div>
-									</form>
+									<ContactForm />
 								</CardContent>
 							</Card>
 						</div>
@@ -250,28 +183,28 @@ function ContactPage() {
 			</section>
 
 			{/* Additional Information */}
-			<section className="py-16 px-4 bg-secondary">
+			<section className="bg-secondary px-4 py-16">
 				<div className="container mx-auto max-w-4xl">
 					<Card className="border-accent/20">
 						<CardHeader>
-							<CardTitle className="text-2xl text-center">
+							<CardTitle className="text-center text-2xl">
 								Planning Your Visit?
 							</CardTitle>
 						</CardHeader>
 						<CardContent>
-							<div className="grid md:grid-cols-2 gap-8 text-center">
+							<div className="grid gap-8 text-center md:grid-cols-2">
 								<div>
-									<h3 className="font-semibold text-lg mb-3 text-accent">
+									<h3 className="mb-3 text-lg font-semibold text-accent">
 										Check-in & Check-out
 									</h3>
 									<p className="text-muted-foreground">
-										Check-in: 3:00 PM - 8:00 PM
+										Check-in: {CHECK_IN_TIME_LABEL}
 										<br />
-										Check-out: 11:00 AM
+										Check-out: {CHECK_OUT_TIME_LABEL}
 									</p>
 								</div>
 								<div>
-									<h3 className="font-semibold text-lg mb-3 text-accent">
+									<h3 className="mb-3 text-lg font-semibold text-accent">
 										Cancellation Policy
 									</h3>
 									<p className="text-muted-foreground">
@@ -286,10 +219,10 @@ function ContactPage() {
 									For immediate assistance with existing reservations, please
 									call us directly at{' '}
 									<a
-										href="tel:+1234567890"
-										className="text-accent hover:text-accent/80 font-medium"
+										href={CONTACT_PHONE_HREF}
+										className="font-medium text-accent hover:text-accent/80"
 									>
-										(123) 456-7890
+										{CONTACT_PHONE}
 									</a>
 								</p>
 							</div>
@@ -297,6 +230,219 @@ function ContactPage() {
 					</Card>
 				</div>
 			</section>
+		</div>
+	);
+}
+
+type ContactField = keyof z.infer<typeof contactSchema>;
+type FieldErrors = Partial<Record<ContactField, string>>;
+
+const RESULT_MESSAGES: Record<
+	Exclude<ContactResult, { ok: true }>['reason'],
+	string
+> = {
+	turnstile: 'The security check failed. Please try again.',
+	unavailable: `We could not run the security check right now. Please try again, or email us directly at ${CONTACT_EMAIL}.`,
+	send_failed: `Your message could not be sent. Please email us directly at ${CONTACT_EMAIL}.`,
+};
+
+/** Message for a thrown server function error (rate limit, network, ...). */
+function thrownMessage(error: unknown) {
+	if (error instanceof Error && error.message.startsWith('Too many requests')) {
+		return error.message;
+	}
+	return `Something went wrong. Please try again, or email us directly at ${CONTACT_EMAIL}.`;
+}
+
+/**
+ * The contact form: emails the admins (CONTACT_EMAIL) and shows up in the
+ * admin dashboard's notifications, where they reply by email. Nothing is sent
+ * to the guest. Signed-in guests get their name, email and phone prefilled.
+ */
+function ContactForm() {
+	const session = useSession();
+	const { booking } = Route.useSearch();
+	const turnstile = useTurnstile();
+	const [isLoading, setIsLoading] = useState(false);
+	const [error, setError] = useState('');
+	const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+	const [sent, setSent] = useState(false);
+	const user = session?.user;
+
+	async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setError('');
+		const form = new FormData(event.currentTarget);
+		const parsed = contactSchema.safeParse({
+			name: form.get('name'),
+			email: form.get('email'),
+			phone: form.get('phone'),
+			subject: form.get('subject'),
+			message: form.get('message'),
+			bookingConfirmationId: form.get('bookingConfirmationId'),
+			turnstileToken: turnstile.token,
+		});
+		if (!parsed.success) {
+			const errors: FieldErrors = {};
+			for (const issue of parsed.error.issues) {
+				const field = issue.path[0] as ContactField;
+				errors[field] ??= issue.message;
+			}
+			setFieldErrors(errors);
+			if (errors.turnstileToken) setError(errors.turnstileToken);
+			return;
+		}
+		setFieldErrors({});
+		setIsLoading(true);
+		try {
+			const result = await submitContactFn({ data: parsed.data });
+			if (result.ok) setSent(true);
+			else setError(RESULT_MESSAGES[result.reason]);
+		} catch (submitError) {
+			setError(thrownMessage(submitError));
+		} finally {
+			setIsLoading(false);
+			// Tokens are single-use: get a fresh one for the next attempt.
+			turnstile.reset();
+		}
+	}
+
+	if (sent) return <ContactSent onAgain={() => setSent(false)} />;
+
+	return (
+		<form onSubmit={handleSubmit} noValidate className="space-y-6">
+			<ContactInput
+				name="name"
+				label="Name *"
+				defaultValue={user?.name ?? ''}
+				autoComplete="name"
+				placeholder="Your name"
+				error={fieldErrors.name}
+			/>
+			<div className="grid gap-4 md:grid-cols-2">
+				<ContactInput
+					name="email"
+					label="Email Address *"
+					type="email"
+					defaultValue={user?.email ?? ''}
+					autoComplete="email"
+					placeholder="your.email@example.com"
+					error={fieldErrors.email}
+				/>
+				<ContactInput
+					name="phone"
+					label="Phone Number"
+					type="tel"
+					defaultValue={user?.phoneNumber ?? ''}
+					autoComplete="tel"
+					placeholder="(123) 456-7890"
+					error={fieldErrors.phone}
+				/>
+			</div>
+			<ContactInput
+				name="subject"
+				label="Subject *"
+				placeholder="What can we help you with?"
+				error={fieldErrors.subject}
+			/>
+			<ContactInput
+				name="bookingConfirmationId"
+				label="Booking Confirmation ID"
+				defaultValue={booking ?? ''}
+				placeholder="Optional, e.g. ABC123"
+				error={fieldErrors.bookingConfirmationId}
+			/>
+			<ContactTextarea error={fieldErrors.message} />
+			<TurnstileField widgetRef={turnstile.ref} onToken={turnstile.setToken} />
+			<AuthError message={error} />
+			<div className="space-y-4">
+				<Button type="submit" className="w-full" size="lg" disabled={isLoading}>
+					<Icon
+						icon={isLoading ? 'tabler:loader-2' : 'tabler:send'}
+						className={isLoading ? 'size-5 animate-spin' : 'size-5'}
+					/>
+					{isLoading ? 'Sending...' : 'Send Message'}
+				</Button>
+				<p className="text-center text-sm text-muted-foreground">
+					* Required fields. We typically respond within 24 hours.
+				</p>
+			</div>
+		</form>
+	);
+}
+
+function ContactSent({ onAgain }: { onAgain: () => void }) {
+	return (
+		<div className="space-y-4 py-6 text-center">
+			<Icon
+				icon="tabler:circle-check"
+				className="mx-auto size-12 text-accent"
+			/>
+			<output className="block space-y-2">
+				<span className="block text-xl font-semibold">
+					Thanks, your message is on its way
+				</span>
+				<span className="block text-muted-foreground">
+					We'll reply by email, usually within 24 hours.
+				</span>
+			</output>
+			<Button variant="outline" onClick={onAgain}>
+				Send another message
+			</Button>
+		</div>
+	);
+}
+
+function FieldError({ id, message }: { id: string; message?: string }) {
+	if (!message) return null;
+	return (
+		<p id={id} className="text-sm text-destructive">
+			{message}
+		</p>
+	);
+}
+
+function ContactInput({
+	label,
+	error,
+	...props
+}: ComponentProps<typeof Input> & {
+	name: string;
+	label: string;
+	error?: string;
+}) {
+	const id = useId();
+	const errorId = `${id}-error`;
+	return (
+		<div className="space-y-2">
+			<Label htmlFor={id}>{label}</Label>
+			<Input
+				id={id}
+				aria-invalid={error ? true : undefined}
+				aria-describedby={error ? errorId : undefined}
+				{...props}
+			/>
+			<FieldError id={errorId} message={error} />
+		</div>
+	);
+}
+
+function ContactTextarea({ error }: { error?: string }) {
+	const id = useId();
+	const errorId = `${id}-error`;
+	return (
+		<div className="space-y-2">
+			<Label htmlFor={id}>Message *</Label>
+			<Textarea
+				id={id}
+				name="message"
+				rows={5}
+				className="min-h-30"
+				placeholder="Tell us more about your inquiry..."
+				aria-invalid={error ? true : undefined}
+				aria-describedby={error ? errorId : undefined}
+			/>
+			<FieldError id={errorId} message={error} />
 		</div>
 	);
 }

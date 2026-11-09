@@ -1,7 +1,7 @@
 import { Icon } from '@iconify/react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
-import { toast } from 'sonner';
+
 import { Button } from '@/components/ui/button';
 import {
 	Dialog,
@@ -13,7 +13,8 @@ import {
 	DialogTrigger,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { trpcClient } from '@/integrations/tanstack-query/root-provider';
+import { toast } from '@/components/ui/toast';
+import { useTRPC } from '@/integrations/trpc/react';
 
 interface BookingInternalNotesProps {
 	bookingId: string;
@@ -24,11 +25,11 @@ export function BookingInternalNotes({
 	bookingId,
 	currentNotes,
 }: BookingInternalNotesProps) {
+	const trpc = useTRPC();
 	const queryClient = useQueryClient();
 	const notesId = useId();
 	const [open, setOpen] = useState(false);
 	const [notes, setNotes] = useState(currentNotes || '');
-	const [isSaving, setIsSaving] = useState(false);
 
 	// Reset notes when dialog opens
 	const handleOpenChange = (isOpen: boolean) => {
@@ -39,52 +40,49 @@ export function BookingInternalNotes({
 	};
 
 	// Mutation to update internal notes
-	const updateNotesMutation = useMutation({
-		mutationFn: async (internalNotes: string) => {
-			return await trpcClient.bookings.adminUpdateInternalNotes.mutate({
-				bookingId,
-				internalNotes,
-			});
-		},
-		onSuccess: async () => {
-			// Invalidate the booking query to refetch updated data
-			await queryClient.invalidateQueries({
-				queryKey: [['bookings', 'getBooking']],
-			});
-			toast.success('Internal notes updated successfully!');
-			setOpen(false);
-		},
-		onError: (error) => {
-			console.error('Failed to update internal notes:', error);
-			toast.error('Failed to update notes', {
-				description:
-					error instanceof Error
-						? error.message
-						: 'Unable to update internal notes. Please try again.',
-			});
-		},
-	});
+	const updateNotesMutation = useMutation(
+		trpc.bookings.adminUpdateInternalNotes.mutationOptions({
+			onSuccess: async () => {
+				// Refetch the booking so the updated notes show up
+				await queryClient.invalidateQueries(
+					trpc.bookings.adminGetBooking.pathFilter(),
+				);
+				toast.add({
+					type: 'success',
+					title: 'Internal notes updated successfully!',
+				});
+				setOpen(false);
+			},
+			onError: (error) => {
+				console.error('Failed to update internal notes:', error);
+				toast.add({
+					type: 'error',
+					title: 'Failed to update notes',
+					description:
+						error.message ||
+						'Unable to update internal notes. Please try again.',
+				});
+			},
+		}),
+	);
+	// Stays true until onSuccess (including the refetch) has finished.
+	const isSaving = updateNotesMutation.isPending;
 
-	const handleSave = async () => {
-		setIsSaving(true);
-		try {
-			await updateNotesMutation.mutateAsync(notes);
-		} finally {
-			setIsSaving(false);
-		}
+	const handleSave = () => {
+		updateNotesMutation.mutate({ bookingId, internalNotes: notes });
 	};
 
 	return (
 		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<div className="space-y-2">
-				<DialogTrigger asChild>
-					<Button variant="secondary" size="sm" className="h-8">
-						<Icon icon="tabler:edit" className="size-5" />
-						{currentNotes ? 'Edit' : 'Add Notes'}
-					</Button>
+				<DialogTrigger
+					render={<Button variant="secondary" size="sm" className="h-8" />}
+				>
+					<Icon icon="tabler:edit" className="size-5" />
+					{currentNotes ? 'Edit' : 'Add Notes'}
 				</DialogTrigger>
 				{currentNotes ? (
-					<p className="text-sm bg-accent/30 p-3 rounded-md whitespace-pre-wrap">
+					<p className="rounded-md bg-accent/30 p-3 text-sm whitespace-pre-wrap">
 						{currentNotes}
 					</p>
 				) : (
@@ -115,7 +113,7 @@ export function BookingInternalNotes({
 					<p
 						className={`text-xs ${
 							notes.length > 4900
-								? 'text-destructive font-semibold'
+								? 'font-semibold text-destructive'
 								: 'text-muted-foreground'
 						}`}
 					>

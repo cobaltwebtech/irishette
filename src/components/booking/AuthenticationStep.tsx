@@ -1,20 +1,29 @@
 import { Icon } from '@iconify/react';
-import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
+
+import { AuthError } from '@/components/auth/AuthCard';
+import { AuthSubmitButton } from '@/components/auth/AuthSubmitButton';
+import { EmailField } from '@/components/auth/EmailField';
+import { TurnstileField, useTurnstile } from '@/components/auth/TurnstileField';
+import { useAuthRequest } from '@/components/auth/useAuthRequest';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { authClient, useSession } from '@/lib/auth-client';
+import { authClient } from '@/lib/auth-client';
+import {
+	formatLinkLifetime,
+	MAGIC_LINK_EXPIRES_IN,
+} from '@/lib/auth-constants';
+import { emailSchema } from '@/lib/auth-validation';
+import { useSession } from '@/lib/session';
 import { useBookingStore } from '@/stores';
 
 export function AuthenticationStep() {
 	const booking = useBookingStore();
-	const { data: session } = useSession();
+	const session = useSession();
 	const [email, setEmail] = useState('');
 	const [emailSent, setEmailSent] = useState(false);
-	const [isLoading, setIsLoading] = useState(false);
-	const [turnstileToken, setTurnstileToken] = useState('');
-	const turnstileRef = useRef<TurnstileInstance>(null);
+	const turnstile = useTurnstile();
+	const { isLoading, error, run, validate } = useAuthRequest(turnstile);
 
 	if (session?.user) {
 		// User is already authenticated, advance to next step
@@ -27,7 +36,7 @@ export function AuthenticationStep() {
 					</CardTitle>
 				</CardHeader>
 				<CardContent>
-					<p className="text-muted-foreground mb-4">
+					<p className="mb-4 text-muted-foreground">
 						You're signed in and ready to continue with your booking.
 					</p>
 					<Button onClick={() => booking.actions.setStep('details')}>
@@ -40,37 +49,22 @@ export function AuthenticationStep() {
 
 	const handleSendMagicLink = async (e: React.FormEvent) => {
 		e.preventDefault();
-		if (!email || isLoading) return;
+		if (isLoading) return;
+		const data = validate(emailSchema, { email });
+		if (!data) return;
 
-		setIsLoading(true);
-		try {
-			// Send magic link using Better Auth client-side API
-			const { error } = await authClient.signIn.magicLink({
-				email: email,
-				callbackURL: '/booking', // Redirect back to booking after authentication
-				newUserCallbackURL: '/booking', // Also redirect new users to booking
-				errorCallbackURL: '/booking?error=auth', // Handle errors gracefully
-				fetchOptions: {
-					headers: {
-						'x-captcha-response': turnstileToken,
-					},
-				},
-			});
-
-			if (error) {
-				throw new Error(error.message || 'Failed to send magic link');
-			}
-
-			setEmailSent(true);
-		} catch (error) {
-			console.error('Error sending magic link:', error);
-			alert('Failed to send magic link. Please try again.');
-			// Reset turnstile on error
-			turnstileRef.current?.reset();
-			setTurnstileToken('');
-		} finally {
-			setIsLoading(false);
-		}
+		// New and existing users both come back to the booking.
+		await run(
+			() =>
+				authClient.signIn.magicLink({
+					email: data.email,
+					callbackURL: '/booking',
+					newUserCallbackURL: '/booking',
+					errorCallbackURL: '/booking?error=auth',
+					fetchOptions: { headers: turnstile.headers },
+				}),
+			{ onSuccess: () => setEmailSent(true) },
+		);
 	};
 
 	if (emailSent) {
@@ -80,9 +74,10 @@ export function AuthenticationStep() {
 					<CardTitle>Check Your Email</CardTitle>
 				</CardHeader>
 				<CardContent>
-					<p className="text-muted-foreground mb-4">
+					<p className="mb-4 text-muted-foreground">
 						We've sent a magic link to <strong>{email}</strong>. Click the link
-						in your email to continue with your booking.
+						in your email to continue with your booking. The link expires in{' '}
+						{formatLinkLifetime(MAGIC_LINK_EXPIRES_IN)}.
 					</p>
 					<p className="text-sm text-muted-foreground">
 						Don't see the email? Check your spam folder or{' '}
@@ -102,7 +97,7 @@ export function AuthenticationStep() {
 	return (
 		<Card>
 			<CardHeader>
-				<CardTitle className="text-lg flex items-center gap-2">
+				<CardTitle className="flex items-center gap-2 text-lg">
 					<Icon icon="tabler:user-circle" className="size-6" />
 					Sign In to Continue
 				</CardTitle>
@@ -116,55 +111,21 @@ export function AuthenticationStep() {
 					Don't worry, if you don't have an account yet we will create one for
 					you automatically.
 				</p>
-				<form onSubmit={handleSendMagicLink} className="space-y-4">
-					<div>
-						<Input
-							type="email"
-							placeholder="Enter your email address"
-							value={email}
-							onChange={(e) => setEmail(e.target.value)}
-							required
-							disabled={isLoading}
-						/>
-					</div>
-					<Turnstile
-						ref={turnstileRef}
-						siteKey={import.meta.env.VITE_TURNSTILE_PUBLIC_KEY}
-						onSuccess={(token: string) => setTurnstileToken(token)}
-						onError={() => {
-							setTurnstileToken('');
-							alert('Captcha verification failed. Please try again.');
-						}}
-						onExpire={() => setTurnstileToken('')}
-						options={{
-							appearance: 'interaction-only',
-							theme: 'light',
-							size: 'flexible',
-						}}
-						style={{
-							display: 'block',
-							width: '100%',
-							minWidth: '300px',
-							height: '65px',
-						}}
+				<form onSubmit={handleSendMagicLink} className="space-y-4" noValidate>
+					<EmailField value={email} onChange={setEmail} disabled={isLoading} />
+					<AuthError message={error} />
+					<TurnstileField
+						widgetRef={turnstile.ref}
+						onToken={turnstile.setToken}
 					/>
-					<Button
-						type="submit"
-						disabled={isLoading || !email || !turnstileToken}
-						className="w-full"
+					<AuthSubmitButton
+						isLoading={isLoading}
+						disabled={!email || !turnstile.token}
+						loadingLabel="Sending Magic Link..."
+						icon="tabler:mail"
 					>
-						{isLoading ? (
-							<>
-								<Icon icon="tabler:loader-2" className="size-5 animate-spin" />
-								Sending Magic Link...
-							</>
-						) : (
-							<>
-								<Icon icon="tabler:mail" className="size-5" />
-								Send Magic Link
-							</>
-						)}
-					</Button>
+						Send Magic Link
+					</AuthSubmitButton>
 				</form>
 			</CardContent>
 		</Card>

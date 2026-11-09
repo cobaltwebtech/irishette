@@ -1,14 +1,14 @@
 import { Icon } from '@iconify/react';
+import { isTRPCClientError } from '@trpc/client';
+import { useId, useState } from 'react';
+
 import {
-	createColumnHelper,
-	flexRender,
-	getCoreRowModel,
-	getSortedRowModel,
-	type SortingState,
-	useReactTable,
-} from '@tanstack/react-table';
-import { useId, useMemo, useState } from 'react';
-import { toast } from 'sonner';
+	createAppColumnHelper,
+	DataTableView,
+	PaginationControls,
+	SortableHeader,
+	useAppTable,
+} from '@/components/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,70 +28,206 @@ import {
 import {
 	DropdownMenu,
 	DropdownMenuContent,
+	DropdownMenuGroup,
 	DropdownMenuItem,
 	DropdownMenuLabel,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from '@/components/ui/table';
+import { toast } from '@/components/ui/toast';
+import type { TRPCRouter } from '@/integrations/trpc/router';
 import type {
 	CreatePricingRule,
 	RoomPricingRule,
 	UpdatePricingRule,
 } from '@/lib/room-validation';
+import { formatStayDate } from '@/lib/timezone';
+import { useTodayCT } from '@/utils/use-now';
 
-// Helper function to parse validation errors into human-readable messages
-function parseValidationErrors(errorMessage: string): string {
-	try {
-		const errors = JSON.parse(errorMessage);
-		if (Array.isArray(errors)) {
-			const fieldErrors = errors.map(
-				(error: { code: string; path?: string[]; message?: string }) => {
-					const field = error.path ? error.path[0] : 'unknown field';
-					const friendlyField = field.replace(/([A-Z])/g, ' $1').toLowerCase();
+/** Overlap details from a CONFLICT error (data.conflict). */
+interface RuleConflict {
+	id: string;
+	name: string;
+	startDate: string;
+	endDate: string;
+}
 
-					switch (error.code) {
-						case 'invalid_type':
-							return `${friendlyField} is required`;
-						case 'invalid_value':
-							return `${friendlyField} has an invalid value`;
-						case 'too_small':
-							return `${friendlyField} is too small`;
-						case 'too_big':
-							return `${friendlyField} is too large`;
-						default:
-							return error.message || `${friendlyField} is invalid`;
-					}
-				},
-			);
-
-			return (
-				fieldErrors.slice(0, 3).join(', ') +
-				(fieldErrors.length > 3 ? ', and more...' : '')
-			);
-		}
-	} catch {
-		// If parsing fails, return a generic message
+/** Reads the server's structured error for the form. */
+function readSaveError(error: unknown): {
+	message: string;
+	conflict: RuleConflict | null;
+	fieldErrors: Record<string, string[] | undefined>;
+} {
+	if (isTRPCClientError<TRPCRouter>(error)) {
+		return {
+			message: error.message,
+			conflict: (error.data?.conflict as RuleConflict | null) ?? null,
+			fieldErrors: error.data?.zodError?.fieldErrors ?? {},
+		};
 	}
+	return {
+		message: error instanceof Error ? error.message : 'Unexpected error',
+		conflict: null,
+		fieldErrors: {},
+	};
+}
 
-	// Fallback for non-JSON errors or parsing failures
-	if (errorMessage.includes('overlaps with existing rule')) {
-		return errorMessage; // Keep overlap messages as they are already user-friendly
+const formatRuleValue = (rule: RoomPricingRule) => {
+	switch (rule.ruleType) {
+		case 'surcharge_rate':
+			return `+${(rule.value * 100).toFixed(1)}%`;
+		case 'fixed_amount':
+			return `+$${rule.value.toFixed(2)}`;
+		case 'absolute_price':
+			return `$${rule.value.toFixed(2)}`;
+		default:
+			return rule.value.toString();
 	}
+};
 
-	if (errorMessage.includes('roomId') && errorMessage.includes('undefined')) {
-		return 'There was a problem with the room data. Please refresh the page and try again.';
+const calculateEffectivePrice = (rule: RoomPricingRule, basePrice: number) => {
+	switch (rule.ruleType) {
+		case 'surcharge_rate':
+			return basePrice + basePrice * rule.value;
+		case 'fixed_amount':
+			return basePrice + rule.value;
+		case 'absolute_price':
+			return rule.value;
+		default:
+			return basePrice;
 	}
+};
 
-	return 'Please check your input and try again';
+const getRuleTypeLabel = (ruleType: string) => {
+	switch (ruleType) {
+		case 'surcharge_rate':
+			return 'Surcharge %';
+		case 'fixed_amount':
+			return 'Fixed Amount';
+		case 'absolute_price':
+			return 'Absolute Price';
+		default:
+			return ruleType;
+	}
+};
+
+const getRuleBadgeVariant = (ruleType: string) => {
+	switch (ruleType) {
+		case 'surcharge_rate':
+			return 'default';
+		case 'fixed_amount':
+			return 'secondary';
+		case 'absolute_price':
+			return 'destructive';
+		default:
+			return 'outline';
+	}
+};
+
+const formatDateRange = (startDate: string, endDate: string) => {
+	// Parse dates without timezone issues by treating them as local dates
+	const start = formatStayDate(startDate);
+	const end = formatStayDate(endDate);
+	return `${start} - ${end}`;
+};
+
+const columnHelper = createAppColumnHelper<RoomPricingRule>();
+
+function makeColumns({
+	basePrice,
+	onEdit,
+	onDelete,
+}: {
+	basePrice: number;
+	onEdit: (rule: RoomPricingRule) => void;
+	onDelete: (rule: RoomPricingRule) => void;
+}) {
+	return columnHelper.columns([
+		columnHelper.accessor('startDate', {
+			header: ({ column }) => (
+				<SortableHeader column={column}>Date Range</SortableHeader>
+			),
+			cell: (info) => (
+				<span className="text-sm">
+					{formatDateRange(info.getValue(), info.row.original.endDate)}
+				</span>
+			),
+		}),
+		columnHelper.accessor('name', {
+			header: 'Rule Name',
+			cell: (info) => (
+				<span
+					id={`pricing-rule-${info.row.original.id}`}
+					className="font-medium"
+				>
+					{info.getValue()}
+				</span>
+			),
+		}),
+		columnHelper.accessor('ruleType', {
+			header: 'Type',
+			cell: (info) => (
+				<Badge variant={getRuleBadgeVariant(info.getValue())}>
+					{getRuleTypeLabel(info.getValue())}
+				</Badge>
+			),
+		}),
+		columnHelper.accessor('value', {
+			header: 'Value',
+			cell: (info) => (
+				<span className="font-mono">{formatRuleValue(info.row.original)}</span>
+			),
+		}),
+		columnHelper.display({
+			id: 'effectivePrice',
+			header: 'Effective Price',
+			cell: (info) => (
+				<span className="font-semibold">
+					${calculateEffectivePrice(info.row.original, basePrice).toFixed(2)}
+				</span>
+			),
+		}),
+		columnHelper.accessor('isActive', {
+			header: 'Status',
+			cell: (info) => (
+				<Badge variant={info.getValue() ? 'default' : 'outline'}>
+					{info.getValue() ? 'Active' : 'Inactive'}
+				</Badge>
+			),
+		}),
+		columnHelper.display({
+			id: 'actions',
+			header: 'Actions',
+			cell: (info) => (
+				<DropdownMenu>
+					<DropdownMenuTrigger
+						render={<Button variant="ghost" className="h-8 w-8 p-0" />}
+					>
+						<span className="sr-only">Open menu</span>
+						<Icon icon="tabler:dots" />
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						<DropdownMenuGroup>
+							<DropdownMenuLabel>Actions</DropdownMenuLabel>
+							<DropdownMenuItem onClick={() => onEdit(info.row.original)}>
+								<Icon icon="tabler:pencil" />
+								Edit
+							</DropdownMenuItem>
+						</DropdownMenuGroup>
+						<DropdownMenuSeparator />
+						<DropdownMenuItem
+							onClick={() => onDelete(info.row.original)}
+							className="text-destructive"
+						>
+							<Icon icon="tabler:trash" />
+							Delete
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			),
+		}),
+	]);
 }
 
 interface PricingRulesManagementProps {
@@ -118,182 +254,50 @@ export function PricingRulesManagement({
 	const [deletingRule, setDeletingRule] = useState<RoomPricingRule | null>(
 		null,
 	);
-	const [sorting, setSorting] = useState<SortingState>([
-		{ id: 'startDate', desc: false },
-	]);
+	// Rule highlighted after an overlap error ("Show rule").
+	const [highlightId, setHighlightId] = useState<string | null>(null);
 
-	const formatRuleValue = (rule: RoomPricingRule) => {
-		switch (rule.ruleType) {
-			case 'surcharge_rate':
-				return `+${(rule.value * 100).toFixed(1)}%`;
-			case 'fixed_amount':
-				return `+$${rule.value.toFixed(2)}`;
-			case 'absolute_price':
-				return `$${rule.value.toFixed(2)}`;
-			default:
-				return rule.value.toString();
-		}
-	};
+	// Only current and future rules are displayed (today in Central Time).
+	const today = useTodayCT();
+	const filteredRules = pricingRules.filter((rule) => rule.endDate >= today);
 
-	const calculateEffectivePrice = (rule: RoomPricingRule) => {
-		switch (rule.ruleType) {
-			case 'surcharge_rate':
-				return basePrice + basePrice * rule.value;
-			case 'fixed_amount':
-				return basePrice + rule.value;
-			case 'absolute_price':
-				return rule.value;
-			default:
-				return basePrice;
-		}
-	};
+	const columns = makeColumns({
+		basePrice,
+		onEdit: setEditingRule,
+		onDelete: setDeletingRule,
+	});
 
-	const getRuleTypeLabel = (ruleType: string) => {
-		switch (ruleType) {
-			case 'surcharge_rate':
-				return 'Surcharge %';
-			case 'fixed_amount':
-				return 'Fixed Amount';
-			case 'absolute_price':
-				return 'Absolute Price';
-			default:
-				return ruleType;
-		}
-	};
-
-	const getRuleBadgeVariant = (ruleType: string) => {
-		switch (ruleType) {
-			case 'surcharge_rate':
-				return 'default';
-			case 'fixed_amount':
-				return 'secondary';
-			case 'absolute_price':
-				return 'destructive';
-			default:
-				return 'outline';
-		}
-	};
-
-	const formatDateRange = (startDate: string, endDate: string) => {
-		// Parse dates without timezone issues by treating them as local dates
-		const start = new Date(`${startDate}T00:00:00`).toLocaleDateString();
-		const end = new Date(`${endDate}T00:00:00`).toLocaleDateString();
-		return `${start} - ${end}`;
-	};
-
-	// Filter pricing rules to show only current and future rules
-	const filteredRules = useMemo(() => {
-		return pricingRules.filter((rule) => {
-			const endDate = new Date(`${rule.endDate}T00:00:00`);
-			const today = new Date();
-			today.setHours(0, 0, 0, 0); // Reset time to start of day
-			return endDate >= today;
-		});
-	}, [pricingRules]);
-
-	// Create columns using the column helper
-	const columnHelper = createColumnHelper<RoomPricingRule>();
-
-	const columns = [
-		columnHelper.accessor('startDate', {
-			header: ({ column }) => (
-				<Button
-					variant="ghost"
-					onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-					className="h-8 px-2"
-				>
-					Date Range
-					<Icon icon="tabler:arrows-up-down" />
-				</Button>
-			),
-			cell: (info) => (
-				<span className="text-sm">
-					{formatDateRange(info.getValue(), info.row.original.endDate)}
-				</span>
-			),
-		}),
-		columnHelper.accessor('name', {
-			header: 'Rule Name',
-			cell: (info) => <span className="font-medium">{info.getValue()}</span>,
-		}),
-		columnHelper.accessor('ruleType', {
-			header: 'Type',
-			cell: (info) => (
-				<Badge variant={getRuleBadgeVariant(info.getValue())}>
-					{getRuleTypeLabel(info.getValue())}
-				</Badge>
-			),
-		}),
-		columnHelper.accessor('value', {
-			header: 'Value',
-			cell: (info) => (
-				<span className="font-mono">{formatRuleValue(info.row.original)}</span>
-			),
-		}),
-		columnHelper.display({
-			id: 'effectivePrice',
-			header: 'Effective Price',
-			cell: (info) => (
-				<span className="font-semibold">
-					${calculateEffectivePrice(info.row.original).toFixed(2)}
-				</span>
-			),
-		}),
-		columnHelper.accessor('isActive', {
-			header: 'Status',
-			cell: (info) => (
-				<Badge variant={info.getValue() ? 'default' : 'outline'}>
-					{info.getValue() ? 'Active' : 'Inactive'}
-				</Badge>
-			),
-		}),
-		columnHelper.display({
-			id: 'actions',
-			header: 'Actions',
-			cell: (info) => (
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<Button variant="ghost" className="h-8 w-8 p-0">
-							<span className="sr-only">Open menu</span>
-							<Icon icon="tabler:dots" />
-						</Button>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end">
-						<DropdownMenuLabel>Actions</DropdownMenuLabel>
-						<DropdownMenuItem onClick={() => setEditingRule(info.row.original)}>
-							<Icon icon="tabler:pencil" />
-							Edit
-						</DropdownMenuItem>
-						<DropdownMenuSeparator />
-						<DropdownMenuItem
-							onClick={() => setDeletingRule(info.row.original)}
-							className="text-destructive"
-						>
-							<Icon icon="tabler:trash" />
-							Delete
-						</DropdownMenuItem>
-					</DropdownMenuContent>
-				</DropdownMenu>
-			),
-		}),
-	];
-
-	const table = useReactTable({
+	const table = useAppTable({
 		data: filteredRules,
 		columns,
-		onSortingChange: setSorting,
-		getCoreRowModel: getCoreRowModel(),
-		getSortedRowModel: getSortedRowModel(),
-		state: {
-			sorting,
+		initialState: {
+			sorting: [{ id: 'startDate', desc: false }],
 		},
 	});
+
+	/** Closes the dialog, pages to the conflicting rule and highlights it. */
+	const showRule = (id: string) => {
+		setIsCreating(false);
+		setEditingRule(null);
+		setHighlightId(id);
+		const index = table
+			.getSortedRowModel()
+			.rows.findIndex((row) => row.original.id === id);
+		if (index >= 0) {
+			table.setPageIndex(Math.floor(index / table.state.pagination.pageSize));
+		}
+		requestAnimationFrame(() =>
+			document
+				.getElementById(`pricing-rule-${id}`)
+				?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+		);
+	};
 
 	return (
 		<Card>
 			<CardHeader className="flex justify-between gap-12">
 				<div>
-					<CardTitle className="text-lg flex items-center gap-2">
+					<CardTitle className="flex items-center gap-2 text-lg">
 						<Icon icon="tabler:calendar-dollar" className="size-6" />
 						Pricing Rules - {roomName}
 					</CardTitle>
@@ -314,10 +318,10 @@ export function PricingRulesManagement({
 			</CardHeader>
 			<CardContent>
 				{filteredRules.length === 0 ? (
-					<div className="text-center py-8 text-muted-foreground">
+					<div className="py-8 text-center text-muted-foreground">
 						<Icon
 							icon="tabler:calendar-cancel"
-							className="size-12 mx-auto mb-4 text-secondary"
+							className="mx-auto mb-4 size-12 text-secondary"
 						/>
 						<p className="text-lg font-medium">
 							No current pricing rules for room
@@ -327,49 +331,18 @@ export function PricingRulesManagement({
 						</p>
 					</div>
 				) : (
-					<Table>
-						<TableHeader>
-							{table.getHeaderGroups().map((headerGroup) => (
-								<TableRow key={headerGroup.id}>
-									{headerGroup.headers.map((header) => (
-										<TableHead key={header.id}>
-											{header.isPlaceholder
-												? null
-												: flexRender(
-														header.column.columnDef.header,
-														header.getContext(),
-													)}
-										</TableHead>
-									))}
-								</TableRow>
-							))}
-						</TableHeader>
-						<TableBody>
-							{table.getRowModel().rows?.length ? (
-								table.getRowModel().rows.map((row) => (
-									<TableRow key={row.id}>
-										{row.getVisibleCells().map((cell) => (
-											<TableCell key={cell.id}>
-												{flexRender(
-													cell.column.columnDef.cell,
-													cell.getContext(),
-												)}
-											</TableCell>
-										))}
-									</TableRow>
-								))
-							) : (
-								<TableRow>
-									<TableCell
-										colSpan={columns.length}
-										className="h-24 text-center"
-									>
-										No pricing rules found.
-									</TableCell>
-								</TableRow>
-							)}
-						</TableBody>
-					</Table>
+					<>
+						<DataTableView
+							table={table}
+							emptyMessage="No pricing rules found."
+							rowClassName={(rule) =>
+								rule.id === highlightId
+									? 'bg-amber-100 ring-2 ring-amber-400 ring-inset'
+									: undefined
+							}
+						/>
+						<PaginationControls table={table} noun="rules" />
+					</>
 				)}
 
 				{(isCreating || editingRule) && (
@@ -385,14 +358,21 @@ export function PricingRulesManagement({
 						<PricingRuleForm
 							roomId={roomId}
 							rule={editingRule}
+							onShowConflict={showRule}
 							onSave={async (rule) => {
 								if (editingRule?.id) {
 									await onUpdateRule({ ...rule, id: editingRule.id });
-									toast.success('Pricing rule updated successfully');
+									toast.add({
+										type: 'success',
+										title: 'Pricing rule updated successfully',
+									});
 									setEditingRule(null);
 								} else {
 									await onCreateRule(rule);
-									toast.success('Pricing rule created successfully');
+									toast.add({
+										type: 'success',
+										title: 'Pricing rule created successfully',
+									});
 									setIsCreating(false);
 								}
 								// No need to re-throw since success toasts and modal closing happen here
@@ -456,11 +436,17 @@ export function PricingRulesManagement({
 										if (deletingRule.id) {
 											try {
 												await onDeleteRule(deletingRule.id);
-												toast.success('Pricing rule deleted successfully');
+												toast.add({
+													type: 'success',
+													title: 'Pricing rule deleted successfully',
+												});
 												setDeletingRule(null);
 											} catch (error) {
 												console.error('Failed to delete pricing rule:', error);
-												toast.error('Failed to delete pricing rule');
+												toast.add({
+													type: 'error',
+													title: 'Failed to delete pricing rule',
+												});
 											}
 										}
 									}}
@@ -481,6 +467,7 @@ interface PricingRuleFormProps {
 	rule?: RoomPricingRule | null;
 	onSave: (rule: CreatePricingRule) => Promise<void>;
 	onCancel: () => void;
+	onShowConflict: (ruleId: string) => void;
 }
 
 function PricingRuleForm({
@@ -488,12 +475,17 @@ function PricingRuleForm({
 	rule,
 	onSave,
 	onCancel,
+	onShowConflict,
 }: PricingRuleFormProps) {
 	const formId = useId();
 	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [conflict, setConflict] = useState<RuleConflict | null>(null);
+	const [fieldErrors, setFieldErrors] = useState<
+		Record<string, string[] | undefined>
+	>({});
 
-	// Get today's date in YYYY-MM-DD format for input min attribute
-	const today = new Date().toISOString().split('T')[0];
+	// Today in Central Time as YYYY-MM-DD, for the date inputs' min.
+	const today = useTodayCT();
 
 	const [formData, setFormData] = useState<CreatePricingRule>({
 		roomId,
@@ -503,7 +495,6 @@ function PricingRuleForm({
 		startDate: rule?.startDate || '',
 		endDate: rule?.endDate || '',
 		isActive: rule?.isActive ?? true,
-		daysOfWeek: rule?.daysOfWeek || undefined,
 	});
 
 	const handleSubmit = async (e: React.FormEvent) => {
@@ -511,41 +502,31 @@ function PricingRuleForm({
 
 		// Basic validation
 		if (!formData.name.trim()) {
-			toast.error('Rule name is required');
+			toast.add({ type: 'error', title: 'Rule name is required' });
 			return;
 		}
 
 		if (!formData.startDate || !formData.endDate) {
-			toast.error('Start and end dates are required');
+			toast.add({ type: 'error', title: 'Start and end dates are required' });
 			return;
 		}
 
-		if (
-			new Date(`${formData.startDate}T00:00:00`) >=
-			new Date(`${formData.endDate}T00:00:00`)
-		) {
-			toast.error('End date must be after start date');
+		// Inclusive dates: a single-night rule has start = end.
+		if (formData.endDate < formData.startDate) {
+			toast.add({
+				type: 'error',
+				title: 'End date must be on or after the start date',
+			});
 			return;
 		}
 
-		// Prevent creating rules with past dates
-		const today = new Date();
-		today.setHours(0, 0, 0, 0); // Reset time to start of day
-		const startDate = new Date(`${formData.startDate}T00:00:00`);
-		const endDate = new Date(`${formData.endDate}T00:00:00`);
-
-		if (startDate < today) {
-			toast.error('Start date cannot be in the past');
-			return;
-		}
-
-		if (endDate < today) {
-			toast.error('End date cannot be in the past');
+		if (formData.endDate < today) {
+			toast.add({ type: 'error', title: 'End date cannot be in the past' });
 			return;
 		}
 
 		if (formData.value <= 0) {
-			toast.error('Value must be greater than 0');
+			toast.add({ type: 'error', title: 'Value must be greater than 0' });
 			return;
 		}
 
@@ -554,52 +535,39 @@ function PricingRuleForm({
 			formData.ruleType === 'surcharge_rate' &&
 			(formData.value < 0 || formData.value > 5)
 		) {
-			toast.error('Surcharge rate must be between 0 and 5 (0% to 500%)');
+			toast.add({
+				type: 'error',
+				title: 'Surcharge rate must be between 0 and 5 (0% to 500%)',
+			});
 			return;
 		}
 
 		try {
 			setIsSubmitting(true);
+			setConflict(null);
+			setFieldErrors({});
 			await onSave(formData);
-
-			// If we get here, the operation was successful
-			// The success toast and modal closing is handled by the parent component
+			// Success toast and closing are handled by the parent.
 		} catch (error) {
-			// Handle specific error types
-			if (error instanceof Error) {
-				if (error.message.includes('overlaps with existing rule')) {
-					toast.error('Date Overlap Detected', {
-						description: error.message,
-						duration: 6000,
-					});
-				} else if (error.message.includes('not found')) {
-					toast.error('Rule not found', {
-						description:
-							'The pricing rule may have been deleted by another user.',
-						duration: 5000,
-					});
-				} else {
-					// Parse validation errors or use the error message
-					const friendlyMessage = parseValidationErrors(error.message);
-					toast.error('Failed to save pricing rule', {
-						description: friendlyMessage,
-						duration: 5000,
-					});
-				}
-			} else {
-				toast.error('Failed to save pricing rule', {
-					description: 'An unexpected error occurred. Please try again.',
-					duration: 5000,
+			// Keep the dialog open so the admin can fix and retry.
+			const { message, conflict, fieldErrors } = readSaveError(error);
+			setConflict(conflict);
+			setFieldErrors(fieldErrors);
+			if (!conflict) {
+				toast.add({
+					type: 'error',
+					title: 'Failed to save pricing rule',
+					description: message,
+					timeout: 5000,
 				});
 			}
-			// Don't close the modal on error - let user fix and retry
 		} finally {
 			setIsSubmitting(false);
 		}
 	};
 
 	return (
-		<DialogContent className="w-full max-w-2xl max-h-[90vh] overflow-auto">
+		<DialogContent className="max-h-[90vh] w-full max-w-2xl overflow-auto">
 			<DialogHeader>
 				<DialogTitle>
 					{rule ? 'Edit Pricing Rule' : 'Create New Pricing Rule'}
@@ -634,7 +602,7 @@ function PricingRuleForm({
 						</label>
 						<select
 							id={`${formId}-ruleType`}
-							className="w-full h-9 px-3 border border-input bg-background rounded-md"
+							className="h-9 w-full rounded-md border border-input bg-background px-3"
 							value={formData.ruleType}
 							onChange={(e) =>
 								setFormData((prev) => ({
@@ -685,7 +653,6 @@ function PricingRuleForm({
 						<Input
 							id={`${formId}-startDate`}
 							type="date"
-							min={today}
 							value={formData.startDate}
 							onChange={(e) =>
 								setFormData((prev) => ({
@@ -718,6 +685,32 @@ function PricingRuleForm({
 						/>
 					</div>
 				</div>
+				{conflict && (
+					<div
+						role="alert"
+						className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+					>
+						<span>
+							Overlaps with '{conflict.name}' (
+							{formatDateRange(conflict.startDate, conflict.endDate)})
+						</span>
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onClick={() => onShowConflict(conflict.id)}
+						>
+							Show rule
+						</Button>
+					</div>
+				)}
+				{[...(fieldErrors.startDate ?? []), ...(fieldErrors.endDate ?? [])].map(
+					(message) => (
+						<p key={message} className="text-sm text-destructive">
+							{message}
+						</p>
+					),
+				)}
 
 				<div className="flex items-center space-x-2">
 					<input

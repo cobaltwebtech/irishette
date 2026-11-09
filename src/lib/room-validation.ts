@@ -1,313 +1,202 @@
 import { z } from 'zod';
 
-// Room status enum
-export const roomStatusSchema = z.enum(['active', 'inactive', 'archived']);
-export type RoomStatus = z.infer<typeof roomStatusSchema>;
+import { isoDateSchema } from '@/lib/date-range';
+import { icalFeedSources } from '@/lib/ical-feed-sources';
+import { isSafeFeedUrl } from '@/lib/ical-fetch';
+import { publicIdSchema } from '@/lib/ids';
 
-// Base room schema matching the database schema
-export const roomSchema = z.object({
-	id: z.string().optional(),
-	name: z.string().min(1, 'Room name is required'),
-	slug: z.string().min(1, 'Room slug is required'),
+// Zod >= 4.6 throws on .omit()/.partial() of refined schemas, so derived
+// schemas start from unrefined base objects and add refinements last.
+
+const roomStatusSchema = z.enum(['active', 'inactive', 'archived']);
+
+const rate = (label: string) =>
+	z
+		.number()
+		.min(0, `${label} must be positive`)
+		.max(1, `${label} cannot exceed 100%`);
+
+const roomBaseSchema = z.object({
+	name: z.string().trim().min(1, 'Room name is required'),
+	slug: z
+		.string()
+		.trim()
+		.min(1, 'Room slug is required')
+		.regex(/^[a-z0-9-]+$/, 'Use lowercase letters, numbers and dashes'),
 	description: z.string().optional(),
 	basePrice: z.number().min(0, 'Price must be positive'),
-	serviceFeeRate: z
-		.number()
-		.min(0, 'Service fee rate must be positive')
-		.max(1, 'Service fee rate cannot exceed 100%')
-		.default(0.12),
-
+	serviceFeeRate: rate('Service fee rate').default(0.12),
 	// Hotel Occupancy Tax rates (as decimals: 0.06 = 6%, 0.07 = 7%)
-	stateTaxRate: z
-		.number()
-		.min(0, 'State tax rate must be positive')
-		.max(1, 'State tax rate cannot exceed 100%')
-		.default(0.06),
-	cityTaxRate: z
-		.number()
-		.min(0, 'City tax rate must be positive')
-		.max(1, 'City tax rate cannot exceed 100%')
-		.default(0.07),
-
+	stateTaxRate: rate('State tax rate').default(0.06),
+	cityTaxRate: rate('City tax rate').default(0.07),
 	status: roomStatusSchema.default('active'),
-
-	// Legacy field - keep for backward compatibility
-	isActive: z.boolean().default(true),
-
-	// iCal sync URLs for external platforms
-	airbnbIcalUrl: z.url().optional(),
-	expediaIcalUrl: z.url().optional(),
-
-	// Last sync timestamps (handled by system, not input)
-	lastAirbnbSync: z.date().optional(),
-	lastExpediaSync: z.date().optional(),
+	// Admin-editable guest limit, enforced on booking.
+	maxGuests: z.number().int().min(1).max(10).default(2),
 });
 
-// Create room input (without ID and timestamps)
-export const createRoomSchema = roomSchema.omit({
-	id: true,
-	lastAirbnbSync: true,
-	lastExpediaSync: true,
+export const createRoomSchema = roomBaseSchema;
+
+export const updateRoomSchema = roomBaseSchema.partial().extend({
+	id: z.string().min(1),
 });
 
-// Update room input (partial with required ID)
-export const updateRoomSchema = roomSchema
-	.partial()
-	.extend({
-		id: z.string(),
-	})
-	.omit({
-		lastAirbnbSync: true,
-		lastExpediaSync: true,
-	});
+// Room queries: by internal id (booking flow), publicId (admin routes) or
+// slug (public room pages)
+export const getRoomSchema = z.union([
+	z.object({ id: z.string().min(1) }),
+	z.object({ publicId: publicIdSchema }),
+	z.object({ slug: z.string().min(1).max(100) }),
+]);
 
-// Room query schemas
-export const getRoomSchema = z.object({
-	id: z.string(),
-});
-
+/** Public room list: active rooms only, so no status filter. */
 export const getRoomsSchema = z.object({
 	limit: z.number().min(1).max(100).default(10),
 	offset: z.number().min(0).default(0),
-	status: roomStatusSchema.optional(), // Filter by status instead of just isActive
-	isActive: z.boolean().optional(), // Keep for backward compatibility
 });
 
-// Availability checking schemas
-export const checkAvailabilitySchema = z.object({
-	roomId: z.string(),
-	startDate: z
-		.string()
-		.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-	endDate: z
-		.string()
-		.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+/** Admin room list: every status, optionally filtered. */
+export const adminGetRoomsSchema = getRoomsSchema.extend({
+	status: roomStatusSchema.optional(),
 });
 
-export const bulkAvailabilitySchema = z.object({
-	roomIds: z.array(z.string()).optional(), // If not provided, check all rooms
-	startDate: z
-		.string()
-		.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-	endDate: z
-		.string()
-		.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+export const roomIdSchema = z.object({ roomId: z.string().min(1) });
+
+// --- Blocked periods (inclusive start/end) ---------------------------------
+
+const endNotBeforeStart = {
+	message: 'End date must be on or after the start date',
+	path: ['endDate'],
+};
+
+/** Partial update input: end >= start when both are given. */
+const updateDatesInOrder = (d: { startDate?: string; endDate?: string }) =>
+	!d.startDate || !d.endDate || d.startDate <= d.endDate;
+
+const blockedPeriodBaseSchema = z.object({
+	roomId: z.string().min(1),
+	startDate: isoDateSchema,
+	endDate: isoDateSchema,
+	reason: z.string().trim().min(1, 'Reason is required').max(200),
+	notes: z.string().max(1000).optional(),
 });
 
-// Calendar sync schema
-export const syncCalendarSchema = z.object({
-	roomId: z.string(),
-	platform: z.enum(['airbnb', 'expedia']),
-});
+export const createBlockedPeriodSchema = blockedPeriodBaseSchema.refine(
+	(d) => d.startDate <= d.endDate,
+	endNotBeforeStart,
+);
 
-// Room availability schema
-export const roomAvailabilitySchema = z.object({
-	id: z.string().optional(),
-	roomId: z.string(),
-	date: z
-		.string()
-		.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-	isAvailable: z.boolean().default(true),
-	isBlocked: z.boolean().default(false),
-	source: z.enum(['direct', 'airbnb', 'expedia', 'manual']).default('direct'),
-	externalBookingId: z.string().optional(),
-	priceOverride: z.number().min(0).optional(),
-});
-
-// Room blocking schema
-export const blockRoomSchema = z
-	.object({
-		roomId: z.string(),
-		startDate: z
-			.string()
-			.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-		endDate: z
-			.string()
-			.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-		reason: z.string().min(1, 'Reason is required'),
-		notes: z.string().optional(),
-	})
-	.refine(
-		(data) => {
-			// Ensure start date is before or equal to end date
-			return new Date(data.startDate) <= new Date(data.endDate);
-		},
-		{
-			message: 'End date must be after or equal to start date',
-			path: ['endDate'],
-		},
-	);
-
-// Room blocked period validation schemas for CRUD operations
-export const roomBlockedPeriodSchema = z
-	.object({
-		id: z.string().optional(),
-		roomId: z.string(),
-		startDate: z
-			.string()
-			.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-		endDate: z
-			.string()
-			.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-		reason: z.string().min(1, 'Reason is required'),
-		notes: z.string().optional(),
-		createdAt: z.date().optional(),
-	})
-	.refine(
-		(data) => {
-			// Ensure start date is before or equal to end date
-			return new Date(data.startDate) <= new Date(data.endDate);
-		},
-		{
-			message: 'End date must be after or equal to start date',
-			path: ['endDate'],
-		},
-	);
-
-// Create blocked period input (without ID and timestamps)
-export const createBlockedPeriodSchema = roomBlockedPeriodSchema.omit({
-	id: true,
-	createdAt: true,
-});
-
-// Update blocked period input (partial with required ID)
-export const updateBlockedPeriodSchema = roomBlockedPeriodSchema
+export const updateBlockedPeriodSchema = blockedPeriodBaseSchema
+	.omit({ roomId: true })
 	.partial()
-	.extend({
-		id: z.string(),
-	})
-	.omit({
-		createdAt: true,
-	})
-	.refine(
-		(data) => {
-			// Ensure start date is before or equal to end date if both are provided
-			if (data.startDate && data.endDate) {
-				return new Date(data.startDate) <= new Date(data.endDate);
-			}
-			return true;
-		},
-		{
-			message: 'End date must be after or equal to start date',
-			path: ['endDate'],
-		},
-	);
+	.extend({ id: z.string().min(1) })
+	.refine(updateDatesInOrder, endNotBeforeStart);
 
-// Query schemas for blocked periods
 export const getBlockedPeriodsSchema = z.object({
 	roomId: z.string().optional(),
-	startDate: z
-		.string()
-		.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
-		.optional(),
-	endDate: z
-		.string()
-		.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
-		.optional(),
+	/** Periods overlapping [startDate, endDate] (inclusive). */
+	startDate: isoDateSchema.optional(),
+	endDate: isoDateSchema.optional(),
 	limit: z.number().min(1).max(100).default(50),
 	offset: z.number().min(0).default(0),
 });
 
-export const getBlockedPeriodSchema = z.object({
-	id: z.string(),
-});
+export const deleteBlockedPeriodSchema = z.object({ id: z.string().min(1) });
 
-export const deleteBlockedPeriodSchema = z.object({
-	id: z.string(),
-});
+// --- Pricing rules (inclusive start/end; start = end allowed) ---------------
 
-// Pricing rules schemas
-export const pricingRuleTypeSchema = z.enum([
+const pricingRuleTypeSchema = z.enum([
 	'surcharge_rate',
 	'fixed_amount',
 	'absolute_price',
 ]);
-export type PricingRuleType = z.infer<typeof pricingRuleTypeSchema>;
 
-export const roomPricingRuleSchema = z
-	.object({
-		id: z.string().optional(),
-		roomId: z.string(),
-		name: z.string().min(1, 'Rule name is required'),
-		ruleType: pricingRuleTypeSchema,
-		value: z.number().min(0, 'Value must be positive'),
-		startDate: z
-			.string()
-			.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-		endDate: z
-			.string()
-			.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-		isActive: z.boolean().default(true),
-		daysOfWeek: z.string().optional(), // JSON stringified array
-	})
-	.refine(
-		(data) => {
-			// Ensure start date is before end date
-			return new Date(data.startDate) < new Date(data.endDate);
-		},
-		{
-			message: 'End date must be after start date',
-			path: ['endDate'],
-		},
-	)
-	.refine(
-		(data) => {
-			// Validate value based on rule type
-			if (data.ruleType === 'surcharge_rate') {
-				// Surcharge rate should be between 0 and 5 (0% to 500%)
-				return data.value >= 0 && data.value <= 5;
-			}
-			return true;
-		},
-		{
-			message: 'Surcharge rate must be between 0 and 5 (0% to 500%)',
-			path: ['value'],
-		},
-	);
-
-// Create pricing rule input (without ID and timestamps)
-export const createPricingRuleSchema = roomPricingRuleSchema.omit({
-	id: true,
+const pricingRuleBaseSchema = z.object({
+	roomId: z.string().min(1),
+	name: z.string().trim().min(1, 'Rule name is required').max(100),
+	ruleType: pricingRuleTypeSchema,
+	value: z.number().min(0, 'Value must be positive'),
+	startDate: isoDateSchema,
+	endDate: isoDateSchema,
+	isActive: z.boolean().default(true),
 });
 
-// Update pricing rule input (partial with required ID)
-export const updatePricingRuleSchema = roomPricingRuleSchema.partial().extend({
-	id: z.string(),
-});
+const surchargeInRange = {
+	message: 'Surcharge rate must be between 0 and 5 (0% to 500%)',
+	path: ['value'],
+};
+const validSurcharge = (d: { ruleType?: string; value?: number }) =>
+	d.ruleType !== 'surcharge_rate' || d.value === undefined || d.value <= 5;
 
-// Query schemas for pricing rules
+export const createPricingRuleSchema = pricingRuleBaseSchema
+	.refine((d) => d.startDate <= d.endDate, endNotBeforeStart)
+	.refine(validSurcharge, surchargeInRange);
+
+export const updatePricingRuleSchema = pricingRuleBaseSchema
+	.omit({ roomId: true })
+	.partial()
+	.extend({ id: z.string().min(1) })
+	.refine(updateDatesInOrder, endNotBeforeStart)
+	.refine(validSurcharge, surchargeInRange);
+
 export const getPricingRulesSchema = z.object({
-	roomId: z.string(),
+	roomId: z.string().min(1),
 	isActive: z.boolean().optional(),
-	startDate: z
-		.string()
-		.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
-		.optional(),
-	endDate: z
-		.string()
-		.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
-		.optional(),
+	/** Rules overlapping [startDate, endDate] (inclusive). */
+	startDate: isoDateSchema.optional(),
+	endDate: isoDateSchema.optional(),
 });
 
-export const deletePricingRuleSchema = z.object({
-	id: z.string(),
+export const deletePricingRuleSchema = z.object({ id: z.string().min(1) });
+
+// --- Calendar ----------------------------------------------------------------
+
+export const calculatePricingSchema = z
+	.object({
+		roomId: z.string().min(1),
+		checkInDate: isoDateSchema,
+		checkOutDate: isoDateSchema,
+		/** Ignored (no guest surcharge); kept for older clients. */
+		guestCount: z.number().int().min(1).optional(),
+	})
+	.refine((d) => d.checkOutDate > d.checkInDate, {
+		message: 'Check-out must be after check-in',
+		path: ['checkOutDate'],
+	});
+
+// --- iCal feeds (admin) -------------------------------------------------------
+
+const icalFeedSourceSchema = z.enum(icalFeedSources);
+
+/** Public https URL with a host name (see isSafeFeedUrl). */
+const feedUrlSchema = z
+	.string()
+	.trim()
+	.max(2000)
+	.refine(isSafeFeedUrl, 'Enter a public https URL');
+
+export const createIcalFeedSchema = z.object({
+	roomId: z.string().min(1),
+	source: icalFeedSourceSchema,
+	label: z.string().trim().max(100).optional(),
+	url: feedUrlSchema,
+	isActive: z.boolean().default(true),
 });
 
-// Export types
-export type Room = z.infer<typeof roomSchema>;
-export type CreateRoom = z.infer<typeof createRoomSchema>;
-export type UpdateRoom = z.infer<typeof updateRoomSchema>;
-export type GetRoomsQuery = z.infer<typeof getRoomsSchema>;
-export type CheckAvailability = z.infer<typeof checkAvailabilitySchema>;
-export type BulkAvailability = z.infer<typeof bulkAvailabilitySchema>;
-export type SyncCalendar = z.infer<typeof syncCalendarSchema>;
-export type RoomAvailability = z.infer<typeof roomAvailabilitySchema>;
-export type BlockRoom = z.infer<typeof blockRoomSchema>;
-export type RoomBlockedPeriod = z.infer<typeof roomBlockedPeriodSchema>;
-export type CreateBlockedPeriod = z.infer<typeof createBlockedPeriodSchema>;
-export type UpdateBlockedPeriod = z.infer<typeof updateBlockedPeriodSchema>;
-export type GetBlockedPeriods = z.infer<typeof getBlockedPeriodsSchema>;
-export type RoomPricingRule = z.infer<typeof roomPricingRuleSchema>;
-export type CreatePricingRule = z.infer<typeof createPricingRuleSchema>;
-export type UpdatePricingRule = z.infer<typeof updatePricingRuleSchema>;
-export type GetPricingRules = z.infer<typeof getPricingRulesSchema>;
+export const updateIcalFeedSchema = z.object({
+	id: z.string().min(1),
+	source: icalFeedSourceSchema.optional(),
+	label: z.string().trim().max(100).nullable().optional(),
+	url: feedUrlSchema.optional(),
+	isActive: z.boolean().optional(),
+});
+
+export const testIcalUrlSchema = z.object({ url: feedUrlSchema });
+
+// --- Types ---------------------------------------------------------------------
+
+export type CreateBlockedPeriod = z.input<typeof createBlockedPeriodSchema>;
+export type UpdateBlockedPeriod = z.input<typeof updateBlockedPeriodSchema>;
+export type RoomBlockedPeriod = CreateBlockedPeriod & { id?: string };
+export type CreatePricingRule = z.input<typeof createPricingRuleSchema>;
+export type UpdatePricingRule = z.input<typeof updatePricingRuleSchema>;
+export type RoomPricingRule = CreatePricingRule & { id?: string };

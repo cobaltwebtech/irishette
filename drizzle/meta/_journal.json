@@ -5,78 +5,8 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1755016687902,
-      "tag": "0000_irishette-migration",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1757619411459,
-      "tag": "0001_irishette-migration",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1757621530790,
-      "tag": "0002_irishette-migration",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1757625441154,
-      "tag": "0003_irishette-migration",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "6",
-      "when": 1758033214051,
-      "tag": "0004_irishette-migration",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "6",
-      "when": 1758125510607,
-      "tag": "0005_irishette-migration",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "6",
-      "when": 1758143206967,
-      "tag": "0006_irishette-migration",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "6",
-      "when": 1760388173997,
-      "tag": "0007_irishette-migration",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "6",
-      "when": 1760395300324,
-      "tag": "0008_irishette-migration",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "6",
-      "when": 1760903478295,
-      "tag": "0009_irishette-migration",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "6",
-      "when": 1762835494614,
-      "tag": "0010_irishette-migration",
+      "when": 1794198175050,
+      "tag": "0000_init",
       "breakpoints": true
     }
   ]

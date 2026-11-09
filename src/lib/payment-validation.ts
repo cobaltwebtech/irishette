@@ -1,90 +1,87 @@
 import { z } from 'zod';
 
-// Base booking schema matching the actual data structure sent from frontend
-export const createBookingSchema = z.object({
-	roomId: z.string(),
-	checkInDate: z
-		.string()
-		.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-	checkOutDate: z
-		.string()
-		.regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-	guestCount: z.number().int().min(1).max(20),
+import { isoDateSchema } from '@/lib/date-range';
+import { publicIdSchema } from '@/lib/ids';
+import { phoneNumberSchema } from '@/lib/user-validation';
 
-	// Guest information
-	guestName: z.string().min(2).max(100),
+const checkOutAfterCheckIn = {
+	message: 'Check-out must be after check-in',
+	path: ['checkOutDate'],
+};
+
+// Booking request from the booking form. Prices are recomputed on the server;
+// the client values below are accepted for compatibility and ignored.
+const createBookingBaseSchema = z.object({
+	roomId: z.string().min(1),
+	checkInDate: isoDateSchema,
+	checkOutDate: isoDateSchema,
+	// Upper bound is the room's max_guests, checked on the server.
+	guestCount: z.number().int().min(1).max(10),
+
+	guestName: z.string().trim().min(2).max(100),
 	guestEmail: z.email(),
-	guestPhone: z.string().min(10).max(20),
-
-	// Special requests and notes
+	guestPhone: phoneNumberSchema,
 	specialRequests: z.string().max(1000).optional(),
 
-	// Pricing breakdown (sent from frontend, validated against server calculation)
-	basePrice: z.number().positive(),
-	serviceFee: z.number().min(0).default(0),
-	taxAmount: z.number().min(0).default(0),
-	totalAmount: z.number().positive(),
+	basePrice: z.number().nonnegative().optional(),
+	serviceFee: z.number().nonnegative().optional(),
+	taxAmount: z.number().nonnegative().optional(),
+	totalAmount: z.number().nonnegative().optional(),
 });
 
-// Stripe checkout session creation schema
-export const createCheckoutSessionSchema = z.object({
-	bookingId: z.string(), // Temporary booking ID
-	successUrl: z.url(),
-	cancelUrl: z.url(),
+/** The guest details form (client) uses the same rules as the server. */
+export const guestDetailsSchema = createBookingBaseSchema.pick({
+	guestName: true,
+	guestEmail: true,
+	guestPhone: true,
+	guestCount: true,
+	specialRequests: true,
 });
 
-// Update booking schema for modifications
-export const updateBookingSchema = z.object({
-	bookingId: z.string(),
-	status: z.enum(['pending', 'confirmed', 'cancelled', 'completed']).optional(),
-	specialRequests: z.string().max(1000).optional(),
+export const createBookingSchema = createBookingBaseSchema.refine(
+	(d) => d.checkOutDate > d.checkInDate,
+	checkOutAfterCheckIn,
+);
+
+export const calculateBookingSchema = z
+	.object({
+		roomId: z.string().min(1),
+		checkInDate: isoDateSchema,
+		checkOutDate: isoDateSchema,
+		guestCount: z.number().int().min(1).max(10),
+	})
+	.refine((d) => d.checkOutDate > d.checkInDate, checkOutAfterCheckIn);
+
+/** A booking the caller owns, by internal id (payment steps). */
+export const bookingIdSchema = z.object({ bookingId: z.string().min(1) });
+
+/** The return page's fast-path confirmation (?session_id=cs_...). */
+export const confirmCheckoutSchema = z.object({
+	publicId: publicIdSchema,
+	sessionId: z
+		.string()
+		.max(255)
+		.regex(/^cs_(test|live)_[A-Za-z0-9]+$/, 'Invalid checkout session id'),
 });
 
-// Cancel booking schema
+export const bookingPublicIdSchema = z.object({ publicId: publicIdSchema });
+
+/** The refund the dialog showed; a different server amount is CONFLICT. */
+const expectedRefundAmount = z.number().nonnegative().max(1_000_000).optional();
+
 export const cancelBookingSchema = z.object({
-	bookingId: z.string(),
-	reason: z.string().max(500).optional(),
+	publicId: publicIdSchema,
+	reason: z.string().trim().max(500).optional(),
+	expectedRefundAmount,
 });
 
-// Get bookings schema with filters
-export const getBookingsSchema = z.object({
-	userId: z.string().optional(),
-	roomId: z.string().optional(),
-	status: z.enum(['pending', 'confirmed', 'cancelled', 'completed']).optional(),
-	startDate: z
-		.string()
-		.regex(/^\d{4}-\d{2}-\d{2}$/)
-		.optional(),
-	endDate: z
-		.string()
-		.regex(/^\d{4}-\d{2}-\d{2}$/)
-		.optional(),
-	limit: z.number().int().min(1).max(100).default(10),
-	offset: z.number().int().min(0).default(0),
-});
-
-// Booking calculation schema
-export const calculateBookingSchema = z.object({
-	roomId: z.string(),
-	checkInDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-	checkOutDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-	guestCount: z.number().int().min(1).max(20),
-});
-
-// Webhook validation schema
-export const stripeWebhookSchema = z.object({
-	type: z.string(),
-	data: z.object({
-		object: z.record(z.string(), z.any()),
-	}),
+export const adminCancelBookingSchema = z.object({
+	publicId: publicIdSchema,
+	refund: z.enum(['full', 'policy', 'none']),
+	reason: z.string().trim().max(500).optional(),
+	/** Refund although the payment has an open dispute (plan 02, B7). */
+	confirmDisputeRefund: z.boolean().optional(),
+	expectedRefundAmount,
 });
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
-export type CreateCheckoutSessionInput = z.infer<
-	typeof createCheckoutSessionSchema
->;
-export type UpdateBookingInput = z.infer<typeof updateBookingSchema>;
-export type CancelBookingInput = z.infer<typeof cancelBookingSchema>;
-export type GetBookingsInput = z.infer<typeof getBookingsSchema>;
-export type CalculateBookingInput = z.infer<typeof calculateBookingSchema>;
-export type StripeWebhookInput = z.infer<typeof stripeWebhookSchema>;

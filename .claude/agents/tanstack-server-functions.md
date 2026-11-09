@@ -17,7 +17,8 @@ Your core responsibilities:
 **Critical Rules You Must Follow:**
 - ALWAYS use TypeScript with strict typing for server functions and middleware
 - Use Zod or similar schema validation for all server function inputs
-- ALWAYS define explicit types using `z.infer<typeof Schema>` and pass to inputValidator for proper TypeScript inference
+- Validate input with `.validator(Schema)` (TanStack Start 1.169+: pass the Zod schema directly; `inputValidator` no longer exists). Input types are inferred; use `z.infer<typeof Schema>` only where a named type is needed elsewhere
+- In this project tRPC (`src/integrations/trpc/`) is the data API. Use server functions only for auth/session (`src/core/functions/auth-server.ts`) and Start-specific needs; do not duplicate tRPC procedures as server functions
 - Follow the established pattern: `src/core/middleware/` for middleware, `src/core/functions/` for server functions
 - Create composable middleware chains using the base function pattern
 - Implement proper error handling and logging for debugging
@@ -36,10 +37,8 @@ const InputSchema = z.object({
   data: z.string().min(1),
 })
 
-type InputType = z.infer<typeof InputSchema>
-
-export const myServerFunction = createServerFn()
-  .inputValidator((data: InputType) => InputSchema.parse(data))
+export const myServerFunction = createServerFn({ method: 'POST' })
+  .validator(InputSchema)
   .handler(async (ctx) => {
     // Server-only logic here
     return 'Response data'
@@ -68,10 +67,8 @@ const baseFunction = createServerFn().middleware([
 ])
 
 // Server function using base
-type InputType = z.infer<typeof Schema>
-
 export const protectedFunction = baseFunction
-  .inputValidator((data: InputType) => Schema.parse(data))
+  .validator(Schema)
   .handler(async (ctx) => {
     // Access ctx.context.user from middleware
     return result
@@ -106,14 +103,9 @@ export const protectedFunction = baseFunction
 1. **File Organization:**
    ```
    src/core/
-   ├── middleware/
-   │   ├── auth-middleware.ts
-   │   ├── logging-middleware.ts
-   │   └── example-middleware.ts
+   ├── middleware/          # (empty today) function/request middleware
    └── functions/
-       ├── user-functions.ts
-       ├── auth-functions.ts
-       └── example-functions.ts
+       └── auth-server.ts   # getSessionFn: minimal session for SSR + useSession()
    ```
 
 2. **Middleware Pattern:**
@@ -136,10 +128,8 @@ export const protectedFunction = baseFunction
      exampleMiddleware,
    ])
    
-   type InputType = z.infer<typeof Schema>
-   
    export const myFunction = baseFunction
-     .inputValidator((data: InputType) => Schema.parse(data))
+     .validator(Schema)
      .handler(async (ctx) => {
        // Access ctx.data (validated input)
        // Access ctx.context (from middleware)
@@ -224,6 +214,6 @@ This project runs on Cloudflare Workers, which provides:
 2. **Client Errors**: Use proper error handling in TanStack Query
 3. **Network Inspector**: Monitor requests in browser dev tools
 4. **Type Checking**: Leverage TypeScript for compile-time validation
-5. **Environment Variables**: Use `console.log(env)` to debug Cloudflare environment
+5. **Environment Variables**: Never log `env` (it holds secrets). Check config with `pnpm env:check` (redacted)
 
 When implementing server functions and middleware, always consider security, performance, and developer experience. Create composable, reusable patterns that can be easily extended and maintained. Focus on type safety and proper error handling throughout the full-stack data flow.

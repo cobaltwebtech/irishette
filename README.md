@@ -1,358 +1,81 @@
-Welcome to your new TanStack app!
+# Irishette
 
-# Getting Started
+Room-booking site for the Irishette Bed & Breakfast (Dublin, Texas): rooms,
+availability calendar, bookings with Stripe payments, cancellations and
+refunds, guest accounts, an admin area, and two-way iCal sync with Airbnb,
+Expedia and other platforms. It runs as a single Cloudflare Worker.
 
-To run this application:
+| | |
+|---|---|
+| Framework | TanStack Start (React 19, Vite 8, React Compiler), TanStack Router / Query / Table / Store |
+| API | tRPC v11 (`src/integrations/trpc/`) behind TanStack Start server routes (`src/routes/api/`) |
+| Data | Cloudflare D1 with Drizzle ORM (`src/db/`, migrations in `drizzle/`) |
+| Auth | Better Auth (email/password, magic link, Turnstile, Stripe customer) |
+| Payments | Stripe (PaymentIntents + Payment Element; webhook at `/api/stripe/webhook`) |
+| Email | Resend + react-email (`src/components/email/`) |
+| Config | `cloudflare.config.ts` + the `cf` CLI; env contract in `.env.schema` (Varlock) |
+| Tooling | pnpm, Vite+ (`vp`: Oxlint, Oxfmt, Vitest), Playwright, Fallow |
+
+Agents and contributors: read [`AGENTS.md`](AGENTS.md) first.
+
+## Setup
+
+Requirements: Node 22.18+ (this repo uses Node 26), pnpm.
 
 ```bash
 pnpm install
-pnpm start
+# Secrets: ask for the values, put them in .env.local, then encrypt them in
+# place (macOS Secure Enclave): pnpm exec varlock encrypt --file .env.local
+pnpm db:reset:local          # local D1: migrate + synthetic seed
+pnpm dev                     # http://localhost:3000 (asks for Touch ID to decrypt secrets)
 ```
 
-# Building For Production
-
-To build this application for production:
+Make yourself an admin after signing up locally:
 
 ```bash
-pnpm build
+pnpm db:make-admin:local you@example.com
 ```
 
-## Testing
-
-This project uses [Vitest](https://vitest.dev/) for testing. You can run the tests with:
-
-```bash
-pnpm test
-```
-
-## Styling
-
-This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
-
-## Linting & Formatting
-
-This project uses [eslint](https://eslint.org/) and [prettier](https://prettier.io/) for linting and formatting. Eslint is configured using [tanstack/eslint-config](https://tanstack.com/config/latest/docs/eslint). The following scripts are available:
-
-```bash
-pnpm lint
-pnpm format
-pnpm check
-```
-
-## Shadcn
-
-Add components using the latest version of [Shadcn](https://ui.shadcn.com/).
-
-```bash
-pnpx shadcn@latest add button
-```
-
-## Routing
-
-This project uses [TanStack Router](https://tanstack.com/router). The initial setup is a file based router. Which means that the routes are managed as files in `src/routes`.
-
-### Adding A Route
-
-To add a new route to your application just add another a new file in the `./src/routes` directory.
-
-TanStack will automatically generate the content of the route file for you.
-
-Now that you have two routes you can use a `Link` component to navigate between them.
-
-### Adding Links
-
-To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/react-router`.
-
-```tsx
-import { Link } from '@tanstack/react-router'
-```
-
-Then anywhere in your JSX you can use it like so:
-
-```tsx
-<Link to="/about">About</Link>
-```
-
-This will create a link that will navigate to the `/about` route.
-
-More information on the `Link` component can be found in the [Link documentation](https://tanstack.com/router/v1/docs/framework/react/api/router/linkComponent).
-
-### Using A Layout
-
-In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you use the `<Outlet />` component.
-
-Here is an example layout that includes a header:
-
-```tsx
-import { Outlet, createRootRoute } from '@tanstack/react-router'
-import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
-
-import { Link } from '@tanstack/react-router'
-
-export const Route = createRootRoute({
-  component: () => (
-    <>
-      <header>
-        <nav>
-          <Link to="/">Home</Link>
-          <Link to="/about">About</Link>
-        </nav>
-      </header>
-      <Outlet />
-      <TanStackRouterDevtools />
-    </>
-  ),
-})
-```
-
-The `<TanStackRouterDevtools />` component is not required so you can remove it if you don't want it in your layout.
-
-More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/react/guide/routing-concepts#layouts).
-
-## Data Fetching
-
-There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
-
-For example:
-
-```tsx
-const peopleRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/people',
-  loader: async () => {
-    const response = await fetch('https://swapi.dev/api/people')
-    return response.json() as Promise<{
-      results: {
-        name: string
-      }[]
-    }>
-  },
-  component: () => {
-    const data = peopleRoute.useLoaderData()
-    return (
-      <ul>
-        {data.results.map((person) => (
-          <li key={person.name}>{person.name}</li>
-        ))}
-      </ul>
-    )
-  },
-})
-```
-
-Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#loader-parameters).
-
-### React-Query
-
-React-Query is an excellent addition or alternative to route loading and integrating it into you application is a breeze.
-
-First add your dependencies:
-
-```bash
-pnpm add @tanstack/react-query @tanstack/react-query-devtools
-```
-
-Next we'll need to create a query client and provider. We recommend putting those in `main.tsx`.
-
-```tsx
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-
-// ...
-
-const queryClient = new QueryClient()
-
-// ...
-
-if (!rootElement.innerHTML) {
-  const root = ReactDOM.createRoot(rootElement)
-
-  root.render(
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>,
-  )
-}
-```
-
-You can also add TanStack Query Devtools to the root route (optional).
-
-```tsx
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-
-const rootRoute = createRootRoute({
-  component: () => (
-    <>
-      <Outlet />
-      <ReactQueryDevtools buttonPosition="top-right" />
-      <TanStackRouterDevtools />
-    </>
-  ),
-})
-```
-
-Now you can use `useQuery` to fetch your data.
-
-```tsx
-import { useQuery } from '@tanstack/react-query'
-
-import './App.css'
-
-function App() {
-  const { data } = useQuery({
-    queryKey: ['people'],
-    queryFn: () =>
-      fetch('https://swapi.dev/api/people')
-        .then((res) => res.json())
-        .then((data) => data.results as { name: string }[]),
-    initialData: [],
-  })
-
-  return (
-    <div>
-      <ul>
-        {data.map((person) => (
-          <li key={person.name}>{person.name}</li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-export default App
-```
-
-You can find out everything you need to know on how to use React-Query in the [React-Query documentation](https://tanstack.com/query/latest/docs/framework/react/overview).
-
-## State Management
-
-Another common requirement for React applications is state management. There are many options for state management in React. TanStack Store provides a great starting point for your project.
-
-First you need to add TanStack Store as a dependency:
-
-```bash
-pnpm add @tanstack/store
-```
-
-Now let's create a simple counter in the `src/App.tsx` file as a demonstration.
-
-```tsx
-import { useStore } from '@tanstack/react-store'
-import { Store } from '@tanstack/store'
-import './App.css'
-
-const countStore = new Store(0)
-
-function App() {
-  const count = useStore(countStore)
-  return (
-    <div>
-      <button onClick={() => countStore.setState((n) => n + 1)}>
-        Increment - {count}
-      </button>
-    </div>
-  )
-}
-
-export default App
-```
-
-One of the many nice features of TanStack Store is the ability to derive state from other state. That derived state will update when the base state updates.
-
-Let's check this out by doubling the count using derived state.
-
-```tsx
-import { useStore } from '@tanstack/react-store'
-import { Store, Derived } from '@tanstack/store'
-import './App.css'
-
-const countStore = new Store(0)
-
-const doubledStore = new Derived({
-  fn: () => countStore.state * 2,
-  deps: [countStore],
-})
-doubledStore.mount()
-
-function App() {
-  const count = useStore(countStore)
-  const doubledCount = useStore(doubledStore)
-
-  return (
-    <div>
-      <button onClick={() => countStore.setState((n) => n + 1)}>
-        Increment - {count}
-      </button>
-      <div>Doubled - {doubledCount}</div>
-    </div>
-  )
-}
-
-export default App
-```
-
-We use the `Derived` class to create a new store that is derived from another store. The `Derived` class has a `mount` method that will start the derived store updating.
-
-Once we've created the derived store we can use it in the `App` component just like we would any other store using the `useStore` hook.
-
-You can find out everything you need to know on how to use TanStack Store in the [TanStack Store documentation](https://tanstack.com/store/latest).
-
-# Demo files
-
-Files prefixed with `demo` can be safely deleted. They are there to provide a starting point for you to play around with the features you've installed.
-
-# Cron Jobs (Scheduled Tasks)
-
-This application includes automated calendar syncing with Airbnb and Expedia via Cloudflare Workers cron triggers.
-
-## Testing Cron Jobs Locally
-
-### Quick Test
-
-1. **Start the dev server:**
-```bash
-pnpm dev
-# or
-wrangler dev
-```
-
-2. **In another terminal, trigger the cron:**
-```bash
-# Easy way - use the helper script
-./scripts/test-cron-local.sh
-
-# Or manually trigger with curl
-curl "http://localhost:8787/__scheduled?cron=0+*+*+*+*"
-```
-
-### What to Expect
-
-You should see logs in your `wrangler dev` terminal showing:
-- 🚀 Calendar sync starting
-- 📋 Rooms being processed
-- ✅ Sync results
-- 📝 Summary stored in KV
-
-### Verify Results
-
-```bash
-# Check sync logs in database
-wrangler d1 execute irishette-dev --command="SELECT * FROM ical_sync_log ORDER BY createdAt DESC LIMIT 5;" --local
-
-# View KV sync summaries
-wrangler kv key list --namespace-id="481a64572c1145de958404c9512755d6" --prefix="sync_summary:"
-```
-
-## Cron Schedules
-
-- **Hourly (0 * * * *)**: Syncs external calendars from Airbnb and Expedia
-- **Weekly (0 2 * * 7)**: Cleans up old sync logs
-
-## Documentation
-
-- [Testing Cron Jobs Locally](./docs/TESTING_CRON_JOBS_LOCALLY.md) - Detailed testing guide
-- [Cron Jobs Setup](./docs/CRON_JOBS_SETUP.md) - Complete setup documentation
-- [Quick Start](./docs/CRON_QUICKSTART.md) - One-page reference
-
-# Learn More
-
-You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
+## Scripts
+
+| Script | What it does |
+|---|---|
+| `pnpm dev` | Dev server (Vite + local D1) |
+| `pnpm build` | Production build into `.cloudflare/output/` |
+| `pnpm typecheck` | Regenerate Worker types, then `tsc` (app and e2e) |
+| `pnpm check` / `pnpm check:fix` | Vite+: Oxfmt + Oxlint (type-aware) + type check; `:fix` formats and applies safe fixes |
+| `pnpm test` | All Vitest tests (`test:unit`, `test:workers`) |
+| `pnpm test:e2e` | Playwright (Chromium) against the dev server |
+| `pnpm test:smoke` | Quick HTTP checks against a running dev server |
+| `pnpm check:bundle` | After a build: no secret names in client assets |
+| `pnpm db:generate` | New SQL migration from the Drizzle schema |
+| `pnpm db:migrate:local` / `db:seed:local` / `db:reset:local` | Local D1 only |
+| `pnpm env:check` / `env:scan` / `env:types` | Varlock: validate env, scan for leaked secrets, regenerate types |
+| `pnpm run deploy` | Build and deploy with `cf` (production; ask first) |
+
+## Tests
+
+- **Unit** (`test/unit/`, Node): date rules, pricing, iCal parse/generate,
+  cancellation policy, validation, ids, booking store.
+- **Workers** (`test/workers/`, workerd via `@cloudflare/vitest-plugin`):
+  tRPC procedures (auth sweep, leaks, bookings, payments, pricing rules,
+  blocks, cancellations), the Stripe webhook, the iCal export route and the
+  cron handlers. Local D1 with migrations, test-only bindings, and msw for
+  Stripe, Resend and feed URLs (unmocked requests fail).
+- **E2E** (`e2e/`, Playwright): hard reloads, auth redirects, the calendar.
+  Signed-in tests need `E2E_USER_EMAIL`/`E2E_USER_PASSWORD` (and the admin
+  equivalents); the Stripe booking test also needs `E2E_STRIPE=1`. See
+  `playwright.config.ts`.
+
+## Environment and deploys
+
+`.env.schema` declares every variable (Varlock); real values live only in the
+gitignored, encrypted `.env.local`. `cloudflare.config.ts` declares the Worker
+bindings. Production secrets are set with
+`pnpm dlx wrangler secret put <NAME> --name irishette`. Details, and the rules
+for remote D1 and deploys, are in [`AGENTS.md`](AGENTS.md).
+
+## Docs
+
+Feature notes are in `docs/`. Start with `BOOKING_ARCHITECTURE.md`,
+`TRPC_QUICK_REFERENCE.md`, `ICAL_SYNC_README.md` and `CRON_JOBS_SETUP.md`.

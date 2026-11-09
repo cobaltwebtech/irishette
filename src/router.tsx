@@ -1,37 +1,59 @@
+import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
 import { createRouter } from '@tanstack/react-router';
 import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query';
-import * as TanstackQuery from './integrations/tanstack-query/root-provider';
+import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
 
-// Import the generated route tree
+import { makeTRPCClient } from '@/integrations/trpc/client';
+import { TRPCProvider } from '@/integrations/trpc/react';
+import type { TRPCRouter } from '@/integrations/trpc/router';
+import { createAuthErrorHandler } from '@/lib/session';
+
 import { routeTree } from './routeTree.gen';
 
-// Create a new router instance
+/**
+ * Called once per SSR request and once in the browser. Everything with state
+ * (QueryClient, tRPC client) is created here, never at module scope, so one
+ * request's cache can never be dehydrated into another user's page.
+ */
 export const getRouter = () => {
-	const rqContext = TanstackQuery.getContext();
+	// Browser only: an UNAUTHORIZED/FORBIDDEN tRPC answer refreshes the session
+	// and re-runs the guards (see createAuthErrorHandler).
+	const onAuthError = (error: unknown) => handleAuthError(error);
+	const queryClient = new QueryClient({
+		queryCache: new QueryCache({ onError: onAuthError }),
+		mutationCache: new MutationCache({ onError: onAuthError }),
+		defaultOptions: {
+			queries: {
+				staleTime: 60_000,
+				retry: 1,
+				refetchOnWindowFocus: false,
+			},
+		},
+	});
+	const trpcClient = makeTRPCClient();
+	const trpc = createTRPCOptionsProxy<TRPCRouter>({
+		client: trpcClient,
+		queryClient,
+	});
 
 	const router = createRouter({
 		routeTree,
-		context: {
-			...rqContext,
-			// auth will initially be undefined
-			// We'll pass the actual auth state from the App component
-			// biome-ignore lint/style/noNonNullAssertion: Better Auth typed in __root.tsx
-			auth: undefined!,
-		},
+		context: { queryClient, trpc },
 		defaultPreload: 'intent',
-		Wrap: (props: { children: React.ReactNode }) => {
-			return (
-				<TanstackQuery.Provider queryClient={rqContext.queryClient}>
-					{props.children}
-				</TanstackQuery.Provider>
-			);
-		},
+		// Let TanStack Query own data freshness for preloads.
+		defaultPreloadStaleTime: 0,
+		// Wrap must close over this router's per-request clients (a component defined inside a function on purpose).
+		Wrap: ({ children }: { children: React.ReactNode }) => (
+			<TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
+				{children}
+			</TRPCProvider>
+		),
 	});
 
-	setupRouterSsrQueryIntegration({
-		router,
-		queryClient: rqContext.queryClient,
-	});
+	const handleAuthError = createAuthErrorHandler(queryClient, () => router);
+
+	// Provides the QueryClientProvider and SSR dehydration/hydration.
+	setupRouterSsrQueryIntegration({ router, queryClient });
 
 	return router;
 };

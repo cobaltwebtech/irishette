@@ -1,14 +1,15 @@
 import { Icon } from '@iconify/react';
+import { Link } from '@tanstack/react-router';
+import { isTRPCClientError } from '@trpc/client';
+import { useId, useState } from 'react';
+
 import {
-	createColumnHelper,
-	flexRender,
-	getCoreRowModel,
-	getSortedRowModel,
-	type SortingState,
-	useReactTable,
-} from '@tanstack/react-table';
-import { useId, useMemo, useState } from 'react';
-import { toast } from 'sonner';
+	createAppColumnHelper,
+	DataTableView,
+	PaginationControls,
+	SortableHeader,
+	useAppTable,
+} from '@/components/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,6 +29,7 @@ import {
 import {
 	DropdownMenu,
 	DropdownMenuContent,
+	DropdownMenuGroup,
 	DropdownMenuItem,
 	DropdownMenuLabel,
 	DropdownMenuSeparator,
@@ -35,135 +37,119 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from '@/components/ui/table';
+import { toast } from '@/components/ui/toast';
+import type { TRPCRouter } from '@/integrations/trpc/router';
+import { daysBetween } from '@/lib/date-range';
 import type {
 	CreateBlockedPeriod,
 	RoomBlockedPeriod,
 	UpdateBlockedPeriod,
 } from '@/lib/room-validation';
+import { formatStayDate } from '@/lib/timezone';
+import { useTodayCT } from '@/utils/use-now';
 
-// Helper function to format date strings without timezone offset issues
-function formatDateString(dateString: string): string {
-	// Parse the date string (YYYY-MM-DD) and format it without timezone conversion
-	const [year, month, day] = dateString.split('-').map(Number);
-	const date = new Date(year, month - 1, day); // month is 0-indexed
-	return date.toLocaleDateString();
+/** A block or stay date (YYYY-MM-DD), shown the same for everyone. */
+const formatDateString = (dateString: string) => formatStayDate(dateString);
+
+/** A reservation a block would overlap (CONFLICT data.conflicts). */
+interface BlockConflict {
+	publicId: string | null;
+	confirmationId: string | null;
+	source: string;
+	checkIn: string;
+	checkOut: string;
+	status: string;
 }
 
-// Helper function to parse validation errors into human-readable messages
-function parseValidationErrors(errorMessage: string): string {
-	try {
-		const errors = JSON.parse(errorMessage);
-		if (Array.isArray(errors)) {
-			const fieldErrors = errors.map(
-				(error: { code: string; path?: string[]; message?: string }) => {
-					const field = error.path ? error.path[0] : 'unknown field';
-					return `${field}: ${error.message || error.code}`;
-				},
-			);
-			return fieldErrors.join(', ');
-		}
-		return errorMessage;
-	} catch {
-		return errorMessage;
+/** Message and conflicts from a failed save. */
+function readSaveError(error: unknown) {
+	if (isTRPCClientError<TRPCRouter>(error)) {
+		return {
+			message: error.message,
+			conflicts: (error.data?.conflicts as BlockConflict[] | null) ?? [],
+		};
 	}
+	return {
+		message: error instanceof Error ? error.message : 'Unexpected error',
+		conflicts: [] as BlockConflict[],
+	};
 }
 
-interface RoomBlockingManagementProps {
-	roomId: string;
-	onCreateBlockedPeriod: (period: CreateBlockedPeriod) => Promise<void>;
-	onUpdateBlockedPeriod: (period: UpdateBlockedPeriod) => Promise<void>;
-	onDeleteBlockedPeriod: (periodId: string) => Promise<void>;
-	blockedPeriods: RoomBlockedPeriod[];
-	isLoading?: boolean;
-}
+const SOURCE_LABELS: Record<string, string> = {
+	direct: 'Booking on this site',
+	block: 'Blocked period',
+	airbnb: 'Airbnb',
+	expedia: 'Expedia',
+	vrbo: 'Vrbo',
+	booking: 'Booking.com',
+	other: 'Imported calendar',
+};
 
-export function RoomBlockingManagement({
-	roomId,
-	onCreateBlockedPeriod,
-	onUpdateBlockedPeriod,
-	onDeleteBlockedPeriod,
-	blockedPeriods,
-	isLoading = false,
-}: RoomBlockingManagementProps) {
-	const [showCreateDialog, setShowCreateDialog] = useState(false);
-	const [editingPeriod, setEditingPeriod] = useState<RoomBlockedPeriod | null>(
-		null,
+/** Lists what a block would overlap, inside the dialog. */
+function BlockConflictList({
+	message,
+	conflicts,
+}: {
+	message: string;
+	conflicts: BlockConflict[];
+}) {
+	return (
+		<div
+			role="alert"
+			className="space-y-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm"
+		>
+			<p className="font-medium text-destructive">{message}</p>
+			{conflicts.length > 0 && (
+				<ul className="space-y-1">
+					{conflicts.map((c) => (
+						<li
+							key={`${c.source}-${c.publicId ?? ''}-${c.checkIn}-${c.checkOut}`}
+							className="flex flex-wrap items-center gap-2"
+						>
+							<Badge variant="outline">
+								{SOURCE_LABELS[c.source] ?? c.source}
+							</Badge>
+							<span>
+								{formatDateString(c.checkIn)} to {formatDateString(c.checkOut)}
+							</span>
+							<span className="text-muted-foreground">({c.status})</span>
+							{c.publicId && (
+								<Link
+									to="/admin/bookings/$publicId"
+									params={{ publicId: c.publicId }}
+									className="text-primary underline"
+								>
+									{c.confirmationId ?? 'Open booking'}
+								</Link>
+							)}
+						</li>
+					))}
+				</ul>
+			)}
+		</div>
 	);
-	const [deletingPeriod, setDeletingPeriod] =
-		useState<RoomBlockedPeriod | null>(null);
-	const [sorting, setSorting] = useState<SortingState>([
-		{ id: 'startDate', desc: false },
-	]);
+}
 
-	const handleCreatePeriod = async (period: CreateBlockedPeriod) => {
-		try {
-			await onCreateBlockedPeriod(period);
-			setShowCreateDialog(false);
-		} catch (error) {
-			console.error('Error creating blocked period:', error);
-			// Error handling is done in the parent component
-		}
-	};
+// Helper function to format date range
+const formatDateRange = (startDate: string, endDate: string) => {
+	const start = formatDateString(startDate);
+	const end = formatDateString(endDate);
+	return `${start} - ${end}`;
+};
 
-	const handleUpdatePeriod = async (period: UpdateBlockedPeriod) => {
-		try {
-			await onUpdateBlockedPeriod(period);
-			setEditingPeriod(null);
-		} catch (error) {
-			console.error('Error updating blocked period:', error);
-			// Error handling is done in the parent component
-		}
-	};
+const columnHelper = createAppColumnHelper<RoomBlockedPeriod>();
 
-	const handleDeletePeriod = async (periodId: string) => {
-		try {
-			await onDeleteBlockedPeriod(periodId);
-			setDeletingPeriod(null);
-		} catch (error) {
-			console.error('Error deleting blocked period:', error);
-			// Error handling is done in the parent component
-		}
-	};
-
-	// Filter blocked periods to show only current and future periods
-	const filteredBlockedPeriods = useMemo(() => {
-		return blockedPeriods.filter((period) => {
-			const endDate = new Date(`${period.endDate}T23:59:59`);
-			const today = new Date();
-			today.setHours(0, 0, 0, 0); // Reset time to start of day
-			return endDate >= today;
-		});
-	}, [blockedPeriods]);
-
-	// Helper function to format date range
-	const formatDateRange = (startDate: string, endDate: string) => {
-		const start = formatDateString(startDate);
-		const end = formatDateString(endDate);
-		return `${start} - ${end}`;
-	};
-
-	// Create columns using the column helper
-	const columnHelper = createColumnHelper<RoomBlockedPeriod>();
-
-	const columns = [
+function makeColumns({
+	onEdit,
+	onDelete,
+}: {
+	onEdit: (period: RoomBlockedPeriod) => void;
+	onDelete: (period: RoomBlockedPeriod) => void;
+}) {
+	return columnHelper.columns([
 		columnHelper.accessor('startDate', {
 			header: ({ column }) => (
-				<Button
-					variant="ghost"
-					onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-					className="h-8 px-2"
-				>
-					Date Range
-					<Icon icon="tabler:arrows-up-down" />
-				</Button>
+				<SortableHeader column={column}>Date Range</SortableHeader>
 			),
 			cell: (info) => (
 				<span className="text-sm">
@@ -192,11 +178,10 @@ export function RoomBlockingManagement({
 			id: 'duration',
 			header: 'Duration',
 			cell: (info) => {
-				const startDate = new Date(info.row.original.startDate);
-				const endDate = new Date(info.row.original.endDate);
-				const duration = Math.ceil(
-					(endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
-				);
+				// Inclusive dates: Jun 8 to Jun 10 is 3 days.
+				const duration =
+					daysBetween(info.row.original.startDate, info.row.original.endDate) +
+					1;
 				return (
 					<Badge variant="outline">
 						{duration} {duration === 1 ? 'Day' : 'Days'}
@@ -209,23 +194,23 @@ export function RoomBlockingManagement({
 			header: 'Actions',
 			cell: (info) => (
 				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<Button variant="ghost" className="h-8 w-8 p-0">
-							<span className="sr-only">Open menu</span>
-							<Icon icon="tabler:dots" />
-						</Button>
+					<DropdownMenuTrigger
+						render={<Button variant="ghost" className="h-8 w-8 p-0" />}
+					>
+						<span className="sr-only">Open menu</span>
+						<Icon icon="tabler:dots" />
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">
-						<DropdownMenuLabel>Actions</DropdownMenuLabel>
-						<DropdownMenuItem
-							onClick={() => setEditingPeriod(info.row.original)}
-						>
-							<Icon icon="tabler:pencil" />
-							Edit
-						</DropdownMenuItem>
+						<DropdownMenuGroup>
+							<DropdownMenuLabel>Actions</DropdownMenuLabel>
+							<DropdownMenuItem onClick={() => onEdit(info.row.original)}>
+								<Icon icon="tabler:pencil" />
+								Edit
+							</DropdownMenuItem>
+						</DropdownMenuGroup>
 						<DropdownMenuSeparator />
 						<DropdownMenuItem
-							onClick={() => setDeletingPeriod(info.row.original)}
+							onClick={() => onDelete(info.row.original)}
 							className="text-destructive"
 						>
 							<Icon icon="tabler:trash" />
@@ -235,16 +220,74 @@ export function RoomBlockingManagement({
 				</DropdownMenu>
 			),
 		}),
-	];
+	]);
+}
 
-	const table = useReactTable({
+interface RoomBlockingManagementProps {
+	roomId: string;
+	onCreateBlockedPeriod: (period: CreateBlockedPeriod) => Promise<void>;
+	onUpdateBlockedPeriod: (period: UpdateBlockedPeriod) => Promise<void>;
+	onDeleteBlockedPeriod: (periodId: string) => Promise<void>;
+	blockedPeriods: RoomBlockedPeriod[];
+	isLoading?: boolean;
+}
+
+export function RoomBlockingManagement({
+	roomId,
+	onCreateBlockedPeriod,
+	onUpdateBlockedPeriod,
+	onDeleteBlockedPeriod,
+	blockedPeriods,
+	isLoading = false,
+}: RoomBlockingManagementProps) {
+	const [showCreateDialog, setShowCreateDialog] = useState(false);
+	const [editingPeriod, setEditingPeriod] = useState<RoomBlockedPeriod | null>(
+		null,
+	);
+	const [deletingPeriod, setDeletingPeriod] =
+		useState<RoomBlockedPeriod | null>(null);
+
+	// Errors propagate to the dialogs, which stay open and show them.
+	const handleCreatePeriod = async (period: CreateBlockedPeriod) => {
+		await onCreateBlockedPeriod(period);
+		setShowCreateDialog(false);
+		toast.add({
+			type: 'success',
+			title: 'Blocked period created successfully!',
+		});
+	};
+
+	const handleUpdatePeriod = async (period: UpdateBlockedPeriod) => {
+		await onUpdateBlockedPeriod(period);
+		setEditingPeriod(null);
+		toast.add({
+			type: 'success',
+			title: 'Blocked period updated successfully!',
+		});
+	};
+
+	const handleDeletePeriod = async (periodId: string) => {
+		await onDeleteBlockedPeriod(periodId);
+		setDeletingPeriod(null);
+	};
+
+	// Current and future periods only (today in Central Time; dates are
+	// inclusive YYYY-MM-DD strings, compared as strings).
+	const today = useTodayCT();
+	const filteredBlockedPeriods = blockedPeriods.filter(
+		(period) => period.endDate >= today,
+	);
+
+	const columns = makeColumns({
+		onEdit: setEditingPeriod,
+		onDelete: setDeletingPeriod,
+	});
+
+	const table = useAppTable({
 		data: filteredBlockedPeriods,
 		columns,
-		onSortingChange: setSorting,
-		getCoreRowModel: getCoreRowModel(),
-		getSortedRowModel: getSortedRowModel(),
-		state: {
-			sorting,
+		initialState: {
+			sorting: [{ id: 'startDate', desc: false }],
 		},
 	});
 
@@ -252,7 +295,7 @@ export function RoomBlockingManagement({
 		<Card>
 			<CardHeader className="flex justify-between gap-12">
 				<div>
-					<CardTitle className="text-lg flex items-center gap-2">
+					<CardTitle className="flex items-center gap-2 text-lg">
 						<Icon icon="tabler:calendar-pause" className="size-6" />
 						Blocked Periods
 					</CardTitle>
@@ -278,62 +321,26 @@ export function RoomBlockingManagement({
 						</div>
 					</div>
 				) : filteredBlockedPeriods.length === 0 ? (
-					<div className="text-center py-8 text-muted-foreground">
+					<div className="py-8 text-center text-muted-foreground">
 						<Icon
 							icon="tabler:calendar-x"
-							className="size-12 text-secondary mx-auto mb-4"
+							className="mx-auto mb-4 size-12 text-secondary"
 						/>
 						<h3 className="text-lg font-medium">
 							No current blocked periods for room
 						</h3>
-						<p className="text-sm mb-4">
+						<p className="mb-4 text-sm">
 							Add blocked dates to prevent bookings during specific periods.
 						</p>
 					</div>
 				) : (
-					<Table>
-						<TableHeader>
-							{table.getHeaderGroups().map((headerGroup) => (
-								<TableRow key={headerGroup.id}>
-									{headerGroup.headers.map((header) => (
-										<TableHead key={header.id}>
-											{header.isPlaceholder
-												? null
-												: flexRender(
-														header.column.columnDef.header,
-														header.getContext(),
-													)}
-										</TableHead>
-									))}
-								</TableRow>
-							))}
-						</TableHeader>
-						<TableBody>
-							{table.getRowModel().rows?.length ? (
-								table.getRowModel().rows.map((row) => (
-									<TableRow key={row.id}>
-										{row.getVisibleCells().map((cell) => (
-											<TableCell key={cell.id}>
-												{flexRender(
-													cell.column.columnDef.cell,
-													cell.getContext(),
-												)}
-											</TableCell>
-										))}
-									</TableRow>
-								))
-							) : (
-								<TableRow>
-									<TableCell
-										colSpan={columns.length}
-										className="h-24 text-center"
-									>
-										No blocked periods found.
-									</TableCell>
-								</TableRow>
-							)}
-						</TableBody>
-					</Table>
+					<>
+						<DataTableView
+							table={table}
+							emptyMessage="No blocked periods found."
+						/>
+						<PaginationControls table={table} noun="blocked periods" />
+					</>
 				)}
 			</CardContent>
 
@@ -360,9 +367,9 @@ export function RoomBlockingManagement({
 				<DeleteBlockedPeriodDialog
 					open={!!deletingPeriod}
 					onOpenChange={() => setDeletingPeriod(null)}
-					onConfirm={() => {
+					onConfirm={async () => {
 						if (deletingPeriod.id) {
-							handleDeletePeriod(deletingPeriod.id);
+							await handleDeletePeriod(deletingPeriod.id);
 						}
 					}}
 					period={deletingPeriod}
@@ -376,7 +383,7 @@ export function RoomBlockingManagement({
 interface CreateBlockedPeriodDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	onSubmit: (period: CreateBlockedPeriod) => void;
+	onSubmit: (period: CreateBlockedPeriod) => Promise<void>;
 	roomId: string;
 }
 
@@ -391,55 +398,58 @@ function CreateBlockedPeriodDialog({
 	const [reason, setReason] = useState('');
 	const [notes, setNotes] = useState('');
 	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [saveError, setSaveError] = useState<ReturnType<
+		typeof readSaveError
+	> | null>(null);
 
 	const startDateId = useId();
 	const endDateId = useId();
 	const reasonId = useId();
 	const notesId = useId();
 
+	const resetForm = () => {
+		setStartDate('');
+		setEndDate('');
+		setReason('');
+		setNotes('');
+		setSaveError(null);
+	};
+
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 
 		if (!startDate || !endDate || !reason.trim()) {
-			toast.error('Please fill in all required fields');
+			toast.add({ type: 'error', title: 'Please fill in all required fields' });
+			return;
+		}
+		if (endDate < startDate) {
+			toast.add({
+				type: 'error',
+				title: 'End date must be on or after the start date',
+			});
 			return;
 		}
 
 		setIsSubmitting(true);
+		setSaveError(null);
 		try {
-			onSubmit({
+			await onSubmit({
 				roomId,
 				startDate,
 				endDate,
 				reason: reason.trim(),
 				notes: notes.trim() || undefined,
 			});
-
-			// Reset form
-			setStartDate('');
-			setEndDate('');
-			setReason('');
-			setNotes('');
-
-			toast.success('Blocked period created successfully!');
+			resetForm();
 		} catch (error) {
-			console.error('Error creating blocked period:', error);
-			const errorMessage =
-				error instanceof Error ? error.message : 'Unknown error';
-
-			toast.error('Failed to create blocked period', {
-				description: parseValidationErrors(errorMessage),
-			});
+			setSaveError(readSaveError(error));
 		} finally {
 			setIsSubmitting(false);
 		}
 	};
 
 	const resetAndClose = () => {
-		setStartDate('');
-		setEndDate('');
-		setReason('');
-		setNotes('');
+		resetForm();
 		onOpenChange(false);
 	};
 
@@ -499,6 +509,8 @@ function CreateBlockedPeriodDialog({
 						/>
 					</div>
 
+					{saveError && <BlockConflictList {...saveError} />}
+
 					<div className="flex justify-end gap-2">
 						<Button
 							type="button"
@@ -522,7 +534,7 @@ function CreateBlockedPeriodDialog({
 interface EditBlockedPeriodDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	onSubmit: (period: UpdateBlockedPeriod) => void;
+	onSubmit: (period: UpdateBlockedPeriod) => Promise<void>;
 	period: RoomBlockedPeriod;
 }
 
@@ -537,6 +549,9 @@ function EditBlockedPeriodDialog({
 	const [reason, setReason] = useState(period.reason);
 	const [notes, setNotes] = useState(period.notes || '');
 	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [saveError, setSaveError] = useState<ReturnType<
+		typeof readSaveError
+	> | null>(null);
 
 	const startDateId = useId();
 	const endDateId = useId();
@@ -547,16 +562,25 @@ function EditBlockedPeriodDialog({
 		e.preventDefault();
 
 		if (!startDate || !endDate || !reason.trim()) {
-			toast.error('Please fill in all required fields');
+			toast.add({ type: 'error', title: 'Please fill in all required fields' });
 			return;
 		}
 
 		if (!period.id) {
-			toast.error('Invalid period - missing ID');
+			toast.add({ type: 'error', title: 'Invalid period - missing ID' });
+			return;
+		}
+
+		if (endDate < startDate) {
+			toast.add({
+				type: 'error',
+				title: 'End date must be on or after the start date',
+			});
 			return;
 		}
 
 		setIsSubmitting(true);
+		setSaveError(null);
 		try {
 			await onSubmit({
 				id: period.id,
@@ -565,16 +589,8 @@ function EditBlockedPeriodDialog({
 				reason: reason.trim(),
 				notes: notes.trim() || undefined,
 			});
-
-			toast.success('Blocked period updated successfully!');
 		} catch (error) {
-			console.error('Error updating blocked period:', error);
-			const errorMessage =
-				error instanceof Error ? error.message : 'Unknown error';
-
-			toast.error('Failed to update blocked period', {
-				description: parseValidationErrors(errorMessage),
-			});
+			setSaveError(readSaveError(error));
 		} finally {
 			setIsSubmitting(false);
 		}
@@ -635,6 +651,8 @@ function EditBlockedPeriodDialog({
 						/>
 					</div>
 
+					{saveError && <BlockConflictList {...saveError} />}
+
 					<div className="flex justify-end gap-2">
 						<Button
 							type="button"
@@ -658,7 +676,7 @@ function EditBlockedPeriodDialog({
 interface DeleteBlockedPeriodDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	onConfirm: () => void;
+	onConfirm: () => Promise<void>;
 	period: RoomBlockedPeriod;
 }
 
@@ -674,13 +692,18 @@ function DeleteBlockedPeriodDialog({
 		setIsDeleting(true);
 		try {
 			await onConfirm();
-			toast.success('Blocked period deleted successfully!');
+			toast.add({
+				type: 'success',
+				title: 'Blocked period deleted successfully!',
+			});
 		} catch (error) {
 			console.error('Error deleting blocked period:', error);
 			const errorMessage =
 				error instanceof Error ? error.message : 'Unknown error';
 
-			toast.error('Failed to delete blocked period', {
+			toast.add({
+				type: 'error',
+				title: 'Failed to delete blocked period',
 				description: errorMessage,
 			});
 		} finally {
@@ -699,7 +722,7 @@ function DeleteBlockedPeriodDialog({
 					</DialogDescription>
 				</DialogHeader>
 
-				<div className="rounded-lg border p-4 bg-muted/20">
+				<div className="rounded-lg border bg-muted/20 p-4">
 					<div className="space-y-2">
 						<div className="flex justify-between">
 							<span className="text-sm font-medium">Period:</span>

@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { Button } from '@/components/ui/button';
+
+import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/utils/twMerge';
 
 export const Route = createFileRoute('/privacy-policy')({
 	head: () => ({
@@ -19,7 +21,7 @@ function PrivacyPolicyPage() {
 			{/* Hero Section */}
 			<section className="my-8">
 				<div className="container mx-auto max-w-4xl text-center">
-					<h1 className="text-4xl md:text-5xl font-bold mb-4">
+					<h1 className="mb-4 text-4xl font-bold md:text-5xl">
 						Privacy Policy
 					</h1>
 					<p className="text-lg text-muted-foreground">
@@ -35,8 +37,8 @@ function PrivacyPolicyPage() {
 						<CardContent>
 							{/* Introduction */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">Introduction</h2>
-								<p className="text-muted-foreground leading-relaxed">
+								<h2 className="mb-4 text-2xl font-bold">Introduction</h2>
+								<p className="leading-relaxed text-muted-foreground">
 									Welcome to irishette.com ("we," "our," or "us"). We are
 									committed to protecting your privacy and handling your
 									personal information with care and respect. This Privacy
@@ -48,17 +50,17 @@ function PrivacyPolicyPage() {
 
 							{/* Information We Collect */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">
+								<h2 className="mb-4 text-2xl font-bold">
 									Information We Collect
 								</h2>
 
-								<h3 className="text-xl font-semibold mb-3 mt-6">
+								<h3 className="mt-6 mb-3 text-xl font-semibold">
 									Personal Information You Provide
 								</h3>
-								<p className="text-muted-foreground leading-relaxed mb-3">
+								<p className="mb-3 leading-relaxed text-muted-foreground">
 									When you make a booking through our website, we collect:
 								</p>
-								<ul className="list-disc pl-6 space-y-2 text-muted-foreground">
+								<ul className="list-disc space-y-2 pl-6 text-muted-foreground">
 									<li>
 										<strong>Contact Information:</strong> Name, email address,
 										and phone number
@@ -77,14 +79,14 @@ function PrivacyPolicyPage() {
 									</li>
 								</ul>
 
-								<h3 className="text-xl font-semibold mb-3 mt-6">
+								<h3 className="mt-6 mb-3 text-xl font-semibold">
 									Automatically Collected Information
 								</h3>
-								<p className="text-muted-foreground leading-relaxed mb-3">
+								<p className="mb-3 leading-relaxed text-muted-foreground">
 									We may automatically collect certain technical information
 									when you visit our website, including:
 								</p>
-								<ul className="list-disc pl-6 space-y-2 text-muted-foreground">
+								<ul className="list-disc space-y-2 pl-6 text-muted-foreground">
 									<li>Browser type and version</li>
 									<li>Device information</li>
 									<li>IP address</li>
@@ -94,14 +96,14 @@ function PrivacyPolicyPage() {
 
 							{/* How We Use Your Information */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">
+								<h2 className="mb-4 text-2xl font-bold">
 									How We Use Your Information
 								</h2>
-								<p className="text-muted-foreground leading-relaxed mb-3">
+								<p className="mb-3 leading-relaxed text-muted-foreground">
 									We use your personal information solely for the following
 									purposes:
 								</p>
-								<ul className="list-disc pl-6 space-y-2 text-muted-foreground">
+								<ul className="list-disc space-y-2 pl-6 text-muted-foreground">
 									<li>
 										<strong>Booking Management:</strong> To process and confirm
 										your reservations
@@ -119,7 +121,7 @@ function PrivacyPolicyPage() {
 										services and website functionality
 									</li>
 								</ul>
-								<p className="text-muted-foreground leading-relaxed mt-3">
+								<p className="mt-3 leading-relaxed text-muted-foreground">
 									We do <strong>not</strong> use your information for marketing
 									purposes unless you explicitly opt in to receive promotional
 									communications.
@@ -128,8 +130,8 @@ function PrivacyPolicyPage() {
 
 							{/* Payment Processing */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">Payment Processing</h2>
-								<p className="text-muted-foreground leading-relaxed mb-3">
+								<h2 className="mb-4 text-2xl font-bold">Payment Processing</h2>
+								<p className="mb-3 leading-relaxed text-muted-foreground">
 									All payment transactions are processed by{' '}
 									<strong>Stripe, Inc.</strong> Payment card information is
 									collected and processed directly by Stripe and is subject to{' '}
@@ -152,7 +154,7 @@ function PrivacyPolicyPage() {
 									</a>
 									.
 								</p>
-								<p className="text-muted-foreground leading-relaxed font-semibold">
+								<p className="leading-relaxed font-semibold text-muted-foreground">
 									Important: We do not store, process, or have access to your
 									complete payment card information on our servers. Only Stripe
 									handles your payment data in accordance with PCI-DSS security
@@ -162,30 +164,30 @@ function PrivacyPolicyPage() {
 
 							{/* Data Storage and Security */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">
+								<h2 className="mb-4 text-2xl font-bold">
 									Data Storage and Security
 								</h2>
 
-								<h3 className="text-xl font-semibold mb-3 mt-6">
+								<h3 className="mt-6 mb-3 text-xl font-semibold">
 									Where We Store Your Data
 								</h3>
-								<p className="text-muted-foreground leading-relaxed mb-3">
+								<p className="mb-3 leading-relaxed text-muted-foreground">
 									Your personal information (excluding payment data) is stored
 									securely using:
 								</p>
-								<ul className="list-disc pl-6 space-y-2 text-muted-foreground">
+								<ul className="list-disc space-y-2 pl-6 text-muted-foreground">
 									<li>Cloudflare's database services</li>
 									<li>Cloudflare Workers platform</li>
 								</ul>
-								<p className="text-muted-foreground leading-relaxed mt-3">
+								<p className="mt-3 leading-relaxed text-muted-foreground">
 									These services provide enterprise-grade security and data
 									protection measures.
 								</p>
 
-								<h3 className="text-xl font-semibold mb-3 mt-6">
+								<h3 className="mt-6 mb-3 text-xl font-semibold">
 									Security Measures
 								</h3>
-								<p className="text-muted-foreground leading-relaxed">
+								<p className="leading-relaxed text-muted-foreground">
 									We implement appropriate technical and organizational measures
 									to protect your personal information against unauthorized
 									access, alteration, disclosure, or destruction. However, no
@@ -196,16 +198,16 @@ function PrivacyPolicyPage() {
 
 							{/* Information Sharing */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">Information Sharing</h2>
-								<p className="text-muted-foreground leading-relaxed mb-3">
+								<h2 className="mb-4 text-2xl font-bold">Information Sharing</h2>
+								<p className="mb-3 leading-relaxed text-muted-foreground">
 									We respect your privacy and do <strong>not</strong> sell,
 									rent, or trade your personal information to third parties.
 								</p>
-								<p className="text-muted-foreground leading-relaxed mb-3">
+								<p className="mb-3 leading-relaxed text-muted-foreground">
 									We only share your information in the following limited
 									circumstances:
 								</p>
-								<ul className="list-disc pl-6 space-y-2 text-muted-foreground">
+								<ul className="list-disc space-y-2 pl-6 text-muted-foreground">
 									<li>
 										<strong>Service Delivery:</strong> With service providers
 										necessary to fulfill your booking (e.g., housekeeping,
@@ -225,19 +227,19 @@ function PrivacyPolicyPage() {
 
 							{/* Data Retention */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">Data Retention</h2>
-								<p className="text-muted-foreground leading-relaxed mb-3">
+								<h2 className="mb-4 text-2xl font-bold">Data Retention</h2>
+								<p className="mb-3 leading-relaxed text-muted-foreground">
 									We retain your personal information only for as long as
 									necessary to:
 								</p>
-								<ul className="list-disc pl-6 space-y-2 text-muted-foreground">
+								<ul className="list-disc space-y-2 pl-6 text-muted-foreground">
 									<li>Fulfill the purposes outlined in this Privacy Policy</li>
 									<li>
 										Comply with legal, accounting, or reporting requirements
 									</li>
 									<li>Resolve disputes and enforce our agreements</li>
 								</ul>
-								<p className="text-muted-foreground leading-relaxed mt-3">
+								<p className="mt-3 leading-relaxed text-muted-foreground">
 									Once your information is no longer needed, we will securely
 									delete or anonymize it.
 								</p>
@@ -245,12 +247,12 @@ function PrivacyPolicyPage() {
 
 							{/* Your Rights */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">Your Rights</h2>
-								<p className="text-muted-foreground leading-relaxed mb-3">
+								<h2 className="mb-4 text-2xl font-bold">Your Rights</h2>
+								<p className="mb-3 leading-relaxed text-muted-foreground">
 									Depending on your location, you may have the following rights
 									regarding your personal information:
 								</p>
-								<ul className="list-disc pl-6 space-y-2 text-muted-foreground">
+								<ul className="list-disc space-y-2 pl-6 text-muted-foreground">
 									<li>
 										<strong>Access:</strong> Request a copy of the personal
 										information we hold about you
@@ -272,7 +274,7 @@ function PrivacyPolicyPage() {
 										in a structured, commonly used format
 									</li>
 								</ul>
-								<p className="text-muted-foreground leading-relaxed mt-3">
+								<p className="mt-3 leading-relaxed text-muted-foreground">
 									To exercise any of these rights, please contact us using the
 									information provided below.
 								</p>
@@ -280,10 +282,10 @@ function PrivacyPolicyPage() {
 
 							{/* Cookies and Tracking Technologies */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">
+								<h2 className="mb-4 text-2xl font-bold">
 									Cookies and Tracking Technologies
 								</h2>
-								<p className="text-muted-foreground leading-relaxed">
+								<p className="leading-relaxed text-muted-foreground">
 									Our website may use cookies and similar tracking technologies
 									to enhance your browsing experience. You can control cookie
 									preferences through your browser settings. Please note that
@@ -293,8 +295,8 @@ function PrivacyPolicyPage() {
 
 							{/* Third-Party Links */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">Third-Party Links</h2>
-								<p className="text-muted-foreground leading-relaxed">
+								<h2 className="mb-4 text-2xl font-bold">Third-Party Links</h2>
+								<p className="leading-relaxed text-muted-foreground">
 									Our website may contain links to third-party websites. We are
 									not responsible for the privacy practices or content of these
 									external sites. We encourage you to review the privacy
@@ -304,8 +306,8 @@ function PrivacyPolicyPage() {
 
 							{/* Children's Privacy */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">Children's Privacy</h2>
-								<p className="text-muted-foreground leading-relaxed">
+								<h2 className="mb-4 text-2xl font-bold">Children's Privacy</h2>
+								<p className="leading-relaxed text-muted-foreground">
 									Our services are not directed to individuals under the age of
 									18. We do not knowingly collect personal information from
 									children. If you believe we have inadvertently collected
@@ -315,10 +317,10 @@ function PrivacyPolicyPage() {
 
 							{/* Changes to This Privacy Policy */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">
+								<h2 className="mb-4 text-2xl font-bold">
 									Changes to This Privacy Policy
 								</h2>
-								<p className="text-muted-foreground leading-relaxed">
+								<p className="leading-relaxed text-muted-foreground">
 									We may update this Privacy Policy from time to time to reflect
 									changes in our practices or legal requirements. We will notify
 									you of any material changes by posting the updated policy on
@@ -330,10 +332,10 @@ function PrivacyPolicyPage() {
 
 							{/* International Data Transfers */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">
+								<h2 className="mb-4 text-2xl font-bold">
 									International Data Transfers
 								</h2>
-								<p className="text-muted-foreground leading-relaxed">
+								<p className="leading-relaxed text-muted-foreground">
 									Your information may be transferred to and processed in
 									countries other than your country of residence. These
 									countries may have different data protection laws. By using
@@ -344,15 +346,19 @@ function PrivacyPolicyPage() {
 
 							{/* Contact Us */}
 							<section className="mb-8">
-								<h2 className="text-2xl font-bold mb-4">Contact Us</h2>
-								<p className="text-muted-foreground leading-relaxed mb-3">
+								<h2 className="mb-4 text-2xl font-bold">Contact Us</h2>
+								<p className="mb-3 leading-relaxed text-muted-foreground">
 									If you have any questions, concerns, or requests regarding
 									this Privacy Policy or our data practices, please contact us
 									at:
 								</p>
-								<Button asChild>
-									<Link to="/contact">Contact Us</Link>
-								</Button>
+								<Link
+									to="/contact"
+									data-slot="button"
+									className={cn(buttonVariants())}
+								>
+									Contact Us
+								</Link>
 								<p className="text-muted-foreground">
 									<strong>Email:</strong> info@irishette.com
 								</p>
@@ -362,8 +368,8 @@ function PrivacyPolicyPage() {
 							</section>
 
 							{/* Acknowledgment */}
-							<section className="mb-8 p-4 bg-muted/30 rounded-lg border border-primary/20">
-								<p className="text-sm text-muted-foreground leading-relaxed">
+							<section className="mb-8 rounded-lg border border-primary/20 bg-muted/30 p-4">
+								<p className="text-sm leading-relaxed text-muted-foreground">
 									By using irishette.com, you acknowledge that you have read and
 									understood this Privacy Policy and agree to its terms.
 								</p>

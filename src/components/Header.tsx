@@ -1,28 +1,50 @@
 import { Icon } from '@iconify/react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { signOut, useSession } from '@/lib/auth-client';
+
+import { Button, buttonVariants } from '@/components/ui/button';
+import { signOut } from '@/lib/auth-client';
+import { clearSession, useSession } from '@/lib/session';
 import { useBookingStore } from '@/stores';
+import { cn } from '@/utils/twMerge';
 
 export default function Header() {
-	const { data: session, isPending } = useSession();
+	const session = useSession();
 	const router = useRouter();
+	const queryClient = useQueryClient();
+
+	const handleLogout = async () => {
+		try {
+			await signOut();
+		} catch (error) {
+			console.error('Logout error:', error);
+		}
+		setIsMobileMenuOpen(false);
+		// Drop the cached session and user data, re-run guards, go home.
+		await clearSession(queryClient, router);
+		await router.navigate({ to: '/' });
+	};
 	const booking = useBookingStore();
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
 	return (
-		<header className="bg-linear-to-b from-secondary-foreground to-primary sticky top-0 z-50">
+		<header className="sticky top-0 z-50 bg-linear-to-b from-secondary-foreground to-primary">
 			<div className="container mx-auto px-4 py-2">
-				<div className="flex items-center justify-between h-16">
+				<div className="flex items-center justify-between">
 					{/* Logo/Brand */}
 					<Link
 						to="/"
-						className="text-2xl font-extrabold text-background hover:text-background/80 transition-colors"
+						className="flex items-center transition-opacity hover:opacity-80"
 					>
-						Irishette
-						<span className="sr-only">Home</span>
-						<span className="text-xs block"> Logo goes here</span>
+						<img
+							src="/irishette-logo.png"
+							alt="Irishette logo"
+							width={384}
+							height={384}
+							className="size-28 rounded-full"
+						/>
+						<span className="sr-only">Irishette</span>
 					</Link>
 
 					{/* Navigation */}
@@ -32,7 +54,7 @@ export default function Header() {
 								<Link
 									key="rose-room"
 									to="/rooms/rose-room"
-									className="flex flex-nowrap items-center gap-2 text-background hover:text-secondary transition-colors font-semibold [&.active]:text-accent"
+									className="flex flex-nowrap items-center gap-2 font-semibold text-background transition-colors hover:text-secondary [&.active]:text-accent"
 								>
 									<Icon icon="lucide:rose" className="size-5" />
 									Rose Room
@@ -42,7 +64,7 @@ export default function Header() {
 								<Link
 									key="texas-room"
 									to="/rooms/texas-room"
-									className="flex flex-nowrap items-center gap-2 text-background hover:text-secondary transition-colors font-semibold [&.active]:text-accent"
+									className="flex flex-nowrap items-center gap-2 font-semibold text-background transition-colors hover:text-secondary [&.active]:text-accent"
 								>
 									<Icon icon="game-icons:texas" className="size-5" />
 									Texas Room
@@ -52,7 +74,7 @@ export default function Header() {
 								<Link
 									key="contact"
 									to="/contact"
-									className="flex flex-nowrap items-center gap-2 text-background hover:text-secondary transition-colors font-semibold [&.active]:text-accent"
+									className="flex flex-nowrap items-center gap-2 font-semibold text-background transition-colors hover:text-secondary [&.active]:text-accent"
 								>
 									<Icon icon="tabler:message" className="size-5" />
 									Contact Us
@@ -63,78 +85,75 @@ export default function Header() {
 
 					{/* Auth Section */}
 					<div className="flex items-center space-x-2">
-						{isPending ? (
-							// Loading state
-							<div className="text-background">Loading...</div>
-						) : session ? (
+						{session ? (
 							// Authenticated user menu
 							<div className="flex items-center space-x-2">
 								{/* Continue Booking Button - Shows if there's an active booking in progress */}
 								{booking.hasActiveBooking() && (
-									<Button variant="secondary" asChild>
-										<Link to="/booking" search={{ step: undefined }}>
-											<Icon icon="tabler:clock-check" className="size-5" />
-											<span className="hidden lg:inline">Continue Booking</span>
-										</Link>
-									</Button>
+									<Link
+										to="/booking"
+										search={{ step: undefined }}
+										data-slot="button"
+										className={cn(buttonVariants({ variant: 'secondary' }))}
+									>
+										<Icon icon="tabler:clock-check" className="size-5" />
+										<span className="hidden lg:inline">Continue Booking</span>
+									</Link>
 								)}
 								{/* Admin Dashboard Button - Only visible to admin users */}
 								{session.user?.role === 'admin' && (
-									<Button variant="destructive" asChild>
-										<Link to="/admin">
-											<Icon icon="tabler:shield-star" className="size-5" />
-											<span className="hidden lg:inline">Admin</span>
-										</Link>
-									</Button>
+									<Link
+										to="/admin"
+										data-slot="button"
+										className={cn(buttonVariants({ variant: 'destructive' }))}
+									>
+										<Icon icon="tabler:shield-star" className="size-5" />
+										<span className="hidden lg:inline">Admin</span>
+									</Link>
 								)}
 								{/* View Bookings Button - Hidden for admin users */}
 								{session.user?.role !== 'admin' && (
-									<Button variant="accent" asChild>
-										<Link to="/account">
-											<Icon
-												icon="material-symbols:bed-outline-rounded"
-												className="size-5"
-											/>
-											<span className="hidden sm:inline">View Bookings</span>
-										</Link>
-									</Button>
+									<Link
+										to="/account"
+										data-slot="button"
+										className={cn(buttonVariants({ variant: 'accent' }))}
+									>
+										<Icon
+											icon="material-symbols:bed-outline-rounded"
+											className="size-5"
+										/>
+										<span className="hidden sm:inline">View Bookings</span>
+									</Link>
 								)}
-								<Button
-									className="hidden lg:flex"
-									onClick={async () => {
-										try {
-											await signOut();
-											router.navigate({ to: '/' });
-										} catch (error) {
-											console.error('Logout error:', error);
-										}
-									}}
-								>
+								<Button className="hidden lg:flex" onClick={handleLogout}>
 									<Icon icon="tabler:logout" className="size-4" />
 									Logout
 								</Button>
 							</div>
 						) : (
-							// Unauthenticated user - always show this if not pending and no session
+							// Unauthenticated user
 							<>
 								{/* Continue Booking Button - Shows if there's an active booking in progress */}
 								{booking.hasActiveBooking() && (
-									<Button variant="secondary" asChild>
-										<Link to="/booking" search={{ step: undefined }}>
-											<Icon icon="tabler:clock-check" className="size-5" />
-											<span className="hidden lg:inline">Continue Booking</span>
-										</Link>
-									</Button>
-								)}
-								<Button variant="accent" asChild>
 									<Link
-										to="/auth/login"
-										search={{ redirect: '/account', error: undefined }}
+										to="/booking"
+										search={{ step: undefined }}
+										data-slot="button"
+										className={cn(buttonVariants({ variant: 'secondary' }))}
 									>
-										<Icon icon="tabler:luggage" className="size-5" />
-										View Bookings
+										<Icon icon="tabler:clock-check" className="size-5" />
+										<span className="hidden lg:inline">Continue Booking</span>
 									</Link>
-								</Button>
+								)}
+								<Link
+									to="/auth/login"
+									search={{ redirect: '/account', error: undefined }}
+									data-slot="button"
+									className={cn(buttonVariants({ variant: 'accent' }))}
+								>
+									<Icon icon="tabler:luggage" className="size-5" />
+									View Bookings
+								</Link>
 							</>
 						)}
 
@@ -152,7 +171,7 @@ export default function Header() {
 
 				{/* Mobile Menu Dropdown */}
 				<div
-					className={`lg:hidden overflow-hidden transition-all duration-300 ease-in-out border-t border-background/20 ${
+					className={`overflow-hidden border-t border-background/20 transition-all duration-300 ease-in-out lg:hidden ${
 						isMobileMenuOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
 					}`}
 				>
@@ -166,7 +185,7 @@ export default function Header() {
 								<li>
 									<Link
 										to="/rooms/rose-room"
-										className="flex items-center gap-2 text-background hover:text-secondary transition-colors font-semibold [&.active]:text-accent px-4 py-2"
+										className="flex items-center gap-2 px-4 py-2 font-semibold text-background transition-colors hover:text-secondary [&.active]:text-accent"
 										onClick={() => setIsMobileMenuOpen(false)}
 									>
 										<Icon icon="lucide:rose" className="size-5" />
@@ -176,7 +195,7 @@ export default function Header() {
 								<li>
 									<Link
 										to="/rooms/texas-room"
-										className="flex items-center gap-2 text-background hover:text-secondary transition-colors font-semibold [&.active]:text-accent px-4 py-2"
+										className="flex items-center gap-2 px-4 py-2 font-semibold text-background transition-colors hover:text-secondary [&.active]:text-accent"
 										onClick={() => setIsMobileMenuOpen(false)}
 									>
 										<Icon icon="game-icons:texas" className="size-5" />
@@ -186,7 +205,7 @@ export default function Header() {
 								<li>
 									<Link
 										to="/contact"
-										className="flex items-center gap-2 text-background hover:text-secondary transition-colors font-semibold [&.active]:text-accent px-4 py-2"
+										className="flex items-center gap-2 px-4 py-2 font-semibold text-background transition-colors hover:text-secondary [&.active]:text-accent"
 										onClick={() => setIsMobileMenuOpen(false)}
 									>
 										<Icon icon="tabler:message" className="size-5" />
@@ -195,18 +214,7 @@ export default function Header() {
 								</li>
 								{session && (
 									<li className="flex justify-end">
-										<Button
-											variant="destructive"
-											onClick={async () => {
-												try {
-													await signOut();
-													setIsMobileMenuOpen(false);
-													router.navigate({ to: '/' });
-												} catch (error) {
-													console.error('Logout error:', error);
-												}
-											}}
-										>
+										<Button variant="destructive" onClick={handleLogout}>
 											<Icon icon="tabler:logout" className="size-4" />
 											Logout
 										</Button>

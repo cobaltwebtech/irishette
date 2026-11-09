@@ -1,6 +1,8 @@
 import { useStore } from '@tanstack/react-store';
+
+import { formatStayDate } from '@/lib/timezone';
+
 import {
-	type BookingState,
 	type BookingStep,
 	bookingActions,
 	bookingStore,
@@ -20,14 +22,11 @@ export function useBookingStore() {
 	// Helper to check if we can proceed to next step
 	const canProceed = () => {
 		switch (state.currentStep) {
-			case 'dates':
-				return bookingActions.canProceedToAuth();
 			case 'auth':
 				return bookingActions.canProceedToDetails();
 			case 'details':
 				return bookingActions.canProceedToPayment();
 			case 'payment':
-			case 'confirmation':
 				return true;
 			default:
 				return false;
@@ -37,17 +36,12 @@ export function useBookingStore() {
 	// Helper to get next step
 	const getNextStep = (): BookingStep | null => {
 		switch (state.currentStep) {
-			case 'dates':
-				return 'auth';
 			case 'auth':
 				return 'details';
 			case 'details':
 				return 'payment';
-			case 'payment':
-				return 'confirmation';
-			case 'confirmation':
-				return null;
 			default:
+				// Payment finishes on the confirmation page.
 				return null;
 		}
 	};
@@ -67,7 +61,7 @@ export function useBookingStore() {
 		const errors: string[] = [];
 
 		switch (state.currentStep) {
-			case 'dates':
+			case 'auth':
 				if (!state.roomId) errors.push('Room must be selected');
 				if (!state.checkInDate) errors.push('Check-in date is required');
 				if (!state.checkOutDate) errors.push('Check-out date is required');
@@ -120,8 +114,8 @@ export function useBookingStore() {
 				(checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24),
 			),
 			formatted: {
-				checkIn: checkIn.toLocaleDateString(),
-				checkOut: checkOut.toLocaleDateString(),
+				checkIn: formatStayDate(state.checkInDate),
+				checkOut: formatStayDate(state.checkOutDate),
 			},
 		};
 	};
@@ -154,19 +148,4 @@ export function useBookingStore() {
 		hasActiveBooking,
 		getDateRange,
 	};
-}
-
-/**
- * Hook to access only the booking actions (for components that only need to update state)
- */
-export function useBookingActions() {
-	return bookingActions;
-}
-
-/**
- * Hook to access only specific parts of the booking state (for performance optimization)
- */
-export function useBookingSelector<T>(selector: (state: BookingState) => T) {
-	const state = useStore(bookingStore);
-	return selector(state);
 }

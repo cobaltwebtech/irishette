@@ -1,33 +1,58 @@
-/// <reference types="vite/client" />
+/// <reference types="vite-plus/client" />
 
+import { TanStackDevtools } from '@tanstack/react-devtools';
 import type { QueryClient } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { ReactQueryDevtoolsPanel } from '@tanstack/react-query-devtools';
 import {
 	createRootRouteWithContext,
 	HeadContent,
 	Scripts,
 	useRouterState,
 } from '@tanstack/react-router';
-import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
+import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools';
+import type { TRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import { ReactLenis } from 'lenis/react';
 import type * as React from 'react';
+
 import { DefaultCatchBoundary } from '@/components/default-catch-boundary';
 import Footer from '@/components/Footer';
 import Header from '@/components/Header';
 import { NotFound } from '@/components/not-found';
 import { ScrollRestoration } from '@/components/scroll-restoration';
-import { Toaster } from '@/components/ui/sonner';
-import type { useSession } from '@/lib/auth-client';
-import appCss from '@/styles/styles.css?url';
+import { Toaster } from '@/components/ui/toast';
+import type { TRPCRouter } from '@/integrations/trpc/router';
+import { type AppSession, sessionQueryOptions } from '@/lib/session';
 import { seo } from '@/utils/seo';
 
-// Define the router context interface
+import appCss from '@/styles/styles.css?url';
+
+// Router context, created per request in src/router.tsx.
 interface RouterContext {
 	queryClient: QueryClient;
-	auth: ReturnType<typeof useSession> | undefined;
+	trpc: TRPCOptionsProxy<TRPCRouter>;
 }
 
 export const Route = createRootRouteWithContext<RouterContext>()({
+	// Load the session once per SSR request. It is dehydrated with the page, so
+	// client navigations read it from the cache (no server call) until it goes
+	// stale. Child routes read `context.session`.
+	beforeLoad: async ({ context }) => {
+		let session: AppSession;
+		try {
+			session = await context.queryClient.ensureQueryData({
+				...sessionQueryOptions(),
+				// Return the cached value now; refetch in the background if stale.
+				revalidateIfStale: true,
+			});
+		} catch (error) {
+			// Treat a failed session lookup as signed out rather than failing
+			// every page. tRPC procedures still enforce auth on the server.
+			console.error('Session lookup failed:', error);
+			session = null;
+			context.queryClient.setQueryData(sessionQueryOptions().queryKey, null);
+		}
+		return { session };
+	},
 	head: () => ({
 		meta: [
 			{
@@ -82,7 +107,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 				<HeadContent />
 			</head>
 			<body>
-				<div className="min-h-screen flex flex-col">
+				<div className="flex min-h-screen flex-col">
 					<ReactLenis root>
 						<ScrollRestoration />
 						<Header />
@@ -91,8 +116,18 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 						<Toaster />
 					</ReactLenis>
 				</div>
-				<TanStackRouterDevtools position="bottom-right" />
-				<ReactQueryDevtools buttonPosition="bottom-left" />
+				<TanStackDevtools
+					plugins={[
+						{
+							name: 'TanStack Query',
+							render: <ReactQueryDevtoolsPanel />,
+						},
+						{
+							name: 'TanStack Router',
+							render: <TanStackRouterDevtoolsPanel />,
+						},
+					]}
+				/>
 				<Scripts />
 			</body>
 		</html>

@@ -1,5 +1,6 @@
 import { Icon } from '@iconify/react';
 import { useId } from 'react';
+
 import {
 	Card,
 	CardContent,
@@ -15,10 +16,12 @@ interface RoomPricingConfigProps {
 	serviceFeeRate: number;
 	stateTaxRate: number;
 	cityTaxRate: number;
+	maxGuests: number;
 	onBasePriceChange: (value: number) => void;
 	onServiceFeeRateChange: (value: number) => void;
 	onStateTaxRateChange: (value: number) => void;
 	onCityTaxRateChange: (value: number) => void;
+	onMaxGuestsChange: (value: number) => void;
 }
 
 export function RoomPricingConfig({
@@ -26,11 +29,14 @@ export function RoomPricingConfig({
 	serviceFeeRate,
 	stateTaxRate,
 	cityTaxRate,
+	maxGuests,
 	onBasePriceChange,
 	onServiceFeeRateChange,
 	onStateTaxRateChange,
 	onCityTaxRateChange,
+	onMaxGuestsChange,
 }: RoomPricingConfigProps) {
+	const maxGuestsId = useId();
 	const basePriceId = useId();
 	const serviceFeeRateId = useId();
 	const stateTaxRateId = useId();
@@ -39,9 +45,9 @@ export function RoomPricingConfig({
 	return (
 		<Card>
 			<CardHeader>
-				<CardTitle className="text-lg flex items-center gap-2">
+				<CardTitle className="flex items-center gap-2 text-lg">
 					<Icon icon="tabler:settings-dollar" className="size-6" />
-					Pricing & Tax Configuration
+					Pricing, Tax & Guests
 				</CardTitle>
 				<CardDescription>
 					Configure service fee and tax rates applied to room bookings. Hotel
@@ -51,7 +57,32 @@ export function RoomPricingConfig({
 			</CardHeader>
 			<CardContent className="space-y-4">
 				<div>
-					<Label htmlFor={basePriceId} className="text-sm font-medium mb-2">
+					<Label htmlFor={maxGuestsId} className="mb-2 text-sm font-medium">
+						Maximum Guests
+					</Label>
+					<Input
+						id={maxGuestsId}
+						type="number"
+						step="1"
+						min="1"
+						max="10"
+						value={maxGuests}
+						onChange={(e) =>
+							onMaxGuestsChange(
+								Math.min(
+									10,
+									Math.max(1, Number.parseInt(e.target.value, 10) || 1),
+								),
+							)
+						}
+					/>
+					<p className="mt-1 text-xs text-muted-foreground">
+						Enforced on new bookings (1-10). Existing bookings are not affected.
+					</p>
+				</div>
+
+				<div>
+					<Label htmlFor={basePriceId} className="mb-2 text-sm font-medium">
 						Room Nightly Base Price (USD)
 					</Label>
 					<Input
@@ -63,7 +94,7 @@ export function RoomPricingConfig({
 						onChange={(e) => onBasePriceChange(parseFloat(e.target.value) || 0)}
 						placeholder="0.00"
 					/>
-					<p className="text-xs text-muted-foreground mt-1">
+					<p className="mt-1 text-xs text-muted-foreground">
 						Current: ${basePrice.toFixed(2)}
 					</p>
 				</div>
@@ -71,7 +102,7 @@ export function RoomPricingConfig({
 				<div>
 					<Label
 						htmlFor={serviceFeeRateId}
-						className="text-sm font-medium mb-2"
+						className="mb-2 text-sm font-medium"
 					>
 						Service Fee Rate (%)
 					</Label>
@@ -87,13 +118,13 @@ export function RoomPricingConfig({
 						}
 						placeholder="0.00"
 					/>
-					<p className="text-xs text-muted-foreground mt-1">
+					<p className="mt-1 text-xs text-muted-foreground">
 						Current: {(serviceFeeRate * 100).toFixed(2)}%
 					</p>
 				</div>
 
 				<div>
-					<Label htmlFor={stateTaxRateId} className="text-sm font-medium mb-2">
+					<Label htmlFor={stateTaxRateId} className="mb-2 text-sm font-medium">
 						Texas Hotel Occupancy Tax Rate (%)
 					</Label>
 					<Input
@@ -108,13 +139,13 @@ export function RoomPricingConfig({
 						}
 						placeholder="6.00"
 					/>
-					<p className="text-xs text-muted-foreground mt-1">
+					<p className="mt-1 text-xs text-muted-foreground">
 						Current: {(stateTaxRate * 100).toFixed(1)}%
 					</p>
 				</div>
 
 				<div>
-					<Label htmlFor={cityTaxRateId} className="text-sm font-medium mb-2">
+					<Label htmlFor={cityTaxRateId} className="mb-2 text-sm font-medium">
 						City of Dublin Hotel Occupancy Tax Rate (%)
 					</Label>
 					<Input
@@ -129,7 +160,7 @@ export function RoomPricingConfig({
 						}
 						placeholder="0.00"
 					/>
-					<p className="text-xs text-muted-foreground mt-1">
+					<p className="mt-1 text-xs text-muted-foreground">
 						Current: {(cityTaxRate * 100).toFixed(2)}%
 					</p>
 				</div>

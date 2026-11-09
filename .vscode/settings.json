@@ -8,8 +8,17 @@
 	"files.readonlyInclude": {
 		"**/routeTree.gen.ts": true
 	},
+	"editor.defaultFormatter": "oxc.oxc-vscode",
+	"[javascript]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+	"[javascriptreact]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+	"[typescript]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+	"[typescriptreact]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+	"[css]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+	"oxc.disableNestedConfig": true,
+	"oxc.fmt.disableNestedConfig": true,
+	"editor.formatOnSave": true,
+	"editor.formatOnSaveMode": "file",
 	"editor.codeActionsOnSave": {
-		"source.organizeImports.biome": "explicit",
-		"source.fixAll.biome": "explicit"
+		"source.fixAll.oxc": "explicit"
 	}
 }

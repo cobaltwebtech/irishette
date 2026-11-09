@@ -1,50 +1,37 @@
-import { env } from 'cloudflare:workers';
 import { createFileRoute } from '@tanstack/react-router';
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
-import type { TRPCContext } from '@/integrations/trpc/init';
-import { trpcRouter } from '@/integrations/trpc/router';
-import { auth } from '@/lib/auth';
 
-// Server route for tRPC API
+import { MAX_BATCH_SIZE } from '@/integrations/trpc/batching';
+import { createTRPCContext } from '@/integrations/trpc/context';
+import { trpcRouter } from '@/integrations/trpc/router';
+
+// Server route for tRPC over HTTP (browser calls). SSR calls the router
+// in-process via localLink instead (src/integrations/trpc/client.ts).
 export const Route = createFileRoute('/api/trpc/$')({
 	server: {
 		handlers: {
-			GET: ({ request }) => {
-				return handleTRPCRequest(request);
-			},
-			POST: ({ request }) => {
-				return handleTRPCRequest(request);
-			},
+			GET: ({ request }) => handleTRPCRequest(request),
+			POST: ({ request }) => handleTRPCRequest(request),
 		},
 	},
 });
 
-async function handleTRPCRequest(request: Request): Promise<Response> {
-	// Fetch session from request headers (server-side)
-	// This runs on every tRPC call and leverages Better Auth's built-in caching
-	const authInstance = await auth();
-	const session = await authInstance.api.getSession({
-		headers: request.headers,
-	});
-
-	// Create tRPC context with session
-	const context: TRPCContext = {
-		db: env.DB,
-		env: {
-			STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY,
-			STRIPE_PUBLISHABLE_KEY: env.STRIPE_PUBLISHABLE_KEY,
-			STRIPE_TRPC_WEBHOOK_SECRET: env.STRIPE_TRPC_WEBHOOK_SECRET,
-			BETTER_AUTH_URL: env.BETTER_AUTH_URL,
-			RESEND_API_KEY: env.RESEND_API_KEY,
-		},
-		session,
-		headers: request.headers,
-	};
-
+function handleTRPCRequest(request: Request): Promise<Response> {
 	return fetchRequestHandler({
 		endpoint: '/api/trpc',
 		req: request,
 		router: trpcRouter,
-		createContext: () => context,
+		createContext: () => createTRPCContext({ headers: request.headers }),
+		// The browser client sends batched queries as POST (input in the body,
+		// not the URL); see src/integrations/trpc/client.ts.
+		allowMethodOverride: true,
+		maxBatchSize: MAX_BATCH_SIZE,
+		onError({ error, path, type }) {
+			// Expected client errors (auth, validation, not found) are not logged.
+			// No input or user data here: only the procedure path and the error.
+			if (error.code === 'INTERNAL_SERVER_ERROR') {
+				console.error(`tRPC ${type} ${path ?? '<unknown>'} failed:`, error);
+			}
+		},
 	});
 }

@@ -1,13 +1,8 @@
 import { Store } from '@tanstack/react-store';
 
-export type BookingStep =
-	| 'dates'
-	| 'auth'
-	| 'details'
-	| 'payment'
-	| 'confirmation';
-
-export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
+/** Steps of /booking (dates are picked on the room page first). */
+export const bookingSteps = ['auth', 'details', 'payment'] as const;
+export type BookingStep = (typeof bookingSteps)[number];
 
 export interface PricingBreakdown {
 	basePrice: number;
@@ -17,7 +12,7 @@ export interface PricingBreakdown {
 	fees: number;
 	totalAmount: number;
 	currency: string;
-	// Enhanced pricing information from PaymentService
+	// Enhanced pricing information from bookings.calculateBooking
 	appliedRules?: Array<{
 		id: string;
 		name: string;
@@ -47,6 +42,8 @@ export interface BookingState {
 	roomId: string | null;
 	roomSlug: string | null;
 	roomName: string | null;
+	/** Room's guest limit (room.max_guests); null until known. */
+	maxGuests: number | null;
 	checkInDate: string | null; // ISO date string
 	checkOutDate: string | null; // ISO date string
 	guestCount: number;
@@ -60,8 +57,10 @@ export interface BookingState {
 	// Flow control
 	currentStep: BookingStep;
 
-	// Booking ID once created
+	// Booking IDs once created: internal id for the payment steps, public id
+	// for URLs (/booking/confirmation/$publicId).
 	bookingId: string | null;
+	bookingPublicId: string | null;
 
 	// Error handling
 	error: string | null;
@@ -79,13 +78,15 @@ const initialState: BookingState = {
 	roomId: null,
 	roomSlug: null,
 	roomName: null,
+	maxGuests: null,
 	checkInDate: null,
 	checkOutDate: null,
 	guestCount: 1,
 	pricing: null,
 	guestInfo: null,
-	currentStep: 'dates',
+	currentStep: 'auth',
 	bookingId: null,
+	bookingPublicId: null,
 	error: null,
 	isLoading: false,
 	createdAt: null,
@@ -109,10 +110,14 @@ function loadPersistedState(): BookingState {
 			return initialState;
 		}
 
-		// Return merged state with any new fields from initialState
+		// Return merged state with any new fields from initialState. Drafts
+		// saved with removed steps ('dates', 'confirmation') start at sign-in.
 		return {
 			...initialState,
 			...parsed,
+			currentStep: bookingSteps.includes(parsed.currentStep)
+				? parsed.currentStep
+				: 'auth',
 			// Reset loading state and errors on page load
 			isLoading: false,
 			error: null,
@@ -139,18 +144,33 @@ bookingStore.subscribe(() => {
 	}
 });
 
+/** At least 1, at most the room's limit (when known). */
+function clampGuests(count: number, maxGuests: number | null): number {
+	const atLeastOne = Math.max(1, Math.floor(count) || 1);
+	return maxGuests ? Math.min(atLeastOne, maxGuests) : atLeastOne;
+}
+
 // Store actions/utilities
 export const bookingActions = {
-	// Set room and initial dates
-	setRoom: (roomId: string, roomSlug: string, roomName?: string) => {
-		bookingStore.setState((state) => ({
-			...state,
-			roomId,
-			roomSlug,
-			roomName: roomName || null,
-			currentStep: 'dates',
-			updatedAt: new Date().toISOString(),
-		}));
+	// Set room details (keeps dates, guests and step)
+	setRoom: (
+		roomId: string,
+		roomSlug: string,
+		roomName?: string,
+		maxGuests?: number,
+	) => {
+		bookingStore.setState((state) => {
+			const limit = maxGuests ?? state.maxGuests;
+			return {
+				...state,
+				roomId,
+				roomSlug,
+				roomName: roomName || null,
+				maxGuests: limit,
+				guestCount: clampGuests(state.guestCount, limit),
+				updatedAt: new Date().toISOString(),
+			};
+		});
 	},
 
 	// Set booking dates
@@ -163,11 +183,11 @@ export const bookingActions = {
 		}));
 	},
 
-	// Set guest count
+	// Set guest count (1 to the room's max_guests)
 	setGuestCount: (count: number) => {
 		bookingStore.setState((state) => ({
 			...state,
-			guestCount: Math.max(1, count),
+			guestCount: clampGuests(count, state.maxGuests),
 			updatedAt: new Date().toISOString(),
 		}));
 	},
@@ -200,10 +220,11 @@ export const bookingActions = {
 	},
 
 	// Set booking ID after creation
-	setBookingId: (bookingId: string) => {
+	setBookingId: (bookingId: string, bookingPublicId: string) => {
 		bookingStore.setState((state) => ({
 			...state,
 			bookingId,
+			bookingPublicId,
 			updatedAt: new Date().toISOString(),
 		}));
 	},
@@ -238,11 +259,11 @@ export const bookingActions = {
 
 	// Reset entire booking state
 	reset: () => {
-		bookingStore.setState({
+		bookingStore.setState(() => ({
 			...initialState,
 			createdAt: new Date().toISOString(),
 			updatedAt: new Date().toISOString(),
-		});
+		}));
 
 		// Also clear from localStorage
 		if (typeof window !== 'undefined') {
@@ -261,10 +282,7 @@ export const bookingActions = {
 		);
 	},
 
-	canProceedToDetails: () => {
-		const state = bookingStore.state;
-		return bookingActions.canProceedToAuth() && state.currentStep !== 'dates';
-	},
+	canProceedToDetails: () => bookingActions.canProceedToAuth(),
 
 	canProceedToPayment: () => {
 		const state = bookingStore.state;
@@ -276,9 +294,16 @@ export const bookingActions = {
 		);
 	},
 
-	// Check if can proceed to confirmation (after payment)
-	canProceedToConfirmation: () => {
-		return !!bookingActions.canProceedToPayment();
+	/**
+	 * The furthest step the draft allows (for `?step=`): payment once a hold
+	 * exists, details once signed in with dates, else sign-in.
+	 */
+	furthestAllowedStep: (signedIn: boolean): BookingStep => {
+		const state = bookingStore.state;
+		if (!signedIn || !bookingActions.canProceedToAuth()) return 'auth';
+		return state.bookingId && bookingActions.canProceedToPayment()
+			? 'payment'
+			: 'details';
 	},
 
 	// Get current booking summary
@@ -310,16 +335,22 @@ export const bookingActions = {
 	},
 
 	// Initialize a new booking session
-	initializeBooking: (roomId: string, roomSlug: string, roomName?: string) => {
-		bookingStore.setState({
+	initializeBooking: (
+		roomId: string,
+		roomSlug: string,
+		roomName?: string,
+		maxGuests?: number,
+	) => {
+		bookingStore.setState(() => ({
 			...initialState,
 			roomId,
 			roomSlug,
 			roomName: roomName || null,
-			currentStep: 'dates',
+			maxGuests: maxGuests ?? null,
+			currentStep: 'auth',
 			createdAt: new Date().toISOString(),
 			updatedAt: new Date().toISOString(),
-		});
+		}));
 	},
 };
 

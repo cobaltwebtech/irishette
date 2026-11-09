@@ -1,224 +1,85 @@
 # Testing Cron Jobs in Local Development
 
-## ⚠️ Important Note for TanStack Start
+The Worker's `scheduled` handler lives in `src/server.ts` and dispatches to
+`handleScheduledEvent` in `src/lib/scheduled-tasks.ts`. Cron triggers are
+declared in `cloudflare.config.ts`.
 
-TanStack Start applications handle routing differently than plain Cloudflare Workers. The `__scheduled` endpoint isn't directly accessible in dev mode. Instead, use these methods:
+| Schedule | Task |
+|---|---|
+| `*/30 * * * *` | iCal import sync |
+| `5 8 * * *` | Expired pending bookings cleanup (08:05 UTC) |
+| `15 9 * * *` | iCal sync log cleanup (09:15 UTC) |
 
-## Quick Test Guide
+Changing a schedule requires updating both `cloudflare.config.ts` and
+`CRON_SCHEDULES` in `src/lib/scheduled-tasks.ts` (see `CRON_JOBS_SETUP.md`).
 
-### Method 1: Test via Admin Dashboard (Easiest) ✅
+The quickest check is the test suite, which calls the handler directly:
+`pnpm test:workers` (`test/workers/scheduled.test.ts`,
+`test/workers/ical-sync.test.ts`).
 
-The easiest way to test the sync logic is through the admin interface:
+## Trigger a cron locally
 
-1. **Start dev server:**
-```bash
-pnpm dev
-# or
-wrangler dev
-```
+1. Start the dev server (local D1 in `.cloudflare/state`):
 
-2. **Go to the admin dashboard:**
-   - Navigate to `http://localhost:8787/admin/property-management`
-   - Click on a room that has Airbnb or Expedia iCal URLs configured
-   - Click the "Sync" button next to the platform you want to test
-   - Watch the console logs in your dev server terminal
+   ```bash
+   pnpm dev            # runs `cf dev` on http://localhost:3000
+   ```
 
-This tests the **exact same code** that the cron job uses (`iCalService.syncExternalCalendar`).
+2. Trigger a schedule. Encode spaces as `+`:
 
-### Method 2: Test in Production (Recommended for Full Cron Testing) 
+   ```bash
+   curl "http://localhost:3000/cdn-cgi/local/scheduled?cron=*/30+*+*+*+*"   # iCal sync
+   curl "http://localhost:3000/cdn-cgi/local/scheduled?cron=5+8+*+*+*"      # pending bookings cleanup
+   curl "http://localhost:3000/cdn-cgi/local/scheduled?cron=15+9+*+*+*"     # sync log cleanup
+   ```
 
-Since the scheduled handler only works properly after deployment:
+   Or open Local Explorer at `http://localhost:3000/cdn-cgi/local/explorer`.
 
-```bash
-# Build and deploy
-pnpm run build
-pnpm run deploy
+   The old `/__scheduled` and `/cdn-cgi/handler/scheduled` endpoints are no
+   longer used.
 
-# Then tail logs to see the hourly sync
-wrangler tail
+3. Watch the dev server terminal. Each task logs one summary line, e.g.:
 
-# You'll see the cron trigger every hour automatically
-```
+   ```
+   iCal sync: 0 feed(s), 0 failed, 0 change(s), 0 conflict(s)
+   Expired holds: 0 deleted, 0 kept (payment found or unknown)
+   Sync history cleanup: 0 run(s), 0 change(s) older than ... removed
+   ```
 
-### Method 3: Manual Trigger via Cloudflare Dashboard
+   An unknown cron string logs `Unknown cron schedule "...": nothing to do`.
 
-1. Deploy your app: `pnpm run deploy`
-2. Go to [Cloudflare Dashboard](https://dash.cloudflare.com)
-3. Navigate to Workers & Pages > Your Worker > Triggers
-4. Click "Trigger Cron" next to the schedule you want to test
-5. Watch logs with `wrangler tail`
+The local seed (`pnpm db:reset:local`) adds one **inactive** feed per room with
+a placeholder URL, so the sync makes no external requests. Add a real feed URL
+(and activate it) in the admin UI to test a fetch.
 
-## Testing Steps
-
-### 1. Ensure you have test data
-
-Make sure you have:
-- At least one active room in your database
-- That room has an Airbnb or Expedia iCal URL configured
-
-You can add this via the admin dashboard:
-- Go to `/admin/property-management`
-- Edit a room
-- Add an Airbnb or Expedia iCal URL
-- Click "Test" to verify the URL works
-
-### 2. Start the dev server
+## Inspect local data
 
 ```bash
-# Terminal 1
-cd /Users/cgarza/GitHub-Repos/irishette
-wrangler dev
+# D1 (always --local; `cf d1` defaults to the REMOTE database otherwise)
+cf d1 raw 2a894e1e-33f0-45ce-88e1-2709f90215a9 --local --persist-to .cloudflare/state \
+  "--sql=SELECT * FROM ical_sync_log ORDER BY created_at DESC LIMIT 5"
+
+# Browse tables in Drizzle Studio
+pnpm db:studio
 ```
 
-### 3. Trigger the sync
+Sync history lives in D1 (`ical_sync_log`, `ical_sync_changes`, and the
+`last_*` columns on `ical_feeds`); the admin iCal page shows it too.
 
-```bash
-# Terminal 2
-curl "http://localhost:8787/__scheduled?cron=0+*+*+*+*"
-```
+## Production
 
-### 4. Check the output
+- Live logs: `pnpm tail` (runs `pnpm dlx wrangler tail irishette`; `cf` has no
+  tail command yet).
+- Manual trigger: Cloudflare dashboard > Workers & Pages > irishette > Settings >
+  Triggers.
 
-You should see logs like:
-```
-⏰ Scheduled event triggered: 0 * * * *
-🔔 Scheduled event received in server.ts
-🚀 Starting scheduled calendar sync... 2025-10-02T...
-📋 Found 3 active rooms to sync
-🏠 Processing room: rose-room (abc-123)
-  📥 Syncing Airbnb calendar...
-  ✅ Airbnb sync successful: 5 bookings processed
-🎉 Calendar sync completed:
-  📊 Total rooms: 3
-  🔄 Sync attempts: 3
-  ✅ Successful: 3
-  ❌ Errors: 0
-```
+## Common issues
 
-## Advanced Testing
-
-### Test with specific cron patterns
-
-```bash
-# Test hourly sync
-curl "http://localhost:8787/__scheduled?cron=0+*+*+*+*"
-
-# Test weekly cleanup
-curl "http://localhost:8787/__scheduled?cron=0+2+*+*+7"
-
-# Test at a specific time (optional, any valid cron pattern works)
-curl "http://localhost:8787/__scheduled?cron=30+14+*+*+*"
-```
-
-### Using httpie (if installed)
-
-```bash
-# Install httpie (optional)
-brew install httpie
-
-# Then use it for nicer formatting
-http "http://localhost:8787/__scheduled?cron=0+*+*+*+*"
-```
-
-### Using Postman or Thunder Client
-
-Create a GET request to:
-```
-http://localhost:8787/__scheduled?cron=0+*+*+*+*
-```
-
-## Verify Results
-
-### Check Database
-
-```bash
-# View recent sync logs
-wrangler d1 execute irishette-dev --command="
-  SELECT * FROM ical_sync_log 
-  ORDER BY createdAt DESC 
-  LIMIT 5;
-" --local
-```
-
-### Check KV Storage
-
-```bash
-# List sync summaries
-wrangler kv key list --namespace-id="481a64572c1145de958404c9512755d6" --prefix="sync_summary:"
-```
-
-### Check Room Availability
-
-```bash
-# View blocked dates for a room
-wrangler d1 execute irishette-dev --command="
-  SELECT * FROM room_availability 
-  WHERE roomId = 'YOUR_ROOM_ID' 
-    AND isBlocked = true 
-  ORDER BY date DESC 
-  LIMIT 10;
-" --local
-```
-
-## Common Issues
-
-### Issue: "Cannot read property 'DB' of undefined"
-
-**Solution:** Make sure your `.dev.vars` file has the required environment variables:
-```
-BETTER_AUTH_SECRET=your-secret
-RESEND_API_KEY=your-key
-STRIPE_SECRET_KEY=your-key
-STRIPE_TRPC_WEBHOOK_SECRET=your-webhook-secret
-```
-
-### Issue: "KV_ICAL_SYNC_LOG is not defined"
-
-**Solution:** KV namespaces need to be bound. Check `wrangler.jsonc` has:
-```jsonc
-"kv_namespaces": [
-  {
-    "binding": "KV_ICAL_SYNC_LOG",
-    "id": "481a64572c1145de958404c9512755d6"
-  }
-]
-```
-
-### Issue: No rooms found
-
-**Solution:** Create test data:
-1. Go to `/admin/property-management`
-2. Create a room or make sure existing rooms are active
-3. Add iCal URLs to the rooms
-
-### Issue: "Failed to fetch calendar"
-
-**Solution:** 
-- Verify the iCal URL is valid
-- Test it in your browser or with curl
-- Use the "Test" button in the admin dashboard
-
-## Quick One-Liner Test
-
-```bash
-# Start dev server and trigger sync in one command
-wrangler dev & sleep 3 && curl "http://localhost:8787/__scheduled?cron=0+*+*+*+*"
-```
-
-## Production-Like Testing
-
-To test with production data (safely):
-
-```bash
-# Use remote database but local code
-wrangler dev --remote
-
-# Then trigger the sync
-curl "http://localhost:8787/__scheduled?cron=0+*+*+*+*"
-```
-
-⚠️ **Warning:** This will sync against your production database, so blocked dates will be created in production!
-
----
-
-**Pro Tip:** Keep `wrangler dev` running in one terminal and trigger syncs from another terminal window for easier testing!
+- **Secrets are undefined in `env`:** a secret reaches `env` only if it is
+  declared with `bindings.secret()` in `cloudflare.config.ts`. Local values come
+  from Varlock (`.env.schema` + the encrypted `.env.local`, injected by
+  `varlock run`); check them with `pnpm env:check`.
+- **Binding is undefined:** check `worker.env` in `cloudflare.config.ts`, then
+  restart `pnpm dev`.
+- **No rooms found:** run `pnpm db:reset:local` to re-create and seed the local
+  database.

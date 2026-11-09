@@ -1,11 +1,12 @@
 {
-  "include": ["**/*.ts", "**/*.tsx"],
+  "include": ["**/*.ts", "**/*.tsx", ".cloudflare/types"],
+  "exclude": ["node_modules", "e2e", "playwright.config.ts", ".agents", ".claude"],
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "ES2024",
     "jsx": "react-jsx",
     "module": "ESNext",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"],
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "types": ["vite-plus/client"],
 
     /* Bundler mode */
     "moduleResolution": "bundler",
@@ -20,7 +21,6 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
     }

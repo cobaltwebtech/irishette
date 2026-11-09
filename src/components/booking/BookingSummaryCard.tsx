@@ -1,9 +1,10 @@
 import { Icon } from '@iconify/react';
 import { useNavigate } from '@tanstack/react-router';
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatStayDate } from '@/lib/timezone';
 import { useBookingStore } from '@/stores';
-import { parseISODateString } from '@/utils/booking-utils';
 
 export function BookingSummaryCard() {
 	const booking = useBookingStore();
@@ -11,7 +12,7 @@ export function BookingSummaryCard() {
 	const navigate = useNavigate();
 
 	const handleNavigateToRooms = () => {
-		navigate({ to: '/' }).then(() => {
+		void navigate({ to: '/' }).then(() => {
 			// Wait a brief moment for the page to render
 			setTimeout(() => {
 				const roomsSection = document.querySelector('[data-rooms-section]');
@@ -65,12 +66,10 @@ export function BookingSummaryCard() {
 				<div>
 					<h4 className="font-semibold">Dates</h4>
 					<p className="text-sm text-muted-foreground">
-						Check-in:{' '}
-						{parseISODateString(summary.checkInDate).toLocaleDateString()}
+						Check-in: {formatStayDate(summary.checkInDate)}
 					</p>
 					<p className="text-sm text-muted-foreground">
-						Check-out:{' '}
-						{parseISODateString(summary.checkOutDate).toLocaleDateString()}
+						Check-out: {formatStayDate(summary.checkOutDate)}
 					</p>
 					<p className="text-sm text-muted-foreground">
 						{summary.totalNights} night{summary.totalNights !== 1 ? 's' : ''}
@@ -80,14 +79,11 @@ export function BookingSummaryCard() {
 				{/* Pricing - Use reactive booking.pricing instead of computed summary.pricing */}
 				{booking.pricing && (
 					<div className="border-t pt-4">
-						<div className="flex items-center justify-between mb-2">
+						<div className="mb-2 flex items-center justify-between">
 							<h4 className="font-semibold">Pricing Breakdown</h4>
-							{booking.currentStep !== 'payment' &&
-								booking.currentStep !== 'confirmation' && (
-									<span className="text-xs text-muted-foreground">
-										Estimated
-									</span>
-								)}
+							{booking.currentStep !== 'payment' && (
+								<span className="text-xs text-muted-foreground">Estimated</span>
+							)}
 						</div>
 						<div className="space-y-1 text-sm">
 							<div className="flex justify-between">
@@ -149,7 +145,7 @@ export function BookingSummaryCard() {
 								</div>
 							)}
 
-							<div className="flex justify-between font-semibold border-t pt-2 mt-2 text-base">
+							<div className="mt-2 flex justify-between border-t pt-2 text-base font-semibold">
 								<span>Total Due (USD)</span>
 								<span>
 									${booking.pricing.totalAmount?.toFixed(2) || '0.00'}
@@ -162,7 +158,7 @@ export function BookingSummaryCard() {
 				{/* Guest Info */}
 				{booking.guestInfo && (
 					<div className="border-t pt-4">
-						<h4 className="font-semibold mb-2">Guest Information</h4>
+						<h4 className="mb-2 font-semibold">Guest Information</h4>
 						<div className="space-y-1 text-sm">
 							<p>{booking.guestInfo.name}</p>
 							<p className="text-muted-foreground">{booking.guestInfo.email}</p>

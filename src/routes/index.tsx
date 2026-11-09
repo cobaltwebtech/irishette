@@ -1,7 +1,11 @@
+import { Icon } from '@iconify/react';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { Image } from '@unpic/react';
+
 import { HeroSlider } from '@/components/HeroSlider';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+
+import '@/styles/custom-swiper.css';
 import {
 	Card,
 	CardContent,
@@ -10,8 +14,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from '@/components/ui/card';
-import '@/styles/custom-swiper.css';
-import { Icon } from '@iconify/react';
+import { cn } from '@/utils/twMerge';
 
 export const Route = createFileRoute('/')({
 	component: HomePage,
@@ -44,23 +47,23 @@ function HomePage() {
 	return (
 		<div className="bg-background">
 			{/* Hero Section */}
-			<section className="relative h-[50vh] min-h-[500px] flex items-center justify-center overflow-hidden shadow-lg shadow-foreground/50">
+			<section className="relative flex h-[50vh] min-h-[500px] items-center justify-center overflow-hidden shadow-lg shadow-foreground/50">
 				{/* Background Slideshow */}
 				<HeroSlider images={heroImages} autoplayDelay={3000} />
 
 				{/* Overlay for better text readability */}
-				<div className="absolute inset-0 bg-black/60 z-10" />
+				<div className="absolute inset-0 z-10 bg-black/60" />
 
 				{/* Content */}
-				<div className="relative z-20 container mx-auto max-w-4xl text-center px-4">
-					<h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold mb-6 bg-linear-to-r from-orange-500 via-green-200 to-green-500 bg-clip-text text-transparent">
+				<div className="relative z-20 container mx-auto max-w-4xl px-4 text-center">
+					<h1 className="mb-6 bg-linear-to-r from-orange-500 via-green-200 to-green-500 bg-clip-text text-4xl font-extrabold text-transparent md:text-6xl lg:text-7xl">
 						Welcome to Irishette
 					</h1>
-					<p className="text-xl md:text-2xl text-popover mb-8 italic drop-shadow-md max-w-3xl mx-auto">
+					<p className="mx-auto mb-8 max-w-3xl text-xl text-popover italic drop-shadow-md md:text-2xl">
 						Built in 1893, Irishette blends timeless character with a welcoming
 						stay. Just minutes from Tarleton State University.
 					</p>
-					<div className="flex flex-col sm:flex-row gap-4 justify-center">
+					<div className="flex flex-col justify-center gap-4 sm:flex-row">
 						<Button
 							variant="accent"
 							size="lg"
@@ -79,23 +82,25 @@ function HomePage() {
 							/>
 							View Our Rooms
 						</Button>
-						<Button size="lg" className="text-background" asChild>
-							<Link to="/account">
-								<Icon icon="tabler:luggage" className="size-6" />
-								View Bookings
-							</Link>
-						</Button>
+						<Link
+							to="/account"
+							data-slot="button"
+							className={cn(buttonVariants({ size: 'lg' }), 'text-background')}
+						>
+							<Icon icon="tabler:luggage" className="size-6" />
+							View Bookings
+						</Link>
 					</div>
 				</div>
 			</section>
 
 			{/* Welcome Text */}
-			<section className="py-16 px-4">
+			<section className="px-4 py-16">
 				<div className="container mx-auto max-w-4xl">
-					<h2 className="text-3xl md:text-4xl font-bold italic text-center text-fuchsia-900 mb-12">
+					<h2 className="mb-12 text-center text-3xl font-bold text-fuchsia-900 italic md:text-4xl">
 						Victorian Charm Meets Modern Comfort
 					</h2>
-					<div className="grid md:grid-cols-2 gap-8 items-center">
+					<div className="grid items-center gap-8 md:grid-cols-2">
 						<Image
 							src="https://res.cloudinary.com/cobalt/image/upload/irishette/rose-room/cb8e21a3-3a0c-4844-9eb8-37afbe8de80c.avif"
 							alt="Irishette Exterior View"
@@ -106,9 +111,9 @@ function HomePage() {
 						<div>
 							<Icon
 								icon="tabler:bed"
-								className="size-16 text-orange-300 mx-auto bg-primary rounded-lg p-3 mb-2 shadow-md shadow-foreground/50"
+								className="mx-auto mb-2 size-16 rounded-lg bg-primary p-3 text-orange-300 shadow-md shadow-foreground/50"
 							/>
-							<p className="text-foreground leading-relaxed text-justify">
+							<p className="text-justify leading-relaxed text-foreground">
 								Built in 1893, Irishette preserves its Victorian charm while
 								offering the comforts of a modern stay. Tucked away in the heart
 								of Dublin, Texas, our two thoughtfully appointed rooms each
@@ -119,9 +124,9 @@ function HomePage() {
 						<div>
 							<Icon
 								icon="tabler:map-pin-heart"
-								className="size-16 text-orange-300 mx-auto bg-primary rounded-lg p-3 mb-2 shadow-md shadow-foreground/50"
+								className="mx-auto mb-2 size-16 rounded-lg bg-primary p-3 text-orange-300 shadow-md shadow-foreground/50"
 							/>
-							<p className="text-foreground leading-relaxed text-justify">
+							<p className="text-justify leading-relaxed text-foreground">
 								While we don't serve breakfast, there are great dining options
 								right here in town—just a short drive away. And with Tarleton
 								State University only minutes from our door, we're an ideal
@@ -142,26 +147,26 @@ function HomePage() {
 
 			{/* Rooms Section */}
 			<section
-				className="py-16 px-4 scroll-mt-20 bg-muted/80"
+				className="scroll-mt-20 bg-muted/80 px-4 py-16"
 				data-rooms-section
 			>
 				<div className="container mx-auto max-w-6xl">
-					<h2 className="text-3xl md:text-4xl font-bold italic text-center mb-12">
+					<h2 className="mb-12 text-center text-3xl font-bold italic md:text-4xl">
 						Our Rooms
 					</h2>
 
-					<div className="grid md:grid-cols-2 gap-8">
+					<div className="grid gap-8 md:grid-cols-2">
 						{/* Rose Room Card */}
-						<Card className="overflow-hidden hover:shadow-lg transition-shadow">
+						<Card className="overflow-hidden transition-shadow hover:shadow-lg">
 							<CardHeader>
 								<Image
 									src="https://res.cloudinary.com/cobalt/image/upload/irishette/rose-room/7ec19df2-0b06-4d10-8777-3558acb41689.jpg"
 									alt="Rose Room"
 									width={400}
 									height={300}
-									className="mx-auto rounded-lg my-2 shadow-md shadow-foreground/50"
+									className="mx-auto my-2 rounded-lg shadow-md shadow-foreground/50"
 								/>
-								<CardTitle className="font-fleur flex flex-col items-center gap-2 text-4xl text-rose-600">
+								<CardTitle className="flex flex-col items-center gap-2 font-fleur text-4xl text-rose-600">
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
 										width="24"
@@ -185,7 +190,7 @@ function HomePage() {
 									</svg>
 									<span>Rose Room</span>
 								</CardTitle>
-								<CardDescription className="text-base text-center">
+								<CardDescription className="text-center text-base">
 									Leave your worries behind in this spacious and tranquil
 									retreat.
 								</CardDescription>
@@ -194,84 +199,85 @@ function HomePage() {
 								<div>
 									<Icon
 										icon="tabler:microwave"
-										className="size-6 mx-auto text-primary"
+										className="mx-auto size-6 text-primary"
 									/>
-									<p className="font-semibold mb-2">Kitchenette</p>
+									<p className="mb-2 font-semibold">Kitchenette</p>
 								</div>
 								<div>
 									<Icon
 										icon="mingcute:shower-line"
-										className="size-6 mx-auto text-primary"
+										className="mx-auto size-6 text-primary"
 									/>
-									<p className="font-semibold mb-2">Walk-In Shower</p>
+									<p className="mb-2 font-semibold">Walk-In Shower</p>
 								</div>
 								<div>
 									<Icon
 										icon="tabler:device-tv-old"
-										className="size-6 mx-auto text-primary"
+										className="mx-auto size-6 text-primary"
 									/>
-									<p className="font-semibold mb-2">Smart TV</p>
+									<p className="mb-2 font-semibold">Smart TV</p>
 								</div>
 								<div>
 									<Icon
 										icon="tabler:wind"
-										className="size-6 mx-auto text-primary"
+										className="mx-auto size-6 text-primary"
 									/>
-									<p className="font-semibold mb-2">Climate Control</p>
+									<p className="mb-2 font-semibold">Climate Control</p>
 								</div>
 								<div>
 									<Icon
 										icon="tabler:wifi"
-										className="size-6 mx-auto text-primary"
+										className="mx-auto size-6 text-primary"
 									/>
-									<p className="font-semibold mb-2">Wifi</p>
+									<p className="mb-2 font-semibold">Wifi</p>
 								</div>
 								<div>
 									<Icon
 										icon="tabler:car"
-										className="size-6 mx-auto text-primary"
+										className="mx-auto size-6 text-primary"
 									/>
-									<p className="font-semibold mb-2">Private Entrance</p>
+									<p className="mb-2 font-semibold">Private Entrance</p>
 								</div>
 								<div>
 									<Icon
 										icon="tabler:bed"
-										className="size-6 mx-auto text-primary"
+										className="mx-auto size-6 text-primary"
 									/>
-									<p className="font-semibold mb-2">Queen Bed</p>
+									<p className="mb-2 font-semibold">Queen Bed</p>
 								</div>
 								<div>
 									<Icon
 										icon="tabler:bolt"
-										className="size-6 mx-auto text-primary"
+										className="mx-auto size-6 text-primary"
 									/>
-									<p className="font-semibold mb-2">Modern Comforts</p>
+									<p className="mb-2 font-semibold">Modern Comforts</p>
 								</div>
 							</CardContent>
-							<CardFooter className="flex justify-center mb-2">
-								<Button
-									size="lg"
-									asChild
+							<CardFooter className="mb-2 flex justify-center">
+								<Link
+									to="/rooms/rose-room"
 									onClick={() =>
 										window.scrollTo({ top: 0, behavior: 'smooth' })
 									}
+									data-slot="button"
+									className={cn(buttonVariants({ size: 'lg' }))}
 								>
-									<Link to="/rooms/rose-room">View & Book Rose Room</Link>
-								</Button>
+									View & Book Rose Room
+								</Link>
 							</CardFooter>
 						</Card>
 
 						{/* Texas Room Card */}
-						<Card className="overflow-hidden hover:shadow-lg transition-shadow">
+						<Card className="overflow-hidden transition-shadow hover:shadow-lg">
 							<CardHeader>
 								<Image
 									src="https://res.cloudinary.com/cobalt/image/upload/irishette/texas-room/9cbf035c-cdb9-49b2-8b27-b9f48b8f1cac.avif"
 									alt="Texas Room"
 									width={400}
 									height={300}
-									className="mx-auto rounded-lg my-2 shadow-md shadow-foreground/50"
+									className="mx-auto my-2 rounded-lg shadow-md shadow-foreground/50"
 								/>
-								<CardTitle className="font-rye flex flex-col items-center gap-2 text-3xl text-blue-600">
+								<CardTitle className="flex flex-col items-center gap-2 font-rye text-3xl text-blue-600">
 									<svg
 										width="512"
 										height="512"
@@ -286,7 +292,7 @@ function HomePage() {
 									</svg>
 									<span>Texas Room</span>
 								</CardTitle>
-								<CardDescription className="text-base text-center">
+								<CardDescription className="text-center text-base">
 									Experience true Texas charm in this spacious and inviting
 									retreat.
 								</CardDescription>
@@ -295,70 +301,71 @@ function HomePage() {
 								<div>
 									<Icon
 										icon="tabler:coffee"
-										className="size-6 mx-auto text-primary"
+										className="mx-auto size-6 text-primary"
 									/>
-									<p className="font-semibold mb-2">Kitchenette</p>
+									<p className="mb-2 font-semibold">Kitchenette</p>
 								</div>
 								<div>
 									<Icon
 										icon="tabler:bath"
-										className="size-6 mx-auto text-primary"
+										className="mx-auto size-6 text-primary"
 									/>
-									<p className="font-semibold mb-2">Clawfoot Tub</p>
+									<p className="mb-2 font-semibold">Clawfoot Tub</p>
 								</div>
 								<div>
 									<Icon
 										icon="tabler:device-tv-old"
-										className="size-6 mx-auto text-primary"
+										className="mx-auto size-6 text-primary"
 									/>
-									<p className="font-semibold mb-2">Smart TV</p>
+									<p className="mb-2 font-semibold">Smart TV</p>
 								</div>
 								<div>
 									<Icon
 										icon="tabler:wind"
-										className="size-6 mx-auto text-primary"
+										className="mx-auto size-6 text-primary"
 									/>
-									<p className="font-semibold mb-2">Climate Control</p>
+									<p className="mb-2 font-semibold">Climate Control</p>
 								</div>
 								<div>
 									<Icon
 										icon="tabler:wifi"
-										className="size-6 mx-auto text-primary"
+										className="mx-auto size-6 text-primary"
 									/>
-									<p className="font-semibold mb-2">Wifi</p>
+									<p className="mb-2 font-semibold">Wifi</p>
 								</div>
 								<div>
 									<Icon
 										icon="tabler:car-suv"
-										className="size-6 mx-auto text-primary"
+										className="mx-auto size-6 text-primary"
 									/>
-									<p className="font-semibold mb-2">Private Entrance</p>
+									<p className="mb-2 font-semibold">Private Entrance</p>
 								</div>
 								<div>
 									<Icon
 										icon="material-symbols:bed-outline-rounded"
-										className="size-6 mx-auto text-primary"
+										className="mx-auto size-6 text-primary"
 									/>
-									<p className="font-semibold mb-2">King Bed</p>
+									<p className="mb-2 font-semibold">King Bed</p>
 								</div>
 								<div>
 									<Icon
 										icon="game-icons:texas"
-										className="size-6 mx-auto text-primary"
+										className="mx-auto size-6 text-primary"
 									/>
-									<p className="font-semibold mb-2">Texas Charm</p>
+									<p className="mb-2 font-semibold">Texas Charm</p>
 								</div>
 							</CardContent>
-							<CardFooter className="flex justify-center mb-2">
-								<Button
-									size="lg"
-									asChild
+							<CardFooter className="mb-2 flex justify-center">
+								<Link
+									to="/rooms/texas-room"
 									onClick={() =>
 										window.scrollTo({ top: 0, behavior: 'smooth' })
 									}
+									data-slot="button"
+									className={cn(buttonVariants({ size: 'lg' }))}
 								>
-									<Link to="/rooms/texas-room">View & Book Texas Room</Link>
-								</Button>
+									View & Book Texas Room
+								</Link>
 							</CardFooter>
 						</Card>
 					</div>
@@ -366,15 +373,15 @@ function HomePage() {
 			</section>
 
 			{/* Location Section */}
-			<section className="py-16 px-4">
+			<section className="px-4 py-16">
 				<div className="container mx-auto max-w-4xl text-center">
-					<h2 className="text-3xl font-bold italic mb-6">Perfect Location</h2>
+					<h2 className="mb-6 text-3xl font-bold italic">Perfect Location</h2>
 					<p className="text-lg text-muted-foreground">
 						Located in the heart of Dublin, Texas, just minutes from Tarleton
 						State University. Ideal for visiting family, attending events, or
 						exploring the Cross Timbers region.
 					</p>
-					<p className="bg-destructive my-4">
+					<p className="my-4 bg-destructive">
 						Can add a map image and directions here later on.
 					</p>
 				</div>

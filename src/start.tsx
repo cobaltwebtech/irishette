@@ -1,25 +1,16 @@
-import { createStart } from '@tanstack/react-start';
+import { createCsrfMiddleware, createStart } from '@tanstack/react-start';
 
-declare module '@tanstack/react-start' {
-	interface Register {
-		server: {
-			requestContext: {
-				fromFetch: boolean;
-			};
-		};
-	}
-}
+import { securityHeadersMiddleware } from '@/core/middleware/security-headers';
+
+// Server functions are same-origin RPC endpoints: reject cross-site calls.
+// (Start only adds this by default when no requestMiddleware is configured.)
+const csrfMiddleware = createCsrfMiddleware({
+	filter: (ctx) => ctx.handlerType === 'serverFn',
+});
 
 export const startInstance = createStart(() => {
 	return {
 		defaultSsr: true,
+		requestMiddleware: [securityHeadersMiddleware, csrfMiddleware],
 	};
-});
-
-startInstance.createMiddleware().server(({ next }) => {
-	return next({
-		context: {
-			fromStartInstanceMw: true,
-		},
-	});
 });

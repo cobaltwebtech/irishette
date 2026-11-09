@@ -1,4 +1,5 @@
 import { useState } from 'react';
+
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -6,7 +7,7 @@ import {
 	SidebarProvider,
 	SidebarTrigger,
 } from '@/components/ui/sidebar';
-import { useSession } from '@/lib/auth-client';
+import { useSession } from '@/lib/session';
 
 interface AdminLayoutProps {
 	children: React.ReactNode;
@@ -14,9 +15,8 @@ interface AdminLayoutProps {
 }
 
 export function AdminLayout({ children, title }: AdminLayoutProps) {
-	// Auth is handled at route level with beforeLoad
-	// Session is guaranteed to exist and user is guaranteed to be admin
-	const { data: session } = useSession();
+	// Auth is enforced by the _authed/_admin layout route.
+	const session = useSession();
 
 	// Load sidebar state from localStorage with lazy initialization
 	// Check for SSR - localStorage is only available in the browser
@@ -48,7 +48,7 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
 						{title && <h1 className="text-3xl font-bold">{title}</h1>}
 					</div>
 				</header>
-				<div className="flex flex-1 flex-col gap-8 p-6 min-w-0">{children}</div>
+				<div className="flex min-w-0 flex-1 flex-col gap-8 p-6">{children}</div>
 			</SidebarInset>
 		</SidebarProvider>
 	);

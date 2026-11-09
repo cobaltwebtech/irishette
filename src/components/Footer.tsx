@@ -1,20 +1,33 @@
 import { Icon } from '@iconify/react';
 import { Link } from '@tanstack/react-router';
 
+import { CONTACT_PHONE, CONTACT_PHONE_HREF } from '@/lib/site';
+import { yearCT } from '@/lib/timezone';
+import { useNow } from '@/utils/use-now';
+
 export default function Footer() {
+	// Central Time, like every date on the site.
+	const year = yearCT(useNow());
 	return (
-		<footer className="bg-muted border-t border-border mt-auto">
+		<footer className="mt-auto border-t border-border bg-muted">
 			<div className="container mx-auto px-4 py-8">
-				<div className="grid md:grid-cols-[2fr_1fr_1fr] gap-8">
+				<div className="grid gap-8 md:grid-cols-[2fr_1fr_1fr]">
 					{/* Logo & Description */}
 					<div className="space-y-4">
 						<Link
 							to="/"
-							className="text-2xl font-bold text-primary hover:text-primary/80 transition-colors inline-block"
+							className="inline-block transition-opacity hover:opacity-80"
 						>
-							Irishette (Logo goes here)
+							<img
+								src="/irishette-logo.png"
+								alt="Irishette logo"
+								width={384}
+								height={384}
+								className="size-24 rounded-full"
+							/>
+							<span className="sr-only">Irishette</span>
 						</Link>
-						<p className="leading-relaxed text-sm">
+						<p className="text-sm leading-relaxed">
 							Experience authentic Irish hospitality in the heart of Dublin,
 							Texas. Our charming bed & breakfast offers uniquely themed rooms
 							for an unforgettable stay.
@@ -22,27 +35,27 @@ export default function Footer() {
 					</div>
 
 					{/* Footer Menu */}
-					<div className="space-y-2 text-center md:text-right text-foreground">
+					<div className="space-y-2 text-center text-foreground md:text-right">
 						<h3 className="text-lg font-semibold">Menu</h3>
 						<nav className="flex flex-col space-y-2 text-sm text-muted-foreground">
-							<Link to="/" className="hover:text-accent transition-colors">
+							<Link to="/" className="transition-colors hover:text-accent">
 								Home
 							</Link>
 							<Link
 								to="/rooms/rose-room"
-								className="hover:text-accent transition-colors"
+								className="transition-colors hover:text-accent"
 							>
 								Rose Room
 							</Link>
 							<Link
 								to="/rooms/texas-room"
-								className="hover:text-accent transition-colors"
+								className="transition-colors hover:text-accent"
 							>
 								Texas Room
 							</Link>
 							<Link
 								to="/account"
-								className="hover:text-accent transition-colors"
+								className="transition-colors hover:text-accent"
 							>
 								My Account
 							</Link>
@@ -50,22 +63,22 @@ export default function Footer() {
 					</div>
 
 					{/* Contact Information */}
-					<div className="space-y-2 text-center md:text-right text-foreground">
+					<div className="space-y-2 text-center text-foreground md:text-right">
 						<h3 className="text-lg font-semibold">Contact Us</h3>
-						<nav className="flex flex-col items-center md:items-end space-y-2 text-sm text-muted-foreground">
+						<nav className="flex flex-col items-center space-y-2 text-sm text-muted-foreground md:items-end">
 							<Link
 								to="/contact"
-								className="flex items-start gap-2 hover:text-accent transition-colors"
+								className="flex items-start gap-2 transition-colors hover:text-accent"
 							>
 								<Icon icon="tabler:mail" className="size-5" />
 								Send a Message
 							</Link>
 							<a
-								href="tel:+1234567890"
-								className="flex items-start gap-2 hover:text-accent transition-colors"
+								href={CONTACT_PHONE_HREF}
+								className="flex items-start gap-2 transition-colors hover:text-accent"
 							>
 								<Icon icon="tabler:phone" className="size-5" />
-								(123) 456-7890
+								{CONTACT_PHONE}
 							</a>
 							<div className="flex items-start gap-2">
 								<Icon icon="tabler:map-pin" className="size-5" />
@@ -80,28 +93,27 @@ export default function Footer() {
 				</div>
 
 				{/* Bottom Bar */}
-				<div className="border-t border-accent mt-4 pt-4">
-					<div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
+				<div className="mt-4 border-t border-accent pt-4">
+					<div className="flex flex-col items-center justify-between space-y-4 md:flex-row md:space-y-0">
 						<div className="text-sm text-muted-foreground">
-							© {new Date().getFullYear()} Irishette Bed & Breakfast. All rights
-							reserved.
+							© {year} Irishette Bed & Breakfast. All rights reserved.
 						</div>
 						<div className="flex items-center space-x-6 text-sm text-muted-foreground">
 							<Link
 								to="/cancellation-refund-policy"
-								className="hover:text-accent transition-colors"
+								className="transition-colors hover:text-accent"
 							>
 								Cancellation & Refund Policy
 							</Link>
 							<Link
 								to="/privacy-policy"
-								className="hover:text-accent transition-colors"
+								className="transition-colors hover:text-accent"
 							>
 								Privacy Policy
 							</Link>
 							<Link
 								to="/terms-of-service"
-								className="hover:text-accent transition-colors"
+								className="transition-colors hover:text-accent"
 							>
 								Terms of Service
 							</Link>

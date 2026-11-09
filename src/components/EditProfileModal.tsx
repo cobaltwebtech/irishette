@@ -1,7 +1,8 @@
 import { Icon } from '@iconify/react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from '@tanstack/react-router';
 import { useId, useState } from 'react';
-import { toast } from 'sonner';
+
 import { Button } from '@/components/ui/button';
 import {
 	Dialog,
@@ -13,8 +14,11 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { trpcClient } from '@/integrations/tanstack-query/root-provider';
-import { updateUser } from '@/lib/auth-client';
+import { toast } from '@/components/ui/toast';
+import { useTRPC } from '@/integrations/trpc/react';
+import { changeEmail } from '@/lib/auth-client';
+import { refreshSession } from '@/lib/session';
+import { phoneNumberSchema } from '@/lib/user-validation';
 
 interface EditProfileModalProps {
 	open: boolean;
@@ -33,6 +37,8 @@ export function EditProfileModal({
 	user,
 }: EditProfileModalProps) {
 	const queryClient = useQueryClient();
+	const router = useRouter();
+	const trpc = useTRPC();
 	const nameId = useId();
 	const emailId = useId();
 	const phoneId = useId();
@@ -45,32 +51,18 @@ export function EditProfileModal({
 		phoneNumber?: string;
 	}>({});
 
-	// tRPC mutation for updating profile in database
-	const updateProfileMutation = useMutation({
-		mutationFn: async (data: {
-			userId: string;
-			name?: string;
-			email?: string;
-			phoneNumber?: string;
-		}) => {
-			return await trpcClient.users.updateProfile.mutate(data);
-		},
-		onSuccess: async () => {
-			// Invalidate queries to refetch updated data
-			await queryClient.invalidateQueries({ queryKey: ['session'] });
-			toast.success('Profile updated successfully!');
-			onOpenChange(false);
-		},
-		onError: (error) => {
-			console.error('Failed to update profile:', error);
-			toast.error('Failed to update profile. Please try again.');
-		},
-	});
-
-	// Better Auth mutation for updating user (this updates the session)
-	const updateBetterAuthUser = useMutation({
-		mutationFn: async (data: { name?: string; image?: string }) => {
-			return await updateUser(data);
+	// Name and phone (database). Email changes go through Better Auth's
+	// changeEmail, which verifies the address by email first.
+	const updateProfileMutation = useMutation(
+		trpc.users.updateProfile.mutationOptions(),
+	);
+	const changeEmailMutation = useMutation({
+		mutationFn: async (newEmail: string) => {
+			const { error } = await changeEmail({
+				newEmail,
+				callbackURL: '/account',
+			});
+			if (error) throw new Error(error.message ?? 'Could not change email');
 		},
 	});
 
@@ -91,10 +83,10 @@ export function EditProfileModal({
 			newErrors.email = 'Invalid email address';
 		}
 
-		if (phoneNumber && phoneNumber.trim().length > 0) {
-			const digitsOnly = phoneNumber.replace(/\D/g, '');
-			if (digitsOnly.length < 10) {
-				newErrors.phoneNumber = 'Phone number must be at least 10 digits';
+		if (phoneNumber.trim()) {
+			const phone = phoneNumberSchema.safeParse(phoneNumber);
+			if (!phone.success) {
+				newErrors.phoneNumber = phone.error.issues[0].message;
 			}
 		}
 
@@ -109,41 +101,45 @@ export function EditProfileModal({
 			return;
 		}
 
+		const nameChanged = name.trim() !== user.name;
+		const phoneChanged = phoneNumber.trim() !== (user.phoneNumber ?? '');
+		const emailChanged =
+			email.trim().toLowerCase() !== user.email.toLowerCase();
 		try {
-			// Update via tRPC (updates database)
-			const updateData: {
-				userId: string;
-				name?: string;
-				email?: string;
-				phoneNumber?: string;
-			} = {
-				userId: user.id,
-			};
-
-			if (name !== user.name) {
-				updateData.name = name;
+			if (nameChanged || phoneChanged) {
+				await updateProfileMutation.mutateAsync({
+					...(nameChanged ? { name: name.trim() } : {}),
+					// An emptied field removes the number.
+					...(phoneChanged ? { phoneNumber: phoneNumber.trim() || null } : {}),
+				});
 			}
-			if (email !== user.email) {
-				updateData.email = email;
+			if (emailChanged) {
+				await changeEmailMutation.mutateAsync(email.trim());
+				toast.add({
+					type: 'info',
+					title: 'Check your email',
+					description:
+						'We sent a link to confirm the change. Your email stays the same until you confirm it.',
+					timeout: 8000,
+				});
 			}
-			if (phoneNumber !== user.phoneNumber) {
-				updateData.phoneNumber = phoneNumber;
+			if (nameChanged || phoneChanged) {
+				// Refetch the session so the header and account page update.
+				await refreshSession(queryClient, router);
+				toast.add({ type: 'success', title: 'Profile updated successfully!' });
 			}
-
-			// Update database via tRPC
-			await updateProfileMutation.mutateAsync(updateData);
-
-			// Update Better Auth session for name changes
-			if (name !== user.name) {
-				await updateBetterAuthUser.mutateAsync({ name });
-			}
+			onOpenChange(false);
 		} catch (error) {
-			console.error('Error updating profile:', error);
+			toast.add({
+				type: 'error',
+				title: 'Failed to update profile',
+				description: error instanceof Error ? error.message : undefined,
+			});
 		}
 	};
 
 	const isLoading =
-		updateProfileMutation.isPending || updateBetterAuthUser.isPending;
+		updateProfileMutation.isPending || changeEmailMutation.isPending;
 
 	// Reset form when dialog closes or opens
 	const handleOpenChange = (newOpen: boolean) => {
@@ -214,7 +210,7 @@ export function EditProfileModal({
 								<p className="text-sm text-red-500">{errors.email}</p>
 							)}
 							<p className="text-xs text-muted-foreground">
-								Note: Changing your email may require verification.
+								Changing your email sends a confirmation link first.
 							</p>
 						</div>
 
