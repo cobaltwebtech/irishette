@@ -34,6 +34,7 @@ import {
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
+import { cn } from '@/utils/twMerge';
 
 export const Route = createFileRoute('/_authed/_admin/admin/inbox/$publicId')({
 	head: () => ({
@@ -57,7 +58,7 @@ function BackToList() {
 		<Link
 			to="/admin/inbox"
 			data-slot="button"
-			className={buttonVariants({ variant: 'outline' })}
+			className={cn(buttonVariants({ variant: 'outline' }))}
 		>
 			<Icon icon="tabler:arrow-left" className="size-4" />
 			All notifications

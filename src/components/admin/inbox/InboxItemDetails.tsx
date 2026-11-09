@@ -13,6 +13,7 @@ import {
 	stripePaymentUrl,
 } from '@/lib/inbox';
 import { formatInstantCT } from '@/lib/timezone';
+import { cn } from '@/utils/twMerge';
 
 // The body of one notification, by kind (src/lib/inbox.ts). Guest-typed text
 // (contact form) is shown as plain text; React escapes it.
@@ -65,7 +66,7 @@ function ExternalLink({
 			target="_blank"
 			rel="noreferrer noopener"
 			data-slot="button"
-			className={buttonVariants({ variant: 'outline', size: 'sm' })}
+			className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
 		>
 			{children}
 			<Icon icon="tabler:external-link" className="size-4" />
@@ -129,7 +130,7 @@ function ContactFormView({
 				<a
 					href={contactReplyHref(d)}
 					data-slot="button"
-					className={buttonVariants()}
+					className={cn(buttonVariants())}
 				>
 					<Icon icon="tabler:arrow-back-up" className="size-4" />
 					Reply by email
@@ -385,7 +386,7 @@ function RoomCalendarAction({ roomPublicId }: { roomPublicId: string }) {
 				to="/admin/property-management/$publicId"
 				params={{ publicId: roomPublicId }}
 				data-slot="button"
-				className={buttonVariants({ variant: 'outline', size: 'sm' })}
+				className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
 			>
 				<Icon icon="tabler:calendar-cog" className="size-4" />
 				Open calendar settings

@@ -2,6 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 
 import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/utils/twMerge';
 
 export const Route = createFileRoute('/privacy-policy')({
 	head: () => ({
@@ -354,7 +355,7 @@ function PrivacyPolicyPage() {
 								<Link
 									to="/contact"
 									data-slot="button"
-									className={buttonVariants()}
+									className={cn(buttonVariants())}
 								>
 									Contact Us
 								</Link>

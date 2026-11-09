@@ -8,7 +8,9 @@ function Checkbox({ className, ...props }: CheckboxPrimitive.Root.Props) {
 		<CheckboxPrimitive.Root
 			data-slot="checkbox"
 			className={cn(
-				'peer size-4 shrink-0 rounded-sm border border-input bg-muted shadow-xs transition-shadow outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground data-disabled:cursor-not-allowed data-disabled:opacity-50 dark:aria-invalid:ring-destructive/40 dark:data-checked:bg-primary',
+				// inline-flex: the Base UI root is a <span>, which ignores size-4 when
+				// inline (the Radix root was a <button>, an inline-block).
+				'peer inline-flex size-4 shrink-0 items-center justify-center rounded-sm border border-input bg-muted shadow-xs transition-shadow outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground data-disabled:cursor-not-allowed data-disabled:opacity-50 dark:aria-invalid:ring-destructive/40 dark:data-checked:bg-primary',
 				className,
 			)}
 			{...props}

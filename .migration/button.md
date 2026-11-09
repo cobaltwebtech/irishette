@@ -6,6 +6,7 @@
 
 - `src/components/ui/button.tsx`: `Slot` / `asChild` replaced by the Base UI `Button` primitive (`ButtonPrimitive.Props`, which accepts `render`). Local customisations kept verbatim: `font-bold`, the `outline` (`bg-foreground/20`) and `accent` variants, the ghost hover, `lg` = `h-12 px-6 text-lg`, `shadow-xs` on filled variants.
 - 33 `<Button asChild><Link|a>…</Link|a></Button>` call sites (Header, default-catch-boundary, not-found, home, rooms, legal pages, reset-password, account pages, confirmation, admin booking + inbox pages, InboxItemDetails) now put the classes on the link itself: `<Link className={cn(buttonVariants({ variant, size }), className)} data-slot="button">`. Base UI's Button enforces `role="button"` and must not render `<a>` (Base UI docs, "Rendering links as buttons"); Radix `Slot` kept them as real links, so this keeps link semantics. Extra props on the old Button (`onClick`) moved to the link.
+- Follow-up fix (found in the before/after screenshot diff): those links must use `className={cn(buttonVariants(…))}`. `buttonVariants()` alone keeps both the base `text-sm` and a size's `text-lg`/`gap-1.5`; the old `Button` ran them through `cn` (tailwind-merge), so `size="lg"` links ("View All Rooms" on the room pages) rendered with small text until all 25 sites were wrapped in `cn`.
 - `Button` import dropped where it became unused (InboxItemDetails, past-bookings, cancellation-refund-policy, privacy-policy).
 - Leftover scan: `grep -n "radix-ui\|@radix-ui" src/components/ui/button.tsx` is clean.
 

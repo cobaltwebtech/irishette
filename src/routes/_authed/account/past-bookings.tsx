@@ -21,6 +21,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
+import { cn } from '@/utils/twMerge';
 
 type BookingRow = RouterOutputs['bookings']['getMyBookings'][number];
 
@@ -158,7 +159,7 @@ function PastBookingsPage() {
 						<Link
 							to="/account"
 							data-slot="button"
-							className={buttonVariants({ variant: 'outline' })}
+							className={cn(buttonVariants({ variant: 'outline' }))}
 						>
 							← Back to Account
 						</Link>
@@ -223,7 +224,7 @@ function PastBookingsPage() {
 							<Link
 								to="/account"
 								data-slot="button"
-								className={buttonVariants()}
+								className={cn(buttonVariants())}
 							>
 								← Back to Account
 							</Link>

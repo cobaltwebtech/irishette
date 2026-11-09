@@ -16,6 +16,7 @@ import {
 	CardTitle,
 } from '@/components/ui/card';
 import { useBookingStore } from '@/stores';
+import { cn } from '@/utils/twMerge';
 
 export const Route = createFileRoute('/rooms/texas-room')({
 	loader: ({ context }) =>
@@ -273,7 +274,7 @@ function TexasRoomPage() {
 					<Link
 						to="/rooms/rose-room"
 						data-slot="button"
-						className={buttonVariants({ variant: 'secondary' })}
+						className={cn(buttonVariants({ variant: 'secondary' }))}
 					>
 						<Icon icon="lucide:rose" className="size-6 text-rose-400" />
 						View Rose Room
@@ -537,7 +538,9 @@ function TexasRoomPage() {
 								<Link
 									to="/"
 									data-slot="button"
-									className={buttonVariants({ variant: 'outline', size: 'lg' })}
+									className={cn(
+										buttonVariants({ variant: 'outline', size: 'lg' }),
+									)}
 								>
 									View All Rooms
 								</Link>

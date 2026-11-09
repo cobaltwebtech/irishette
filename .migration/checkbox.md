@@ -6,6 +6,7 @@
 
 - `src/components/ui/checkbox.tsx`: `import * as CheckboxPrimitive from '@radix-ui/react-checkbox'` -> `import { Checkbox as CheckboxPrimitive } from '@base-ui/react/checkbox'`; props typed `CheckboxPrimitive.Root.Props`. Classes: `data-[state=checked]:` -> `data-checked:`; `disabled:` -> `data-disabled:` (the Base UI root is not a native control, so `:disabled` never matches). Local look kept (`rounded-sm`, `bg-muted`, the Iconify `tabler:check` icon).
 - `src/routes/_authed/_admin/admin/inbox/index.tsx`: the select-all header checkbox passed `checked="indeterminate"`; now `checked={allSelected}` plus a separate `indeterminate` boolean (consumer-props table). It renders as before (check icon on the muted box).
+- Follow-up fix (found in the screenshot diff): the root also gets `inline-flex items-center justify-center`. Base UI renders the root as a `<span>`, which ignores `size-4` when it is not a flex child; the admin inbox select-all checkbox (in a table header cell) collapsed to a 1px line. Radix rendered a `<button>` (inline-block).
 - `PaymentStep.tsx` (`id` + `<Label htmlFor>`) needs no change: Base UI puts `id` on its hidden `<input>`, so the label association still works. `onCheckedChange` handlers keep working (Base UI passes `(checked: boolean, eventDetails)`).
 - Leftover scan: `grep -n "radix-ui\|@radix-ui" src/components/ui/checkbox.tsx` is clean.
 

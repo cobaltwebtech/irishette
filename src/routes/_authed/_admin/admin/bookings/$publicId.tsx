@@ -134,7 +134,7 @@ function AdminBookingDetailPage() {
 					<Link
 						to="/admin/bookings/current-bookings"
 						data-slot="button"
-						className={buttonVariants({ variant: 'outline' })}
+						className={cn(buttonVariants({ variant: 'outline' }))}
 					>
 						← Back to Bookings
 					</Link>

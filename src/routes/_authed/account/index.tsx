@@ -24,6 +24,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
+import { cn } from '@/utils/twMerge';
 
 type BookingRow = RouterOutputs['bookings']['getMyBookings'][number];
 
@@ -206,7 +207,7 @@ function AccountPage() {
 							<Link
 								to="/account/past-bookings"
 								data-slot="button"
-								className={buttonVariants({ variant: 'outline' })}
+								className={cn(buttonVariants({ variant: 'outline' }))}
 							>
 								<Icon icon="tabler:calendar-repeat" className="size-5" />
 								View Past Bookings
@@ -228,13 +229,17 @@ function AccountPage() {
 								available rooms and make your next reservation!
 							</p>
 							<div className="flex gap-2">
-								<Link to="/" data-slot="button" className={buttonVariants()}>
+								<Link
+									to="/"
+									data-slot="button"
+									className={cn(buttonVariants())}
+								>
 									Browse Rooms
 								</Link>
 								<Link
 									to="/account/past-bookings"
 									data-slot="button"
-									className={buttonVariants({ variant: 'outline' })}
+									className={cn(buttonVariants({ variant: 'outline' }))}
 								>
 									<Icon icon="tabler:calendar-repeat" className="size-5" />
 									View Past Bookings
@@ -308,7 +313,7 @@ function AccountPage() {
 								<Link
 									to="/contact"
 									data-slot="button"
-									className={buttonVariants({ variant: 'secondary' })}
+									className={cn(buttonVariants({ variant: 'secondary' }))}
 								>
 									<Icon icon="tabler:message-circle" className="size-4" />
 									Contact Us

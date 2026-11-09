@@ -7,6 +7,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { signOut } from '@/lib/auth-client';
 import { clearSession, useSession } from '@/lib/session';
 import { useBookingStore } from '@/stores';
+import { cn } from '@/utils/twMerge';
 
 export default function Header() {
 	const session = useSession();
@@ -88,7 +89,7 @@ export default function Header() {
 										to="/booking"
 										search={{ step: undefined }}
 										data-slot="button"
-										className={buttonVariants({ variant: 'secondary' })}
+										className={cn(buttonVariants({ variant: 'secondary' }))}
 									>
 										<Icon icon="tabler:clock-check" className="size-5" />
 										<span className="hidden lg:inline">Continue Booking</span>
@@ -99,7 +100,7 @@ export default function Header() {
 									<Link
 										to="/admin"
 										data-slot="button"
-										className={buttonVariants({ variant: 'destructive' })}
+										className={cn(buttonVariants({ variant: 'destructive' }))}
 									>
 										<Icon icon="tabler:shield-star" className="size-5" />
 										<span className="hidden lg:inline">Admin</span>
@@ -110,7 +111,7 @@ export default function Header() {
 									<Link
 										to="/account"
 										data-slot="button"
-										className={buttonVariants({ variant: 'accent' })}
+										className={cn(buttonVariants({ variant: 'accent' }))}
 									>
 										<Icon
 											icon="material-symbols:bed-outline-rounded"
@@ -133,7 +134,7 @@ export default function Header() {
 										to="/booking"
 										search={{ step: undefined }}
 										data-slot="button"
-										className={buttonVariants({ variant: 'secondary' })}
+										className={cn(buttonVariants({ variant: 'secondary' }))}
 									>
 										<Icon icon="tabler:clock-check" className="size-5" />
 										<span className="hidden lg:inline">Continue Booking</span>
@@ -143,7 +144,7 @@ export default function Header() {
 									to="/auth/login"
 									search={{ redirect: '/account', error: undefined }}
 									data-slot="button"
-									className={buttonVariants({ variant: 'accent' })}
+									className={cn(buttonVariants({ variant: 'accent' }))}
 								>
 									<Icon icon="tabler:luggage" className="size-5" />
 									View Bookings

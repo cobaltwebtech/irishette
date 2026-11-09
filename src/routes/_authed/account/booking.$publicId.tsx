@@ -16,6 +16,7 @@ import { toast } from '@/components/ui/toast';
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
 import { CHECK_OUT_TIME_LABEL } from '@/lib/site';
+import { cn } from '@/utils/twMerge';
 
 export const Route = createFileRoute('/_authed/account/booking/$publicId')({
 	head: () => ({
@@ -129,7 +130,11 @@ function BookingDetailPage() {
 			<div className="border-b bg-primary/5">
 				<div className="container mx-auto px-4 py-6">
 					<div className="flex flex-wrap items-center justify-between gap-2">
-						<Link to="/account" data-slot="button" className={buttonVariants()}>
+						<Link
+							to="/account"
+							data-slot="button"
+							className={cn(buttonVariants())}
+						>
 							← Back to Account
 						</Link>
 						<h1 className="text-2xl font-bold text-foreground">

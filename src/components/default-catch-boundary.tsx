@@ -11,6 +11,7 @@ import {
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import { cn } from '@/utils/twMerge';
 
 export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
 	const router = useRouter();
@@ -68,7 +69,7 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
 						</Button>
 
 						{isRoot ? (
-							<Link to="/" data-slot="button" className={buttonVariants()}>
+							<Link to="/" data-slot="button" className={cn(buttonVariants())}>
 								<Icon icon="tabler:home" />
 								Go to Home
 							</Link>

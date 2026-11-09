@@ -260,7 +260,7 @@ function HomePage() {
 										window.scrollTo({ top: 0, behavior: 'smooth' })
 									}
 									data-slot="button"
-									className={buttonVariants({ size: 'lg' })}
+									className={cn(buttonVariants({ size: 'lg' }))}
 								>
 									View & Book Rose Room
 								</Link>
@@ -362,7 +362,7 @@ function HomePage() {
 										window.scrollTo({ top: 0, behavior: 'smooth' })
 									}
 									data-slot="button"
-									className={buttonVariants({ size: 'lg' })}
+									className={cn(buttonVariants({ size: 'lg' }))}
 								>
 									View & Book Texas Room
 								</Link>
