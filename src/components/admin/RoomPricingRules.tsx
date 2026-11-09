@@ -29,6 +29,7 @@ import {
 import {
 	DropdownMenu,
 	DropdownMenuContent,
+	DropdownMenuGroup,
 	DropdownMenuItem,
 	DropdownMenuLabel,
 	DropdownMenuSeparator,
@@ -198,18 +199,20 @@ function makeColumns({
 			header: 'Actions',
 			cell: (info) => (
 				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<Button variant="ghost" className="h-8 w-8 p-0">
-							<span className="sr-only">Open menu</span>
-							<Icon icon="tabler:dots" />
-						</Button>
+					<DropdownMenuTrigger
+						render={<Button variant="ghost" className="h-8 w-8 p-0" />}
+					>
+						<span className="sr-only">Open menu</span>
+						<Icon icon="tabler:dots" />
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">
-						<DropdownMenuLabel>Actions</DropdownMenuLabel>
-						<DropdownMenuItem onClick={() => onEdit(info.row.original)}>
-							<Icon icon="tabler:pencil" />
-							Edit
-						</DropdownMenuItem>
+						<DropdownMenuGroup>
+							<DropdownMenuLabel>Actions</DropdownMenuLabel>
+							<DropdownMenuItem onClick={() => onEdit(info.row.original)}>
+								<Icon icon="tabler:pencil" />
+								Edit
+							</DropdownMenuItem>
+						</DropdownMenuGroup>
 						<DropdownMenuSeparator />
 						<DropdownMenuItem
 							onClick={() => onDelete(info.row.original)}

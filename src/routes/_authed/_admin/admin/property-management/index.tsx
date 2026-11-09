@@ -405,10 +405,10 @@ function PropertyManagement() {
 						<div className="flex items-center gap-2">
 							<div className="text-sm font-medium">Change Room Status:</div>
 							<DropdownMenu>
-								<DropdownMenuTrigger asChild>
-									<Button variant="outline" className="capitalize">
-										{formData.status}
-									</Button>
+								<DropdownMenuTrigger
+									render={<Button variant="outline" className="capitalize" />}
+								>
+									{formData.status}
 								</DropdownMenuTrigger>
 								<DropdownMenuContent>
 									<DropdownMenuItem
