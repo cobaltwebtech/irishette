@@ -5,12 +5,13 @@ import {
 	useCheckoutElements,
 } from '@stripe/react-stripe-js/checkout';
 import { loadStripe, type Stripe } from '@stripe/stripe-js';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { isTRPCClientError } from '@trpc/client';
 import { useLenis } from 'lenis/react';
 import { useEffect, useId, useState } from 'react';
 
+import { CancellationPolicySummary } from '@/components/booking/CancellationPolicySummary';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -264,6 +265,10 @@ export function PaymentStep() {
 		publicId: string;
 	} | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
+	// The active policy's windows for these dates (cutoffs shown in CT).
+	const { data: policy } = useQuery(
+		trpc.policies.getCancellationPolicy.queryOptions(),
+	);
 
 	// Scroll to top when payment step mounts
 	useEffect(() => {
@@ -431,6 +436,16 @@ export function PaymentStep() {
 					{booking.pricing?.nights} night
 					{booking.pricing?.nights !== 1 ? 's' : ''}
 				</p>
+
+				{policy && booking.checkInDate && (
+					<div className="rounded-lg border p-4">
+						<p className="mb-1 font-semibold">Cancellation policy</p>
+						<CancellationPolicySummary
+							tiers={policy.tiers}
+							checkInDate={booking.checkInDate}
+						/>
+					</div>
+				)}
 
 				{/* Stripe Checkout Session + Payment Element */}
 				<CheckoutElementsProvider

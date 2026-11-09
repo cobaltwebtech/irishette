@@ -5,7 +5,7 @@ import { createInnerTRPCContext } from '@/integrations/trpc/inner-context';
 import { trpcRouter } from '@/integrations/trpc/router';
 import { actorKey, isRateLimited } from '@/lib/rate-limit';
 
-import { trpcError } from './helpers';
+import { trpcError, useClock } from './helpers';
 import { ROSE } from './seed';
 
 // TEST_RATE_LIMITER allows 3 calls per 60 s per key (vitest.config.ts).
@@ -60,6 +60,8 @@ describe('isRateLimited', () => {
 });
 
 describe('tRPC rateLimit middleware', () => {
+	useClock('2036-12-20T17:00:00Z');
+
 	it('bookings.calculateBooking returns TOO_MANY_REQUESTS over the limit', async () => {
 		vi.spyOn(console, 'warn').mockImplementation(() => {});
 		const ctx = createInnerTRPCContext({

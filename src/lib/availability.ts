@@ -297,3 +297,47 @@ export const noOverlapForBookingRow = (now: Date) => sql`
 			AND blk.start_date < bookings.check_out_date
 			AND blk.end_date >= bookings.check_in_date
 	)`;
+
+/**
+ * SQL condition (no FROM needed) that is true when an admin block
+ * [start, end] (inclusive) in `roomId` would overlap no booking that holds
+ * dates, no imported event and no other block. Used as the WHERE of the
+ * guarded block insert/update, so the check and the write are one statement
+ * (assertBlockAllowed only produces the friendly error first).
+ */
+export function blockIsFree(
+	roomId: string,
+	start: string,
+	end: string,
+	now: Date,
+	excludeBlockId: string | null = null,
+) {
+	const nowSeconds = Math.floor(now.getTime() / 1000);
+	return sql`
+		NOT EXISTS (
+			SELECT 1 FROM bookings AS b
+			WHERE b.room_id = ${roomId}
+				AND b.check_out_date > ${start}
+				AND b.check_in_date <= ${end}
+				AND (
+					b.status = 'confirmed'
+					OR (
+						b.status = 'pending'
+						AND (b.expires_at > ${nowSeconds} OR b.payment_status = 'processing')
+					)
+				)
+		)
+		AND NOT EXISTS (
+			SELECT 1 FROM external_events AS ev
+			WHERE ev.room_id = ${roomId}
+				AND ev.end_date > ${start}
+				AND ev.start_date <= ${end}
+		)
+		AND NOT EXISTS (
+			SELECT 1 FROM room_blocked_periods AS other
+			WHERE other.room_id = ${roomId}
+				AND other.start_date <= ${end}
+				AND other.end_date >= ${start}
+				AND (${excludeBlockId} IS NULL OR other.id <> ${excludeBlockId})
+		)`;
+}

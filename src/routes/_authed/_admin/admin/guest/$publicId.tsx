@@ -6,13 +6,16 @@ import { AdminLayout } from '@/components/admin/AdminLayout';
 import { DisputesPanel } from '@/components/admin/DisputesPanel';
 import { NotificationsPanel } from '@/components/admin/inbox/NotificationsPanel';
 import {
+	BookingStatusBadge,
+	PaymentStatusBadge,
+} from '@/components/booking/StatusBadges';
+import {
 	createAppColumnHelper,
 	DataTableView,
 	PaginationControls,
 	SortableHeader,
 	useAppTable,
 } from '@/components/data-table';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
 	Card,
@@ -73,39 +76,11 @@ const columns = columnHelper.columns([
 	}),
 	columnHelper.accessor('status', {
 		header: 'Status',
-		cell: (info) => (
-			<Badge
-				variant={
-					info.getValue() === 'confirmed'
-						? 'default'
-						: info.getValue() === 'cancelled'
-							? 'destructive'
-							: info.getValue() === 'completed'
-								? 'default'
-								: 'secondary'
-				}
-			>
-				{info.getValue()}
-			</Badge>
-		),
+		cell: (info) => <BookingStatusBadge status={info.getValue()} />,
 	}),
 	columnHelper.accessor('paymentStatus', {
 		header: 'Payment',
-		cell: (info) => (
-			<Badge
-				variant={
-					info.getValue() === 'paid'
-						? 'default'
-						: info.getValue() === 'failed'
-							? 'destructive'
-							: info.getValue() === 'refunded'
-								? 'secondary'
-								: 'secondary'
-				}
-			>
-				{info.getValue()}
-			</Badge>
-		),
+		cell: (info) => <PaymentStatusBadge status={info.getValue()} />,
 	}),
 	columnHelper.accessor('totalAmount', {
 		header: ({ column }) => (
@@ -175,31 +150,29 @@ function AdminGuestDetail() {
 		},
 	});
 
-	// Statistics
-	const today = new Date();
-	today.setHours(0, 0, 0, 0); // Reset time to start of day for accurate comparison
-
+	// Statistics (stay phase from the server, in property time)
 	const totalBookings = bookings.length;
 
-	// A booking is completed if it's confirmed and checkout date is in the past
-	const completedBookings = bookings.filter((b) => {
-		const checkOutDate = new Date(`${b.checkOutDate}T00:00:00`);
-		return b.status === 'confirmed' && checkOutDate < today;
-	}).length;
+	// A stay is completed once it is confirmed and past check-out.
+	const completedBookings = bookings.filter(
+		(b) => b.status === 'confirmed' && b.stayPhase === 'past',
+	).length;
 
 	const cancelledBookings = bookings.filter(
 		(b) => b.status === 'cancelled',
 	).length;
 
 	const totalSpent = bookings
-		.filter((b) => b.paymentStatus === 'paid')
-		.reduce((sum, b) => sum + b.totalAmount, 0);
+		.filter(
+			(b) =>
+				b.paymentStatus === 'paid' || b.paymentStatus === 'partially_refunded',
+		)
+		.reduce((sum, b) => sum + b.totalAmount - (b.refundAmount ?? 0), 0);
 
-	// Current & Upcoming bookings: confirmed with checkout date today or in the future
-	const currentUpcomingBookings = bookings.filter((b) => {
-		const checkOutDate = new Date(`${b.checkOutDate}T00:00:00`);
-		return b.status === 'confirmed' && checkOutDate >= today;
-	}).length;
+	// Current & upcoming: confirmed and not past check-out.
+	const currentUpcomingBookings = bookings.filter(
+		(b) => b.status === 'confirmed' && b.stayPhase !== 'past',
+	).length;
 
 	return (
 		<AdminLayout title={`Guest: ${user.name}`}>

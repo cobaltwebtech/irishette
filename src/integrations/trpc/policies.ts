@@ -13,8 +13,6 @@ export const policiesRouter = createTRPCRouter({
 		const policy = await getActiveCancellationPolicy(ctx.db);
 		return {
 			name: policy.name,
-			checkInTime: policy.checkInTime,
-			timezone: policy.timezone,
 			tiers: policy.tiers,
 			isDefault: policy.id === null,
 		};

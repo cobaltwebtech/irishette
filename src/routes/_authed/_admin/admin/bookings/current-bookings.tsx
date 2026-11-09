@@ -4,6 +4,10 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import {
+	BookingStatusBadge,
+	PaymentStatusBadge,
+} from '@/components/booking/StatusBadges';
+import {
 	createAppColumnHelper,
 	DataTableView,
 	PaginationControls,
@@ -82,41 +86,11 @@ const columns = columnHelper.columns([
 	}),
 	columnHelper.accessor('booking.status', {
 		header: 'Status',
-		cell: (info) => (
-			<Badge
-				className="uppercase"
-				variant={
-					info.getValue() === 'confirmed'
-						? 'default'
-						: info.getValue() === 'cancelled'
-							? 'destructive'
-							: info.getValue() === 'completed'
-								? 'default'
-								: 'secondary'
-				}
-			>
-				{info.getValue()}
-			</Badge>
-		),
+		cell: (info) => <BookingStatusBadge status={info.getValue()} />,
 	}),
 	columnHelper.accessor('booking.paymentStatus', {
 		header: 'Payment',
-		cell: (info) => (
-			<Badge
-				className="uppercase"
-				variant={
-					info.getValue() === 'paid'
-						? 'default'
-						: info.getValue() === 'failed'
-							? 'destructive'
-							: info.getValue() === 'refunded'
-								? 'secondary'
-								: 'secondary'
-				}
-			>
-				{info.getValue()}
-			</Badge>
-		),
+		cell: (info) => <PaymentStatusBadge status={info.getValue()} />,
 	}),
 	columnHelper.accessor('hasOpenDispute', {
 		header: 'Dispute',
@@ -164,13 +138,11 @@ function AdminBookings() {
 		trpc.bookings.adminListBookings.queryOptions(ADMIN_BOOKINGS_INPUT),
 	);
 
-	// Current and upcoming confirmed bookings (checkout today or later).
-	const today = new Date();
-	today.setHours(0, 0, 0, 0);
-	const bookings = bookingsData.filter((booking) => {
-		const checkOutDate = new Date(`${booking.booking.checkOutDate}T00:00:00`);
-		return checkOutDate >= today && booking.booking.status === 'confirmed';
-	});
+	// Current and upcoming confirmed stays (stay phase from the server, in
+	// property time).
+	const bookings = bookingsData.filter(
+		(row) => row.booking.status === 'confirmed' && row.stayPhase !== 'past',
+	);
 
 	const table = useAppTable({
 		data: bookings,

@@ -3,6 +3,8 @@ import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 
 import { CancelBookingButton } from '@/components/booking/CancelBookingButton';
+import { CancellationPolicySummary } from '@/components/booking/CancellationPolicySummary';
+import { PaymentStatusBadge } from '@/components/booking/StatusBadges';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -15,7 +17,7 @@ import {
 import { toast } from '@/components/ui/toast';
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
-import { CHECK_OUT_TIME_LABEL } from '@/lib/site';
+import { CHECK_IN_TIME_LABEL, CHECK_OUT_TIME_LABEL } from '@/lib/site';
 import { cn } from '@/utils/twMerge';
 
 export const Route = createFileRoute('/_authed/account/booking/$publicId')({
@@ -196,7 +198,9 @@ function BookingDetailPage() {
 										day: 'numeric',
 									})}
 								</p>
-								<p className="text-sm text-muted-foreground">After 3:00 PM</p>
+								<p className="text-sm text-muted-foreground">
+									From {CHECK_IN_TIME_LABEL}
+								</p>
 							</div>
 							<div>
 								<p className="text-sm font-medium text-muted-foreground">
@@ -292,19 +296,7 @@ function BookingDetailPage() {
 								Payment Status
 							</p>
 							<p className="text-right">
-								<Badge
-									variant={
-										booking.booking.paymentStatus === 'paid'
-											? 'default'
-											: booking.booking.paymentStatus === 'failed'
-												? 'destructive'
-												: booking.booking.paymentStatus === 'refunded'
-													? 'secondary'
-													: 'outline'
-									}
-								>
-									{booking.booking.paymentStatus.toUpperCase()}
-								</Badge>
+								<PaymentStatusBadge status={booking.booking.paymentStatus} />
 							</p>
 						</CardFooter>
 					</Card>
@@ -369,29 +361,59 @@ function BookingDetailPage() {
 							<CardTitle>Booking Actions</CardTitle>
 						</CardHeader>
 						<CardContent className="space-y-4">
-							<Button
-								onClick={handleResendEmail}
-								disabled={isResendingEmail}
-								variant="outline"
-								className="w-full"
+							{booking.booking.status === 'confirmed' && (
+								<Button
+									onClick={handleResendEmail}
+									disabled={isResendingEmail}
+									variant="outline"
+									className="w-full"
+								>
+									<Icon icon="tabler:mail-forward" className="size-6" />
+									{isResendingEmail
+										? 'Sending...'
+										: 'Resend Confirmation Email'}
+								</Button>
+							)}
+							<Link
+								to="/contact"
+								search={{ booking: booking.booking.confirmationId }}
+								data-slot="button"
+								className={cn(
+									buttonVariants({ variant: 'secondary' }),
+									'w-full',
+								)}
 							>
-								<Icon icon="tabler:mail-forward" className="size-6" />
-								{isResendingEmail ? 'Sending...' : 'Resend Confirmation Email'}
-							</Button>
-							<Button className="w-full" variant="secondary">
 								<Icon icon="tabler:message-circle" className="size-6" />
 								Contact Support
-							</Button>
-							{booking.booking.status !== 'cancelled' && (
+							</Link>
+							{booking.booking.canCancel ? (
 								<CancelBookingButton
 									publicId={booking.booking.publicId}
 									mode="guest"
 								/>
+							) : (
+								booking.booking.status === 'confirmed' && (
+									<p className="text-sm text-muted-foreground">
+										{booking.booking.stayPhase === 'upcoming'
+											? 'This booking cannot be cancelled online.'
+											: 'Check-in time has passed, so this booking can no longer be cancelled online.'}{' '}
+										Please contact us.
+									</p>
+								)
 							)}
+							{booking.booking.status !== 'cancelled' &&
+								booking.cancellationPolicy && (
+									<div className="rounded-md bg-muted p-3">
+										<p className="mb-1 text-sm font-semibold">
+											Cancellation windows
+										</p>
+										<CancellationPolicySummary
+											tiers={booking.cancellationPolicy.tiers}
+											checkInDate={booking.booking.checkInDate}
+										/>
+									</div>
+								)}
 						</CardContent>
-						<CardFooter>
-							Can add link for Google and Apple Maps directions here later on.
-						</CardFooter>
 					</Card>
 
 					{/* Important Information Card */}
@@ -403,8 +425,8 @@ function BookingDetailPage() {
 							<ul className="mx-4 list-disc space-y-2 text-sm text-muted-foreground">
 								<li>Check your email for the booking confirmation details</li>
 								<li>
-									Check-in is available from 3:00 PM. Early check-in may be
-									available upon request.
+									Check-in is available from {CHECK_IN_TIME_LABEL}. Early
+									check-in may be available upon request.
 								</li>
 								<li>
 									Check-out is by {CHECK_OUT_TIME_LABEL}. Late check-out may be

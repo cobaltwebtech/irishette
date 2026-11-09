@@ -83,12 +83,9 @@ export function BookingSummaryCard() {
 					<div className="border-t pt-4">
 						<div className="mb-2 flex items-center justify-between">
 							<h4 className="font-semibold">Pricing Breakdown</h4>
-							{booking.currentStep !== 'payment' &&
-								booking.currentStep !== 'confirmation' && (
-									<span className="text-xs text-muted-foreground">
-										Estimated
-									</span>
-								)}
+							{booking.currentStep !== 'payment' && (
+								<span className="text-xs text-muted-foreground">Estimated</span>
+							)}
 						</div>
 						<div className="space-y-1 text-sm">
 							<div className="flex justify-between">

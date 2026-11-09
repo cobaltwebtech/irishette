@@ -305,6 +305,8 @@ Read `stripe-best-practices` (references/payments.md) and the Stripe docs "Accep
 | B4 | **Closed:** after the 3.0 doc and again when Phase 3 is done, the agent gives the user the exact event list for the sandbox webhook endpoint and the Link check; the user makes those Dashboard changes (listed in the Phase 3 report). |
 | B5 | **Closed:** `HOLD_MINUTES` goes from 30 to 35, and the Checkout Session `expires_at` equals the hold expiry. |
 | B7 | **Closed:** the admin cancel dialog for a booking with an open dispute shows a warning, defaults the refund to "none", and needs an explicit confirmation to refund. |
+| Disputes on guest pages | **Decided 2026-11-08 (after Phase 3):** guests never see a dispute or anything about it (no panel, no fields, no wording). An open dispute only turns the guest's online cancellation off with a generic "cannot be cancelled online, please contact us"; guests see a booking's cancelled status as usual. Dispute panels stay on the admin booking and admin guest pages. |
+| Booking window | **Confirmed 2026-11-08:** at most 30 nights, and the **check-out** date must be within 10 months of the property's today (`lastBookableDate`). |
 
 ### 3.0 Document the webhook events first (`docs/STRIPE_WEBHOOKS.md`)
 

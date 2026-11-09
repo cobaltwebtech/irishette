@@ -6,6 +6,7 @@ import {
 	text,
 } from 'drizzle-orm/sqlite-core';
 
+import { bookingStatuses, paymentStatuses } from '../lib/booking-status';
 import { newId, newPublicId } from '../lib/ids';
 import { user } from './auth-schema';
 import { cancellationPolicies } from './policy-schema';
@@ -28,9 +29,13 @@ export const bookings = sqliteTable(
 			.notNull()
 			.references(() => room.id, { onDelete: 'cascade' }),
 
-		// Core booking data
+		// Core booking data. Stay dates are property-local YYYY-MM-DD; the
+		// normalized instants (UTC seconds) are check-in at 4:00 PM CT and
+		// check-out at 11:00 AM CT on those dates (src/lib/stay-times.ts).
 		checkInDate: text('check_in_date').notNull(),
 		checkOutDate: text('check_out_date').notNull(),
+		checkInAt: integer('check_in_at', { mode: 'timestamp' }).notNull(),
+		checkOutAt: integer('check_out_at', { mode: 'timestamp' }).notNull(),
 		numberOfNights: integer('number_of_nights').notNull(),
 		numberOfGuests: integer('number_of_guests').notNull(),
 
@@ -38,14 +43,17 @@ export const bookings = sqliteTable(
 		baseAmount: real('base_amount').notNull(),
 		taxAmount: real('tax_amount').default(0),
 		feesAmount: real('fees_amount').default(0),
+		// Reserved for discounts (e.g. Checkout promotion codes); not set yet.
 		discountAmount: real('discount_amount').default(0),
 		totalAmount: real('total_amount').notNull(),
 
-		// Essential status tracking
-		status: text('status').notNull().default('pending'), // pending, confirmed, cancelled
-		// pending, processing (delayed payment method), paid, partially_refunded,
-		// refunded, refund_pending, refund_failed
-		paymentStatus: text('payment_status').notNull().default('pending'),
+		// Status (src/lib/booking-status.ts). Stay timing is derived.
+		status: text('status', { enum: bookingStatuses })
+			.notNull()
+			.default('pending'),
+		paymentStatus: text('payment_status', { enum: paymentStatuses })
+			.notNull()
+			.default('pending'),
 
 		// Guest contact (essential for communication)
 		guestName: text('guest_name').notNull(),
@@ -83,6 +91,11 @@ export const bookings = sqliteTable(
 		// guest_request, admin, dates_unavailable, payment_failed, ...
 		cancellationReason: text('cancellation_reason'),
 		refundAmount: real('refund_amount'), // dollars refunded (0 if none)
+		// The cancellation tier applied when the booking was cancelled.
+		cancellationRefundPercent: integer('cancellation_refund_percent'),
+		cancellationCutoffAt: integer('cancellation_cutoff_at', {
+			mode: 'timestamp',
+		}),
 		stripeRefundId: text('stripe_refund_id'),
 		// Hold expiry for pending bookings; the Checkout Session expires at the
 		// same moment (HOLD_MINUTES).
@@ -92,6 +105,8 @@ export const bookings = sqliteTable(
 		index('bookings_room_id_idx').on(table.roomId),
 		index('bookings_status_idx').on(table.status),
 		index('bookings_check_in_date_idx').on(table.checkInDate),
+		// Stay-phase filters (upcoming / in stay / past).
+		index('bookings_status_check_in_at_idx').on(table.status, table.checkInAt),
 		index('bookings_created_at_idx').on(table.createdAt),
 		index('bookings_expires_at_idx').on(table.expiresAt), // Index for efficient cleanup queries
 		index('bookings_payment_intent_idx').on(table.stripePaymentIntentId),
@@ -125,8 +140,8 @@ export const paymentTransactions = sqliteTable(
 		amount: real('amount').notNull(),
 		// Dollars refunded so far (charge.amount_refunded).
 		amountRefunded: real('amount_refunded').notNull().default(0),
-		// succeeded, partially_refunded, refunded
-		status: text('status').notNull(),
+		// Mirrors the booking's payment status once paid.
+		status: text('status', { enum: paymentStatuses }).notNull(),
 
 		// Payment method info (useful for admin)
 		paymentMethod: text('payment_method'), // card, link, us_bank_account, ...

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "0a404d44-f3ba-480a-bbce-8eb3fa87b664",
+  "id": "753791d0-5305-4ba5-8a2e-8953d52b210b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -524,6 +524,20 @@
           "notNull": true,
           "autoincrement": false
         },
+        "check_in_at": {
+          "name": "check_in_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "check_out_at": {
+          "name": "check_out_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "number_of_nights": {
           "name": "number_of_nights",
           "type": "integer",
@@ -704,6 +718,20 @@
           "notNull": false,
           "autoincrement": false
         },
+        "cancellation_refund_percent": {
+          "name": "cancellation_refund_percent",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "cancellation_cutoff_at": {
+          "name": "cancellation_cutoff_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "stripe_refund_id": {
           "name": "stripe_refund_id",
           "type": "text",
@@ -752,6 +780,14 @@
           "name": "bookings_check_in_date_idx",
           "columns": [
             "check_in_date"
+          ],
+          "isUnique": false
+        },
+        "bookings_status_check_in_at_idx": {
+          "name": "bookings_status_check_in_at_idx",
+          "columns": [
+            "status",
+            "check_in_at"
           ],
           "isUnique": false
         },
@@ -1592,22 +1628,6 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
-        },
-        "check_in_time": {
-          "name": "check_in_time",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'16:00'"
-        },
-        "timezone": {
-          "name": "timezone",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'America/Chicago'"
         },
         "is_active": {
           "name": "is_active",

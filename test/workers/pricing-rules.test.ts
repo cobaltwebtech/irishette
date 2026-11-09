@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test';
 
-import { caller, causeField, insertPricingRule, trpcError } from './helpers';
+import {
+	caller,
+	causeField,
+	insertPricingRule,
+	trpcError,
+	useClock,
+} from './helpers';
 import { ROSE } from './seed';
 
 // Rules: inclusive start/end; active rules in a room may not overlap
@@ -160,6 +166,8 @@ describe('pricing rule overlap', () => {
 });
 
 describe('pricing per night (calendar and checkout)', () => {
+	useClock('2032-05-20T17:00:00Z');
+
 	// Rule Jun 8-10 (inclusive), stay Jun 10-12: night of the 10th at the
 	// rule price (150), night of the 11th at the base price (100).
 	it('calendar prices each night independently', async () => {

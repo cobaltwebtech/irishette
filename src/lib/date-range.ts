@@ -30,6 +30,20 @@ export function addDays(date: IsoDate, days: number): IsoDate {
 	return d.toISOString().slice(0, 10);
 }
 
+/**
+ * `date` plus `months` calendar months, clamped to the month's last day
+ * (Jan 31 + 1 month = Feb 28/29).
+ */
+export function addMonths(date: IsoDate, months: number): IsoDate {
+	const [y, m, d] = date.split('-').map(Number);
+	const first = new Date(Date.UTC(y, m - 1 + months, 1));
+	const lastDay = new Date(
+		Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0),
+	).getUTCDate();
+	first.setUTCDate(Math.min(d, lastDay));
+	return first.toISOString().slice(0, 10);
+}
+
 /** Whole days from `from` to `to` (negative if `to` is earlier). */
 export function daysBetween(from: IsoDate, to: IsoDate): number {
 	const ms =
@@ -44,6 +58,17 @@ export function stayNights(checkIn: IsoDate, checkOut: IsoDate): IsoDate[] {
 	for (let d = checkIn; d < checkOut; d = addDays(d, 1)) nights.push(d);
 	return nights;
 }
+
+// --- Booking limits (server and calendar) -----------------------------------
+
+/** Longest stay a guest can book online. */
+export const MAX_NIGHTS = 30;
+/** How far ahead guests can book: check-out within this many months. */
+export const BOOKING_WINDOW_MONTHS = 10;
+
+/** The last check-out date a new booking may have, from `today`. */
+export const lastBookableDate = (today: IsoDate) =>
+	addMonths(today, BOOKING_WINDOW_MONTHS);
 
 // --- Overlap rules ---------------------------------------------------------
 

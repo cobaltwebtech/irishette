@@ -78,6 +78,8 @@ CREATE TABLE `bookings` (
 	`room_id` text NOT NULL,
 	`check_in_date` text NOT NULL,
 	`check_out_date` text NOT NULL,
+	`check_in_at` integer NOT NULL,
+	`check_out_at` integer NOT NULL,
 	`number_of_nights` integer NOT NULL,
 	`number_of_guests` integer NOT NULL,
 	`base_amount` real NOT NULL,
@@ -103,6 +105,8 @@ CREATE TABLE `bookings` (
 	`cancelled_by` text,
 	`cancellation_reason` text,
 	`refund_amount` real,
+	`cancellation_refund_percent` integer,
+	`cancellation_cutoff_at` integer,
 	`stripe_refund_id` text,
 	`expires_at` integer,
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade,
@@ -115,6 +119,7 @@ CREATE UNIQUE INDEX `bookings_confirmation_id_unique` ON `bookings` (`confirmati
 CREATE INDEX `bookings_room_id_idx` ON `bookings` (`room_id`);--> statement-breakpoint
 CREATE INDEX `bookings_status_idx` ON `bookings` (`status`);--> statement-breakpoint
 CREATE INDEX `bookings_check_in_date_idx` ON `bookings` (`check_in_date`);--> statement-breakpoint
+CREATE INDEX `bookings_status_check_in_at_idx` ON `bookings` (`status`,`check_in_at`);--> statement-breakpoint
 CREATE INDEX `bookings_created_at_idx` ON `bookings` (`created_at`);--> statement-breakpoint
 CREATE INDEX `bookings_expires_at_idx` ON `bookings` (`expires_at`);--> statement-breakpoint
 CREATE INDEX `bookings_payment_intent_idx` ON `bookings` (`stripe_payment_intent_id`);--> statement-breakpoint
@@ -226,8 +231,6 @@ CREATE INDEX `admin_inbox_user_idx` ON `admin_inbox_items` (`user_id`,`surfaced_
 CREATE TABLE `cancellation_policies` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
-	`check_in_time` text DEFAULT '16:00' NOT NULL,
-	`timezone` text DEFAULT 'America/Chicago' NOT NULL,
 	`is_active` integer DEFAULT false NOT NULL,
 	`created_by` text,
 	`created_at` integer NOT NULL

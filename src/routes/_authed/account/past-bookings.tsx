@@ -2,6 +2,7 @@ import { Icon } from '@iconify/react';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 
+import { BookingStatusBadge } from '@/components/booking/StatusBadges';
 import {
 	createAppColumnHelper,
 	DataTableView,
@@ -76,22 +77,7 @@ const columns = columnHelper.columns([
 	}),
 	columnHelper.accessor('booking.status', {
 		header: 'Status',
-		cell: (info) => (
-			<Badge
-				variant={
-					info.getValue() === 'confirmed'
-						? 'default'
-						: info.getValue() === 'cancelled'
-							? 'destructive'
-							: info.getValue() === 'completed'
-								? 'default'
-								: 'secondary'
-				}
-				className="capitalize"
-			>
-				{info.getValue()}
-			</Badge>
-		),
+		cell: (info) => <BookingStatusBadge status={info.getValue()} />,
 	}),
 	columnHelper.accessor('booking.totalAmount', {
 		header: ({ column }) => (
@@ -126,13 +112,11 @@ function PastBookingsPage() {
 		trpc.bookings.getMyBookings.queryOptions(MY_BOOKINGS_INPUT),
 	);
 
-	// Past confirmed bookings (checkout date is before today).
-	const today = new Date();
-	today.setHours(0, 0, 0, 0);
-	const bookings = allBookings.filter((booking) => {
-		const checkOutDate = new Date(`${booking.booking.checkOutDate}T00:00:00`);
-		return checkOutDate < today && booking.booking.status === 'confirmed';
-	});
+	// Past confirmed stays, by the server's stay phase (property time).
+	const bookings = allBookings.filter(
+		(row) =>
+			row.booking.status === 'confirmed' && row.booking.stayPhase === 'past',
+	);
 
 	const table = useAppTable({
 		data: bookings,

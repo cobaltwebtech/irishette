@@ -2,8 +2,10 @@ import { Icon } from '@iconify/react';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
+import { isTRPCClientError } from '@trpc/client';
 import { useId, useState } from 'react';
 
+import { CancellationPolicySummary } from '@/components/booking/CancellationPolicySummary';
 import { Button } from '@/components/ui/button';
 import {
 	Dialog,
@@ -28,7 +30,7 @@ type Quote = RouterOutputs['bookings']['getCancellationQuote'];
 /** What the selected option refunds (guests always get the policy refund). */
 function refundFor(quote: Quote, mode: 'guest' | 'admin', refund: RefundMode) {
 	if (mode === 'guest' || refund === 'policy') return quote.refundAmount;
-	return refund === 'full' ? quote.amountPaid : 0;
+	return refund === 'full' ? quote.refundableAmount : 0;
 }
 
 /**
@@ -72,6 +74,9 @@ export function CancelBookingButton({
 		mode === 'admin' && disputed && refund !== 'none' && !confirmDisputeRefund;
 
 	const handleCancel = async () => {
+		// The amount shown: the server refuses (CONFLICT) if a window passed
+		// in the meantime, and the dialog then shows the new quote.
+		const expectedRefundAmount = refundAmount;
 		try {
 			const result =
 				mode === 'admin'
@@ -83,26 +88,40 @@ export function CancelBookingButton({
 								disputed && refund !== 'none'
 									? confirmDisputeRefund
 									: undefined,
+							expectedRefundAmount,
 						})
 					: await guestCancel.mutateAsync({
 							publicId,
 							reason: reason || undefined,
+							expectedRefundAmount,
 						});
-			toast.add({
-				type: 'success',
-				title: 'Booking cancelled',
-				description:
-					result.refundAmount > 0
-						? `${currency(result.refundAmount)} will be refunded to the original payment method.`
-						: 'No refund was due.',
-			});
+			if (result.refundFailed) {
+				toast.add({
+					type: 'warning',
+					title: 'Booking cancelled, refund pending',
+					description:
+						'The refund could not be created automatically. We have been notified and will refund you shortly.',
+				});
+			} else {
+				toast.add({
+					type: 'success',
+					title: 'Booking cancelled',
+					description:
+						result.refundAmount > 0
+							? `${currency(result.refundAmount)} will be refunded to the original payment method within 5-10 business days.`
+							: 'No refund was due.',
+				});
+			}
 			setOpen(false);
 			await queryClient.invalidateQueries(trpc.bookings.pathFilter());
 		} catch (error) {
+			if (isTRPCClientError(error) && error.data?.code === 'CONFLICT') {
+				await quote.refetch();
+			}
 			toast.add({
 				type: 'error',
 				title: 'Could not cancel the booking',
-				description: error instanceof Error ? error.message : undefined,
+				description: isTRPCClientError(error) ? error.message : undefined,
 			});
 		}
 	};
@@ -150,8 +169,7 @@ export function CancelBookingButton({
 								pending ||
 								!quote.data ||
 								needsDisputeConfirm ||
-								(mode === 'guest' &&
-									(!quote.data.canCancel || quote.data.hasOpenDispute))
+								(mode === 'guest' && !quote.data.canCancel)
 							}
 						>
 							{pending ? 'Cancelling...' : 'Cancel booking'}
@@ -198,19 +216,9 @@ function QuoteDetails({
 	if (!quote.data.canCancel && mode === 'guest') {
 		return (
 			<p className="text-sm text-destructive">
-				Check-in time has passed, so this booking can no longer be cancelled
-				online. Please{' '}
-				<Link to="/contact" className="underline">
-					contact us
-				</Link>
-				.
-			</p>
-		);
-	}
-	if (quote.data.hasOpenDispute && mode === 'guest') {
-		return (
-			<p className="text-sm text-destructive">
-				This booking's payment is under review, so it can't be cancelled online.
+				{quote.data.cancelBlocked === 'check_in_passed'
+					? 'Check-in time has passed, so this booking can no longer be cancelled online.'
+					: 'This booking cannot be cancelled online.'}{' '}
 				Please{' '}
 				<Link to="/contact" className="underline">
 					contact us
@@ -277,21 +285,16 @@ function QuoteDetails({
 						</span>
 					)}
 				</p>
-				<p className="mt-2 text-xs text-muted-foreground">
-					Windows count from check-in at {data.policy.checkInTime} (
-					{data.policy.timezone}):{' '}
-					{data.policy.tiers
-						.map((t) => `${t.minHoursBefore}h+ before: ${t.refundPercent}%`)
-						.join(', ')}
-					.{' '}
-					<Link
-						to="/cancellation-refund-policy"
-						target="_blank"
-						className="underline"
-					>
-						Full policy
-					</Link>
-				</p>
+				{data.alreadyRefunded > 0 && (
+					<p className="text-muted-foreground">
+						Already refunded: {currency(data.alreadyRefunded)}
+					</p>
+				)}
+				<CancellationPolicySummary
+					className="mt-2"
+					tiers={data.policy.tiers}
+					checkInDate={data.checkInDate}
+				/>
 			</div>
 			<div className="space-y-1">
 				<Label htmlFor={reasonId}>Reason (optional)</Label>

@@ -9,6 +9,7 @@ import {
 	insertExternalEvent,
 	insertFeed,
 	trpcError,
+	useClock,
 } from './helpers';
 import { ROSE } from './seed';
 
@@ -131,6 +132,8 @@ describe('creating a block over existing stays', () => {
 });
 
 describe('booking around a block (block Jun 8-10)', () => {
+	useClock('2031-05-20T17:00:00Z');
+
 	const guest = () => caller('user');
 
 	it('rejects check-in on the block’s last day', async () => {

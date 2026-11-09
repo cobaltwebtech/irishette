@@ -109,7 +109,7 @@ async function paidBooking(piId: string) {
 			stripePaymentIntentId: piId,
 			stripeChargeId: `ch_${piId}`,
 			amount: booking.totalAmount,
-			status: 'succeeded',
+			status: 'paid',
 		});
 	return booking;
 }
@@ -631,11 +631,34 @@ describe('charge.dispute.*', () => {
 			await send(created);
 			expect((await disputeItem('dp_test_1')).status).toBe('read');
 
-			// The guest can't cancel online; an admin refund needs confirmation.
+			// The guest can't cancel online and is never told about the dispute
+			// (decision 2026-11-08); an admin refund needs confirmation.
 			const guestError = await trpcError(
 				caller('user').bookings.cancelBooking({ publicId: booking.publicId }),
 			);
 			expect(guestError.code).toBe('CONFLICT');
+			expect(guestError.message).not.toMatch(/dispute|review/i);
+			const guestQuote = await caller('user').bookings.getCancellationQuote({
+				publicId: booking.publicId,
+			});
+			expect(guestQuote).toMatchObject({
+				hasOpenDispute: false,
+				canCancel: false,
+				cancelBlocked: 'contact_us',
+			});
+			const guestView = await caller('user').bookings.getBooking({
+				publicId: booking.publicId,
+			});
+			expect(guestView.booking.canCancel).toBe(false);
+			expect(JSON.stringify(guestView)).not.toMatch(/dispute/i);
+			const guestList = await caller('user').bookings.getMyBookings({
+				limit: 100,
+			});
+			const listed = guestList.find(
+				(r) => r.booking.publicId === booking.publicId,
+			);
+			expect(listed?.booking.canCancel).toBe(false);
+			expect(JSON.stringify(listed)).not.toMatch(/dispute/i);
 			const quote = await caller('admin').bookings.getCancellationQuote({
 				publicId: booking.publicId,
 			});
@@ -704,6 +727,10 @@ describe('charge.dispute.*', () => {
 				publicId: booking.publicId,
 			});
 			expect(closedQuote.hasOpenDispute).toBe(false);
+			const guestAfter = await caller('user').bookings.getCancellationQuote({
+				publicId: booking.publicId,
+			});
+			expect(guestAfter.cancelBlocked).toBeNull();
 
 			await settle();
 			expect(sent).toHaveLength(0);

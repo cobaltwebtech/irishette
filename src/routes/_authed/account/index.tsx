@@ -3,6 +3,8 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useState } from 'react';
 
+import { BookingSummaryList } from '@/components/booking/BookingSummaryList';
+import { BookingStatusBadge } from '@/components/booking/StatusBadges';
 import {
 	createAppColumnHelper,
 	DataTableView,
@@ -78,22 +80,7 @@ const columns = columnHelper.columns([
 	}),
 	columnHelper.accessor('booking.status', {
 		header: 'Status',
-		cell: (info) => (
-			<Badge
-				variant={
-					info.getValue() === 'confirmed'
-						? 'default'
-						: info.getValue() === 'cancelled'
-							? 'destructive'
-							: info.getValue() === 'completed'
-								? 'default'
-								: 'secondary'
-				}
-				className="capitalize"
-			>
-				{info.getValue()}
-			</Badge>
-		),
+		cell: (info) => <BookingStatusBadge status={info.getValue()} />,
 	}),
 	columnHelper.accessor('booking.totalAmount', {
 		header: ({ column }) => (
@@ -132,13 +119,17 @@ function AccountPage() {
 		trpc.bookings.getMyBookings.queryOptions(MY_BOOKINGS_INPUT),
 	);
 
-	// Current and upcoming confirmed bookings (checkout today or later).
-	const today = new Date();
-	today.setHours(0, 0, 0, 0);
-	const bookings = allBookings.filter((booking) => {
-		const checkOutDate = new Date(`${booking.booking.checkOutDate}T00:00:00`);
-		return checkOutDate >= today && booking.booking.status === 'confirmed';
-	});
+	// By the server's stay phase (property time), not the browser's clock.
+	const notPast = (row: BookingRow) => row.booking.stayPhase !== 'past';
+	const bookings = allBookings.filter(
+		(row) => row.booking.status === 'confirmed' && notPast(row),
+	);
+	const awaitingPayment = allBookings.filter(
+		(row) => row.booking.status === 'pending',
+	);
+	const cancelled = allBookings.filter(
+		(row) => row.booking.status === 'cancelled' && notPast(row),
+	);
 
 	const table = useAppTable({
 		data: bookings,
@@ -248,6 +239,19 @@ function AccountPage() {
 						</CardContent>
 					</Card>
 				)}
+
+				<BookingSummaryList
+					className="mb-8"
+					title="Awaiting Payment"
+					description="Bookings whose payment has not completed. A bank payment that is processing keeps your dates until it completes; an unpaid hold is released when it expires."
+					rows={awaitingPayment}
+				/>
+				<BookingSummaryList
+					className="mb-8"
+					title="Cancelled Bookings"
+					description="Upcoming stays that were cancelled. Refunds go back to the original payment method within 5-10 business days."
+					rows={cancelled}
+				/>
 
 				<div className="grid gap-6 md:grid-cols-2">
 					{/* Account Info Card */}

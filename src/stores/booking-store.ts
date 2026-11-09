@@ -1,11 +1,8 @@
 import { Store } from '@tanstack/react-store';
 
-export type BookingStep =
-	| 'dates'
-	| 'auth'
-	| 'details'
-	| 'payment'
-	| 'confirmation';
+/** Steps of /booking (dates are picked on the room page first). */
+export const bookingSteps = ['auth', 'details', 'payment'] as const;
+export type BookingStep = (typeof bookingSteps)[number];
 
 export interface PricingBreakdown {
 	basePrice: number;
@@ -87,7 +84,7 @@ const initialState: BookingState = {
 	guestCount: 1,
 	pricing: null,
 	guestInfo: null,
-	currentStep: 'dates',
+	currentStep: 'auth',
 	bookingId: null,
 	bookingPublicId: null,
 	error: null,
@@ -113,10 +110,14 @@ function loadPersistedState(): BookingState {
 			return initialState;
 		}
 
-		// Return merged state with any new fields from initialState
+		// Return merged state with any new fields from initialState. Drafts
+		// saved with removed steps ('dates', 'confirmation') start at sign-in.
 		return {
 			...initialState,
 			...parsed,
+			currentStep: bookingSteps.includes(parsed.currentStep)
+				? parsed.currentStep
+				: 'auth',
 			// Reset loading state and errors on page load
 			isLoading: false,
 			error: null,
@@ -281,10 +282,7 @@ export const bookingActions = {
 		);
 	},
 
-	canProceedToDetails: () => {
-		const state = bookingStore.state;
-		return bookingActions.canProceedToAuth() && state.currentStep !== 'dates';
-	},
+	canProceedToDetails: () => bookingActions.canProceedToAuth(),
 
 	canProceedToPayment: () => {
 		const state = bookingStore.state;
@@ -296,9 +294,16 @@ export const bookingActions = {
 		);
 	},
 
-	// Check if can proceed to confirmation (after payment)
-	canProceedToConfirmation: () => {
-		return !!bookingActions.canProceedToPayment();
+	/**
+	 * The furthest step the draft allows (for `?step=`): payment once a hold
+	 * exists, details once signed in with dates, else sign-in.
+	 */
+	furthestAllowedStep: (signedIn: boolean): BookingStep => {
+		const state = bookingStore.state;
+		if (!signedIn || !bookingActions.canProceedToAuth()) return 'auth';
+		return state.bookingId && bookingActions.canProceedToPayment()
+			? 'payment'
+			: 'details';
 	},
 
 	// Get current booking summary
@@ -342,7 +347,7 @@ export const bookingActions = {
 			roomSlug,
 			roomName: roomName || null,
 			maxGuests: maxGuests ?? null,
-			currentStep: 'dates',
+			currentStep: 'auth',
 			createdAt: new Date().toISOString(),
 			updatedAt: new Date().toISOString(),
 		}));

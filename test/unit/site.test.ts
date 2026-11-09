@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vite-plus/test';
 
 import {
 	CHECK_IN_TIME,
+	CHECK_IN_TIME_LABEL,
 	CHECK_OUT_TIME,
 	CHECK_OUT_TIME_LABEL,
+	SAME_DAY_CUTOFF_LABEL,
 	CONTACT_PHONE,
 	CONTACT_PHONE_HREF,
 	formatTimeOfDay,
@@ -15,7 +17,9 @@ describe('site constants', () => {
 		expect(PROPERTY_TIMEZONE).toBe('America/Chicago');
 		expect(CHECK_IN_TIME).toBe('16:00');
 		expect(CHECK_OUT_TIME).toBe('11:00');
-		expect(CHECK_OUT_TIME_LABEL).toBe('11:00 AM');
+		expect(CHECK_IN_TIME_LABEL).toBe('4:00 PM CT');
+		expect(CHECK_OUT_TIME_LABEL).toBe('11:00 AM CT');
+		expect(SAME_DAY_CUTOFF_LABEL).toBe('9:00 AM CT');
 	});
 
 	it('keeps the tel: link in sync with the displayed phone digits', () => {

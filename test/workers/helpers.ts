@@ -5,7 +5,7 @@ import {
 } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { eq } from 'drizzle-orm';
-import { expect } from 'vite-plus/test';
+import { afterAll, beforeAll, expect, vi } from 'vite-plus/test';
 
 import { createDrizzle } from '@/db/drizzle-init';
 import {
@@ -23,6 +23,7 @@ import {
 import { trpcRouter } from '@/integrations/trpc/router';
 import { newId, newPublicId } from '@/lib/ids';
 import type { InboxKind } from '@/lib/inbox';
+import { checkInAt, checkOutAt } from '@/lib/stay-times';
 
 import worker from './entry';
 import { ADMIN, GUEST, OTHER_GUEST, ROSE } from './seed';
@@ -163,23 +164,31 @@ export async function inboxItemsOfKind(kind: InboxKind) {
 
 type BookingOverrides = Partial<typeof bookings.$inferInsert>;
 
+/**
+ * Inserts a booking (default: confirmed and paid). check_in_at / check_out_at
+ * follow the dates (4:00 PM / 11:00 AM CT) unless overridden.
+ */
 export async function insertBooking(overrides: BookingOverrides = {}) {
+	const checkInDate = overrides.checkInDate ?? '2030-06-10';
+	const checkOutDate = overrides.checkOutDate ?? '2030-06-12';
 	const row = {
 		id: newId(),
 		publicId: newPublicId(),
 		confirmationId: newPublicId().slice(0, 6).toUpperCase(),
 		userId: GUEST.id,
 		roomId: ROSE.id,
-		checkInDate: '2030-06-10',
-		checkOutDate: '2030-06-12',
+		checkInDate,
+		checkOutDate,
+		checkInAt: checkInAt(checkInDate),
+		checkOutAt: checkOutAt(checkOutDate),
 		numberOfNights: 2,
 		numberOfGuests: 1,
 		baseAmount: 200,
 		taxAmount: 26,
 		feesAmount: 24,
 		totalAmount: 250,
-		status: 'confirmed',
-		paymentStatus: 'paid',
+		status: 'confirmed' as const,
+		paymentStatus: 'paid' as const,
 		guestName: 'Fixture Guest',
 		guestEmail: GUEST.email,
 		guestPhone: '5555550100',
@@ -281,4 +290,19 @@ export function bookingInput(
 		totalAmount: 250,
 		...overrides,
 	};
+}
+
+/**
+ * Pins `Date` (only) to `instant` for the enclosing describe block. Booking
+ * creation checks the 10-month window and the same-day cutoff against the
+ * clock, so blocks that book fixed far-future dates set a clock shortly
+ * before them.
+ */
+export function useClock(instant: string) {
+	beforeAll(() => {
+		vi.useFakeTimers({ now: new Date(instant), toFake: ['Date'] });
+	});
+	afterAll(() => {
+		vi.useRealTimers();
+	});
 }

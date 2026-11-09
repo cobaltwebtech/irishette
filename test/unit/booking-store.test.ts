@@ -17,7 +17,7 @@ beforeEach(() => {
 describe('booking store', () => {
 	it('starts empty and cannot proceed', async () => {
 		const { bookingActions, bookingStore } = await loadStore();
-		expect(bookingStore.state.currentStep).toBe('dates');
+		expect(bookingStore.state.currentStep).toBe('auth');
 		expect(bookingActions.canProceedToAuth()).toBe(false);
 		expect(bookingActions.getBookingSummary()).toBeNull();
 	});
@@ -27,10 +27,6 @@ describe('booking store', () => {
 		bookingActions.initializeBooking('room-1', 'rose-room', 'Rose Room');
 		bookingActions.setDates('2030-07-01', '2030-07-04');
 		expect(bookingActions.canProceedToAuth()).toBe(true);
-		// Still on the dates step.
-		expect(bookingActions.canProceedToDetails()).toBe(false);
-
-		bookingActions.setStep('details');
 		expect(bookingActions.canProceedToDetails()).toBe(true);
 		expect(bookingActions.canProceedToPayment()).toBe(false);
 
@@ -49,6 +45,42 @@ describe('booking store', () => {
 			currency: 'usd',
 		});
 		expect(bookingActions.canProceedToPayment()).toBe(true);
+	});
+
+	it('furthestAllowedStep clamps ?step= jumps', async () => {
+		const { bookingActions } = await loadStore();
+		expect(bookingActions.furthestAllowedStep(true)).toBe('auth');
+		bookingActions.initializeBooking('room-1', 'rose-room');
+		bookingActions.setDates('2030-07-01', '2030-07-04');
+		expect(bookingActions.furthestAllowedStep(false)).toBe('auth');
+		expect(bookingActions.furthestAllowedStep(true)).toBe('details');
+		bookingActions.setGuestInfo({
+			name: 'Ada',
+			email: 'ada@example.test',
+			phone: '5555550100',
+		});
+		bookingActions.setPricing({
+			basePrice: 100,
+			nights: 3,
+			subtotal: 300,
+			taxes: 0,
+			fees: 0,
+			totalAmount: 300,
+			currency: 'usd',
+		});
+		// Payment needs a hold.
+		expect(bookingActions.furthestAllowedStep(true)).toBe('details');
+		bookingActions.setBookingId('b1', 'abcdefghij012345');
+		expect(bookingActions.furthestAllowedStep(true)).toBe('payment');
+	});
+
+	it('drafts saved with removed steps start at sign-in', async () => {
+		localStorage.setItem(
+			STORAGE_KEY,
+			JSON.stringify({ roomId: 'room-1', currentStep: 'confirmation' }),
+		);
+		const { bookingStore } = await loadStore();
+		expect(bookingStore.state.currentStep).toBe('auth');
 	});
 
 	it('counts nights from the dates', async () => {

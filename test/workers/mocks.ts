@@ -399,3 +399,24 @@ export function mockStripeCharges(...charges: FakeCharge[]) {
 		},
 	};
 }
+
+/** Stripe: POST /v1/refunds fails (e.g. the charge can't be refunded). */
+export function mockStripeRefundsFailing() {
+	const attempts: URLSearchParams[] = [];
+	network.use(
+		http.post('https://api.stripe.com/v1/refunds', async ({ request }) => {
+			attempts.push(new URLSearchParams(await request.text()));
+			return HttpResponse.json(
+				{
+					error: {
+						type: 'invalid_request_error',
+						code: 'charge_already_refunded',
+						message: 'Charge has already been refunded.',
+					},
+				},
+				{ status: 400 },
+			);
+		}),
+	);
+	return attempts;
+}

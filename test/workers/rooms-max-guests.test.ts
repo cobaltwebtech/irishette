@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vite-plus/test';
 
-import { bookingInput, caller, trpcError } from './helpers';
+import { bookingInput, caller, trpcError, useClock } from './helpers';
 import { TEXAS } from './seed';
 
 describe('room max guests', () => {
+	useClock('2034-12-20T17:00:00Z');
+
 	it('an admin can update maxGuests', async () => {
 		const updated = await caller('admin').rooms.update({
 			id: TEXAS.id,
