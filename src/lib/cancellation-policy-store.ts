@@ -33,8 +33,6 @@ async function loadPolicy(
 	return {
 		id: row.id,
 		name: row.name,
-		checkInTime: row.checkInTime,
-		timezone: row.timezone,
 		tiers: sortTiers(tiers),
 	};
 }
@@ -81,8 +79,6 @@ export async function saveCancellationPolicy(
 		db.insert(cancellationPolicies).values({
 			id,
 			name: input.name,
-			checkInTime: input.checkInTime,
-			timezone: input.timezone,
 			isActive: true,
 			createdBy: adminUserId,
 		}),

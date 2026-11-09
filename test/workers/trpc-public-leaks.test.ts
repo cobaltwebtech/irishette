@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vite-plus/test';
 
-import { caller, insertBooking, insertFeed } from './helpers';
+import { caller, insertBooking, insertFeed, useClock } from './helpers';
 import { ROSE } from './seed';
 
 // Public outputs must not contain: feed URLs (third-party secrets), the iCal
@@ -53,6 +53,8 @@ function expectNoSecrets(output: unknown) {
 }
 
 describe('public procedure outputs', () => {
+	useClock('2035-12-15T17:00:00Z');
+
 	it('rooms.list', async () => {
 		expectNoSecrets(await caller(null).rooms.list({}));
 	});

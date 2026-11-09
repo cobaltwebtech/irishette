@@ -7,7 +7,9 @@ import {
 	paymentTransactions,
 } from '@/db/schema-export';
 import { HOLD_MINUTES } from '@/lib/availability';
+import { addDays } from '@/lib/date-range';
 import { createStripe } from '@/lib/stripe';
+import { dateInZone } from '@/lib/timezone';
 
 import {
 	bookingInput,
@@ -33,17 +35,19 @@ import { ADMIN, OTHER_GUEST } from './seed';
 const guest = () => caller('user');
 const stripe = createStripe('sk_test_x');
 
-let day = 0;
-/** A pending booking on its own dates (a live hold). */
+let day = 20;
+/**
+ * A pending booking on its own dates (a live hold), weeks from now so new
+ * holds on the same dates pass the booking window checks.
+ */
 async function pendingBooking(
 	overrides: Parameters<typeof insertBooking>[0] = {},
 ) {
 	day += 3;
-	const checkIn = new Date(Date.UTC(2038, 0, day));
-	const checkOut = new Date(Date.UTC(2038, 0, day + 2));
+	const checkIn = dateInZone(new Date(Date.now() + day * 86_400_000));
 	return insertBooking({
-		checkInDate: checkIn.toISOString().slice(0, 10),
-		checkOutDate: checkOut.toISOString().slice(0, 10),
+		checkInDate: checkIn,
+		checkOutDate: addDays(checkIn, 2),
 		status: 'pending',
 		paymentStatus: 'pending',
 		expiresAt: new Date(Date.now() + 20 * 60 * 1000),
@@ -287,7 +291,7 @@ describe('confirmation', () => {
 			stripePaymentIntentId: `pi_${session.id}`,
 			stripeChargeId: `ch_pi_${session.id}`,
 			paymentMethod: 'card',
-			status: 'succeeded',
+			status: 'paid',
 		});
 		await settle();
 		expect(

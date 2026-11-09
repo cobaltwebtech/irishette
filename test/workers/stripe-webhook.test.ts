@@ -109,7 +109,7 @@ async function paidBooking(piId: string) {
 			stripePaymentIntentId: piId,
 			stripeChargeId: `ch_${piId}`,
 			amount: booking.totalAmount,
-			status: 'succeeded',
+			status: 'paid',
 		});
 	return booking;
 }

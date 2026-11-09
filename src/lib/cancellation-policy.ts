@@ -7,13 +7,19 @@ import { z } from 'zod';
 
 import type { IsoDate } from './date-range';
 import { roundCents } from './pricing';
-import { CHECK_IN_TIME, PROPERTY_TIMEZONE } from './site';
-import { zonedTimeToUtc } from './timezone';
+import { CHECK_IN_TIME } from './site';
+import { checkInAt as checkInInstant, localCutoff } from './stay-times';
+
+// Windows count back from check-in at 4:00 PM CT (CHECK_IN_TIME, a fixed
+// constant since plan 02, 3.9) on the local clock: a tier's cutoff is
+// `minHoursBefore` hours before 4:00 PM CT on the check-in date, with whole
+// days counted as calendar days (so "72 hours" is 4:00 PM CT three days
+// before, across DST too). At exactly a cutoff the higher refund applies.
 
 export interface CancellationTier {
 	/** Applies when cancelling at least this many hours before check-in. */
 	minHoursBefore: number;
-	/** Percent of the amount paid that is refunded (0-100). */
+	/** Percent of the booking total that is refunded (0-100). */
 	refundPercent: number;
 }
 
@@ -21,9 +27,6 @@ export interface CancellationPolicy {
 	/** Database id, or null for the built-in default. */
 	id: string | null;
 	name: string;
-	/** Local check-in time ("HH:MM") the windows count back from. */
-	checkInTime: string;
-	timezone: string;
 	tiers: CancellationTier[];
 }
 
@@ -31,8 +34,6 @@ export interface CancellationPolicy {
 export const DEFAULT_CANCELLATION_POLICY: CancellationPolicy = {
 	id: null,
 	name: 'Standard policy',
-	checkInTime: CHECK_IN_TIME,
-	timezone: PROPERTY_TIMEZONE,
 	tiers: [
 		{ minHoursBefore: 72, refundPercent: 100 },
 		{ minHoursBefore: 24, refundPercent: 50 },
@@ -53,17 +54,6 @@ const cancellationTierSchema = z.object({
 export const cancellationPolicyInputSchema = z
 	.object({
 		name: z.string().trim().min(1).max(100),
-		checkInTime: z
-			.string()
-			.regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use 24-hour HH:MM'),
-		timezone: z.string().refine((tz) => {
-			try {
-				new Intl.DateTimeFormat('en-US', { timeZone: tz });
-				return true;
-			} catch {
-				return false;
-			}
-		}, 'Unknown timezone'),
 		tiers: z.array(cancellationTierSchema).min(1).max(10),
 	})
 	.superRefine((policy, ctx) => {
@@ -104,51 +94,71 @@ export function sortTiers(tiers: CancellationTier[]): CancellationTier[] {
 	return [...tiers].sort((a, b) => b.minHoursBefore - a.minHoursBefore);
 }
 
+/** A tier with its cutoff instant: it applies while `now <= until`. */
+export interface RefundCutoff {
+	minHoursBefore: number;
+	refundPercent: number;
+	/** UTC instant (local wall-clock cutoff converted with the CT offset). */
+	until: Date;
+}
+
+/** Each tier's cutoff for a stay, most notice first. */
+export function refundCutoffs(
+	policy: Pick<CancellationPolicy, 'tiers'>,
+	checkInDate: IsoDate,
+): RefundCutoff[] {
+	return sortTiers(policy.tiers).map((t) => ({
+		...t,
+		until: localCutoff(checkInDate, CHECK_IN_TIME, t.minHoursBefore),
+	}));
+}
+
 export interface CancellationQuote {
-	/** When check-in starts (property time), as an instant. */
+	/** Check-in (4:00 PM CT on the check-in date), as an instant. */
 	checkInAt: Date;
-	hoursBeforeCheckIn: number;
-	/** False once check-in time has passed (guests can no longer cancel). */
+	/** False from check-in on (guests can no longer cancel online). */
 	canCancel: boolean;
-	tier: CancellationTier | null;
+	/** The tier that applies now (null once check-in has passed). */
+	tier: RefundCutoff | null;
 	refundPercent: number;
 	refundAmount: number;
+	refundCutoffs: RefundCutoff[];
 }
 
 /**
- * Refund for cancelling a stay at `now`. `amountPaid` is what the guest paid
- * (0 for an unpaid hold).
+ * Refund for cancelling a stay at `now`: the policy percent of the booking
+ * total (`amountPaid`, including taxes and fees), capped at what is still
+ * paid (`amountPaid - alreadyRefunded`, e.g. after a partial refund in
+ * Stripe). `amountPaid` is 0 for an unpaid hold. `checkInAt` defaults to
+ * 4:00 PM CT on the check-in date (bookings store it as check_in_at).
  */
 export function quoteCancellation({
 	policy,
 	checkInDate,
+	checkInAt = checkInInstant(checkInDate),
 	amountPaid,
+	alreadyRefunded = 0,
 	now = new Date(),
 }: {
-	policy: CancellationPolicy;
+	policy: Pick<CancellationPolicy, 'tiers'>;
 	checkInDate: IsoDate;
+	checkInAt?: Date;
 	amountPaid: number;
+	alreadyRefunded?: number;
 	now?: Date;
 }): CancellationQuote {
-	const checkInAt = zonedTimeToUtc(
-		checkInDate,
-		policy.checkInTime,
-		policy.timezone,
-	);
-	const hoursBeforeCheckIn = (checkInAt.getTime() - now.getTime()) / 3_600_000;
-	const canCancel = hoursBeforeCheckIn > 0;
-	const tier = canCancel
-		? (sortTiers(policy.tiers).find(
-				(t) => hoursBeforeCheckIn >= t.minHoursBefore,
-			) ?? null)
-		: null;
+	const cutoffs = refundCutoffs(policy, checkInDate);
+	const canCancel = now < checkInAt;
+	const tier = canCancel ? (cutoffs.find((c) => now <= c.until) ?? null) : null;
 	const refundPercent = tier?.refundPercent ?? 0;
+	const paid = Math.max(0, amountPaid);
+	const remaining = Math.max(0, roundCents(paid - alreadyRefunded));
 	return {
 		checkInAt,
-		hoursBeforeCheckIn,
 		canCancel,
 		tier,
 		refundPercent,
-		refundAmount: roundCents((Math.max(0, amountPaid) * refundPercent) / 100),
+		refundAmount: Math.min(remaining, roundCents((paid * refundPercent) / 100)),
+		refundCutoffs: cutoffs,
 	};
 }

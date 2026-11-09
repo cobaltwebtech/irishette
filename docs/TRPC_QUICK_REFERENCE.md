@@ -161,29 +161,33 @@ Schemas are in `src/lib/payment-validation.ts`. Owner checks go through
 `findAccessibleBooking`, which returns `NOT_FOUND` for other users' bookings.
 
 Guest responses (`getBooking`, `getMyBookings`) select `GUEST_BOOKING_FIELDS`:
-`publicId`, `confirmationId`, `status`, `paymentStatus`, the dates, nights,
-guests, the amounts (`baseAmount`, `feesAmount`, `taxAmount`, `totalAmount`,
-`refundAmount`), the guest's own name/email/phone/special requests,
-`createdAt`, `cancelledAt`, and the room's `name` and `slug`. Never the
+`publicId`, `confirmationId`, `status`, `paymentStatus`, the dates and their
+instants (`checkInAt`, `checkOutAt`), nights, guests, the amounts
+(`baseAmount`, `feesAmount`, `taxAmount`, `totalAmount`, `refundAmount`), the
+guest's own name/email/phone/special requests, `createdAt`, `cancelledAt`, and
+the room's `name` and `slug`; plus the derived `stayPhase`
+(`upcoming` / `in_stay` / `past`, property time), `canCancel` and
+`cancelUntil` (check-in, 4:00 PM CT). `getBooking` also returns the booking's
+`cancellationPolicy` (`name`, `tiers`). Never the
 internal `id`, `userId`, `roomId`, `internalNotes`, Stripe ids,
 `cancellationPolicyId` or the payment transaction. Admin pages use
 `adminGetBooking`.
 
 | Procedure | Type | Access | Input | Purpose |
 |---|---|---|---|---|
-| `calculateBooking` | query | public, rate-limited | `calculateBookingSchema` (`roomId`, dates, `guestCount`) | Full price (base, fees, taxes, nights, applied rules, tax breakdown). Same `quoteStay` as booking creation |
+| `calculateBooking` | query | public, rate-limited | `calculateBookingSchema` (`roomId`, dates, `guestCount`) | Full price (base, fees, taxes, nights, applied rules, tax breakdown). Same `quoteStay` and date limits (`assertBookableDates`: same-day cutoff 9:00 AM CT, 30 nights, 10 months) as booking creation |
 | `createBooking` | mutation | user | `createBookingSchema` (room, dates, guest count/name/email/phone, special requests; client prices ignored) | `createHold`: 35-minute pending hold (releases expired holds on the dates first: priority rule); returns `bookingId`, `publicId` |
 | `createCheckoutSession` | mutation | user (owner) | `bookingIdSchema` | `prepareCheckout`: the hold's Checkout Session (`ui_mode: 'elements'`). Returns `{ status: 'open', clientSecret }` or `{ status: 'complete' }` (already paid / processing), plus `publicId`, `publishableKey` |
 | `refreshBooking` | mutation | user (owner) | `bookingIdSchema` | `refreshHold`: extend an expired hold if the dates are still free |
 | `confirmCheckout` | mutation | user (owner) | `confirmCheckoutSchema` (`publicId`, `sessionId` `cs_test_...`/`cs_live_...`) | Return-page fast path: `confirmBookingPayment` (idempotent; the webhook is the source of truth). Returns `{ status: 'confirmed' \| 'already_confirmed' \| 'processing' \| 'refunded_conflict', publicId }` |
 | `getBooking` | query | user (owner only) | `bookingPublicIdSchema` | `{ booking, room }` with guest fields only (above) |
 | `adminGetBooking` | query | admin | `bookingPublicIdSchema` | Any booking: the full row, the room (`bookingRoomColumns`), the guest account (`publicId`, `email`, `name`) and its payment `disputes` (panel fields, no internal ids) |
-| `getMyBookings` | query | user | `{ limit 1-100 (10), offset, status? }` | The caller's bookings (guest fields) with room name and slug, newest first |
-| `getCancellationQuote` | query | owner or admin | `bookingPublicIdSchema` | Whether the booking can be cancelled now, the refund under its policy, and `hasOpenDispute` |
-| `cancelBooking` | mutation | user (owner only) | `cancelBookingSchema` (`publicId`, `reason?`) | Guest cancellation, refund per policy. `CONFLICT` while the payment has an open dispute |
-| `adminCancelBooking` | mutation | admin | `adminCancelBookingSchema` (`publicId`, `refund: 'full' \| 'policy' \| 'none'`, `reason?`, `confirmDisputeRefund?`) | Admin cancellation with chosen refund. With an open dispute, a refund needs `confirmDisputeRefund: true` (else `CONFLICT`) |
+| `getMyBookings` | query | user | `{ limit 1-100 (10), offset, status? (pending/confirmed/cancelled), phase? ('upcoming' \| 'current' \| 'past', by `check_in_at`/`check_out_at`) }` | The caller's bookings (guest fields + `stayPhase`, `canCancel`, `cancelUntil`) with room name and slug, by check-in |
+| `getCancellationQuote` | query | owner or admin | `bookingPublicIdSchema` | Whether the booking can be cancelled now, the refund under its policy (`refundAmount`, `refundPercent`, `amountPaid`, `alreadyRefunded`, `refundableAmount`), `checkInDate`, `checkInAt`, every tier's cutoff as a UTC instant (`refundCutoffs: [{ refundPercent, minHoursBefore, until }]`), the policy (`name`, `tiers`) and `hasOpenDispute` |
+| `cancelBooking` | mutation | user (owner only) | `cancelBookingSchema` (`publicId`, `reason?`, `expectedRefundAmount?`) | Guest cancellation, refund per policy (saved first, then refunded). `CONFLICT` while the payment has an open dispute, or when the refund differs from `expectedRefundAmount` (a window passed). Returns `refundAmount`, `refundPercent`, `refundFailed?` |
+| `adminCancelBooking` | mutation | admin | `adminCancelBookingSchema` (`publicId`, `refund: 'full' \| 'policy' \| 'none'`, `reason?`, `confirmDisputeRefund?`, `expectedRefundAmount?`) | Admin cancellation with chosen refund (`full` = what is still paid). With an open dispute, a refund needs `confirmDisputeRefund: true` (else `CONFLICT`) |
 | `resendConfirmationEmail` | mutation | owner or admin | `bookingPublicIdSchema` | Re-send the confirmation email; `BAD_REQUEST` unless confirmed, `BAD_GATEWAY` if Resend fails |
-| `adminListBookings` | query | admin | `{ limit 1-100 (10), offset, status?, paymentStatus?, roomId? (idSchema), startDate?, endDate? (isoDateSchema) }` | All bookings with room, guest (id, email, name) and `hasOpenDispute`. `startDate` / `endDate` bound the check-in date and work alone or together |
+| `adminListBookings` | query | admin | `{ limit 1-100 (10), offset, status?, paymentStatus? (shared enums), phase?, roomId? (idSchema), startDate?, endDate? (isoDateSchema) }` | All bookings with room, guest (id, email, name), `hasOpenDispute` and `stayPhase`. `startDate` / `endDate` bound the check-in date and work alone or together |
 | `adminUpdateInternalNotes` | mutation | admin | `{ bookingId, internalNotes (max 5000) }` | Set a booking's internal notes |
 | `adminGetMonthlyStats` | query | admin | `{ months 1-24 (12), status: 'confirmed' \| 'all' }` | Booking count and revenue per check-in month |
 
@@ -191,7 +195,7 @@ internal `id`, `userId`, `roomId`, `internalNotes`, Stripe ids,
 
 | Procedure | Type | Access | Input | Purpose |
 |---|---|---|---|---|
-| `getBySlug` | query | public | `{ roomSlug, startDate?, endDate?, monthsAhead 1-12 (10) }` (ISO dates) | Active room summary and unavailable date ranges (`loadUnavailability`) for the booking calendar. Dates only: no booking ids, confirmation ids or guest data |
+| `getBySlug` | query | public | `{ roomSlug, startDate?, endDate?, monthsAhead 1-12 (10) }` (ISO dates) | Active room summary and unavailable date ranges (`loadUnavailability`) for the booking calendar, plus `today`, `earliestCheckIn` (same-day cutoff 9:00 AM CT), `lastCheckOut` and `maxNights`, all in property time. Dates only: no booking ids, confirmation ids or guest data |
 
 ### `ical` (`src/integrations/trpc/ical.ts`)
 
@@ -219,8 +223,8 @@ returned only here. See `ICAL_SYNC_README.md`.
 
 | Procedure | Type | Access | Input | Purpose |
 |---|---|---|---|---|
-| `getCancellationPolicy` | query | public | none | Active cancellation policy (name, check-in time, timezone, tiers, `isDefault`), shown at checkout |
-| `saveCancellationPolicy` | mutation | admin | `cancellationPolicyInputSchema` (`src/lib/cancellation-policy.ts`) | Save a new policy version for future bookings; existing bookings keep theirs |
+| `getCancellationPolicy` | query | public | none | Active cancellation policy (name, tiers, `isDefault`), shown at checkout with each tier's cutoff in CT. Windows always count back from 4:00 PM CT (no per-policy time or zone) |
+| `saveCancellationPolicy` | mutation | admin | `cancellationPolicyInputSchema` (`name`, `tiers`; `src/lib/cancellation-policy.ts`) | Save a new policy version for future bookings; existing bookings keep theirs |
 | `listCancellationPolicies` | query | admin | none | All saved policy versions |
 
 ### `users` (`src/integrations/trpc/users.ts`)
@@ -228,7 +232,7 @@ returned only here. See `ICAL_SYNC_README.md`.
 | Procedure | Type | Access | Input | Purpose |
 |---|---|---|---|---|
 | `adminListGuests` | query | admin | `{ limit 1-100 (50), offset }` | Users with role `user`, with non-pending booking count, `total`, `hasMore` |
-| `adminGetGuestDetails` | query | admin | `{ publicId }` (`publicIdSchema`) | The guest's profile (explicit columns: `publicId`, name, email, `emailVerified`, phone, role, `stripeCustomerId`, `createdAt`; no ban fields or internal id), their non-pending bookings and their payment `disputes` |
+| `adminGetGuestDetails` | query | admin | `{ publicId }` (`publicIdSchema`) | The guest's profile (explicit columns: `publicId`, name, email, `emailVerified`, phone, role, `stripeCustomerId`, `createdAt`; no ban fields or internal id), their non-pending bookings (with `stayPhase`) and their payment `disputes` |
 | `updateProfile` | mutation | user | `updateProfileSchema` (`src/lib/user-validation.ts`): `{ name? (trimmed, 1-100), phoneNumber? (phoneNumberSchema: trimmed, max 20 chars, at least 10 digits; null removes it) }` | Update the caller's own name and phone; omitted fields stay. The only way to change the phone (`additionalFields.phoneNumber` has `input: false` in Better Auth). `CONFLICT` if the phone is used by another account. Email changes go through Better Auth's `changeEmail` |
 
 `users.updatePhoneNumber` was merged into `updateProfile` in plan 02 Phase 2
@@ -429,6 +433,7 @@ a synthetic session.
 | `test/workers/admin-inputs.test.ts`, `users.test.ts` | Admin input validation (ids, dates, single date bound); guest details columns; phone `CONFLICT` |
 | `test/workers/ical-test-url.test.ts` | `testUrl` / feed URL rules (https, no IP or localhost, redirects, size cap) |
 | `test/workers/rate-limit.test.ts`, `auth-rate-limit.test.ts`, `csp-report.test.ts` | Rate limiting bindings and the `rateLimit` middleware, Better Auth's D1 limits, the CSP report endpoint |
+| `test/workers/booking-integrity.test.ts` | Same-day cutoff and limits on `createBooking` / `calculateBooking`, `availability.getBySlug` times, quote drift, partial refunds, save-then-refund, `getMyBookings` phases |
 | `test/workers/checkout.test.ts` | `createCheckoutSession` parameters, reuse and replacement; `confirmCheckout` verification, processing, taken-dates refund, idempotency; the hold priority rule |
 | `test/workers/blocks.test.ts`, `pricing-rules.test.ts`, `rooms-max-guests.test.ts` | Block conflicts, pricing rule overlap and per-night prices, guest limit |
 | `test/workers/ical-route.test.ts`, `ical-sync.test.ts` | Export feed access and contents, admin feed procedures, sync |

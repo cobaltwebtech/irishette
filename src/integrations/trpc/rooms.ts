@@ -15,7 +15,7 @@ import type { z } from 'zod';
 
 import type { Database } from '@/db/drizzle-init';
 import { room, roomBlockedPeriods, roomPricingRules } from '@/db/schema-export';
-import { findBlockConflicts } from '@/lib/availability';
+import { blockIsFree, findBlockConflicts } from '@/lib/availability';
 import { quoteStay } from '@/lib/booking-service';
 import { inclusiveRangesOverlap } from '@/lib/date-range';
 import { isUniqueViolation } from '@/lib/db-errors';
@@ -499,16 +499,21 @@ export const roomsRouter = createTRPCRouter({
 				input.startDate,
 				input.endDate,
 			);
+			// The check above gives the friendly error; this insert re-checks
+			// atomically (a booking or import may have arrived in between).
+			const id = newId();
+			const now = new Date();
+			const result = await ctx.db.run(sql`
+				INSERT INTO room_blocked_periods
+					(id, room_id, start_date, end_date, reason, notes, created_at)
+				SELECT ${id}, ${input.roomId}, ${input.startDate}, ${input.endDate},
+					${input.reason}, ${input.notes || null}, ${Math.floor(now.getTime() / 1000)}
+				WHERE ${blockIsFree(input.roomId, input.startDate, input.endDate, now)}`);
+			if (!result.meta.changes) throw blockChanged();
 			const [created] = await ctx.db
-				.insert(roomBlockedPeriods)
-				.values({
-					roomId: input.roomId,
-					startDate: input.startDate,
-					endDate: input.endDate,
-					reason: input.reason,
-					notes: input.notes || null,
-				})
-				.returning();
+				.select()
+				.from(roomBlockedPeriods)
+				.where(eq(roomBlockedPeriods.id, id));
 			return created;
 		}),
 
@@ -542,6 +547,8 @@ export const roomsRouter = createTRPCRouter({
 					existing.id,
 				);
 			}
+			const datesChanged =
+				startDate !== existing.startDate || endDate !== existing.endDate;
 			const [updated] = await ctx.db
 				.update(roomBlockedPeriods)
 				.set({
@@ -550,8 +557,22 @@ export const roomsRouter = createTRPCRouter({
 					...(input.reason ? { reason: input.reason } : {}),
 					...(input.notes !== undefined ? { notes: input.notes || null } : {}),
 				})
-				.where(eq(roomBlockedPeriods.id, input.id))
+				.where(
+					and(
+						eq(roomBlockedPeriods.id, input.id),
+						datesChanged
+							? blockIsFree(
+									existing.roomId,
+									startDate,
+									endDate,
+									new Date(),
+									existing.id,
+								)
+							: undefined,
+					),
+				)
 				.returning();
+			if (!updated) throw blockChanged();
 			return updated;
 		}),
 
@@ -571,6 +592,13 @@ export const roomsRouter = createTRPCRouter({
 			return { success: true, id: deleted.id };
 		}),
 });
+
+const blockChanged = () =>
+	new TRPCError({
+		code: 'CONFLICT',
+		message:
+			'A reservation or block was added for these dates just now. Please reload and try again.',
+	});
 
 async function assertBlockAllowed(
 	db: Database,

@@ -213,10 +213,20 @@ releases pending holds past `expiresAt` that are not processing
   later, sets `cancelled` with refund 0. If the session was paid or the payment
   is processing, throws `CONFLICT` instead.
 - **Confirmed booking** (`cancelConfirmed`): the refund amount comes from the
-  policy the booking was made under (`quoteBookingCancellation()`). Refunds use
-  `stripeBookingMetadata()` + `reason: 'cancellation'` and are recorded in
-  `payment_refunds` (source `app`), so the refund webhooks send no second
-  email. See `BOOKING_ARCHITECTURE.md` for the windows.
+  policy the booking was made under (`quoteBookingCancellation()`): the tier
+  percent of the booking total, capped at what is still paid after earlier
+  (e.g. Dashboard) refunds. **The cancellation is saved first** (guarded
+  update to `cancelled`, `paymentStatus: 'refund_pending'`, the applied tier),
+  **then** the refund is created (`stripeBookingMetadata()` +
+  `reason: 'cancellation'`, idempotency key
+  `refund-cancel/<bookingId>/<amountCents>`, recorded in `payment_refunds` as
+  source `app`, so the refund webhooks send no second email), then the result
+  is stored (`refunded` / `partially_refunded`). A Stripe failure leaves the
+  booking cancelled with `refund_failed` and alerts the admins (email +
+  `refund_failed` notification). A refund amount that differs from the one the
+  dialog showed (`expectedRefundAmount`) is `CONFLICT` before anything
+  changes. See `BOOKING_ARCHITECTURE.md` for the windows (4:00 PM CT,
+  wall-clock cutoffs).
 - **Open dispute** (`hasOpenDispute`): guests get `CONFLICT` ("contact us");
   admins default to no refund and must pass `confirmDisputeRefund: true` to
   refund (Stripe warns a refund on a disputed charge can credit the guest

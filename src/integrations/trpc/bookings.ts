@@ -1,9 +1,20 @@
 import { TRPCError } from '@trpc/server';
-import { and, between, desc, eq, gte, lte, type SQL } from 'drizzle-orm';
+import {
+	and,
+	asc,
+	between,
+	desc,
+	eq,
+	gt,
+	gte,
+	lte,
+	type SQL,
+} from 'drizzle-orm';
 import { z } from 'zod';
 
 import { bookings, room, user } from '@/db/schema-export';
 import {
+	assertBookableDates,
 	type Booking,
 	bookingRoomColumns,
 	cancelBooking,
@@ -12,6 +23,8 @@ import {
 	quoteStay,
 	refreshHold,
 } from '@/lib/booking-service';
+import { bookingStatusSchema, paymentStatusSchema } from '@/lib/booking-status';
+import { getBookingCancellationPolicy } from '@/lib/cancellation-policy-store';
 import { confirmBookingPayment, prepareCheckout } from '@/lib/checkout-service';
 import { isoDateSchema } from '@/lib/date-range';
 import {
@@ -30,6 +43,8 @@ import {
 	confirmCheckoutSchema,
 	createBookingSchema,
 } from '@/lib/payment-validation';
+import { roundCents } from '@/lib/pricing';
+import { stayPhase } from '@/lib/stay-times';
 
 import { isActiveAdmin } from './access';
 import {
@@ -97,6 +112,8 @@ const GUEST_BOOKING_FIELDS = [
 	'taxAmount',
 	'totalAmount',
 	'refundAmount',
+	'checkInAt',
+	'checkOutAt',
 	'guestName',
 	'guestEmail',
 	'guestPhone',
@@ -111,18 +128,44 @@ const guestBookingColumns = Object.fromEntries(
 	GUEST_BOOKING_FIELDS.map((field) => [field, bookings[field]]),
 ) as { [K in GuestBookingField]: (typeof bookings)[K] };
 
-function toGuestBooking(booking: Booking): Pick<Booking, GuestBookingField> {
-	return Object.fromEntries(
-		GUEST_BOOKING_FIELDS.map((field) => [field, booking[field]]),
-	) as Pick<Booking, GuestBookingField>;
+/**
+ * Derived timing for a guest booking (plan 02, 3.6): the stay phase in
+ * property time, whether it can still be cancelled online, and until when
+ * (check-in at 4:00 PM CT). Open disputes are checked when cancelling.
+ */
+function withTiming<
+	B extends Pick<Booking, 'status' | 'checkInAt' | 'checkOutAt'>,
+>(booking: B, now = new Date()) {
+	return {
+		...booking,
+		stayPhase: stayPhase(booking, now),
+		canCancel: booking.status !== 'cancelled' && now < booking.checkInAt,
+		cancelUntil: booking.checkInAt,
+	};
 }
+
+function toGuestBooking(booking: Booking) {
+	return withTiming(
+		Object.fromEntries(
+			GUEST_BOOKING_FIELDS.map((field) => [field, booking[field]]),
+		) as Pick<Booking, GuestBookingField>,
+	);
+}
+
+/** SQL filter for a stay phase (uses the stored check-in/out instants). */
+function phaseCondition(phase: 'upcoming' | 'current' | 'past', now: Date) {
+	if (phase === 'upcoming') return gt(bookings.checkInAt, now);
+	if (phase === 'current') return gt(bookings.checkOutAt, now);
+	return lte(bookings.checkOutAt, now);
+}
+
+/** `current` = upcoming or in stay (check-out not passed yet). */
+const phaseFilterSchema = z.enum(['upcoming', 'current', 'past']).optional();
 
 /** Room fields shown with a guest's booking. */
 const guestRoomColumns = { name: room.name, slug: room.slug };
 
-const listStatusSchema = z
-	.enum(['pending', 'confirmed', 'cancelled', 'completed'])
-	.optional();
+const listStatusSchema = bookingStatusSchema.optional();
 
 export const bookingsRouter = createTRPCRouter({
 	/** Price of a stay (read-only). Same calculation as booking creation. */
@@ -130,6 +173,7 @@ export const bookingsRouter = createTRPCRouter({
 		.use(rateLimit('API_RATE_LIMITER', 'bookings.calculateBooking'))
 		.input(calculateBookingSchema)
 		.query(async ({ ctx, input }) => {
+			assertBookableDates(input.checkInDate, input.checkOutDate);
 			const price = await quoteStay(
 				ctx.db,
 				input.roomId,
@@ -217,7 +261,15 @@ export const bookingsRouter = createTRPCRouter({
 				.select(guestRoomColumns)
 				.from(room)
 				.where(eq(room.id, booking.roomId));
-			return { booking: toGuestBooking(booking), room: roomRow };
+			const policy = await getBookingCancellationPolicy(
+				ctx.db,
+				booking.cancellationPolicyId,
+			);
+			return {
+				booking: toGuestBooking(booking),
+				room: roomRow,
+				cancellationPolicy: { name: policy.name, tiers: policy.tiers },
+			};
 		}),
 
 	/** Any booking with every column, its room and the guest account (admin). */
@@ -253,19 +305,27 @@ export const bookingsRouter = createTRPCRouter({
 				limit: z.number().min(1).max(100).default(10),
 				offset: z.number().min(0).default(0),
 				status: listStatusSchema,
+				phase: phaseFilterSchema,
 			}),
 		)
 		.query(async ({ ctx, input }) => {
+			const now = new Date();
 			const conditions = [eq(bookings.userId, ctx.user.id)];
 			if (input.status) conditions.push(eq(bookings.status, input.status));
-			return ctx.db
+			if (input.phase) conditions.push(phaseCondition(input.phase, now));
+			const rows = await ctx.db
 				.select({ booking: guestBookingColumns, room: guestRoomColumns })
 				.from(bookings)
 				.innerJoin(room, eq(bookings.roomId, room.id))
 				.where(and(...conditions))
-				.orderBy(desc(bookings.createdAt))
+				.orderBy(
+					input.phase === 'past'
+						? desc(bookings.checkInAt)
+						: asc(bookings.checkInAt),
+				)
 				.limit(input.limit)
 				.offset(input.offset);
+			return rows.map((r) => ({ ...r, booking: withTiming(r.booking, now) }));
 		}),
 
 	/** What cancelling now would refund (owner or admin). */
@@ -276,6 +336,7 @@ export const bookingsRouter = createTRPCRouter({
 				allowAdmin: true,
 			});
 			const quote = await quoteBookingCancellation(ctx.db, booking);
+			const pending = booking.status === 'pending';
 			return {
 				status: booking.status,
 				// Guests can't cancel online while it is open; admins refund only
@@ -288,16 +349,23 @@ export const bookingsRouter = createTRPCRouter({
 					booking.status !== 'cancelled' &&
 					(booking.status === 'pending' || quote.canCancel),
 				amountPaid: quote.amountPaid,
-				refundAmount: booking.status === 'pending' ? 0 : quote.refundAmount,
-				refundPercent: booking.status === 'pending' ? 0 : quote.refundPercent,
+				alreadyRefunded: quote.alreadyRefunded,
+				/** What a full refund would return now (after partial refunds). */
+				refundableAmount: Math.max(
+					0,
+					roundCents(quote.amountPaid - quote.alreadyRefunded),
+				),
+				refundAmount: pending ? 0 : quote.refundAmount,
+				refundPercent: pending ? 0 : quote.refundPercent,
+				checkInDate: booking.checkInDate,
 				checkInAt: quote.checkInAt,
-				hoursBeforeCheckIn: quote.hoursBeforeCheckIn,
-				policy: {
-					name: quote.policy.name,
-					checkInTime: quote.policy.checkInTime,
-					timezone: quote.policy.timezone,
-					tiers: quote.policy.tiers,
-				},
+				/** Each tier's cutoff as a UTC instant (most notice first). */
+				refundCutoffs: quote.refundCutoffs.map((c) => ({
+					refundPercent: c.refundPercent,
+					minHoursBefore: c.minHoursBefore,
+					until: c.until,
+				})),
+				policy: { name: quote.policy.name, tiers: quote.policy.tiers },
 			};
 		}),
 
@@ -312,6 +380,7 @@ export const bookingsRouter = createTRPCRouter({
 				by: 'guest',
 				refund: 'policy',
 				reason: input.reason ? `guest_request: ${input.reason}` : undefined,
+				expectedRefundAmount: input.expectedRefundAmount,
 			});
 			return { success: true, ...result };
 		}),
@@ -330,6 +399,7 @@ export const bookingsRouter = createTRPCRouter({
 				refund: input.refund,
 				reason: input.reason ? `admin: ${input.reason}` : undefined,
 				confirmDisputeRefund: input.confirmDisputeRefund,
+				expectedRefundAmount: input.expectedRefundAmount,
 			});
 			return { success: true, ...result };
 		}),
@@ -372,17 +442,8 @@ export const bookingsRouter = createTRPCRouter({
 				limit: z.number().min(1).max(100).default(10),
 				offset: z.number().min(0).default(0),
 				status: listStatusSchema,
-				paymentStatus: z
-					.enum([
-						'pending',
-						'processing',
-						'paid',
-						'partially_refunded',
-						'refunded',
-						'refund_pending',
-						'refund_failed',
-					])
-					.optional(),
+				paymentStatus: paymentStatusSchema.optional(),
+				phase: phaseFilterSchema,
 				roomId: idSchema.optional(),
 				/** Check-in on or after this date. */
 				startDate: isoDateSchema.optional(),
@@ -397,13 +458,15 @@ export const bookingsRouter = createTRPCRouter({
 				conditions.push(eq(bookings.paymentStatus, input.paymentStatus));
 			}
 			if (input.roomId) conditions.push(eq(bookings.roomId, input.roomId));
+			const now = new Date();
+			if (input.phase) conditions.push(phaseCondition(input.phase, now));
 			if (input.startDate) {
 				conditions.push(gte(bookings.checkInDate, input.startDate));
 			}
 			if (input.endDate) {
 				conditions.push(lte(bookings.checkInDate, input.endDate));
 			}
-			return ctx.db
+			const rows = await ctx.db
 				.select({
 					booking: bookings,
 					room: { id: room.id, slug: room.slug, basePrice: room.basePrice },
@@ -414,9 +477,19 @@ export const bookingsRouter = createTRPCRouter({
 				.innerJoin(room, eq(bookings.roomId, room.id))
 				.innerJoin(user, eq(bookings.userId, user.id))
 				.where(conditions.length > 0 ? and(...conditions) : undefined)
-				.orderBy(desc(bookings.createdAt))
+				.orderBy(
+					input.phase === 'current'
+						? asc(bookings.checkInAt)
+						: input.phase === 'past'
+							? desc(bookings.checkInAt)
+							: desc(bookings.createdAt),
+				)
 				.limit(input.limit)
 				.offset(input.offset);
+			return rows.map((r) => ({
+				...r,
+				stayPhase: stayPhase(r.booking, now),
+			}));
 		}),
 
 	adminUpdateInternalNotes: adminProcedure

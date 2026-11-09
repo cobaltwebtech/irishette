@@ -7,6 +7,7 @@ import { bookings, user } from '@/db/schema-export';
 import { isUniqueViolation } from '@/lib/db-errors';
 import { listDisputes } from '@/lib/dispute-service';
 import { publicIdSchema } from '@/lib/ids';
+import { stayPhase } from '@/lib/stay-times';
 import { updateProfileSchema } from '@/lib/user-validation';
 
 import { adminProcedure, createTRPCRouter, protectedProcedure } from './init';
@@ -112,7 +113,15 @@ export const usersRouter = createTRPCRouter({
 				)
 				.orderBy(bookings.createdAt);
 			const disputes = await listDisputes(ctx.db, { userId: internalId });
-			return { user: profile, bookings: userBookings, disputes };
+			const now = new Date();
+			return {
+				user: profile,
+				bookings: userBookings.map((b) => ({
+					...b,
+					stayPhase: stayPhase(b, now),
+				})),
+				disputes,
+			};
 		}),
 
 	/**

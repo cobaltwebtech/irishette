@@ -75,6 +75,7 @@ Notes:
 
 - **Unit** (`test/unit/`): pure modules (date rules, pricing, iCal parse/generate, cancellation policy, validation, ids, booking store).
 - **Workers** (`test/workers/`): tRPC procedures through `createInnerTRPCContext` with a synthetic session (no Better Auth), the Stripe webhook, the iCal route and the cron handlers, inside workerd with a migrated local D1. Bindings are declared in `vitest.config.ts` with test-only values (it does not read `cloudflare.config.ts` or any `.env`). Outbound requests (Stripe, Resend, feed URLs) are mocked with msw (`test/workers/mocks.ts`); unmocked requests fail.
+- Booking creation checks the 10-month window and the same-day cutoff against the clock: workers tests that book fixed future dates pin `Date` with `useClock(...)` (`test/workers/helpers.ts`) in their `describe` block.
 - When you add a tRPC procedure, add it to the access lists in `test/workers/trpc-authz.test.ts` (and `trpc-public-leaks.test.ts` if public).
 - **E2E** (`e2e/`): a few Playwright flows (hard reloads, auth redirects, calendar, optional Stripe booking with `E2E_STRIPE=1`).
 
@@ -113,7 +114,7 @@ src/routes/api/          Server routes: auth.$ (Better Auth, rate-limited), trpc
 src/integrations/trpc/   init.ts (public/protected/admin procedures, errorFormatter), context.ts + inner-context.ts (per-request context), router.ts, routers: bookings, rooms, availability, ical, policies, users, inbox
 src/core/functions/      TanStack Start server functions (auth-server.ts: getSessionFn; contact.ts: submitContactFn, public)
 src/core/middleware/     TanStack Start middleware: security-headers (global), rate-limit (server routes + rateLimitFnMiddleware for server functions), auth (requireSession/requireAdmin function middleware)
-src/lib/                 Services and validation: auth, auth-client, auth-check (route guards), server-auth (server fn checks), session (useSession), session-user, booking-service, checkout-service, refund-service, dispute-service, availability, pricing, date-range, cancellation-policy, email-service, stripe(-webhook), ical-sync/-parse/-generate/-export, scheduled-tasks, deps (ServiceDeps), ids, site (domain, contact details, email senders, check-in/out times), inbox (kinds, details types) + inbox-service (createInboxItem), contact-service + turnstile (contact form, Siteverify), *-validation (Zod)
+src/lib/                 Services and validation: auth, auth-client, auth-check (route guards), server-auth (server fn checks), session (useSession), session-user, booking-service, checkout-service, refund-service, dispute-service, booking-status (status enums), stay-times (check-in/out instants, same-day cutoff, stay phase), format, availability, pricing, date-range, cancellation-policy, email-service, stripe(-webhook), ical-sync/-parse/-generate/-export, scheduled-tasks, deps (ServiceDeps), ids, site (domain, contact details, email senders, check-in/out times), inbox (kinds, details types) + inbox-service (createInboxItem), contact-service + turnstile (contact form, Siteverify), *-validation (Zod)
 src/db/                  Drizzle schemas (auth-, booking-, room-, policy-, inbox-), schema-export.ts, drizzle-init.ts (createDrizzle, Database type)
 src/components/          UI (ui/ = shadcn, admin/ (admin/inbox/ = notifications), booking/, email/, data-table/)
 src/stores/              TanStack Store booking state
@@ -132,6 +133,12 @@ Conventions:
 - Client data fetching uses `@trpc/tanstack-react-query` (`useTRPC()` + `queryOptions`/`mutationOptions`) + TanStack Query; prefer route loaders / `ensureQueryData` for SSR. Never share a QueryClient across requests.
 - Do not call Stripe, D1, or Better Auth server APIs from components; go through tRPC procedures, server functions, or `src/lib` services.
 - The React Compiler is enabled: avoid manual `useMemo`/`useCallback` unless there is a measured reason; follow the Rules of React. (Only vendored shadcn components in `src/components/ui/` still use them.)
+
+### Times and timestamps
+
+- **Every instant in D1 is UTC Unix seconds** (`integer(..., { mode: 'timestamp' })`). Never `timestamp_ms`, local-time text or ISO strings. Check new timestamp columns in review.
+- **Stay dates are property-local `YYYY-MM-DD` text.** Bookings also store the normalized `check_in_at` (4:00 PM CT) and `check_out_at` (11:00 AM CT) instants; compare those, don't rebuild local times.
+- **Times of day exist only as constants** in `src/lib/site.ts` (`CHECK_IN_TIME`, `CHECK_OUT_TIME`, `SAME_DAY_CUTOFF_TIME`, and their `*_LABEL`s). All rules use America/Chicago wall-clock time via `src/lib/stay-times.ts` / `src/lib/timezone.ts` (`zonedTimeToUtc`, `formatInstantCT`), never the server's or browser's time zone.
 
 ### IDs
 

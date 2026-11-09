@@ -8,6 +8,7 @@ import { BookingInternalNotes } from '@/components/admin/BookingInternalNotes';
 import { DisputesPanel } from '@/components/admin/DisputesPanel';
 import { NotificationsPanel } from '@/components/admin/inbox/NotificationsPanel';
 import { CancelBookingButton } from '@/components/booking/CancelBookingButton';
+import { PaymentStatusBadge } from '@/components/booking/StatusBadges';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,7 +21,7 @@ import {
 } from '@/components/ui/card';
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
-import { CHECK_OUT_TIME_LABEL } from '@/lib/site';
+import { CHECK_IN_TIME_LABEL, CHECK_OUT_TIME_LABEL } from '@/lib/site';
 
 export const Route = createFileRoute(
 	'/_authed/_admin/admin/bookings/$publicId',
@@ -189,7 +190,9 @@ function AdminBookingDetailPage() {
 									day: 'numeric',
 								})}
 							</p>
-							<p className="text-sm text-muted-foreground">After 3:00 PM</p>
+							<p className="text-sm text-muted-foreground">
+								From {CHECK_IN_TIME_LABEL}
+							</p>
 						</div>
 						<div>
 							<p className="text-sm font-medium text-muted-foreground">
@@ -286,19 +289,7 @@ function AdminBookingDetailPage() {
 							Payment Status
 						</p>
 						<p className="text-right">
-							<Badge
-								variant={
-									booking.booking.paymentStatus === 'paid'
-										? 'default'
-										: booking.booking.paymentStatus === 'failed'
-											? 'destructive'
-											: booking.booking.paymentStatus === 'refunded'
-												? 'secondary'
-												: 'outline'
-								}
-							>
-								{booking.booking.paymentStatus.toUpperCase()}
-							</Badge>
+							<PaymentStatusBadge status={booking.booking.paymentStatus} />
 						</p>
 					</CardFooter>
 				</Card>

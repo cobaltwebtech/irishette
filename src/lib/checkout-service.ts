@@ -655,7 +655,7 @@ async function recordConfirmation(
 			stripeChargeId: stripeId(intent?.latest_charge),
 			stripeCustomerId: stripeId(session.customer),
 			amount: confirmed.totalAmount,
-			status: 'succeeded',
+			status: 'paid',
 			paymentMethod: paymentMethodType(intent),
 			createdAt: now,
 			updatedAt: now,

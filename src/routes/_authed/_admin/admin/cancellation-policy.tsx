@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { TRPCRouter } from '@/integrations/trpc/router';
+import { CHECK_IN_TIME_LABEL } from '@/lib/site';
 
 export const Route = createFileRoute(
 	'/_authed/_admin/admin/cancellation-policy',
@@ -53,7 +54,7 @@ let nextKey = 0;
 function CancellationPolicyPage() {
 	const trpc = useTRPC();
 	const queryClient = useQueryClient();
-	const ids = { name: useId(), time: useId(), zone: useId() };
+	const ids = { name: useId() };
 	const { data: policy } = useSuspenseQuery(
 		trpc.policies.getCancellationPolicy.queryOptions(),
 	);
@@ -62,8 +63,6 @@ function CancellationPolicyPage() {
 	);
 
 	const [name, setName] = useState(policy.name);
-	const [checkInTime, setCheckInTime] = useState(policy.checkInTime);
-	const [timezone, setTimezone] = useState(policy.timezone);
 	const [tiers, setTiers] = useState<TierRow[]>(() =>
 		policy.tiers.map((t) => ({ ...t, key: nextKey++ })),
 	);
@@ -84,8 +83,6 @@ function CancellationPolicyPage() {
 		try {
 			await save.mutateAsync({
 				name,
-				checkInTime,
-				timezone,
 				tiers: tiers.map(({ minHoursBefore, refundPercent }) => ({
 					minHoursBefore,
 					refundPercent,
@@ -127,9 +124,13 @@ function CancellationPolicyPage() {
 						</CardTitle>
 						<CardDescription>
 							Guests who cancel at least the given hours before check-in get
-							that share of what they paid back. Saving creates a new version
-							for future bookings; existing bookings keep the policy they booked
-							under. Keep the{' '}
+							that share of the booking total (including taxes and fees) back.
+							Windows count back from check-in at {CHECK_IN_TIME_LABEL} on the
+							check-in date, on the local clock: whole days are calendar days
+							(72 hours = {CHECK_IN_TIME_LABEL} three days before, also across
+							daylight saving changes), and at exactly a cutoff the higher
+							refund applies. Saving creates a new version for future bookings;
+							existing bookings keep the policy they booked under. Keep the{' '}
 							<Link to="/cancellation-refund-policy" className="underline">
 								public policy page
 							</Link>{' '}
@@ -148,24 +149,12 @@ function CancellationPolicyPage() {
 										required
 									/>
 								</div>
-								<div className="space-y-1">
-									<Label htmlFor={ids.time}>Check-in time</Label>
-									<Input
-										id={ids.time}
-										type="time"
-										value={checkInTime}
-										onChange={(e) => setCheckInTime(e.target.value)}
-										required
-									/>
-								</div>
-								<div className="space-y-1">
-									<Label htmlFor={ids.zone}>Timezone</Label>
-									<Input
-										id={ids.zone}
-										value={timezone}
-										onChange={(e) => setTimezone(e.target.value)}
-										required
-									/>
+								<div className="space-y-1 sm:col-span-2">
+									<p className="text-sm font-medium">Check-in time</p>
+									<p className="text-sm text-muted-foreground">
+										Windows count back from check-in at {CHECK_IN_TIME_LABEL}{' '}
+										(fixed for all bookings).
+									</p>
 								</div>
 							</div>
 

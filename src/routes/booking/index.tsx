@@ -2,6 +2,7 @@ import { Icon } from '@iconify/react';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useEffectEvent, useSyncExternalStore } from 'react';
+import { z } from 'zod';
 
 import { AuthenticationStep } from '@/components/booking/AuthenticationStep';
 import { BookingDetailsStep } from '@/components/booking/BookingDetailsStep';
@@ -13,7 +14,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
 import { useSession } from '@/lib/session';
-import { type BookingStep, useBookingStore } from '@/stores';
+import { bookingSteps, useBookingStore } from '@/stores';
+import { isPricingComplete } from '@/utils/booking-utils';
 
 type BookingPricing = RouterOutputs['bookings']['calculateBooking'];
 
@@ -25,11 +27,11 @@ export const Route = createFileRoute('/booking/')({
 			},
 		],
 	}),
-	validateSearch: (search: Record<string, unknown>): { step?: BookingStep } => {
-		return {
-			step: search.step as BookingStep | undefined,
-		};
-	},
+	// Unknown steps are dropped; a valid one is clamped to the furthest step
+	// the draft allows (below).
+	validateSearch: z.object({
+		step: z.enum(bookingSteps).optional().catch(undefined),
+	}),
 	component: BookingFlow,
 });
 
@@ -87,14 +89,8 @@ function BookingFlow() {
 	// Event handler for updating pricing in store (non-reactive)
 	const onPricingDataFetched = useEffectEvent((pricingData: BookingPricing) => {
 		// Validate that we have the expected data structure
-		if (
-			!pricingData.baseAmount ||
-			!pricingData.feesAmount ||
-			!pricingData.taxAmount ||
-			!pricingData.numberOfNights ||
-			!pricingData.totalAmount
-		) {
-			console.error('Invalid pricing data structure:', pricingData);
+		if (!isPricingComplete(pricingData)) {
+			console.error('Incomplete pricing data');
 			return;
 		}
 
@@ -137,22 +133,17 @@ function BookingFlow() {
 		}
 	}, [pricingData]);
 
-	// Handle URL search params for step navigation
+	// ?step= jumps at most to the furthest step the draft allows.
+	const signedIn = !!session?.user;
 	useEffect(() => {
 		if (!isClient || !stepFromUrl) return;
-
-		const validSteps: BookingStep[] = [
-			'dates',
-			'auth',
-			'details',
-			'payment',
-			'confirmation',
-		];
-
-		if (validSteps.includes(stepFromUrl)) {
-			booking.actions.setStep(stepFromUrl);
-		}
-	}, [isClient, stepFromUrl, booking.actions]);
+		const furthest = booking.actions.furthestAllowedStep(signedIn);
+		const allowed =
+			bookingSteps.indexOf(stepFromUrl) <= bookingSteps.indexOf(furthest)
+				? stepFromUrl
+				: furthest;
+		booking.actions.setStep(allowed);
+	}, [isClient, stepFromUrl, signedIn, booking.actions]);
 
 	// Handle authentication callback - advance to details step when authenticated
 	useEffect(() => {

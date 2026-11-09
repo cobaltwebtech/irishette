@@ -14,11 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
-import {
-	CHECK_IN_TIME,
-	CHECK_OUT_TIME_LABEL,
-	formatTimeOfDay,
-} from '@/lib/site';
+import { CHECK_IN_TIME_LABEL, CHECK_OUT_TIME_LABEL } from '@/lib/site';
 import { bookingActions } from '@/stores';
 import { parseISODateString } from '@/utils/booking-utils';
 
@@ -80,8 +76,6 @@ function BookingNotFound() {
 		</div>
 	);
 }
-
-const CHECK_IN_LABEL = formatTimeOfDay(CHECK_IN_TIME, { withZone: true });
 
 type BannerKind = 'confirmed' | 'processing' | 'unpaid' | 'cancelled';
 
@@ -247,7 +241,7 @@ function BookingConfirmation() {
 										})}
 									</p>
 									<p className="text-sm text-muted-foreground">
-										From {CHECK_IN_LABEL}
+										From {CHECK_IN_TIME_LABEL}
 									</p>
 								</div>
 								<div>
@@ -385,8 +379,8 @@ function BookingConfirmation() {
 							<ul className="mx-4 list-disc space-y-2 text-sm text-muted-foreground">
 								<li>Check your email for the booking confirmation details</li>
 								<li>
-									Check-in is available from 3:00 PM. Early check-in may be
-									available upon request.
+									Check-in is available from {CHECK_IN_TIME_LABEL}. Early
+									check-in may be available upon request.
 								</li>
 								<li>
 									Check-out is by {CHECK_OUT_TIME_LABEL}. Late check-out may be

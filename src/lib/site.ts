@@ -32,10 +32,7 @@ export const EMAIL_REPLY_TO = CONTACT_EMAIL;
 // (America/Chicago wall-clock time).
 export const CHECK_IN_TIME = '16:00';
 export const CHECK_OUT_TIME = '11:00';
-/**
- * Same-day check-in is allowed only before this time (plan 02, 3.9).
- * @expected-unused
- */
+/** Same-day check-in is allowed only before this time (plan 02, 3.9). */
 export const SAME_DAY_CUTOFF_TIME = '09:00';
 
 /** Short label for the property time zone. */
@@ -57,5 +54,15 @@ export function formatTimeOfDay(
 	return withZone ? `${label} ${PROPERTY_TIMEZONE_LABEL}` : label;
 }
 
-/** "11:00 AM" */
-export const CHECK_OUT_TIME_LABEL = formatTimeOfDay(CHECK_OUT_TIME);
+/** "4:00 PM CT" */
+export const CHECK_IN_TIME_LABEL = formatTimeOfDay(CHECK_IN_TIME, {
+	withZone: true,
+});
+/** "11:00 AM CT" */
+export const CHECK_OUT_TIME_LABEL = formatTimeOfDay(CHECK_OUT_TIME, {
+	withZone: true,
+});
+/** "9:00 AM CT" */
+export const SAME_DAY_CUTOFF_LABEL = formatTimeOfDay(SAME_DAY_CUTOFF_TIME, {
+	withZone: true,
+});

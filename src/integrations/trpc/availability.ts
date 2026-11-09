@@ -4,7 +4,14 @@ import { z } from 'zod';
 
 import { room } from '@/db/schema-export';
 import { loadUnavailability } from '@/lib/availability';
-import { addDays, isoDateSchema } from '@/lib/date-range';
+import {
+	addDays,
+	addMonths,
+	isoDateSchema,
+	lastBookableDate,
+	MAX_NIGHTS,
+} from '@/lib/date-range';
+import { earliestCheckInDate } from '@/lib/stay-times';
 import { todayIn } from '@/lib/timezone';
 
 import { createTRPCRouter, publicProcedure } from './init';
@@ -40,10 +47,10 @@ export const availabilityRouter = createTRPCRouter({
 			if (!roomRow) {
 				throw new TRPCError({ code: 'NOT_FOUND', message: 'Room not found' });
 			}
-			const startDate = input.startDate ?? todayIn();
-			const endDate =
-				input.endDate ??
-				addDays(startDate, Math.round(input.monthsAhead * 30.5));
+			const now = new Date();
+			const today = todayIn(undefined, now);
+			const startDate = input.startDate ?? today;
+			const endDate = input.endDate ?? addMonths(startDate, input.monthsAhead);
 			if (endDate < startDate) {
 				throw new TRPCError({
 					code: 'BAD_REQUEST',
@@ -61,6 +68,12 @@ export const availabilityRouter = createTRPCRouter({
 				room: roomRow,
 				dateRange: { startDate, endDate },
 				unavailability,
+				// Property time (America/Chicago), not the browser's clock:
+				// same-day check-in closes at 9:00 AM CT.
+				today,
+				earliestCheckIn: earliestCheckInDate(now),
+				lastCheckOut: lastBookableDate(today),
+				maxNights: MAX_NIGHTS,
 			};
 		}),
 });

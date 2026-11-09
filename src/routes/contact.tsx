@@ -21,6 +21,7 @@ import type { ContactResult } from '@/lib/contact-service';
 import { contactSchema } from '@/lib/contact-validation';
 import { useSession } from '@/lib/session';
 import {
+	CHECK_IN_TIME_LABEL,
 	CHECK_OUT_TIME_LABEL,
 	CONTACT_EMAIL,
 	CONTACT_PHONE,
@@ -197,7 +198,7 @@ function ContactPage() {
 										Check-in & Check-out
 									</h3>
 									<p className="text-muted-foreground">
-										Check-in: 3:00 PM - 8:00 PM
+										Check-in: {CHECK_IN_TIME_LABEL}
 										<br />
 										Check-out: {CHECK_OUT_TIME_LABEL}
 									</p>

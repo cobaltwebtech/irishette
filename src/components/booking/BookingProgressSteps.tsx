@@ -1,7 +1,7 @@
 import { Icon } from '@iconify/react';
 
 import { useSession } from '@/lib/session';
-import { type BookingStep, useBookingStore } from '@/stores';
+import { useBookingStore } from '@/stores';
 import type { BookingStepItem } from '@/utils/booking-utils';
 
 export function BookingProgressSteps() {
@@ -15,16 +15,9 @@ export function BookingProgressSteps() {
 			label: 'Details',
 			completed: booking.isValid.details,
 		},
-		{
-			step: 'payment',
-			label: 'Payment',
-			completed: booking.isStep('confirmation'),
-		},
-		{
-			step: 'confirmation',
-			label: 'Confirmed',
-			completed: booking.isStep('confirmation'),
-		},
+		// Payment completes on the confirmation page (another route).
+		{ step: 'payment', label: 'Payment', completed: false },
+		{ step: 'confirmation', label: 'Confirmed', completed: false },
 	];
 
 	return (
@@ -38,7 +31,7 @@ export function BookingProgressSteps() {
 						<div key={item.step} className="flex items-center">
 							<div
 								className={`flex size-8 items-center justify-center rounded-full ${
-									item.completed || booking.isStep(item.step as BookingStep)
+									item.completed || booking.currentStep === item.step
 										? 'bg-primary text-primary-foreground'
 										: 'bg-background text-muted-foreground'
 								}`}
@@ -51,7 +44,7 @@ export function BookingProgressSteps() {
 							</div>
 							<span
 								className={`ml-2 text-sm font-medium ${
-									item.completed || booking.isStep(item.step as BookingStep)
+									item.completed || booking.currentStep === item.step
 										? 'text-foreground'
 										: 'text-muted-foreground'
 								}`}

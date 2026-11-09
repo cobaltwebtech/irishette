@@ -24,13 +24,18 @@ when the stored draft is for another room.
 
 `src/components/RoomAvailabilityCalendar.tsx`:
 
-- Loads `availability.getBySlug` from today (browser date) to 10 months ahead.
-  The response is date ranges only (`stays`, `events`, `blocks`), no ids.
+- Loads `availability.getBySlug` (default window: the property's today to 10
+  months ahead). The response is date ranges only (`stays`, `events`,
+  `blocks`), no ids, plus `today`, `earliestCheckIn` and `lastCheckOut` in
+  property time: the calendar never uses the browser's clock. Check-in
+  before `earliestCheckIn` (today until 9:00 AM CT, then tomorrow) is
+  disabled, with a note under the calendar.
 - Applies the same rules as the server, imported from `src/lib/date-range.ts`:
   `isCheckInDisabled`, `isCheckOutAllowed`, `isStayAvailable`. A day whose
   night is unavailable but whose previous night is free is shown as
   "Checkout Only".
-- Enforces 1-30 nights (props `minNights` / `maxNights`).
+- Enforces 1 to `MAX_NIGHTS` (30) nights and check-out by `lastCheckOut`
+  (the same limits as the server, `src/lib/date-range.ts`).
 - On a complete range, fetches `rooms.calculatePricing` (`staleTime: 0`) and
   reports the room subtotal and nights to the page, which writes the dates and
   a subtotal-only estimate into the store. "Book now" sets step `auth` and
@@ -43,16 +48,21 @@ Client-only render (waits for hydration because the store lives in
 `BookingSummaryCard`. Shows "No Active Booking" when the store has neither a
 `bookingId` nor room + dates. It also refetches `rooms.get({ id })` if the
 draft lacks the room name or `maxGuests`, keeps `bookings.calculateBooking`
-in the store's `pricing`, and accepts `?step=` to jump to a step.
+in the store's `pricing` (zero fees or taxes are valid:
+`isPricingComplete`), and accepts `?step=` (validated with Zod) to jump to a
+step, clamped to the furthest step the draft allows
+(`furthestAllowedStep`: payment needs a hold, details needs sign-in and
+dates).
 
 | Step | Component | What it does |
 |---|---|---|
 | `auth` | `src/components/booking/AuthenticationStep.tsx` | Magic link sign-in (`authClient.signIn.magicLink`, callback `/booking`) with a Turnstile token in `x-captcha-response`. Signed-in users move to `details` automatically. |
-| `details` | `src/components/booking/BookingDetailsStep.tsx` | Name, email, phone, guests (1 to `maxGuests`), special requests. Updates the user's name/phone if changed, re-prices with `calculateBooking`, then calls `createBooking` and stores `bookingId` + `publicId`. |
+| `details` | `src/components/booking/BookingDetailsStep.tsx` | Name, email, phone, guests (1 to `maxGuests`), special requests, validated with the server's `guestDetailsSchema`. Updates the user's name/phone if changed, re-prices with `calculateBooking`, then calls `createBooking` and stores `bookingId` + `publicId`. |
 | `payment` | `src/components/booking/PaymentStep.tsx` | On mount: `refreshBooking` (extends an expired hold if possible), then `createCheckoutSession`. Renders `CheckoutElementsProvider` + `<PaymentElement>` with the session's line items and total; requires the policies checkbox and `checkout.canConfirm`; `checkout.confirm({ redirect: 'if_required' })`, then navigates to the confirmation page with `?session_id=`. |
 
-The `dates` and `confirmation` store steps are not rendered by `/booking`:
-dates are picked on the room page and confirmation is its own route.
+The store's steps are `auth`, `details` and `payment` (drafts saved with the
+removed `dates` / `confirmation` steps restart at `auth`): dates are picked on
+the room page and confirmation is its own route.
 
 ### Booking store (`src/stores/booking-store.ts`)
 
@@ -77,13 +87,16 @@ regardless.
 | Route | File | Notes |
 |---|---|---|
 | `/booking/confirmation/$publicId` | `src/routes/_authed/booking/confirmation.$publicId.tsx` | Loader `getBooking` via `orNotFound`; with `?session_id=` it calls `confirmCheckout` (Stripe's return URL lands here too) and refetches. Renders by status: confirmed, payment processing, payment not completed, cancelled. Resets the store on mount. |
-| `/account` | `src/routes/_authed/account/index.tsx` | `getMyBookings({ limit: 50 })`, shows confirmed bookings with check-out today or later. |
-| `/account/past-bookings` | `src/routes/_authed/account/past-bookings.tsx` | Confirmed bookings with check-out before today. |
-| `/account/booking/$publicId` | `src/routes/_authed/account/booking.$publicId.tsx` | Details, "Resend Confirmation Email", `CancelBookingButton mode="guest"` unless cancelled. |
+| `/account` | `src/routes/_authed/account/index.tsx` | `getMyBookings({ limit: 50 })`. Confirmed stays not yet past (server `stayPhase`), plus "Awaiting Payment" (pending, including processing) and "Cancelled Bookings" sections. |
+| `/account/past-bookings` | `src/routes/_authed/account/past-bookings.tsx` | Confirmed stays with `stayPhase: 'past'` (after 11:00 AM CT on the check-out date). |
+| `/account/booking/$publicId` | `src/routes/_authed/account/booking.$publicId.tsx` | Details; "Resend Confirmation Email" for confirmed bookings only; "Contact Support" links to `/contact?booking=<confirmationId>`; `CancelBookingButton mode="guest"` while `canCancel` (before check-in); the cancellation windows with their CT cutoffs (`CancellationPolicySummary`). |
 
 `src/components/booking/CancelBookingButton.tsx` is shared with the admin
 booking page (`mode="admin"`, which adds the refund choice). It loads
-`getCancellationQuote` when the dialog opens.
+`getCancellationQuote` when the dialog opens, shows the tier cutoffs in CT,
+and sends the amount it showed (`expectedRefundAmount`); if a window passed in
+the meantime the server answers `CONFLICT` and the dialog reloads the quote.
+Status badges are shared (`StatusBadges.tsx`).
 
 ## Server
 
@@ -282,16 +295,53 @@ each does: `STRIPE_WEBHOOKS.md`.
 
 Logs carry Stripe ids and confirmation ids only.
 
+### Times (check-in, check-out, same-day cutoff)
+
+All date/time rules use **America/Chicago wall-clock time**, whatever the
+server's or browser's time zone. The times are constants in `src/lib/site.ts`:
+`CHECK_IN_TIME` 16:00, `CHECK_OUT_TIME` 11:00, `SAME_DAY_CUTOFF_TIME` 09:00
+(labels `CHECK_IN_TIME_LABEL` etc. are what pages and emails print; the legal
+pages are the one exception). `src/lib/stay-times.ts` turns them into
+instants: `checkInAt(date)`, `checkOutAt(date)`, `localCutoff(date, time,
+hoursBefore)`, `earliestCheckInDate(now)` and `stayPhase`.
+
+**Stored instants:** every instant in D1 is UTC Unix seconds
+(`integer(..., { mode: 'timestamp' })`); stay dates are property-local
+`YYYY-MM-DD`; times of day exist only as the constants. Each booking stores
+`check_in_at` (check-in date at 4:00 PM CT) and `check_out_at` (check-out date
+at 11:00 AM CT), written by `createHold`, indexed with `status`. Cancellation,
+refund and stay-phase checks compare these instants; the account and admin
+lists filter by them (`phase: 'upcoming' | 'current' | 'past'`).
+
+**Booking limits** (`assertBookableDates`, used by `createHold` and
+`calculateBooking`): check-in not before `earliestCheckInDate(now)` (today
+until 9:00 AM CT, else tomorrow: "Same-day bookings close at 9:00 AM CT"), at
+most `MAX_NIGHTS` (30) nights, check-out within `BOOKING_WINDOW_MONTHS` (10)
+months. A hold created in time stays payable until it expires (B3).
+
+The iCal export stays all-day (date-only) events.
+
 ### Cancellations and refunds
 
 Policy data and the quote are pure (`src/lib/cancellation-policy.ts`):
 
-- A policy is `checkInTime` (`HH:MM`), `timezone` and tiers
-  `{ minHoursBefore, refundPercent }`. `DEFAULT_CANCELLATION_POLICY`: 16:00
-  `America/Chicago`; 72 h+ 100%, 24 h+ 50%, less 0%.
-- `quoteCancellation` measures hours from now to check-in time on the
-  check-in date (`zonedTimeToUtc`); `canCancel` is false once that time has
-  passed. The refund is `refundPercent` of the amount paid, rounded to cents.
+- A policy is a name and tiers `{ minHoursBefore, refundPercent }`.
+  `DEFAULT_CANCELLATION_POLICY`: 72 h+ 100%, 24 h+ 50%, less 0%. There is no
+  per-policy check-in time or time zone any more: windows always count back
+  from check-in at **4:00 PM CT**.
+- **Cutoffs are wall-clock:** a tier's cutoff is `minHoursBefore` hours before
+  4:00 PM CT on the check-in date, whole days counted as calendar days
+  (`localCutoff`): "72 hours" is 4:00 PM CT three days before, also across a
+  DST change (that day has 71 or 73 elapsed hours); 36 h is 4:00 AM CT a day
+  and a half before. Each local cutoff becomes a UTC instant with the Chicago
+  offset for that date.
+- `quoteCancellation` picks the first tier (most notice first) with
+  `now <= cutoff`, so at exactly a cutoff the higher refund applies.
+  `canCancel` is false from `check_in_at` on. The refund is the tier percent of
+  the **booking total** (taxes and fees included), capped at what is still
+  paid (`total - refundAmount`, e.g. after a partial refund in Stripe). The
+  quote returns every tier's cutoff (`refundCutoffs`); the UI formats them in
+  CT (`formatInstantCT`, "Tue, Jun 7, 2030, 4:00 PM CT").
 
 Storage (`src/lib/cancellation-policy-store.ts`, tables in
 `src/db/policy-schema.ts`): `saveCancellationPolicy` adds a new active
@@ -299,25 +349,37 @@ version and deactivates the old one; `getActiveCancellationPolicy` is what new
 holds record in `bookings.cancellation_policy_id`;
 `getBookingCancellationPolicy` loads the version a booking was made under
 (default if null). Admin UI: `/admin/cancellation-policy` via the `policies`
-router (`src/integrations/trpc/policies.ts`).
+router (`src/integrations/trpc/policies.ts`); it explains the fixed 4:00 PM CT
+reference as read-only text.
 
 `cancelBooking` (booking service):
 
 | Booking | Behaviour |
 |---|---|
 | `pending` (hold) | Expires the open Checkout Session (`CONFLICT` if it was paid or the payment is processing), sets `cancelled`, refund 0, no email. |
-| `confirmed`, guest | Policy refund; rejected after check-in time. |
-| `confirmed`, admin | `full` (amount paid), `policy`, or `none`; allowed after check-in. |
+| `confirmed`, guest | Policy refund; rejected from check-in on. |
+| `confirmed`, admin | `full` (what is still paid), `policy`, or `none`; allowed after check-in. |
 | `confirmed`, open dispute | Guests: `CONFLICT` ("contact us"). Admins: the dialog defaults to no refund; a refund needs `confirmDisputeRefund` (Stripe warns it can credit the guest twice). |
+| Quote drift | If `expectedRefundAmount` (what the dialog showed) differs from the server's amount (a window passed), `CONFLICT` with the new amount; nothing changes. |
 
-For confirmed bookings, a positive refund goes through `stripe.refunds.create`
-(idempotency key `refund-cancel/<id>`, metadata `stripeBookingMetadata` +
-`reason: 'cancellation'`, recorded in `payment_refunds` as an app refund),
-then a guarded update sets
-`cancelled`, `paymentStatus` (`refunded` or `partially_refunded`, unchanged if
-nothing is refunded), `cancelledBy`, `cancellationReason`, `refundAmount`,
-`stripeRefundId`, updates `payment_transactions`, and emails the guest and
-admins. Cancelled bookings stop blocking dates immediately.
+**Save first, then refund** (`cancelConfirmed`, plan 02 3.7):
+
+1. One guarded update (`status = 'confirmed'`) sets `cancelled`,
+   `paymentStatus: 'refund_pending'` (when a refund is due),
+   `cancelledBy`, `cancellationReason`, and the applied tier
+   (`cancellation_refund_percent`, `cancellation_cutoff_at`). The dates are
+   free from here.
+2. The refund: `stripe.refunds.create` with metadata `stripeBookingMetadata` +
+   `reason: 'cancellation'`, idempotency key
+   `refund-cancel/<bookingId>/<amountCents>`, recorded in `payment_refunds`
+   (source `app`, so the refund webhooks send no second email).
+3. `refunded` / `partially_refunded` with the new `refundAmount` (total
+   refunded so far) and `payment_transactions` updated. If Stripe fails: the
+   booking stays cancelled with `refund_failed`, the admins get an alert email
+   and a `refund_failed` notification (dedupe `refund_failed:cancel:<id>`),
+   and the guest sees "refund pending".
+
+Cancellation emails go to the guest and admins after that.
 
 ### Emails (`src/lib/email-service.ts`)
 
@@ -344,9 +406,12 @@ Managed in **Admin -> Property -> (room)**
 inclusive. `assertBlockAllowed` rejects a create or a date change with
 `CONFLICT` and `data.conflicts` (`{ publicId, confirmationId, source,
 checkIn, checkOut, status }`, listed in the admin dialog) when the block would
-cover a confirmed booking, a live hold or an imported event, or overlap
-another block. Expired holds do not count. Blocks are exported in the iCal
-feed.
+cover a confirmed booking, a live or processing hold or an imported event, or
+overlap another block. Expired holds do not count. The insert (and a date
+change) is then **one guarded statement** whose `WHERE` repeats the check
+(`blockIsFree` in `availability.ts`), so a booking or import arriving in
+between makes it `CONFLICT` instead of a double booking. Blocks are exported
+in the iCal feed.
 
 ## IDs
 
@@ -356,20 +421,34 @@ feed.
 | `publicId` | 16 chars `[0-9a-z]` (`newPublicId`), unique; validated by `publicIdSchema` | URLs (`/booking/confirmation/$publicId`, `/account/booking/$publicId`, `/admin/bookings/$publicId`) and `getBooking` / cancel inputs |
 | `confirmationId` | 6 chars from `A-Z` (no I, O) and `0-9` (`generateConfirmationId` in `booking-service.ts`), unique | Shown to guests, in email subjects and in logs |
 
-Tables: `bookings` and `payment_transactions` in `src/db/booking-schema.ts`.
-Booking `status` is `pending` / `confirmed` / `cancelled`; `paymentStatus` is
+Tables in `src/db/booking-schema.ts`: `bookings`, `payment_transactions` (one
+per paid booking: Checkout Session, PaymentIntent and charge ids, amount
+refunded), `payment_refunds` (every refund, app or Dashboard) and
+`payment_disputes`. On `bookings`, `stripe_session_id` is the hold's current
+Checkout Session (used since Phase 3) and `stripe_payment_intent_id` is set on
+confirmation; `discount_amount` is reserved for discounts and not set yet.
+Statuses are shared enums (`src/lib/booking-status.ts`, Drizzle `text` enums):
+booking `status` is `pending` / `confirmed` / `cancelled` (stored; there is no
+`completed`); `paymentStatus` (also `payment_transactions.status`) is
 `pending` / `processing` / `paid` / `partially_refunded` / `refunded` /
-`refund_pending` / `refund_failed`; amounts are dollars.
+`refund_pending` / `refund_failed` (a failed card payment leaves the hold
+`pending` until it expires). The stay's timing is derived, not stored:
+`stayPhase` (`upcoming` before 4:00 PM CT on the check-in date, `in_stay`
+until 11:00 AM CT on the check-out date, then `past`) from the stored
+`check_in_at` / `check_out_at`. Guest responses also carry `canCancel` and
+`cancelUntil` (check-in). Amounts are dollars.
 
 ## Tests
 
 | File | Covers |
 |---|---|
 | `test/unit/date-range.test.ts`, `pricing.test.ts` | Overlap rules (calendar vs server), per-night pricing, no guest surcharge |
-| `test/unit/cancellation-policy.test.ts` | Tiers, check-in cutoff, DST, policy schema |
-| `test/unit/booking-store.test.ts` | Store steps, guest clamping, persistence, reset |
+| `test/unit/cancellation-policy.test.ts` | Tier cutoffs (at, 1 s before/after each cutoff, after check-in), DST check-ins (71/73 h), a 36 h tier, partial-refund cap, `TZ=Asia/Tokyo`, policy schema |
+| `test/unit/stay-times.test.ts` | `checkInAt`/`checkOutAt` (CDT/CST, DST days), `localCutoff`, the 9:00 AM CT same-day cutoff, `stayPhase` edges, `addMonths`, `isPricingComplete` |
+| `test/unit/booking-store.test.ts` | Store steps, `furthestAllowedStep`, old drafts, guest clamping, persistence, reset |
 | `test/unit/ids.test.ts`, `validation.test.ts` | Id formats, booking/payment input schemas |
 | `test/workers/bookings.test.ts` | Overlaps, holds, pricing parity, ownership, cancellation and refunds |
+| `test/workers/booking-integrity.test.ts` | Stored check-in/out instants, booking limits, the same-day cutoff, applied tier, quote drift, partial refunds, save-then-refund with a failing refund, stay phase |
 | `test/workers/checkout.test.ts` | Session parameters, reuse/replacement, confirmation checks, processing, auto-refund on conflict, idempotency, priority rule |
 | `test/workers/stripe-webhook.test.ts` | Signature, `checkout.session.*`, refunds, disputes, log hygiene |
 | `test/workers/blocks.test.ts` | Block conflicts and booking around blocks |
@@ -396,6 +475,8 @@ Run with `pnpm test` (or `pnpm test:unit`, `pnpm test:workers`).
 | `src/lib/availability.ts` | Availability queries and SQL guard |
 | `src/lib/date-range.ts` | Date rules (shared with the client) |
 | `src/lib/pricing.ts` | Per-night pricing |
+| `src/lib/stay-times.ts`, `src/lib/site.ts` | Check-in/out instants, same-day cutoff, stay phase; the time constants |
+| `src/lib/booking-status.ts` | Booking and payment status enums |
 | `src/lib/cancellation-policy.ts`, `cancellation-policy-store.ts` | Refund policy and versions |
 | `src/lib/stripe-webhook.ts` | Stripe webhook handler |
 | `src/lib/email-service.ts` | Booking and admin emails |

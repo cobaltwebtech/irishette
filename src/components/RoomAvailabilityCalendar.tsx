@@ -8,13 +8,16 @@ import { Calendar } from '@/components/ui/calendar';
 import { useTRPC } from '@/integrations/trpc/react';
 import {
 	addDays,
+	BOOKING_WINDOW_MONTHS,
 	daysBetween,
 	isCheckInDisabled,
 	isCheckOutAllowed,
 	isNightUnavailable,
 	isStayAvailable,
+	MAX_NIGHTS,
 	type Unavailability,
 } from '@/lib/date-range';
+import { SAME_DAY_CUTOFF_LABEL } from '@/lib/site';
 
 interface RoomAvailabilityCalendarProps {
 	roomSlug: string;
@@ -29,11 +32,15 @@ interface RoomAvailabilityCalendarProps {
 	maxNights?: number;
 }
 
-const MONTHS_AHEAD = 10;
-
 /** Local calendar date → YYYY-MM-DD (no timezone shift). */
 function toIso(date: Date): string {
 	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+/** YYYY-MM-DD → local midnight (the day picker works in local dates). */
+function fromIso(iso: string): Date {
+	const [y, m, d] = iso.split('-').map(Number);
+	return new Date(y, m - 1, d);
 }
 
 const EMPTY: Unavailability = { stays: [], events: [], blocks: [] };
@@ -50,7 +57,7 @@ export default function RoomAvailabilityCalendar({
 	selectedDateRange,
 	className = 'rounded-lg border shadow-sm',
 	minNights = 1,
-	maxNights = 30,
+	maxNights = MAX_NIGHTS,
 }: RoomAvailabilityCalendarProps) {
 	const trpc = useTRPC();
 	const queryClient = useQueryClient();
@@ -58,20 +65,24 @@ export default function RoomAvailabilityCalendar({
 		selectedDateRange,
 	);
 
-	const today = new Date();
-	today.setHours(0, 0, 0, 0);
-	const lastDay = new Date(today);
-	lastDay.setMonth(lastDay.getMonth() + MONTHS_AHEAD);
-
+	// The window (today, the same-day cutoff, the last check-out) comes from
+	// the server in property time, never from the browser's clock.
 	const availabilityQuery = useQuery(
 		trpc.availability.getBySlug.queryOptions({
 			roomSlug,
-			startDate: toIso(today),
-			endDate: toIso(lastDay),
+			monthsAhead: BOOKING_WINDOW_MONTHS,
 		}),
 	);
-	const unavailability = availabilityQuery.data?.unavailability ?? EMPTY;
-	const roomId = availabilityQuery.data?.room.id;
+	const data = availabilityQuery.data;
+	const unavailability = data?.unavailability ?? EMPTY;
+	const roomId = data?.room.id;
+	// Empty until loaded; the calendar renders only after the data arrives.
+	const todayIso = data?.today ?? '';
+	const earliestIso = data?.earliestCheckIn ?? todayIso;
+	const lastIso = data?.lastCheckOut ?? todayIso;
+	const today = fromIso(todayIso);
+	const lastDay = fromIso(lastIso);
+	const sameDayClosed = earliestIso > todayIso;
 
 	const isUnavailable = (date: Date) =>
 		isNightUnavailable(toIso(date), unavailability);
@@ -85,8 +96,8 @@ export default function RoomAvailabilityCalendar({
 	};
 
 	const isDisabled = (date: Date) => {
-		if (date < today) return true;
 		const iso = toIso(date);
+		if (iso < todayIso || iso > lastIso) return true;
 		const from = dateRange?.from ? toIso(dateRange.from) : null;
 		// Picking the check-out day: any day the stay can run to.
 		if (from && !dateRange?.to && iso > from) {
@@ -95,7 +106,8 @@ export default function RoomAvailabilityCalendar({
 				daysBetween(from, iso) > maxNights
 			);
 		}
-		return isCheckInDisabled(iso, unavailability);
+		// Check-in: not before the earliest date (same-day cutoff).
+		return iso < earliestIso || isCheckInDisabled(iso, unavailability);
 	};
 
 	const handleSelect = async (range: DateRange | undefined) => {
@@ -107,6 +119,8 @@ export default function RoomAvailabilityCalendar({
 			if (
 				nights < minNights ||
 				nights > maxNights ||
+				checkIn < earliestIso ||
+				checkOut > lastIso ||
 				!isStayAvailable({ checkIn, checkOut }, unavailability)
 			) {
 				return;
@@ -244,8 +258,13 @@ export default function RoomAvailabilityCalendar({
 						Your stay must be between {minNights} and {maxNights} nights
 					</p>
 					<p>
-						Maximum availability to book a room is up to {MONTHS_AHEAD} months
-						from today.
+						Maximum availability to book a room is up to {BOOKING_WINDOW_MONTHS}{' '}
+						months from today.
+					</p>
+					<p>
+						Same-day check-in is available until {SAME_DAY_CUTOFF_LABEL}.
+						{sameDayClosed &&
+							' Today is closed; the earliest check-in is tomorrow.'}
 					</p>
 					<p>
 						"Checkout Only" dates can only be selected as your checkout date,

@@ -19,10 +19,6 @@ export const cancellationPolicies = sqliteTable(
 	{
 		id: text('id').primaryKey().$defaultFn(newId),
 		name: text('name').notNull(),
-		// Local check-in time the refund windows count back from ("HH:MM").
-		checkInTime: text('check_in_time').notNull().default('16:00'),
-		// IANA zone of the property.
-		timezone: text('timezone').notNull().default('America/Chicago'),
 		isActive: integer('is_active', { mode: 'boolean' })
 			.notNull()
 			.default(false),
@@ -34,8 +30,9 @@ export const cancellationPolicies = sqliteTable(
 	(table) => [index('cancellation_policies_active_idx').on(table.isActive)],
 );
 
-// Refund tiers. A cancellation `h` hours before check-in gets the refund of
-// the tier with the largest `minHoursBefore` <= h.
+// Refund tiers, counted back from check-in at 4:00 PM CT on the local clock
+// (src/lib/cancellation-policy.ts). A cancellation at or before a tier's
+// cutoff gets that tier's refund (the most notice first).
 export const cancellationPolicyTiers = sqliteTable(
 	'cancellation_policy_tiers',
 	{

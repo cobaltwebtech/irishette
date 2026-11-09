@@ -9,11 +9,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useTRPC } from '@/integrations/trpc/react';
+import { guestDetailsSchema } from '@/lib/payment-validation';
 import { refreshSession, useSession } from '@/lib/session';
-import { phoneNumberSchema } from '@/lib/user-validation';
 import { useBookingStore } from '@/stores';
 import { bookingActions, bookingStore } from '@/stores/booking-store';
-import { parseISODateString } from '@/utils/booking-utils';
+import { isPricingComplete, parseISODateString } from '@/utils/booking-utils';
+
+/** Friendlier messages than Zod's defaults for the form fields. */
+const FIELD_MESSAGES: Record<string, string> = {
+	guestName: 'Please enter your full name (2-100 characters)',
+	guestEmail: 'Please enter a valid email address',
+	specialRequests: 'Special requests can be at most 1000 characters',
+};
 
 export function BookingDetailsStep() {
 	const booking = useBookingStore();
@@ -73,32 +80,23 @@ export function BookingDetailsStep() {
 		// oxlint-disable-next-line react-hooks/exhaustive-deps -- This effect should only run once on mount to validate initial booking data
 	}, []);
 
+	/** The server's Zod rules (guestDetailsSchema), with per-field messages. */
 	const validateForm = () => {
+		const result = guestDetailsSchema.safeParse({
+			guestName,
+			guestEmail: guestEmail.trim(),
+			guestPhone,
+			guestCount: numberOfGuests,
+			specialRequests: specialRequests || undefined,
+		});
 		const newErrors: Record<string, string> = {};
-
-		if (!guestName.trim()) {
-			newErrors.guestName = 'Guest name is required';
-		}
-
-		if (!guestEmail.trim()) {
-			newErrors.guestEmail = 'Email is required';
-		} else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail)) {
-			newErrors.guestEmail = 'Please enter a valid email address';
-		}
-
-		if (numberOfGuests < 1) {
-			newErrors.numberOfGuests = 'At least 1 guest is required';
-		}
-
-		if (!guestPhone.trim()) {
-			newErrors.guestPhone = 'Phone number is required';
-		} else {
-			const phone = phoneNumberSchema.safeParse(guestPhone);
-			if (!phone.success) {
-				newErrors.guestPhone = phone.error.issues[0].message;
+		if (!result.success) {
+			for (const issue of result.error.issues) {
+				const field = String(issue.path[0]);
+				const key = field === 'guestCount' ? 'numberOfGuests' : field;
+				newErrors[key] ??= FIELD_MESSAGES[key] ?? issue.message;
 			}
 		}
-
 		setErrors(newErrors);
 		return Object.keys(newErrors).length === 0;
 	};
@@ -166,18 +164,9 @@ export function BookingDetailsStep() {
 				),
 			);
 
-			// Validate that we have the expected data structure
-			if (
-				!pricingData.baseAmount ||
-				!pricingData.feesAmount ||
-				!pricingData.taxAmount ||
-				!pricingData.numberOfNights ||
-				!pricingData.totalAmount
-			) {
-				console.error(
-					'Invalid pricing data structure in handleContinue:',
-					pricingData,
-				);
+			// Zero fees or taxes are valid; only missing values are not.
+			if (!isPricingComplete(pricingData)) {
+				console.error('Incomplete pricing data in handleContinue');
 				booking.actions.setError(
 					'Failed to calculate pricing. Please try again.',
 				);

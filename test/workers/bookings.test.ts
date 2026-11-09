@@ -14,6 +14,7 @@ import {
 	insertPricingRule,
 	settle,
 	trpcError,
+	useClock,
 } from './helpers';
 import { mockResend, mockStripeCheckout, mockStripeRefunds } from './mocks';
 import { ADMIN, ROSE, TEXAS } from './seed';
@@ -45,6 +46,8 @@ async function bookingRow(id: string) {
 }
 
 describe('date overlap with other bookings (stay Jun 10-12 exists)', () => {
+	useClock('2033-05-20T17:00:00Z');
+
 	it('rejects a partial overlap', async () => {
 		await insertBooking({
 			checkInDate: '2033-06-10',
@@ -136,6 +139,8 @@ describe('date overlap with other bookings (stay Jun 10-12 exists)', () => {
 });
 
 describe('pending holds', () => {
+	useClock('2033-12-20T17:00:00Z');
+
 	it('a non-expired hold blocks a second guest', async () => {
 		await insertBooking({
 			checkInDate: '2034-01-10',
@@ -169,6 +174,8 @@ describe('pending holds', () => {
 });
 
 describe('booking pricing', () => {
+	useClock('2034-02-20T17:00:00Z');
+
 	it('calendar total equals checkout total', async () => {
 		// Rule covers only part of the stay.
 		await insertPricingRule({
@@ -324,6 +331,8 @@ describe('access and ownership', () => {
 });
 
 describe('cancellation', () => {
+	useClock('2034-08-20T17:00:00Z');
+
 	const inDays = (n: number) =>
 		dateInZone(new Date(Date.now() + n * 86_400_000));
 
@@ -481,8 +490,6 @@ describe('cancellation', () => {
 		);
 		await caller('admin').policies.saveCancellationPolicy({
 			name: 'Strict',
-			checkInTime: '16:00',
-			timezone: 'America/Chicago',
 			tiers: [{ minHoursBefore: 0, refundPercent: 0 }],
 		});
 		const after = await caller('other').bookings.createBooking(

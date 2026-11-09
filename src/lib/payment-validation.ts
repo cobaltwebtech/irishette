@@ -29,6 +29,15 @@ const createBookingBaseSchema = z.object({
 	totalAmount: z.number().nonnegative().optional(),
 });
 
+/** The guest details form (client) uses the same rules as the server. */
+export const guestDetailsSchema = createBookingBaseSchema.pick({
+	guestName: true,
+	guestEmail: true,
+	guestPhone: true,
+	guestCount: true,
+	specialRequests: true,
+});
+
 export const createBookingSchema = createBookingBaseSchema.refine(
 	(d) => d.checkOutDate > d.checkInDate,
 	checkOutAfterCheckIn,
@@ -57,9 +66,13 @@ export const confirmCheckoutSchema = z.object({
 
 export const bookingPublicIdSchema = z.object({ publicId: publicIdSchema });
 
+/** The refund the dialog showed; a different server amount is CONFLICT. */
+const expectedRefundAmount = z.number().nonnegative().max(1_000_000).optional();
+
 export const cancelBookingSchema = z.object({
 	publicId: publicIdSchema,
 	reason: z.string().trim().max(500).optional(),
+	expectedRefundAmount,
 });
 
 export const adminCancelBookingSchema = z.object({
@@ -68,6 +81,7 @@ export const adminCancelBookingSchema = z.object({
 	reason: z.string().trim().max(500).optional(),
 	/** Refund although the payment has an open dispute (plan 02, B7). */
 	confirmDisputeRefund: z.boolean().optional(),
+	expectedRefundAmount,
 });
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
