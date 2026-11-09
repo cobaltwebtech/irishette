@@ -124,16 +124,18 @@ export function AdminSidebar({
 			<SidebarHeader>
 				<SidebarMenu>
 					<SidebarMenuItem>
-						<SidebarMenuButton size="lg" asChild>
-							<a href="/admin">
-								<div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-									<Icon icon="tabler:layout-dashboard" className="size-5" />
-								</div>
-								<div className="grid flex-1 text-left text-sm leading-tight">
-									<span className="truncate font-semibold">Irishette</span>
-									<span className="truncate text-xs">Admin Panel</span>
-								</div>
-							</a>
+						<SidebarMenuButton
+							size="lg"
+							// oxlint-disable-next-line jsx-a11y/control-has-associated-label -- the link's text is SidebarMenuButton's children
+							render={<a href="/admin" />}
+						>
+							<div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+								<Icon icon="tabler:layout-dashboard" className="size-5" />
+							</div>
+							<div className="grid flex-1 text-left text-sm leading-tight">
+								<span className="truncate font-semibold">Irishette</span>
+								<span className="truncate text-xs">Admin Panel</span>
+							</div>
 						</SidebarMenuButton>
 					</SidebarMenuItem>
 				</SidebarMenu>

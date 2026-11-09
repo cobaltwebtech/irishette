@@ -68,10 +68,8 @@ export function AdminNavigation({
 							<SidebarMenuSub>
 								{item.items?.map((subItem) => (
 									<SidebarMenuSubItem key={subItem.title}>
-										<SidebarMenuSubButton asChild>
-											<Link to={subItem.url}>
-												<span>{subItem.title}</span>
-											</Link>
+										<SidebarMenuSubButton render={<Link to={subItem.url} />}>
+											<span>{subItem.title}</span>
 										</SidebarMenuSubButton>
 									</SidebarMenuSubItem>
 								))}
