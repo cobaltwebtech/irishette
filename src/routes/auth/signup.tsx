@@ -1,32 +1,30 @@
-import { Icon } from '@iconify/react';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useId, useState } from 'react';
 import { z } from 'zod';
 
 import { AuthCard, AuthError } from '@/components/auth/AuthCard';
 import { AuthModeToggle } from '@/components/auth/AuthModeToggle';
-import { CheckEmailPanel } from '@/components/auth/CheckEmailPanel';
+import { AuthSubmitButton } from '@/components/auth/AuthSubmitButton';
+import {
+	CheckEmailPanel,
+	MagicLinkSentPanel,
+} from '@/components/auth/CheckEmailPanel';
 import { EmailField } from '@/components/auth/EmailField';
 import { useMagicLinkURLs } from '@/components/auth/magic-link';
+import { PasswordField } from '@/components/auth/PasswordField';
 import { ResendVerification } from '@/components/auth/ResendVerification';
 import { TurnstileField, useTurnstile } from '@/components/auth/TurnstileField';
+import { type AuthMode, useAuthMode } from '@/components/auth/useAuthMode';
 import { useAuthRequest } from '@/components/auth/useAuthRequest';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PasswordInput } from '@/components/ui/password';
 import { requireNoSession } from '@/lib/auth-check';
 import { authClient } from '@/lib/auth-client';
 import {
 	EMAIL_VERIFICATION_EXPIRES_IN,
 	formatLinkLifetime,
-	MAGIC_LINK_EXPIRES_IN,
 } from '@/lib/auth-constants';
-import {
-	firstIssue,
-	magicLinkSignupSchema,
-	registerSchema,
-} from '@/lib/auth-validation';
+import { magicLinkSignupSchema, registerSchema } from '@/lib/auth-validation';
 import { DEFAULT_AUTH_REDIRECT, redirectSearchParam } from '@/lib/redirect';
 
 export const Route = createFileRoute('/auth/signup')({
@@ -39,77 +37,81 @@ export const Route = createFileRoute('/auth/signup')({
 	component: SignupPage,
 });
 
+const COPY = {
+	magic: {
+		description:
+			'Enter your name and email address and we will email you a link to create your account. No password needed.',
+		loadingLabel: 'Sending link...',
+		submitIcon: 'tabler:mail',
+		submitLabel: 'Email me a sign-up link',
+	},
+	password: {
+		description:
+			'Enter your details and choose a password. We will email you a link to verify your address.',
+		loadingLabel: 'Creating account...',
+		submitIcon: undefined,
+		submitLabel: 'Create account',
+	},
+};
+
 function SignupPage() {
 	const search = Route.useSearch();
 	const turnstile = useTurnstile();
 	const nameId = useId();
-	const passwordId = useId();
-	const confirmPasswordId = useId();
 
-	const [mode, setMode] = useState<'magic' | 'password'>('magic');
 	const [name, setName] = useState('');
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
 	const [confirmPassword, setConfirmPassword] = useState('');
-	const { isLoading, error, setError, run } = useAuthRequest(turnstile);
+	const { isLoading, error, setError, run, validate } =
+		useAuthRequest(turnstile);
 	const magicLinkURLs = useMagicLinkURLs(search.redirect);
-	const [sent, setSent] = useState<{
-		email: string;
-		mode: 'magic' | 'password';
-	} | null>(null);
+	const [sent, setSent] = useState<{ email: string; mode: AuthMode } | null>(
+		null,
+	);
+	const { mode, isMagic, toggleMode } = useAuthMode(() => setError(''));
 
 	const redirectTo = search.redirect ?? DEFAULT_AUTH_REDIRECT;
-
-	const switchMode = () => {
-		setMode(mode === 'magic' ? 'password' : 'magic');
-		setError('');
-	};
+	const copy = COPY[mode];
 
 	const handleMagicLink = async (e: React.FormEvent) => {
 		e.preventDefault();
-		const parsed = magicLinkSignupSchema.safeParse({ name, email });
-		if (!parsed.success) {
-			setError(firstIssue(parsed.error));
-			return;
-		}
+		const data = validate(magicLinkSignupSchema, { name, email });
+		if (!data) return;
 		// `name` is used when the link creates the account (an existing account
 		// is simply signed in).
 		await run(
 			() =>
 				authClient.signIn.magicLink({
-					email: parsed.data.email,
-					name: parsed.data.name,
+					email: data.email,
+					name: data.name,
 					...magicLinkURLs,
 					fetchOptions: { headers: turnstile.headers },
 				}),
-			{ onSuccess: () => setSent({ email: parsed.data.email, mode: 'magic' }) },
+			{ onSuccess: () => setSent({ email: data.email, mode: 'magic' }) },
 		);
 	};
 
 	const handlePassword = async (e: React.FormEvent) => {
 		e.preventDefault();
-		const parsed = registerSchema.safeParse({
+		const data = validate(registerSchema, {
 			name,
 			email,
 			password,
 			confirmPassword,
 		});
-		if (!parsed.success) {
-			setError(firstIssue(parsed.error));
-			return;
-		}
+		if (!data) return;
 		await run(
 			() =>
 				authClient.signUp.email({
-					name: parsed.data.name,
-					email: parsed.data.email,
-					password: parsed.data.password,
+					name: data.name,
+					email: data.email,
+					password: data.password,
 					callbackURL: redirectTo,
 					fetchOptions: { headers: turnstile.headers },
 				}),
 			{
-				onSuccess: () =>
-					setSent({ email: parsed.data.email, mode: 'password' }),
+				onSuccess: () => setSent({ email: data.email, mode: 'password' }),
 			},
 		);
 	};
@@ -124,17 +126,11 @@ function SignupPage() {
 		);
 	}
 
-	const isMagic = mode === 'magic';
-
 	return (
 		<AuthCard
 			icon="tabler:user-plus"
 			title="Create an Account"
-			description={
-				isMagic
-					? 'Enter your name and email address and we will email you a link to create your account. No password needed.'
-					: 'Enter your details and choose a password. We will email you a link to verify your address.'
-			}
+			description={copy.description}
 			footer={
 				<p>
 					Already have an account?{' '}
@@ -169,33 +165,25 @@ function SignupPage() {
 
 				{!isMagic && (
 					<>
-						<div className="flex flex-col gap-2">
-							<Label htmlFor={passwordId}>Password</Label>
-							<PasswordInput
-								id={passwordId}
-								value={password}
-								onChange={(e) => setPassword(e.target.value)}
-								placeholder="At least 8 characters"
-								required
-								disabled={isLoading}
-								autoComplete="new-password"
-							/>
-							<p className="text-xs text-muted-foreground">
-								Use upper and lower case letters and at least one number.
-							</p>
-						</div>
-						<div className="flex flex-col gap-2">
-							<Label htmlFor={confirmPasswordId}>Confirm Password</Label>
-							<PasswordInput
-								id={confirmPasswordId}
-								value={confirmPassword}
-								onChange={(e) => setConfirmPassword(e.target.value)}
-								placeholder="Re-enter your password"
-								required
-								disabled={isLoading}
-								autoComplete="new-password"
-							/>
-						</div>
+						<PasswordField
+							label="Password"
+							hint="Use upper and lower case letters and at least one number."
+							value={password}
+							onChange={setPassword}
+							placeholder="At least 8 characters"
+							required
+							disabled={isLoading}
+							autoComplete="new-password"
+						/>
+						<PasswordField
+							label="Confirm Password"
+							value={confirmPassword}
+							onChange={setConfirmPassword}
+							placeholder="Re-enter your password"
+							required
+							disabled={isLoading}
+							autoComplete="new-password"
+						/>
 					</>
 				)}
 
@@ -206,30 +194,19 @@ function SignupPage() {
 					onToken={turnstile.setToken}
 				/>
 
-				<Button
-					type="submit"
-					className="w-full"
-					disabled={isLoading || !name || !email || !turnstile.token}
+				<AuthSubmitButton
+					isLoading={isLoading}
+					disabled={!name || !email || !turnstile.token}
+					loadingLabel={copy.loadingLabel}
+					icon={copy.submitIcon}
 				>
-					{isLoading ? (
-						<>
-							<Icon icon="tabler:loader-2" className="size-5 animate-spin" />
-							{isMagic ? 'Sending link...' : 'Creating account...'}
-						</>
-					) : isMagic ? (
-						<>
-							<Icon icon="tabler:mail" className="size-5" />
-							Email me a sign-up link
-						</>
-					) : (
-						'Create account'
-					)}
-				</Button>
+					{copy.submitLabel}
+				</AuthSubmitButton>
 			</form>
 
 			<AuthModeToggle
 				mode={mode}
-				onToggle={switchMode}
+				onToggle={toggleMode}
 				magicLabel="Email me a sign-up link instead"
 			/>
 		</AuthCard>
@@ -242,22 +219,17 @@ function SignupSent({
 	callbackURL,
 	onSendAgain,
 }: {
-	sent: { email: string; mode: 'magic' | 'password' };
+	sent: { email: string; mode: AuthMode };
 	callbackURL: string;
 	onSendAgain: () => void;
 }) {
 	if (sent.mode === 'magic') {
 		return (
-			<CheckEmailPanel
+			<MagicLinkSentPanel
 				email={sent.email}
 				purpose="finish creating your account and sign in"
-				lifetime={formatLinkLifetime(MAGIC_LINK_EXPIRES_IN)}
-			>
-				<Button variant="secondary" className="w-full" onClick={onSendAgain}>
-					<Icon icon="tabler:mail-share" className="size-5" />
-					Send another link
-				</Button>
-			</CheckEmailPanel>
+				onSendAgain={onSendAgain}
+			/>
 		);
 	}
 	return (

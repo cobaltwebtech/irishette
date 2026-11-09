@@ -2,6 +2,7 @@ import { Icon } from '@iconify/react';
 import { useState } from 'react';
 
 import { AuthError } from '@/components/auth/AuthCard';
+import { AuthSubmitButton } from '@/components/auth/AuthSubmitButton';
 import { EmailField } from '@/components/auth/EmailField';
 import { TurnstileField, useTurnstile } from '@/components/auth/TurnstileField';
 import { useAuthRequest } from '@/components/auth/useAuthRequest';
@@ -12,7 +13,7 @@ import {
 	formatLinkLifetime,
 	MAGIC_LINK_EXPIRES_IN,
 } from '@/lib/auth-constants';
-import { emailSchema, firstIssue } from '@/lib/auth-validation';
+import { emailSchema } from '@/lib/auth-validation';
 import { useSession } from '@/lib/session';
 import { useBookingStore } from '@/stores';
 
@@ -22,7 +23,7 @@ export function AuthenticationStep() {
 	const [email, setEmail] = useState('');
 	const [emailSent, setEmailSent] = useState(false);
 	const turnstile = useTurnstile();
-	const { isLoading, error, setError, run } = useAuthRequest(turnstile);
+	const { isLoading, error, run, validate } = useAuthRequest(turnstile);
 
 	if (session?.user) {
 		// User is already authenticated, advance to next step
@@ -49,17 +50,14 @@ export function AuthenticationStep() {
 	const handleSendMagicLink = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (isLoading) return;
-		const parsed = emailSchema.safeParse({ email });
-		if (!parsed.success) {
-			setError(firstIssue(parsed.error));
-			return;
-		}
+		const data = validate(emailSchema, { email });
+		if (!data) return;
 
 		// New and existing users both come back to the booking.
 		await run(
 			() =>
 				authClient.signIn.magicLink({
-					email: parsed.data.email,
+					email: data.email,
 					callbackURL: '/booking',
 					newUserCallbackURL: '/booking',
 					errorCallbackURL: '/booking?error=auth',
@@ -120,23 +118,14 @@ export function AuthenticationStep() {
 						widgetRef={turnstile.ref}
 						onToken={turnstile.setToken}
 					/>
-					<Button
-						type="submit"
-						disabled={isLoading || !email || !turnstile.token}
-						className="w-full"
+					<AuthSubmitButton
+						isLoading={isLoading}
+						disabled={!email || !turnstile.token}
+						loadingLabel="Sending Magic Link..."
+						icon="tabler:mail"
 					>
-						{isLoading ? (
-							<>
-								<Icon icon="tabler:loader-2" className="size-5 animate-spin" />
-								Sending Magic Link...
-							</>
-						) : (
-							<>
-								<Icon icon="tabler:mail" className="size-5" />
-								Send Magic Link
-							</>
-						)}
-					</Button>
+						Send Magic Link
+					</AuthSubmitButton>
 				</form>
 			</CardContent>
 		</Card>

@@ -1,5 +1,5 @@
 import { Icon } from '@iconify/react';
-import { useMutation, useQuery, useSuspenseQuery } from '@tanstack/react-query';
+import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 
 import { AdminLayout } from '@/components/admin/AdminLayout';
@@ -7,23 +7,31 @@ import { BookingInternalNotes } from '@/components/admin/BookingInternalNotes';
 import { DisputesPanel } from '@/components/admin/DisputesPanel';
 import { NotificationsPanel } from '@/components/admin/inbox/NotificationsPanel';
 import { CancelBookingButton } from '@/components/booking/CancelBookingButton';
-import { PaymentStatusBadge } from '@/components/booking/StatusBadges';
+import {
+	BookingDetailHeader,
+	BookingGuestCard,
+	BookingPaymentCard,
+	BookingStayCard,
+	DetailField,
+	SpecialRequestsCard,
+} from '@/components/booking/detail/BookingDetailCards';
+import { useResendConfirmationEmail } from '@/components/booking/detail/use-resend-confirmation-email';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
 	Card,
 	CardContent,
 	CardDescription,
-	CardFooter,
 	CardHeader,
 	CardTitle,
 } from '@/components/ui/card';
-import { toast } from '@/components/ui/toast';
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
-import { CHECK_IN_TIME_LABEL, CHECK_OUT_TIME_LABEL } from '@/lib/site';
-import { formatDateTimeCT, formatStayDate } from '@/lib/timezone';
+import type { RouterOutputs } from '@/integrations/trpc/types';
+import { formatDateTimeCT } from '@/lib/timezone';
 import { cn } from '@/utils/twMerge';
+
+type AdminBooking = RouterOutputs['bookings']['adminGetBooking'];
 
 export const Route = createFileRoute(
 	'/_authed/_admin/admin/bookings/$publicId',
@@ -83,13 +91,14 @@ function AdminBookingDetailPage() {
 	const { publicId } = Route.useParams();
 	const trpc = useTRPC();
 
-	const { data: booking } = useSuspenseQuery(
+	const { data } = useSuspenseQuery(
 		trpc.bookings.adminGetBooking.queryOptions({ publicId }),
 	);
+	const { booking, room } = data;
 
 	// Guest details for the repeat-guest badge (`user` is null only if the
 	// account was deleted), hence `enabled`.
-	const guestPublicId = booking.user?.publicId;
+	const guestPublicId = data.user?.publicId;
 	const { data: guestData } = useQuery(
 		trpc.users.adminGetGuestDetails.queryOptions(
 			{ publicId: guestPublicId ?? '' },
@@ -97,305 +106,79 @@ function AdminBookingDetailPage() {
 		),
 	);
 
-	// Admin can resend for any booking.
-	const resendEmail = useMutation(
-		trpc.bookings.resendConfirmationEmail.mutationOptions({
-			onSuccess: (result) => {
-				toast.add({
-					type: 'success',
-					title: 'Email sent successfully!',
-					description:
-						result.message || 'Confirmation email has been sent to the guest.',
-				});
-			},
-			onError: (error) => {
-				console.error('Failed to resend confirmation email:', error);
-				toast.add({
-					type: 'error',
-					title: 'Failed to send email',
-					description:
-						error.message ||
-						'Unable to send confirmation email. Please try again.',
-				});
-			},
-		}),
-	);
-	const isResendingEmail = resendEmail.isPending;
-
-	const handleResendEmail = () => {
-		resendEmail.mutate({ publicId: booking.booking.publicId });
-	};
-
 	const bookingCount = guestData?.bookings?.length || 0;
 
 	return (
 		<AdminLayout title="Booking Details">
 			{/* Header */}
 			<div className="container mx-auto px-4 py-6">
-				<div className="flex flex-wrap items-center justify-between gap-2">
-					<Link
-						to="/admin/bookings/current-bookings"
-						data-slot="button"
-						className={cn(buttonVariants({ variant: 'outline' }))}
-					>
-						← Back to Bookings
-					</Link>
-					<h1 className="text-2xl font-bold text-foreground">
-						Booking -{' '}
-						<span className="font-mono tracking-wider">
-							{booking.booking.confirmationId}
-						</span>
-					</h1>
-					<Badge
-						variant={
-							booking.booking.status === 'confirmed'
-								? 'secondary'
-								: booking.booking.status === 'cancelled'
-									? 'destructive'
-									: 'secondary'
-						}
-						className="text-sm"
-					>
-						{booking.booking.status.toUpperCase()}
-					</Badge>
-				</div>
+				<BookingDetailHeader
+					back={
+						<Link
+							to="/admin/bookings/current-bookings"
+							data-slot="button"
+							className={cn(buttonVariants({ variant: 'outline' }))}
+						>
+							← Back to Bookings
+						</Link>
+					}
+					title={
+						<>
+							Booking -{' '}
+							<span className="font-mono tracking-wider">
+								{booking.confirmationId}
+							</span>
+						</>
+					}
+					status={booking.status}
+				/>
 			</div>
 
 			{/* Main Content */}
 			<div className="grid gap-8 lg:grid-cols-6">
-				{/* Left Column - Booking Details */}
-				<Card className="lg:col-span-4">
-					<CardHeader>
-						<CardTitle>Booking Details</CardTitle>
-					</CardHeader>
-					<CardContent className="grid gap-4 sm:grid-cols-2">
-						<div>
-							<p className="text-sm font-medium text-muted-foreground">
-								Confirmation ID
-							</p>
-							<Badge
-								variant="secondary"
-								className="font-mono text-lg font-semibold tracking-wider"
-							>
-								{booking.booking.confirmationId}
+				<BookingStayCard
+					title="Booking Details"
+					booking={booking}
+					roomName={room.name}
+				/>
+				<BookingPaymentCard booking={booking} showPaymentStatus />
+
+				<BookingGuestCard
+					className="lg:col-span-4"
+					guestName={booking.guestName}
+					guestEmail={booking.guestEmail}
+					badge={
+						bookingCount > 1 && (
+							<Badge className="bg-accent-4 text-xs">
+								<Icon
+									icon="tabler:star-filled"
+									className="size-4 text-accent"
+								/>
+								Repeat Guest
 							</Badge>
-						</div>
-						<div>
-							<p className="text-sm font-medium text-muted-foreground">Room</p>
-							<p className="font-semibold">{booking.room.name}</p>
-						</div>
-						<div>
-							<p className="text-sm font-medium text-muted-foreground">
-								Check-in
-							</p>
-							<p className="font-semibold">
-								{formatStayDate(booking.booking.checkInDate, 'full')}
-							</p>
-							<p className="text-sm text-muted-foreground">
-								From {CHECK_IN_TIME_LABEL}
-							</p>
-						</div>
-						<div>
-							<p className="text-sm font-medium text-muted-foreground">
-								Check-out
-							</p>
-							<p className="font-semibold">
-								{formatStayDate(booking.booking.checkOutDate, 'full')}
-							</p>
-							<p className="text-sm text-muted-foreground">
-								Before {CHECK_OUT_TIME_LABEL}
-							</p>
-						</div>
-						<div>
-							<p className="text-sm font-medium text-muted-foreground">
-								Duration
-							</p>
-							<p className="font-semibold">
-								{booking.booking.numberOfNights} night
-								{booking.booking.numberOfNights !== 1 ? 's' : ''}
-							</p>
-						</div>
-						<div>
-							<p className="text-sm font-medium text-muted-foreground">
-								Guests
-							</p>
-							<p className="font-semibold">
-								{booking.booking.numberOfGuests} guest
-								{booking.booking.numberOfGuests !== 1 ? 's' : ''}
-							</p>
-						</div>
-					</CardContent>
-				</Card>
-
-				{/* Right Column - Payment Summary */}
-				<Card className="lg:col-span-2">
-					<CardHeader>
-						<CardTitle>Payment Summary</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className="grid grid-cols-2 gap-x-4 gap-y-2">
-							<p className="text-sm font-medium text-muted-foreground">
-								Base Rate
-							</p>
-							<p className="text-right">
-								$
-								{(
-									booking.booking.baseAmount / booking.booking.numberOfNights
-								).toFixed(2)}
-								/night
-							</p>
-							<p className="text-sm font-medium text-muted-foreground">
-								Subtotal
-							</p>
-							<p className="text-right">
-								${booking.booking.baseAmount.toFixed(2)}
-							</p>
-							{booking.booking.feesAmount !== null &&
-								booking.booking.feesAmount > 0 && (
-									<>
-										<p className="text-sm font-medium text-muted-foreground">
-											Fees
-										</p>
-										<p className="text-right">
-											${booking.booking.feesAmount.toFixed(2)}
-										</p>
-									</>
-								)}
-							{booking.booking.taxAmount !== null &&
-								booking.booking.taxAmount > 0 && (
-									<>
-										<p className="text-sm font-medium text-muted-foreground">
-											Taxes
-										</p>
-										<p className="text-right">
-											${booking.booking.taxAmount.toFixed(2)}
-										</p>
-									</>
-								)}
-							<p className="text-lg font-semibold">Total Paid</p>
-							<p className="text-right text-lg font-semibold">
-								${booking.booking.totalAmount.toFixed(2)}
-							</p>
-						</div>
-					</CardContent>
-					<CardFooter className="grid grid-cols-2 border-t">
-						<p className="text-sm font-medium text-muted-foreground">
-							Payment Status
-						</p>
-						<p className="text-right">
-							<PaymentStatusBadge status={booking.booking.paymentStatus} />
-						</p>
-					</CardFooter>
-				</Card>
-
-				{/* Left Column - Guest Information */}
-				<Card className="lg:col-span-4">
-					<CardHeader>
-						<CardTitle className="flex items-center gap-2">
-							Guest Information
-							{bookingCount > 1 && (
-								<Badge className="bg-accent-4 text-xs">
-									<Icon
-										icon="tabler:star-filled"
-										className="size-4 text-accent"
-									/>
-									Repeat Guest
-								</Badge>
-							)}
-						</CardTitle>
-					</CardHeader>
-					<CardContent className="space-y-4">
-						<div className="grid gap-4 sm:grid-cols-2">
-							<div>
-								<p className="text-sm font-medium text-muted-foreground">
-									Name
-								</p>
-								<p className="font-semibold">{booking.booking.guestName}</p>
-							</div>
-							<div>
-								<p className="text-sm font-medium text-muted-foreground">
-									Email
-								</p>
-								<p className="font-semibold">{booking.booking.guestEmail}</p>
-							</div>
-						</div>
-						<div className="grid gap-4 sm:grid-cols-2">
-							<div>
-								<p className="text-sm font-medium text-muted-foreground">
-									Account Email
-								</p>
-								<p className="font-semibold">{booking.user?.email || 'N/A'}</p>
-							</div>
-							{booking.booking.guestPhone && (
-								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										Phone
-									</p>
-									<p className="font-semibold">{booking.booking.guestPhone}</p>
-								</div>
-							)}
-						</div>
-					</CardContent>
-				</Card>
-
-				{/* Right Column - Booking Actions */}
-				<Card className="lg:col-span-2">
-					<CardHeader>
-						<CardTitle>Booking Actions</CardTitle>
-					</CardHeader>
-					<CardContent className="space-y-4">
-						{booking.booking.stripePaymentIntentId && (
-							<a
-								href={`https://dashboard.stripe.com/acct_1RwOD0B1s28979kR/payments/${booking.booking.stripePaymentIntentId}`}
-								target="_blank"
-								rel="noopener noreferrer"
-								data-slot="button"
-								className={cn(
-									buttonVariants(),
-									'h-auto w-full',
-									'inline-flex items-center',
-								)}
-							>
-								<Icon icon="tabler:external-link" className="size-6" />
-								<span className="text-center text-wrap">
-									View Payment at Stripe
-								</span>
-							</a>
+						)
+					}
+				>
+					<div className="grid gap-4 sm:grid-cols-2">
+						<DetailField
+							label="Account Email"
+							value={data.user?.email || 'N/A'}
+						/>
+						{booking.guestPhone && (
+							<DetailField label="Phone" value={booking.guestPhone} />
 						)}
-						<Button
-							onClick={handleResendEmail}
-							disabled={isResendingEmail}
-							variant="secondary"
-							className="h-auto w-full"
-						>
-							<Icon icon="tabler:mail-forward" className="size-6" />
-							<span className="text-wrap">
-								{isResendingEmail ? 'Sending...' : 'Resend Confirmation Email'}
-							</span>
-						</Button>
-						{booking.booking.status !== 'cancelled' && (
-							<CancelBookingButton
-								publicId={booking.booking.publicId}
-								mode="admin"
-							/>
-						)}
-					</CardContent>
-				</Card>
+					</div>
+				</BookingGuestCard>
 
-				{/* Left Column - Special Requests */}
-				<Card className="lg:col-span-3">
-					<CardHeader>
-						<CardTitle>Special Requests</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className="rounded-md bg-muted p-4 text-sm text-muted-foreground">
-							{booking.booking.specialRequests ||
-								'No special requests provided by guest'}
-						</div>
-					</CardContent>
-				</Card>
+				<AdminActionsCard booking={booking} />
 
-				{/* Right Column - Internal Notes */}
+				<SpecialRequestsCard
+					className="lg:col-span-3"
+					specialRequests={booking.specialRequests}
+					emptyText="No special requests provided by guest"
+				/>
+
+				{/* Internal Notes (admin only) */}
 				<Card className="lg:col-span-3">
 					<CardHeader>
 						<CardTitle>Internal Notes</CardTitle>
@@ -406,85 +189,125 @@ function AdminBookingDetailPage() {
 					</CardHeader>
 					<CardContent>
 						<BookingInternalNotes
-							bookingId={booking.booking.id}
-							currentNotes={booking.booking.internalNotes || ''}
+							bookingId={booking.id}
+							currentNotes={booking.internalNotes || ''}
 						/>
 					</CardContent>
 				</Card>
 
-				<DisputesPanel
-					className="lg:col-span-full"
-					disputes={booking.disputes}
-				/>
+				<DisputesPanel className="lg:col-span-full" disputes={data.disputes} />
 
 				<NotificationsPanel
 					className="lg:col-span-full"
-					bookingPublicId={booking.booking.publicId}
+					bookingPublicId={booking.publicId}
 				/>
 
-				{/* Admin Information */}
-				<Card className="lg:col-span-full">
-					<CardHeader>
-						<CardTitle>Admin Information</CardTitle>
-					</CardHeader>
-					<CardContent className="space-y-4">
-						<div className="grid gap-4 sm:grid-cols-2">
-							<div>
-								<p className="text-sm font-medium text-muted-foreground">
-									Internal Booking ID
-								</p>
-								<p className="font-mono text-sm">{booking.booking.id}</p>
-							</div>
-							<div>
-								<p className="text-sm font-medium text-muted-foreground">
-									User ID
-								</p>
-								<p className="font-mono text-sm">
-									{booking.user?.publicId ?? 'N/A'}
-								</p>
-							</div>
-						</div>
-						<div className="grid gap-4 sm:grid-cols-2">
-							<div>
-								<p className="text-sm font-medium text-muted-foreground">
-									Created At
-								</p>
-								<p className="font-mono text-sm">
-									{formatDateTimeCT(booking.booking.createdAt)}
-								</p>
-							</div>
-							<div>
-								<p className="text-sm font-medium text-muted-foreground">
-									Updated At
-								</p>
-								<p className="font-mono text-sm">
-									{formatDateTimeCT(booking.booking.updatedAt)}
-								</p>
-							</div>
-						</div>
-						<div className="grid gap-4 sm:grid-cols-2">
-							<div>
-								<p className="text-sm font-medium text-muted-foreground">
-									Stripe Customer ID
-								</p>
-								<p className="font-mono text-sm">
-									{booking.booking.stripeCustomerId}
-								</p>
-							</div>
-							{booking.booking.stripePaymentIntentId && (
-								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										Stripe Payment Intent ID
-									</p>
-									<p className="font-mono text-sm">
-										{booking.booking.stripePaymentIntentId}
-									</p>
-								</div>
-							)}
-						</div>
-					</CardContent>
-				</Card>
+				<AdminInfoCard booking={booking} userPublicId={data.user?.publicId} />
 			</div>
 		</AdminLayout>
+	);
+}
+
+/** Stripe link, resend confirmation and cancel (admin only). */
+function AdminActionsCard({ booking }: { booking: AdminBooking['booking'] }) {
+	// Admin can resend for any booking.
+	const resendEmail = useResendConfirmationEmail(
+		'Confirmation email has been sent to the guest.',
+	);
+	const isResendingEmail = resendEmail.isPending;
+
+	return (
+		<Card className="lg:col-span-2">
+			<CardHeader>
+				<CardTitle>Booking Actions</CardTitle>
+			</CardHeader>
+			<CardContent className="space-y-4">
+				{booking.stripePaymentIntentId && (
+					<a
+						href={`https://dashboard.stripe.com/acct_1RwOD0B1s28979kR/payments/${booking.stripePaymentIntentId}`}
+						target="_blank"
+						rel="noopener noreferrer"
+						data-slot="button"
+						className={cn(
+							buttonVariants(),
+							'h-auto w-full',
+							'inline-flex items-center',
+						)}
+					>
+						<Icon icon="tabler:external-link" className="size-6" />
+						<span className="text-center text-wrap">
+							View Payment at Stripe
+						</span>
+					</a>
+				)}
+				<Button
+					onClick={() => resendEmail.mutate({ publicId: booking.publicId })}
+					disabled={isResendingEmail}
+					variant="secondary"
+					className="h-auto w-full"
+				>
+					<Icon icon="tabler:mail-forward" className="size-6" />
+					<span className="text-wrap">
+						{isResendingEmail ? 'Sending...' : 'Resend Confirmation Email'}
+					</span>
+				</Button>
+				{booking.status !== 'cancelled' && (
+					<CancelBookingButton publicId={booking.publicId} mode="admin" />
+				)}
+			</CardContent>
+		</Card>
+	);
+}
+
+function MonoField({ label, value }: { label: string; value: string | null }) {
+	return (
+		<DetailField label={label}>
+			<p className="font-mono text-sm">{value}</p>
+		</DetailField>
+	);
+}
+
+/** Internal ids, timestamps and Stripe ids (admin only). */
+function AdminInfoCard({
+	booking,
+	userPublicId,
+}: {
+	booking: AdminBooking['booking'];
+	userPublicId: string | undefined;
+}) {
+	return (
+		<Card className="lg:col-span-full">
+			<CardHeader>
+				<CardTitle>Admin Information</CardTitle>
+			</CardHeader>
+			<CardContent className="space-y-4">
+				<div className="grid gap-4 sm:grid-cols-2">
+					<MonoField label="Internal Booking ID" value={booking.id} />
+					<MonoField label="User ID" value={userPublicId ?? 'N/A'} />
+				</div>
+				<div className="grid gap-4 sm:grid-cols-2">
+					<MonoField
+						label="Created At"
+						value={formatDateTimeCT(booking.createdAt)}
+					/>
+					<MonoField
+						label="Updated At"
+						value={formatDateTimeCT(booking.updatedAt)}
+					/>
+				</div>
+				<div className="grid gap-4 sm:grid-cols-2">
+					<MonoField
+						label="Stripe Customer ID"
+						value={booking.stripeCustomerId}
+					/>
+					{booking.stripePaymentIntentId && (
+						<MonoField
+							label="Stripe Payment Intent ID"
+							value={booking.stripePaymentIntentId}
+						/>
+					)}
+				</div>
+			</CardContent>
+		</Card>
 	);
 }

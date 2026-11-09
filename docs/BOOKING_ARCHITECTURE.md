@@ -19,8 +19,14 @@ client store only drives the UI.
 ### Room page and calendar
 
 `src/routes/rooms/rose-room.tsx` and `texas-room.tsx` (one file per room) load
-the room with `rooms.get({ slug })` and call `bookingActions.initializeBooking`
-when the stored draft is for another room.
+the room with `rooms.get({ slug })` and keep their own copy, images and
+amenities. The layout is shared from `src/components/rooms/`: `RoomHero`,
+`RoomBookingPanel` (calendar, price summary, "Book now"), and
+`RoomSections.tsx` (`RoomGallerySection`, `RoomDetailsSection`,
+`RoomAmenities`, `RoomBookingCta`). `RoomBookingPanel` takes the loader's room
+(id, slug, name, max guests) and calls `bookingActions.initializeBooking` when
+the stored draft is for another room. No booking code hardcodes a room slug:
+the details step's "Back" goes to `/rooms/<booking.roomSlug>`.
 
 `src/components/RoomAvailabilityCalendar.tsx`:
 
@@ -57,7 +63,7 @@ dates).
 | Step | Component | What it does |
 |---|---|---|
 | `auth` | `src/components/booking/AuthenticationStep.tsx` | Magic link sign-in (`authClient.signIn.magicLink`, callback `/booking`) with a Turnstile token in `x-captcha-response`. Signed-in users move to `details` automatically. |
-| `details` | `src/components/booking/BookingDetailsStep.tsx` | Name, email, phone, guests (1 to `maxGuests`), special requests, validated with the server's `guestDetailsSchema`. Updates the user's name/phone if changed, re-prices with `calculateBooking`, then calls `createBooking` and stores `bookingId` + `publicId`. |
+| `details` | `src/components/booking/BookingDetailsStep.tsx` (fields in `GuestDetailsFields.tsx`, submit in `use-booking-details-submit.ts`) | Name, email, phone, guests (1 to `maxGuests`), special requests, validated with the server's `guestDetailsSchema` (`validateGuestDetails`). `useBookingDetailsSubmit` updates the user's name/phone if changed, re-prices with `calculateBooking`, then calls `createBooking` and stores `bookingId` + `publicId`. |
 | `payment` | `src/components/booking/PaymentStep.tsx` | On mount: `refreshBooking` (extends an expired hold if possible), then `createCheckoutSession`. Renders `CheckoutElementsProvider` + `<PaymentElement>` with the session's line items and total; requires the policies checkbox and `checkout.canConfirm`; `checkout.confirm({ redirect: 'if_required' })`, then navigates to the confirmation page with `?session_id=`. |
 
 The store's steps are `auth`, `details` and `payment` (drafts saved with the

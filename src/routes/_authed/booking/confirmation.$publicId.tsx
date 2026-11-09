@@ -8,13 +8,20 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { z } from 'zod';
 
-import { Badge } from '@/components/ui/badge';
+import {
+	BookingGuestCard,
+	BookingPaymentCard,
+	BookingStayCard,
+	DetailField,
+	ImportantInfoCard,
+	SpecialRequestsCard,
+} from '@/components/booking/detail/BookingDetailCards';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from '@/components/ui/toast';
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
-import { CHECK_IN_TIME_LABEL, CHECK_OUT_TIME_LABEL } from '@/lib/site';
+import type { BookingStatus, PaymentStatus } from '@/lib/booking-status';
 import { formatStayDate } from '@/lib/timezone';
 import { bookingActions } from '@/stores';
 import { cn } from '@/utils/twMerge';
@@ -156,239 +163,43 @@ function BookingConfirmation() {
 	}, []);
 
 	const { booking, room: roomData } = bookingData;
-	const banner = BANNERS[bannerKind(booking.status, booking.paymentStatus)];
-
-	const nights = Math.max(1, booking.numberOfNights);
 
 	return (
 		<section>
-			<div className="border-b bg-muted">
-				<div className="container mx-auto space-y-1 px-4 py-6 text-center">
-					{booking.status === 'confirmed' && (
-						<p className="animate-bounce text-4xl">🎉</p>
-					)}
-					<div className="flex items-center justify-center gap-2">
-						<Icon
-							icon={confirming ? 'tabler:loader-2' : banner.icon}
-							className={`size-8 ${confirming ? 'animate-spin' : ''} ${banner.tone}`}
-						/>
-						<h1 className="text-2xl font-bold text-foreground">
-							{confirming ? 'Confirming your payment...' : banner.title}
-						</h1>
-					</div>
-					{!confirming && <p>{banner.text}</p>}
-					<p>
-						{booking.status === 'cancelled'
-							? 'Your stay was planned for '
-							: 'We look forward to seeing you on '}
-						{formatStayDate(booking.checkInDate, 'full')}.
-					</p>
-				</div>
-			</div>
+			<ConfirmationBanner
+				status={booking.status}
+				paymentStatus={booking.paymentStatus}
+				checkInDate={booking.checkInDate}
+				confirming={confirming}
+			/>
 
 			{/* Main Content */}
 			<div className="container mx-auto px-4 py-8">
 				<div className="grid gap-8 lg:grid-cols-6">
-					{/* Left Column - Booking Details */}
-					<Card className="lg:col-span-4">
-						<CardHeader>
-							<CardTitle>Booking Details</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className="grid gap-4 sm:grid-cols-2">
-								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										Confirmation ID
-									</p>
-									<Badge
-										variant="secondary"
-										className="font-mono text-lg font-semibold tracking-wider"
-									>
-										{booking.confirmationId}
-									</Badge>
-								</div>
-								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										Room
-									</p>
-									<p className="font-semibold">
-										{roomData?.name ?? 'Unknown Room'}
-									</p>
-								</div>
-								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										Check-in
-									</p>
-									<p className="font-semibold">
-										{formatStayDate(booking.checkInDate, 'full')}
-									</p>
-									<p className="text-sm text-muted-foreground">
-										From {CHECK_IN_TIME_LABEL}
-									</p>
-								</div>
-								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										Check-out
-									</p>
-									<p className="font-semibold">
-										{formatStayDate(booking.checkOutDate, 'full')}
-									</p>
-									<p className="text-sm text-muted-foreground">
-										Before {CHECK_OUT_TIME_LABEL}
-									</p>
-								</div>
-								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										Duration
-									</p>
-									<p className="font-semibold">
-										{booking.numberOfNights} night
-										{booking.numberOfNights !== 1 ? 's' : ''}
-									</p>
-								</div>
-								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										Guests
-									</p>
-									<p className="font-semibold">
-										{booking.numberOfGuests} guest
-										{booking.numberOfGuests !== 1 ? 's' : ''}
-									</p>
-								</div>
-							</div>
-						</CardContent>
-					</Card>
-					{/* Right Column - Payment Summary */}
-					<Card className="lg:col-span-2">
-						<CardHeader>
-							<CardTitle>Payment Summary</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className="grid grid-cols-2 gap-x-4 gap-y-2">
-								<p className="text-sm font-medium text-muted-foreground">
-									Base Rate
-								</p>
-								<p className="text-right">
-									${(booking.baseAmount / nights).toFixed(2)}/night
-								</p>
-								<p className="text-sm font-medium text-muted-foreground">
-									Subtotal
-								</p>
-								<p className="text-right">${booking.baseAmount.toFixed(2)}</p>
-								{booking.feesAmount !== null && booking.feesAmount > 0 && (
-									<>
-										<p className="text-sm font-medium text-muted-foreground">
-											Fees
-										</p>
-										<p className="text-right">
-											${booking.feesAmount.toFixed(2)}
-										</p>
-									</>
-								)}
-								{booking.taxAmount !== null && booking.taxAmount > 0 && (
-									<>
-										<p className="text-sm font-medium text-muted-foreground">
-											Taxes
-										</p>
-										<p className="text-right">
-											${booking.taxAmount.toFixed(2)}
-										</p>
-									</>
-								)}
-								<p className="text-lg font-semibold">
-									{booking.status === 'confirmed' ? 'Total Paid' : 'Total'}
-								</p>
-								<p className="text-right text-lg font-semibold">
-									${booking.totalAmount.toFixed(2)}
-								</p>
-							</div>
-						</CardContent>
-					</Card>
-					{/* Left Column - Guest Info */}
-					<Card className="lg:col-span-3">
-						<CardHeader>
-							<CardTitle>Guest Information</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className="grid gap-4 sm:grid-cols-2">
-								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										Name
-									</p>
-									<p className="font-semibold">{booking.guestName}</p>
-								</div>
-								<div>
-									<p className="text-sm font-medium text-muted-foreground">
-										Email
-									</p>
-									<p className="font-semibold">{booking.guestEmail}</p>
-								</div>
-								{booking.guestPhone && (
-									<div className="sm:col-span-2">
-										<p className="text-sm font-medium text-muted-foreground">
-											Phone
-										</p>
-										<p className="font-semibold">{booking.guestPhone}</p>
-									</div>
-								)}
-							</div>
-						</CardContent>
-					</Card>
-					{/* Right Column - Special Requests */}
-					<Card className="lg:col-span-3">
-						<CardHeader>
-							<CardTitle>Special Requests</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className="rounded-md bg-muted p-4 text-sm text-muted-foreground">
-								{booking.specialRequests || 'No special requests provided'}
-							</div>
-						</CardContent>
-					</Card>
-					{/* Left Column - Important Info */}
-					<Card className="lg:col-span-3">
-						<CardHeader>
-							<CardTitle>Important Information</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<ul className="mx-4 list-disc space-y-2 text-sm text-muted-foreground">
-								<li>Check your email for the booking confirmation details</li>
-								<li>
-									Check-in is available from {CHECK_IN_TIME_LABEL}. Early
-									check-in may be available upon request.
-								</li>
-								<li>
-									Check-out is by {CHECK_OUT_TIME_LABEL}. Late check-out may be
-									available upon request.
-								</li>
-								<li>
-									If you need to cancel your booking please review our{' '}
-									<Link
-										to="/cancellation-refund-policy"
-										className="text-accent hover:underline"
-										target="_blank"
-									>
-										Cancellation & Refund Policy
-									</Link>
-									.
-								</li>
-								<li>
-									If you have any questions or need assistance{' '}
-									<Link
-										to="/contact"
-										className="text-accent hover:underline"
-										target="_blank"
-									>
-										Contact Us
-									</Link>
-									.
-								</li>
-								<li className="bg-red-200 text-lg font-bold">
-									DO WE NEED ADDITIONAL INSTRUCTIONS FOR THE CUSTOMER?
-								</li>
-							</ul>
-						</CardContent>
-					</Card>
+					<BookingStayCard
+						title="Booking Details"
+						booking={booking}
+						roomName={roomData?.name ?? 'Unknown Room'}
+					/>
+					<BookingPaymentCard
+						booking={booking}
+						totalLabel={booking.status === 'confirmed' ? 'Total Paid' : 'Total'}
+					/>
+					<BookingGuestCard
+						className="lg:col-span-3"
+						guestName={booking.guestName}
+						guestEmail={booking.guestEmail}
+					>
+						{booking.guestPhone && (
+							<DetailField label="Phone" value={booking.guestPhone} />
+						)}
+					</BookingGuestCard>
+					<SpecialRequestsCard
+						className="lg:col-span-3"
+						specialRequests={booking.specialRequests}
+						emptyText="No special requests provided"
+					/>
+					<ImportantInfoCard className="lg:col-span-3" />
 					{/* Right Column - Address and Directions */}
 					<Card className="lg:col-span-3">
 						<CardHeader>
@@ -421,5 +232,45 @@ function BookingConfirmation() {
 				</div>
 			</div>
 		</section>
+	);
+}
+
+/** Status banner: confirmed, processing, unpaid or cancelled. */
+function ConfirmationBanner({
+	status,
+	paymentStatus,
+	checkInDate,
+	confirming,
+}: {
+	status: BookingStatus;
+	paymentStatus: PaymentStatus;
+	checkInDate: string;
+	confirming: boolean;
+}) {
+	const banner = BANNERS[bannerKind(status, paymentStatus)];
+	return (
+		<div className="border-b bg-muted">
+			<div className="container mx-auto space-y-1 px-4 py-6 text-center">
+				{status === 'confirmed' && (
+					<p className="animate-bounce text-4xl">🎉</p>
+				)}
+				<div className="flex items-center justify-center gap-2">
+					<Icon
+						icon={confirming ? 'tabler:loader-2' : banner.icon}
+						className={`size-8 ${confirming ? 'animate-spin' : ''} ${banner.tone}`}
+					/>
+					<h1 className="text-2xl font-bold text-foreground">
+						{confirming ? 'Confirming your payment...' : banner.title}
+					</h1>
+				</div>
+				{!confirming && <p>{banner.text}</p>}
+				<p>
+					{status === 'cancelled'
+						? 'Your stay was planned for '
+						: 'We look forward to seeing you on '}
+					{formatStayDate(checkInDate, 'full')}.
+				</p>
+			</div>
+		</div>
 	);
 }

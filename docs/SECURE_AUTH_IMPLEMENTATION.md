@@ -73,8 +73,8 @@ address Better Auth answers the same way and sends nothing, so it reveals
 nothing. Signing in with a magic link also verifies the address.
 
 Every email states the real link lifetime (`expiresIn` prop on
-`MagicLinkEmail` / `PasswordReset`, a sentence in the verification and change
-emails).
+`MagicLinkEmail` / `PasswordReset`, both thin wrappers over the shared
+`AuthLinkEmail` layout; a sentence in the verification and change emails).
 
 ## Client
 
@@ -104,9 +104,12 @@ The header's logout button (`src/components/Header.tsx`) does the same as
 to `/booking` with the same shared Turnstile, error and lifetime handling.
 
 **Shared parts** (`src/components/auth/`): `AuthCard` (page shell),
-`AuthError` (inline `role="alert"` message), `EmailField`, `AuthModeToggle`
-("or" + "Use a password instead"), `CheckEmailPanel` ("check your email" with
-the link lifetime), `ResendVerification`, `TurnstileField` + `useTurnstile()`,
+`AuthError` (inline `role="alert"` message), `EmailField`, `PasswordField`,
+`AuthSubmitButton` (spinner + loading label), `useAuthMode` (magic link /
+password switch) + `AuthModeToggle` ("or" + "Use a password instead"),
+`CheckEmailPanel` ("check your email" with the link lifetime) and
+`MagicLinkSentPanel` (its magic-link variant with "Send another link"),
+`ResendVerification`, `TurnstileField` + `useTurnstile()`,
 `useMagicLinkURLs(redirect)` (`callbackURL` + `errorCallbackURL`), and
 `useAuthRequest(turnstile)`: its `run(request, { onSuccess, onError })` sends
 one Better Auth call, checks `error`, shows the mapped message, and resets
@@ -346,8 +349,8 @@ account page (`src/routes/_authed/account/index.tsx`):
   callbackURL: '/account' })`; the address changes only after the emailed
   confirmation.
 
-The booking details step (`src/components/booking/BookingDetailsStep.tsx`)
-also saves a changed name or phone with one `users.updateProfile` call, then
+The booking details step (`useBookingDetailsSubmit` in
+`src/components/booking/use-booking-details-submit.ts`) also saves a changed name or phone with one `users.updateProfile` call, then
 `refreshSession`. A failure there (e.g. `CONFLICT`) is logged and does not
 block the booking, which keeps the details typed in the form. The booking's
 `guestPhone` uses the same `phoneNumberSchema`.

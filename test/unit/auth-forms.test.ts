@@ -12,6 +12,8 @@ import {
 	isLinkError,
 } from '@/lib/auth-errors';
 import {
+	firstIssue,
+	loginSchema,
 	magicLinkSignupSchema,
 	passwordSchema,
 	registerSchema,
@@ -96,6 +98,20 @@ describe('auth form schemas', () => {
 			magicLinkSignupSchema.safeParse({ name: ' ', email: 'g@example.test' })
 				.success,
 		).toBe(false);
+	});
+
+	it('loginSchema reports the email first, then a missing password', () => {
+		const issue = (input: { email: string; password: string }) => {
+			const parsed = loginSchema.safeParse(input);
+			return parsed.success ? null : firstIssue(parsed.error);
+		};
+		expect(issue({ email: 'nope', password: '' })).toBe(
+			'Please enter a valid email address',
+		);
+		expect(issue({ email: 'g@example.test', password: '' })).toBe(
+			'Password is required',
+		);
+		expect(issue({ email: 'g@example.test', password: 'x' })).toBeNull();
 	});
 
 	it('phoneNumberSchema trims and needs 10 digits, max 20 characters', () => {

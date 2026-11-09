@@ -1,9 +1,9 @@
-import { Icon } from '@iconify/react';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { z } from 'zod';
 
 import { AuthCard, AuthError } from '@/components/auth/AuthCard';
+import { AuthSubmitButton } from '@/components/auth/AuthSubmitButton';
 import { CheckEmailPanel } from '@/components/auth/CheckEmailPanel';
 import { EmailField } from '@/components/auth/EmailField';
 import { TurnstileField, useTurnstile } from '@/components/auth/TurnstileField';
@@ -15,7 +15,7 @@ import {
 	formatLinkLifetime,
 	PASSWORD_RESET_EXPIRES_IN,
 } from '@/lib/auth-constants';
-import { emailSchema, firstIssue } from '@/lib/auth-validation';
+import { emailSchema } from '@/lib/auth-validation';
 import { redirectSearchParam } from '@/lib/redirect';
 
 export const Route = createFileRoute('/auth/forgot-password')({
@@ -32,7 +32,7 @@ function ForgotPasswordPage() {
 	const search = Route.useSearch();
 	const turnstile = useTurnstile();
 	const [email, setEmail] = useState('');
-	const { isLoading, error, setError, run } = useAuthRequest(turnstile);
+	const { isLoading, error, run, validate } = useAuthRequest(turnstile);
 	const [sentTo, setSentTo] = useState('');
 
 	const backToLogin = (
@@ -50,19 +50,16 @@ function ForgotPasswordPage() {
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
-		const parsed = emailSchema.safeParse({ email });
-		if (!parsed.success) {
-			setError(firstIssue(parsed.error));
-			return;
-		}
+		const data = validate(emailSchema, { email });
+		if (!data) return;
 		await run(
 			() =>
 				authClient.requestPasswordReset({
-					email: parsed.data.email,
+					email: data.email,
 					redirectTo: '/auth/reset-password',
 					fetchOptions: { headers: turnstile.headers },
 				}),
-			{ onSuccess: () => setSentTo(parsed.data.email) },
+			{ onSuccess: () => setSentTo(data.email) },
 		);
 	};
 
@@ -102,23 +99,14 @@ function ForgotPasswordPage() {
 					onToken={turnstile.setToken}
 				/>
 
-				<Button
-					type="submit"
-					className="w-full"
-					disabled={isLoading || !email || !turnstile.token}
+				<AuthSubmitButton
+					isLoading={isLoading}
+					disabled={!email || !turnstile.token}
+					loadingLabel="Sending reset link..."
+					icon="tabler:mail-share"
 				>
-					{isLoading ? (
-						<>
-							<Icon icon="tabler:loader-2" className="size-5 animate-spin" />
-							Sending reset link...
-						</>
-					) : (
-						<>
-							<Icon icon="tabler:mail-share" className="size-5" />
-							Send reset link
-						</>
-					)}
-				</Button>
+					Send reset link
+				</AuthSubmitButton>
 			</form>
 		</AuthCard>
 	);

@@ -1,13 +1,13 @@
 import { Icon } from '@iconify/react';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { useId, useState } from 'react';
+import { useState } from 'react';
 import { z } from 'zod';
 
 import { AuthCard, AuthError } from '@/components/auth/AuthCard';
+import { AuthSubmitButton } from '@/components/auth/AuthSubmitButton';
+import { PasswordField } from '@/components/auth/PasswordField';
 import { useAuthRequest } from '@/components/auth/useAuthRequest';
-import { Button, buttonVariants } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { PasswordInput } from '@/components/ui/password';
+import { buttonVariants } from '@/components/ui/button';
 import { requireNoSession } from '@/lib/auth-check';
 import { authClient } from '@/lib/auth-client';
 import {
@@ -15,7 +15,7 @@ import {
 	PASSWORD_RESET_EXPIRES_IN,
 } from '@/lib/auth-constants';
 import { authLinkErrorMessage, isLinkError } from '@/lib/auth-errors';
-import { firstIssue, passwordSchema } from '@/lib/auth-validation';
+import { passwordSchema } from '@/lib/auth-validation';
 import { cn } from '@/utils/twMerge';
 
 // Better Auth redirects the email link here with ?token=... (valid) or
@@ -78,30 +78,24 @@ function BackToLogin() {
 
 function ResetPasswordPage() {
 	const search = Route.useSearch();
-	const newPasswordId = useId();
-	const confirmPasswordId = useId();
 	const [newPassword, setNewPassword] = useState('');
 	const [confirmPassword, setConfirmPassword] = useState('');
-	const { isLoading, error, setError, run } = useAuthRequest();
+	const { isLoading, error, setError, run, validate } = useAuthRequest();
 	const [linkError, setLinkError] = useState(search.error ?? '');
 	const [isSuccess, setIsSuccess] = useState(false);
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!search.token) return;
-		const parsed = passwordSchema.safeParse({ password: newPassword });
-		if (!parsed.success) {
-			setError(firstIssue(parsed.error));
-			return;
-		}
+		const data = validate(passwordSchema, { password: newPassword });
+		if (!data) return;
 		if (newPassword !== confirmPassword) {
 			setError('Passwords do not match');
 			return;
 		}
 		const token = search.token;
 		await run(
-			() =>
-				authClient.resetPassword({ newPassword: parsed.data.password, token }),
+			() => authClient.resetPassword({ newPassword: data.password, token }),
 			{
 				// An invalid or expired token: show "request a new link".
 				onError: (resetError) => {
@@ -157,51 +151,34 @@ function ResetPasswordPage() {
 			footer={<BackToLogin />}
 		>
 			<form onSubmit={handleSubmit} className="space-y-4" noValidate>
-				<div className="flex flex-col gap-2">
-					<Label htmlFor={newPasswordId}>New Password</Label>
-					<PasswordInput
-						id={newPasswordId}
-						value={newPassword}
-						onChange={(e) => setNewPassword(e.target.value)}
-						disabled={isLoading}
-						autoComplete="new-password"
-						placeholder="Enter new password"
-					/>
-					<p className="text-xs text-muted-foreground">
-						At least 8 characters with upper case, lower case and a number.
-					</p>
-				</div>
-				<div className="flex flex-col gap-2">
-					<Label htmlFor={confirmPasswordId}>Confirm Password</Label>
-					<PasswordInput
-						id={confirmPasswordId}
-						value={confirmPassword}
-						onChange={(e) => setConfirmPassword(e.target.value)}
-						disabled={isLoading}
-						autoComplete="new-password"
-						placeholder="Confirm new password"
-					/>
-				</div>
+				<PasswordField
+					label="New Password"
+					hint="At least 8 characters with upper case, lower case and a number."
+					value={newPassword}
+					onChange={setNewPassword}
+					disabled={isLoading}
+					autoComplete="new-password"
+					placeholder="Enter new password"
+				/>
+				<PasswordField
+					label="Confirm Password"
+					value={confirmPassword}
+					onChange={setConfirmPassword}
+					disabled={isLoading}
+					autoComplete="new-password"
+					placeholder="Confirm new password"
+				/>
 
 				<AuthError message={error} />
 
-				<Button
-					type="submit"
-					className="w-full"
-					disabled={isLoading || !newPassword || !confirmPassword}
+				<AuthSubmitButton
+					isLoading={isLoading}
+					disabled={!newPassword || !confirmPassword}
+					loadingLabel="Resetting password..."
+					icon="tabler:lock-password"
 				>
-					{isLoading ? (
-						<>
-							<Icon icon="tabler:loader-2" className="size-5 animate-spin" />
-							Resetting password...
-						</>
-					) : (
-						<>
-							<Icon icon="tabler:lock-password" className="size-5" />
-							Reset password
-						</>
-					)}
-				</Button>
+					Reset password
+				</AuthSubmitButton>
 			</form>
 		</AuthCard>
 	);

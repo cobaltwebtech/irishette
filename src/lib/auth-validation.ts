@@ -25,6 +25,12 @@ export const passwordSchema = z.object({ password: passwordField });
 
 export const emailSchema = z.object({ email: emailField });
 
+/** Email + password sign-in: any non-empty password (rules apply at sign-up). */
+export const loginSchema = z.object({
+	email: emailField,
+	password: z.string().min(1, 'Password is required'),
+});
+
 /** Magic-link sign-up: the name is used when the link creates the account. */
 export const magicLinkSignupSchema = z.object({
 	name: nameField,

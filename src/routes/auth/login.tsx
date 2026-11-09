@@ -1,29 +1,24 @@
-import { Icon } from '@iconify/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
-import { useEffect, useEffectEvent, useId, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import { z } from 'zod';
 
 import { AuthCard, AuthError } from '@/components/auth/AuthCard';
 import { AuthModeToggle } from '@/components/auth/AuthModeToggle';
-import { CheckEmailPanel } from '@/components/auth/CheckEmailPanel';
+import { AuthSubmitButton } from '@/components/auth/AuthSubmitButton';
+import { MagicLinkSentPanel } from '@/components/auth/CheckEmailPanel';
 import { EmailField } from '@/components/auth/EmailField';
 import { useMagicLinkURLs } from '@/components/auth/magic-link';
+import { PasswordField } from '@/components/auth/PasswordField';
 import { ResendVerification } from '@/components/auth/ResendVerification';
 import { TurnstileField, useTurnstile } from '@/components/auth/TurnstileField';
+import { useAuthMode } from '@/components/auth/useAuthMode';
 import { useAuthRequest } from '@/components/auth/useAuthRequest';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { PasswordInput } from '@/components/ui/password';
 import { toast } from '@/components/ui/toast';
 import { invalidateSession, requireNoSession } from '@/lib/auth-check';
 import { authClient } from '@/lib/auth-client';
-import {
-	formatLinkLifetime,
-	MAGIC_LINK_EXPIRES_IN,
-} from '@/lib/auth-constants';
 import { authLinkErrorMessage } from '@/lib/auth-errors';
-import { emailSchema, firstIssue } from '@/lib/auth-validation';
+import { emailSchema, loginSchema } from '@/lib/auth-validation';
 import { DEFAULT_AUTH_REDIRECT, redirectSearchParam } from '@/lib/redirect';
 
 export const Route = createFileRoute('/auth/login')({
@@ -55,24 +50,12 @@ function linkError(search: { redirect?: string; error?: string }) {
 	return { code, redirect: url.pathname + url.search };
 }
 
-function LoginPage() {
-	const search = Route.useSearch();
+/** Show an email-link error once, then drop it from the URL. */
+function useLinkError(
+	search: { redirect?: string; error?: string },
+	setError: (message: string) => void,
+) {
 	const router = useRouter();
-	const queryClient = useQueryClient();
-	const turnstile = useTurnstile();
-	const passwordId = useId();
-
-	const [mode, setMode] = useState<'magic' | 'password'>('magic');
-	const [email, setEmail] = useState('');
-	const [password, setPassword] = useState('');
-	const { isLoading, error, setError, run } = useAuthRequest(turnstile);
-	const magicLinkURLs = useMagicLinkURLs(search.redirect);
-	const [needsVerification, setNeedsVerification] = useState(false);
-	const [sentTo, setSentTo] = useState('');
-
-	const redirectTo = search.redirect ?? DEFAULT_AUTH_REDIRECT;
-
-	// Show an email-link error once, then drop it from the URL.
 	const showLinkError = useEffectEvent(
 		(found: { code: string; redirect?: string }) => {
 			setError(`${authLinkErrorMessage(found.code)} Request a new link below.`);
@@ -87,46 +70,70 @@ function LoginPage() {
 		const found = linkError(search);
 		if (found) showLinkError(found);
 	}, [search]);
+}
 
-	const switchMode = () => {
-		setMode(mode === 'magic' ? 'password' : 'magic');
+const COPY = {
+	magic: {
+		description:
+			'Enter your email address and we will email you a link to log in. No password needed.',
+		loadingLabel: 'Sending link...',
+		submitIcon: 'tabler:mail',
+		submitLabel: 'Email me a login link',
+	},
+	password: {
+		description: 'Enter your email address and password.',
+		loadingLabel: 'Logging in...',
+		submitIcon: undefined,
+		submitLabel: 'Login',
+	},
+};
+
+/** State and submit handlers of the login form (magic link or password). */
+function useLoginForm(search: { redirect?: string; error?: string }) {
+	const router = useRouter();
+	const queryClient = useQueryClient();
+	const turnstile = useTurnstile();
+
+	const [email, setEmail] = useState('');
+	const [password, setPassword] = useState('');
+	const { isLoading, error, setError, run, validate } =
+		useAuthRequest(turnstile);
+	const magicLinkURLs = useMagicLinkURLs(search.redirect);
+	const [needsVerification, setNeedsVerification] = useState(false);
+	const [sentTo, setSentTo] = useState('');
+	const { mode, isMagic, toggleMode } = useAuthMode(() => {
 		setError('');
 		setNeedsVerification(false);
-	};
+	});
+	useLinkError(search, setError);
+
+	const redirectTo = search.redirect ?? DEFAULT_AUTH_REDIRECT;
 
 	const handleMagicLink = async (e: React.FormEvent) => {
 		e.preventDefault();
-		const parsed = emailSchema.safeParse({ email });
-		if (!parsed.success) {
-			setError(firstIssue(parsed.error));
-			return;
-		}
+		const data = validate(emailSchema, { email });
+		if (!data) return;
 		await run(
 			() =>
 				authClient.signIn.magicLink({
-					email: parsed.data.email,
+					email: data.email,
 					...magicLinkURLs,
 					fetchOptions: { headers: turnstile.headers },
 				}),
-			{ onSuccess: () => setSentTo(parsed.data.email) },
+			{ onSuccess: () => setSentTo(data.email) },
 		);
 	};
 
 	const handlePassword = async (e: React.FormEvent) => {
 		e.preventDefault();
-		const parsed = emailSchema.safeParse({ email });
-		if (!parsed.success || !password) {
-			setError(
-				parsed.success ? 'Password is required' : firstIssue(parsed.error),
-			);
-			return;
-		}
+		const data = validate(loginSchema, { email, password });
+		if (!data) return;
 		setNeedsVerification(false);
 		await run(
 			() =>
 				authClient.signIn.email({
-					email: parsed.data.email,
-					password,
+					email: data.email,
+					password: data.password,
 					callbackURL: redirectTo,
 					fetchOptions: { headers: turnstile.headers },
 				}),
@@ -143,36 +150,61 @@ function LoginPage() {
 		);
 	};
 
+	return {
+		turnstile,
+		email,
+		setEmail,
+		password,
+		setPassword,
+		isLoading,
+		error,
+		needsVerification,
+		sentTo,
+		setSentTo,
+		mode,
+		isMagic,
+		toggleMode,
+		redirectTo,
+		handleSubmit: isMagic ? handleMagicLink : handlePassword,
+	};
+}
+
+function LoginPage() {
+	const search = Route.useSearch();
+	const {
+		turnstile,
+		email,
+		setEmail,
+		password,
+		setPassword,
+		isLoading,
+		error,
+		needsVerification,
+		sentTo,
+		setSentTo,
+		mode,
+		isMagic,
+		toggleMode,
+		redirectTo,
+		handleSubmit,
+	} = useLoginForm(search);
+	const copy = COPY[mode];
+
 	if (sentTo) {
 		return (
-			<CheckEmailPanel
+			<MagicLinkSentPanel
 				email={sentTo}
 				purpose="sign in to your Irishette account"
-				lifetime={formatLinkLifetime(MAGIC_LINK_EXPIRES_IN)}
-			>
-				<Button
-					variant="secondary"
-					className="w-full"
-					onClick={() => setSentTo('')}
-				>
-					<Icon icon="tabler:mail-share" className="size-5" />
-					Send another link
-				</Button>
-			</CheckEmailPanel>
+				onSendAgain={() => setSentTo('')}
+			/>
 		);
 	}
-
-	const isMagic = mode === 'magic';
 
 	return (
 		<AuthCard
 			icon="tabler:user-circle"
 			title="Login to Your Account"
-			description={
-				isMagic
-					? 'Enter your email address and we will email you a link to log in. No password needed.'
-					: 'Enter your email address and password.'
-			}
+			description={copy.description}
 			footer={
 				<p>
 					Don&apos;t have an account?{' '}
@@ -186,17 +218,13 @@ function LoginPage() {
 				</p>
 			}
 		>
-			<form
-				onSubmit={isMagic ? handleMagicLink : handlePassword}
-				className="space-y-4"
-				noValidate
-			>
+			<form onSubmit={handleSubmit} className="space-y-4" noValidate>
 				<EmailField value={email} onChange={setEmail} disabled={isLoading} />
 
 				{!isMagic && (
-					<div className="flex flex-col gap-2">
-						<div className="flex items-center">
-							<Label htmlFor={passwordId}>Password</Label>
+					<PasswordField
+						label="Password"
+						labelAction={
 							<Link
 								to="/auth/forgot-password"
 								search={{ redirect: search.redirect }}
@@ -204,16 +232,13 @@ function LoginPage() {
 							>
 								Forgot your password?
 							</Link>
-						</div>
-						<PasswordInput
-							id={passwordId}
-							value={password}
-							onChange={(e) => setPassword(e.target.value)}
-							required
-							disabled={isLoading}
-							autoComplete="current-password"
-						/>
-					</div>
+						}
+						value={password}
+						onChange={setPassword}
+						required
+						disabled={isLoading}
+						autoComplete="current-password"
+					/>
 				)}
 
 				<AuthError message={error} />
@@ -223,25 +248,14 @@ function LoginPage() {
 					onToken={turnstile.setToken}
 				/>
 
-				<Button
-					type="submit"
-					className="w-full"
-					disabled={isLoading || !email || !turnstile.token}
+				<AuthSubmitButton
+					isLoading={isLoading}
+					disabled={!email || !turnstile.token}
+					loadingLabel={copy.loadingLabel}
+					icon={copy.submitIcon}
 				>
-					{isLoading ? (
-						<>
-							<Icon icon="tabler:loader-2" className="size-5 animate-spin" />
-							{isMagic ? 'Sending link...' : 'Logging in...'}
-						</>
-					) : isMagic ? (
-						<>
-							<Icon icon="tabler:mail" className="size-5" />
-							Email me a login link
-						</>
-					) : (
-						'Login'
-					)}
-				</Button>
+					{copy.submitLabel}
+				</AuthSubmitButton>
 			</form>
 
 			{needsVerification && (
@@ -250,7 +264,7 @@ function LoginPage() {
 
 			<AuthModeToggle
 				mode={mode}
-				onToggle={switchMode}
+				onToggle={toggleMode}
 				magicLabel="Email me a login link instead"
 			/>
 		</AuthCard>

@@ -20,6 +20,7 @@ import {
 	BookingDetailsSection,
 	type EmailBookingDetails,
 } from './BookingDetailsSection';
+import { EmailContactRow } from './EmailContactRow';
 
 interface BookingConfirmationEmailProps {
 	booking: EmailBookingDetails;
@@ -153,16 +154,7 @@ export const BookingConfirmationEmail: React.FC<
 									</Text>
 								</Column>
 							</Row>
-							<Row className="my-[12px]">
-								<Column className="text-center">
-									<Text className="my-[8px] text-[12px] leading-[24px] text-stone-500">
-										Irishette Bed & Breakfast
-									</Text>
-									<Text className="mt-[4px] mb-0 text-[12px] leading-[24px] font-semibold text-stone-500">
-										<Link href={`mailto:${contactEmail}`}>{contactEmail}</Link>
-									</Text>
-								</Column>
-							</Row>
+							<EmailContactRow contactEmail={contactEmail} />
 						</Section>
 					</Container>
 				</Body>

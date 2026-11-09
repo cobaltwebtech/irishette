@@ -6,6 +6,11 @@ import { AdminLayout } from '@/components/admin/AdminLayout';
 import { DisputesPanel } from '@/components/admin/DisputesPanel';
 import { NotificationsPanel } from '@/components/admin/inbox/NotificationsPanel';
 import {
+	Amount,
+	BookingLink,
+	StayDates,
+} from '@/components/booking/BookingsTable';
+import {
 	BookingStatusBadge,
 	PaymentStatusBadge,
 } from '@/components/booking/StatusBadges';
@@ -13,7 +18,7 @@ import {
 	createAppColumnHelper,
 	DataTableView,
 	PaginationControls,
-	SortableHeader,
+	sortable,
 	useAppTable,
 } from '@/components/data-table';
 import { Button } from '@/components/ui/button';
@@ -28,7 +33,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
-import { formatDateCT, formatStayDate } from '@/lib/timezone';
+import { formatDateCT } from '@/lib/timezone';
 
 type BookingRow =
 	RouterOutputs['users']['adminGetGuestDetails']['bookings'][number];
@@ -39,26 +44,21 @@ const columns = columnHelper.columns([
 	columnHelper.accessor('confirmationId', {
 		header: 'Confirmation ID',
 		cell: (info) => (
-			<Link
+			<BookingLink
 				to="/admin/bookings/$publicId"
-				params={{ publicId: info.row.original.publicId }}
-				className="font-mono text-sm font-semibold text-primary underline hover:text-primary/80"
+				publicId={info.row.original.publicId}
 			>
 				{info.getValue()}
-			</Link>
+			</BookingLink>
 		),
 	}),
 	columnHelper.accessor('checkInDate', {
-		header: ({ column }) => (
-			<SortableHeader column={column}>Check-in</SortableHeader>
-		),
+		header: sortable('Check-in'),
 		cell: (info) => (
-			<div>
-				<div>{formatStayDate(info.getValue())}</div>
-				<div className="text-sm text-muted-foreground">
-					to {formatStayDate(info.row.original.checkOutDate)}
-				</div>
-			</div>
+			<StayDates
+				checkIn={info.getValue()}
+				checkOut={info.row.original.checkOutDate}
+			/>
 		),
 	}),
 	columnHelper.accessor('numberOfNights', {
@@ -79,12 +79,8 @@ const columns = columnHelper.columns([
 		cell: (info) => <PaymentStatusBadge status={info.getValue()} />,
 	}),
 	columnHelper.accessor('totalAmount', {
-		header: ({ column }) => (
-			<SortableHeader column={column}>Amount</SortableHeader>
-		),
-		cell: (info) => (
-			<span className="font-medium">${info.getValue().toFixed(2)}</span>
-		),
+		header: sortable('Amount'),
+		cell: (info) => <Amount value={info.getValue()} />,
 	}),
 ]);
 

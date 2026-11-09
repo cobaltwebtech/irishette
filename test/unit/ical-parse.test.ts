@@ -183,6 +183,78 @@ describe('parseIcal', () => {
 		expect(events).toHaveLength(1);
 	});
 
+	it('ignores properties of nested components and stray END lines', () => {
+		const { events } = parseIcal(
+			[
+				'BEGIN:VCALENDAR',
+				'END:VEVENT',
+				'BEGIN:VEVENT',
+				'UID:nest',
+				'DTSTART;VALUE=DATE:20300901',
+				'BEGIN:VALARM',
+				'BEGIN:VEVENT',
+				'SUMMARY:Owner block',
+				'END:VEVENT',
+				'END:VALARM',
+				'END:VCALENDAR',
+				'not a property line',
+				'DTEND;VALUE=DATE:20300903',
+				'END:VEVENT',
+				'END:VCALENDAR',
+			].join('\r\n'),
+		);
+		expect(events).toEqual([
+			{
+				uid: 'nest',
+				start: '2030-09-01',
+				end: '2030-09-03',
+				kind: 'reserved',
+				summary: null,
+			},
+		]);
+	});
+
+	it('adds DURATION to a date-time start in its zone', () => {
+		const { events } = parseIcal(
+			cal(['UID:dt', 'DTSTART:20300411T030000Z', 'DURATION:P1DT12H']),
+		);
+		// 03:00Z Apr 11 is Apr 10 in Chicago; +36h is 15:00Z Apr 12 (Apr 12).
+		expect(events[0]).toMatchObject({ start: '2030-04-10', end: '2030-04-12' });
+	});
+
+	it('counts missing or unusable dates as invalid', () => {
+		const result = parseIcal(
+			cal(
+				['UID:no-start', 'DTEND;VALUE=DATE:20300802'],
+				['UID:bad-duration', 'DTSTART;VALUE=DATE:20300801', 'DURATION:P'],
+				['UID:floating-no-end', 'DTSTART:20300801T150000'],
+				['UID:bad-end', 'DTSTART;VALUE=DATE:20300801', 'DTEND:tomorrow'],
+				[
+					'UID:backwards',
+					'DTSTART;VALUE=DATE:20300805',
+					'DTEND;VALUE=DATE:20300801',
+				],
+			),
+		);
+		expect(result.events).toEqual([]);
+		expect(result.skipped.invalidDates).toBe(5);
+	});
+
+	it('classifies, unescapes and trims summaries', () => {
+		const { events } = parseIcal(
+			cal([
+				'UID:sum',
+				'DTSTART;VALUE=DATE:20300801',
+				'DTEND;VALUE=DATE:20300802',
+				'SUMMARY: Closed\\, owner stay ',
+			]),
+		);
+		expect(events[0]).toMatchObject({
+			kind: 'unavailable',
+			summary: 'Closed, owner stay',
+		});
+	});
+
 	it('recognizes non-calendars', () => {
 		expect(parseIcal('<html><body>Sign in</body></html>')).toMatchObject({
 			isCalendar: false,

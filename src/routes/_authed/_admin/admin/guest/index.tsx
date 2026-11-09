@@ -5,15 +5,11 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import {
 	createAppColumnHelper,
-	DataTableView,
-	PaginationControls,
-	SortableHeader,
+	DataTableCard,
+	sortable,
 	useAppTable,
 } from '@/components/data-table';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
 import { formatDateCT } from '@/lib/timezone';
@@ -26,9 +22,7 @@ const columnHelper = createAppColumnHelper<GuestRow>();
 
 const columns = columnHelper.columns([
 	columnHelper.accessor('user.name', {
-		header: ({ column }) => (
-			<SortableHeader column={column}>Guest Name</SortableHeader>
-		),
+		header: sortable('Guest Name'),
 		cell: (info) => (
 			<div className="flex items-center gap-2">
 				<Icon
@@ -45,9 +39,7 @@ const columns = columnHelper.columns([
 		),
 	}),
 	columnHelper.accessor('user.email', {
-		header: ({ column }) => (
-			<SortableHeader column={column}>Email</SortableHeader>
-		),
+		header: sortable('Email'),
 		cell: (info) => (
 			<a
 				href={`mailto:${info.getValue()}`}
@@ -71,9 +63,7 @@ const columns = columnHelper.columns([
 		},
 	}),
 	columnHelper.accessor('bookingCount', {
-		header: ({ column }) => (
-			<SortableHeader column={column}>Bookings</SortableHeader>
-		),
+		header: sortable('Bookings'),
 		cell: (info) => {
 			const count = info.getValue();
 			return (
@@ -128,47 +118,23 @@ function AdminGuests() {
 				</p>
 			</div>
 
-			<Card className="max-w-full overflow-hidden">
-				<CardHeader>
-					<div className="flex items-center justify-between">
-						<CardTitle>
-							All Guests ({table.getFilteredRowModel().rows.length})
-						</CardTitle>
-						<div className="flex items-center gap-2">
-							<div className="relative">
-								<Icon
-									icon="tabler:search"
-									className="absolute top-1/2 left-2 size-5 -translate-y-1/2 transform text-muted-foreground"
-								/>
-								<Input
-									placeholder="Search guests..."
-									value={table.state.globalFilter ?? ''}
-									onChange={(event) =>
-										table.setGlobalFilter(String(event.target.value))
-									}
-									className="w-[300px] pl-8"
-								/>
-							</div>
-						</div>
-					</div>
-				</CardHeader>
-				<CardContent>
-					<ScrollArea className="w-full">
-						<DataTableView
-							table={table}
-							emptyMessage="No guests found."
-							onRowClick={(guest) =>
-								navigate({
-									to: '/admin/guest/$publicId',
-									params: { publicId: guest.user.publicId },
-								})
-							}
-						/>
-						<ScrollBar orientation="horizontal" />
-					</ScrollArea>
-					<PaginationControls table={table} noun="guests" />
-				</CardContent>
-			</Card>
+			<DataTableCard
+				table={table}
+				title="All Guests"
+				searchPlaceholder="Search guests..."
+				searchClassName="w-[300px]"
+				searchIconClassName="size-5"
+				emptyMessage="No guests found."
+				noun="guests"
+				scroll
+				className="max-w-full overflow-hidden"
+				onRowClick={(guest) =>
+					navigate({
+						to: '/admin/guest/$publicId',
+						params: { publicId: guest.user.publicId },
+					})
+				}
+			/>
 		</AdminLayout>
 	);
 }

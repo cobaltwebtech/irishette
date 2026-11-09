@@ -3,90 +3,23 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useState } from 'react';
 
+import {
+	ACCOUNT_BOOKING_COLUMNS,
+	BookingsTable,
+	byCheckIn,
+} from '@/components/booking/BookingsTable';
 import { BookingSummaryList } from '@/components/booking/BookingSummaryList';
-import { BookingStatusBadge } from '@/components/booking/StatusBadges';
-import {
-	createAppColumnHelper,
-	DataTableView,
-	PaginationControls,
-	SortableHeader,
-	useAppTable,
-} from '@/components/data-table';
 import { EditProfileModal } from '@/components/EditProfileModal';
-import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardFooter,
-	CardHeader,
-	CardTitle,
-} from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
-import { formatDateCT, formatStayDate } from '@/lib/timezone';
+import { formatDateCT } from '@/lib/timezone';
 import { cn } from '@/utils/twMerge';
 
 type BookingRow = RouterOutputs['bookings']['getMyBookings'][number];
 
 const MY_BOOKINGS_INPUT = { limit: 50, offset: 0 };
-
-const columnHelper = createAppColumnHelper<BookingRow>();
-
-const columns = columnHelper.columns([
-	columnHelper.accessor('booking.confirmationId', {
-		header: 'Confirmation ID',
-		cell: (info) => (
-			<Link
-				to="/account/booking/$publicId"
-				params={{ publicId: info.row.original.booking.publicId }}
-				className="font-mono text-sm font-semibold text-primary underline hover:text-primary/80"
-			>
-				{info.getValue()}
-			</Link>
-		),
-	}),
-	columnHelper.accessor('booking.checkInDate', {
-		id: 'booking.checkInDate',
-		header: ({ column }) => (
-			<SortableHeader column={column}>Stay Dates</SortableHeader>
-		),
-		cell: (info) => (
-			<div>
-				<div className="font-medium">{formatStayDate(info.getValue())}</div>
-				<div className="text-sm text-muted-foreground">
-					to {formatStayDate(info.row.original.booking.checkOutDate)}
-				</div>
-			</div>
-		),
-	}),
-	columnHelper.accessor('room.name', {
-		header: 'Room',
-		cell: (info) => (
-			<Badge variant="outline" className="capitalize">
-				{info.getValue()}
-			</Badge>
-		),
-	}),
-	columnHelper.accessor('booking.numberOfGuests', {
-		header: 'Guests',
-		cell: (info) => info.getValue(),
-	}),
-	columnHelper.accessor('booking.status', {
-		header: 'Status',
-		cell: (info) => <BookingStatusBadge status={info.getValue()} />,
-	}),
-	columnHelper.accessor('booking.totalAmount', {
-		header: ({ column }) => (
-			<SortableHeader column={column}>Amount</SortableHeader>
-		),
-		cell: (info) => (
-			<span className="font-medium">${info.getValue().toFixed(2)}</span>
-		),
-	}),
-]);
 
 export const Route = createFileRoute('/_authed/account/')({
 	head: () => ({
@@ -127,14 +60,6 @@ function AccountPage() {
 		(row) => row.booking.status === 'cancelled' && notPast(row),
 	);
 
-	const table = useAppTable({
-		data: bookings,
-		columns,
-		initialState: {
-			sorting: [{ id: 'booking.checkInDate', desc: false }],
-		},
-	});
-
 	return (
 		<div className="bg-background">
 			{/* Header */}
@@ -157,40 +82,19 @@ function AccountPage() {
 			<div className="container mx-auto px-4 py-8">
 				{/* Conditional Rendering: Show table if bookings exist, otherwise show empty state */}
 				{bookings.length > 0 ? (
-					<Card className="mb-8">
-						<CardHeader>
-							<div className="flex flex-wrap items-center justify-between gap-2">
-								<div>
-									<CardTitle>
-										Current & Upcoming Bookings (
-										{table.getFilteredRowModel().rows.length})
-									</CardTitle>
-									<CardDescription>
-										Your current and upcoming confirmed bookings. Click on the
-										confirmation ID to view more details.
-									</CardDescription>
-								</div>
-								<div className="relative">
-									<Icon
-										icon="tabler:search"
-										className="absolute top-1/2 left-2 size-4 -translate-y-1/2 transform text-muted-foreground"
-									/>
-									<Input
-										placeholder="Search bookings..."
-										value={table.state.globalFilter ?? ''}
-										onChange={(event) =>
-											table.setGlobalFilter(String(event.target.value))
-										}
-										className="w-[250px] pl-8"
-									/>
-								</div>
-							</div>
-						</CardHeader>
-						<CardContent>
-							<DataTableView table={table} emptyMessage="No bookings found." />
-							<PaginationControls table={table} noun="bookings" />
-						</CardContent>
-						<CardFooter>
+					<BookingsTable
+						data={bookings}
+						columns={ACCOUNT_BOOKING_COLUMNS}
+						initialState={byCheckIn(false)}
+						title="Current & Upcoming Bookings"
+						description="Your current and upcoming confirmed bookings. Click on the confirmation ID to view more details."
+						searchPlaceholder="Search bookings..."
+						searchClassName="w-[250px]"
+						headerClassName="flex flex-wrap items-center justify-between gap-2"
+						emptyMessage="No bookings found."
+						noun="bookings"
+						className="mb-8"
+						footer={
 							<Link
 								to="/account/past-bookings"
 								data-slot="button"
@@ -199,8 +103,8 @@ function AccountPage() {
 								<Icon icon="tabler:calendar-repeat" className="size-5" />
 								View Past Bookings
 							</Link>
-						</CardFooter>
-					</Card>
+						}
+					/>
 				) : (
 					<Card className="mb-8">
 						<CardContent className="flex flex-col items-center justify-center py-12">

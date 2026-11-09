@@ -186,6 +186,60 @@ function classifySummary(summary: string | null): ImportedEventKind {
 		: 'reserved';
 }
 
+/** The VEVENT being read; nested components (VALARM) are skipped. */
+interface EventReader {
+	event: Property[] | null;
+	nested: number;
+}
+
+function beginComponent(reader: EventReader, component: string): void {
+	if (component === 'VEVENT' && !reader.event) {
+		reader.event = [];
+		reader.nested = 0;
+	} else if (reader.event) {
+		reader.nested++;
+	}
+}
+
+/** Returns the VEVENT's properties when this END closes it. */
+function endComponent(
+	reader: EventReader,
+	component: string,
+): Property[] | null {
+	if (!reader.event) return null;
+	if (reader.nested > 0) {
+		reader.nested--;
+		return null;
+	}
+	if (component !== 'VEVENT') return null;
+	const props = reader.event;
+	reader.event = null;
+	return props;
+}
+
+/** The top-level properties of each VEVENT, in feed order. */
+function readEvents(text: string): Property[][] {
+	const reader: EventReader = { event: null, nested: 0 };
+	const events: Property[][] = [];
+	for (const line of unfoldLines(text)) {
+		const prop = parseProperty(line);
+		if (!prop) continue;
+		if (prop.name === 'BEGIN') {
+			beginComponent(reader, prop.value.toUpperCase());
+		} else if (prop.name === 'END') {
+			const props = endComponent(reader, prop.value.toUpperCase());
+			if (props) events.push(props);
+		} else if (reader.event && reader.nested === 0) {
+			reader.event.push(prop);
+		}
+	}
+	return events;
+}
+
+type SkipReason = Exclude<keyof ParseResult['skipped'], 'duplicateUid'>;
+type Skipped = { skip: SkipReason };
+type GetProperty = (name: string) => Property | undefined;
+
 export function parseIcal(
 	text: string,
 	timeZone = PROPERTY_TIMEZONE,
@@ -202,99 +256,80 @@ export function parseIcal(
 		},
 	};
 	const byUid = new Map<string, ImportedEvent>();
-
-	// Properties of the VEVENT being read; nested components (VALARM) ignored.
-	let event: Property[] | null = null;
-	let nested = 0;
-
-	for (const line of unfoldLines(text)) {
-		const prop = parseProperty(line);
-		if (!prop) continue;
-		if (prop.name === 'BEGIN') {
-			if (prop.value.toUpperCase() === 'VEVENT' && !event) {
-				event = [];
-				nested = 0;
-			} else if (event) {
-				nested++;
-			}
+	for (const props of readEvents(text)) {
+		const parsed = toEvent(props, timeZone);
+		if ('skip' in parsed) {
+			result.skipped[parsed.skip]++;
 			continue;
 		}
-		if (prop.name === 'END') {
-			if (event && nested > 0) {
-				nested--;
-			} else if (event && prop.value.toUpperCase() === 'VEVENT') {
-				const parsed = toEvent(event, timeZone, result);
-				if (parsed) {
-					if (byUid.has(parsed.uid)) result.skipped.duplicateUid++;
-					byUid.set(parsed.uid, parsed);
-				}
-				event = null;
-			}
-			continue;
-		}
-		if (event && nested === 0) event.push(prop);
+		if (byUid.has(parsed.uid)) result.skipped.duplicateUid++;
+		byUid.set(parsed.uid, parsed);
 	}
-
 	result.events = [...byUid.values()];
 	return result;
 }
 
-function toEvent(
-	props: Property[],
-	timeZone: string,
-	result: ParseResult,
-): ImportedEvent | null {
-	const get = (name: string) => props.find((p) => p.name === name);
-	const status = get('STATUS')?.value.trim().toUpperCase();
-	if (status === 'CANCELLED') {
-		result.skipped.cancelled++;
-		return null;
-	}
-	const uid = get('UID')?.value.trim();
-	if (!uid) {
-		result.skipped.noUid++;
-		return null;
-	}
-	if (isOwnExportUid(uid)) {
-		result.skipped.ownExport++;
-		return null;
-	}
-
-	const dtStart = get('DTSTART');
-	const start = dtStart ? parseDateValue(dtStart, timeZone) : null;
-	if (!start) {
-		result.skipped.invalidDates++;
-		return null;
-	}
-
-	let end: IsoDate | null = null;
-	const dtEnd = get('DTEND');
-	const duration = get('DURATION');
-	if (dtEnd) {
-		end = parseDateValue(dtEnd, timeZone)?.date ?? null;
-	} else if (duration) {
-		const ms = parseDuration(duration.value);
-		if (ms !== null) {
-			end =
-				start.instant && !start.isDate
-					? dateInZone(new Date(start.instant.getTime() + ms), timeZone)
-					: addDays(start.date, Math.round(ms / 86_400_000));
-		}
-	} else if (start.isDate) {
-		end = addDays(start.date, 1);
-	}
-	if (!end || end <= start.date) {
-		result.skipped.invalidDates++;
-		return null;
-	}
-
+function toEvent(props: Property[], timeZone: string): ImportedEvent | Skipped {
+	const get: GetProperty = (name) => props.find((p) => p.name === name);
+	const id = readUid(get);
+	if ('skip' in id) return id;
+	const dates = readDates(get, timeZone);
+	if (!dates) return { skip: 'invalidDates' };
 	const rawSummary = get('SUMMARY')?.value;
 	const summary = rawSummary ? unescapeText(rawSummary).trim() : null;
 	return {
-		uid,
-		start: start.date,
-		end,
+		uid: id.uid,
+		start: dates.start,
+		end: dates.end,
 		kind: classifySummary(summary),
 		summary,
 	};
+}
+
+/** The UID of an event worth importing (not cancelled, not our own export). */
+function readUid(get: GetProperty): { uid: string } | Skipped {
+	if (get('STATUS')?.value.trim().toUpperCase() === 'CANCELLED') {
+		return { skip: 'cancelled' };
+	}
+	const uid = get('UID')?.value.trim();
+	if (!uid) return { skip: 'noUid' };
+	if (isOwnExportUid(uid)) return { skip: 'ownExport' };
+	return { uid };
+}
+
+/** Start and exclusive end, or null when missing or not a forward range. */
+function readDates(
+	get: GetProperty,
+	timeZone: string,
+): { start: IsoDate; end: IsoDate } | null {
+	const dtStart = get('DTSTART');
+	const start = dtStart ? parseDateValue(dtStart, timeZone) : null;
+	if (!start) return null;
+	const end = readEnd(get, start, timeZone);
+	return end && end > start.date ? { start: start.date, end } : null;
+}
+
+/** DTEND, else DTSTART + DURATION, else one day for DATE events. */
+function readEnd(
+	get: GetProperty,
+	start: DateValue,
+	timeZone: string,
+): IsoDate | null {
+	const dtEnd = get('DTEND');
+	if (dtEnd) return parseDateValue(dtEnd, timeZone)?.date ?? null;
+	const duration = get('DURATION');
+	if (duration) return addDuration(start, duration.value, timeZone);
+	return start.isDate ? addDays(start.date, 1) : null;
+}
+
+function addDuration(
+	start: DateValue,
+	duration: string,
+	timeZone: string,
+): IsoDate | null {
+	const ms = parseDuration(duration);
+	if (ms === null) return null;
+	return start.instant && !start.isDate
+		? dateInZone(new Date(start.instant.getTime() + ms), timeZone)
+		: addDays(start.date, Math.round(ms / 86_400_000));
 }
