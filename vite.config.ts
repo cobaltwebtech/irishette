@@ -1,5 +1,6 @@
 import { cloudflare } from '@cloudflare/vite-plugin';
 import tailwindcss from '@tailwindcss/vite';
+import { devtools } from '@tanstack/devtools-vite';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, lazyPlugins } from 'vite-plus';
@@ -91,6 +92,8 @@ const config = defineConfig({
 		},
 	},
 	plugins: lazyPlugins(() => [
+		// Must be the first plugin. Strips the devtools from production builds.
+		devtools(),
 		cloudflare({
 			viteEnvironment: {
 				name: 'ssr',

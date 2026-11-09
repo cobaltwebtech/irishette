@@ -11,7 +11,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 // Must match DB in cloudflare.config.ts.
-const DATABASE_ID = '7a52bbfc-592e-4792-990e-6a5e51ca8cbd';
+const DATABASE_ID = '2a894e1e-33f0-45ce-88e1-2709f90215a9';
 // Same dir @cloudflare/vite-plugin v2 uses for `pnpm dev` (.cloudflare/state/v3).
 const PERSIST_TO = '.cloudflare/state';
 const LOCAL = ['--local', '--persist-to', PERSIST_TO];

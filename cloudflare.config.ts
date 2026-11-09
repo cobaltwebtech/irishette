@@ -44,8 +44,8 @@ export default defineConfig({
 		],
 		env: {
 			DB: bindings.d1({
-				name: 'irishette-dev',
-				id: '7a52bbfc-592e-4792-990e-6a5e51ca8cbd',
+				name: 'irishette-dev-1',
+				id: '2a894e1e-33f0-45ce-88e1-2709f90215a9',
 			}),
 			BETTER_AUTH_URL: bindings.text(publicValue('BETTER_AUTH_URL') as string),
 			BETTER_AUTH_SECRET: bindings.secret(),

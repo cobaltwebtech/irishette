@@ -1,14 +1,15 @@
 /// <reference types="vite-plus/client" />
 
+import { TanStackDevtools } from '@tanstack/react-devtools';
 import type { QueryClient } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { ReactQueryDevtoolsPanel } from '@tanstack/react-query-devtools';
 import {
 	createRootRouteWithContext,
 	HeadContent,
 	Scripts,
 	useRouterState,
 } from '@tanstack/react-router';
-import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
+import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools';
 import type { TRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import { ReactLenis } from 'lenis/react';
 import type * as React from 'react';
@@ -115,8 +116,18 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 						<Toaster />
 					</ReactLenis>
 				</div>
-				<TanStackRouterDevtools position="bottom-right" />
-				<ReactQueryDevtools buttonPosition="bottom-left" />
+				<TanStackDevtools
+					plugins={[
+						{
+							name: 'TanStack Query',
+							render: <ReactQueryDevtoolsPanel />,
+						},
+						{
+							name: 'TanStack Router',
+							render: <TanStackRouterDevtoolsPanel />,
+						},
+					]}
+				/>
 				<Scripts />
 			</body>
 		</html>

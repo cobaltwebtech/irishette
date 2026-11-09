@@ -186,7 +186,7 @@ Update the matching doc when you change an area; verify against the source when 
 - Never run `drizzle-kit migrate` or `push` against D1 (see `drizzle.config.ts`); drizzle-kit is for `generate`, `check` and `studio` only.
 - Better Auth tables live in `src/db/auth-schema.ts`; keep them in sync with Better Auth plugin changes.
 - Local D1 state lives in `.cloudflare/state/` (gitignored), shared by `pnpm dev` and `scripts/d1-local.mjs`. Inspect local data with `pnpm db:studio` or the Local Explorer (see `workers-development` skill).
-- `cloudflare.config.ts` binds the D1 database `irishette-dev`. Treat any remote command as touching real data.
+- `cloudflare.config.ts` binds the D1 database `irishette-dev-1`. Treat any remote command as touching real data.
 
 ## Secrets and environment (Varlock)
 
