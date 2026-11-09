@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/utils/twMerge';
 
 export const Route = createFileRoute('/cancellation-refund-policy')({
 	head: () => ({
@@ -312,9 +313,13 @@ function CancellationRefundPolicyPage() {
 									<p className="text-muted-foreground">
 										<strong>Email:</strong> info@irishette.com
 									</p>
-									<Button asChild className="mt-4">
-										<Link to="/account">Manage Bookings</Link>
-									</Button>
+									<Link
+										to="/account"
+										data-slot="button"
+										className={cn(buttonVariants(), 'mt-4')}
+									>
+										Manage Bookings
+									</Link>
 								</div>
 							</section>
 

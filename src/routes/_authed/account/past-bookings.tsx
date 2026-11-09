@@ -10,7 +10,7 @@ import {
 	useAppTable,
 } from '@/components/data-table';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import {
 	Card,
 	CardContent,
@@ -155,9 +155,13 @@ function PastBookingsPage() {
 								View your previous booking history
 							</p>
 						</div>
-						<Button asChild variant="outline">
-							<Link to="/account">← Back to Account</Link>
-						</Button>
+						<Link
+							to="/account"
+							data-slot="button"
+							className={buttonVariants({ variant: 'outline' })}
+						>
+							← Back to Account
+						</Link>
 					</div>
 				</div>
 			</div>
@@ -216,9 +220,13 @@ function PastBookingsPage() {
 								You don't have any past bookings yet. Once your stay is
 								complete, it will appear here.
 							</p>
-							<Button asChild>
-								<Link to="/account">← Back to Account</Link>
-							</Button>
+							<Link
+								to="/account"
+								data-slot="button"
+								className={buttonVariants()}
+							>
+								← Back to Account
+							</Link>
 						</CardContent>
 					</Card>
 				)}

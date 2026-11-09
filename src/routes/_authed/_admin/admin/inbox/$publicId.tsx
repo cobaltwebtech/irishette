@@ -15,7 +15,7 @@ import {
 	useForgetInboxItem,
 	useSetInboxStatus,
 } from '@/components/admin/inbox/use-inbox';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
 	Card,
 	CardContent,
@@ -54,12 +54,14 @@ export const Route = createFileRoute('/_authed/_admin/admin/inbox/$publicId')({
 
 function BackToList() {
 	return (
-		<Button asChild variant="outline">
-			<Link to="/admin/inbox">
-				<Icon icon="tabler:arrow-left" className="size-4" />
-				All notifications
-			</Link>
-		</Button>
+		<Link
+			to="/admin/inbox"
+			data-slot="button"
+			className={buttonVariants({ variant: 'outline' })}
+		>
+			<Icon icon="tabler:arrow-left" className="size-4" />
+			All notifications
+		</Link>
 	);
 }
 

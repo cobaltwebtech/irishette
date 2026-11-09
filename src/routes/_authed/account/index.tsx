@@ -12,7 +12,7 @@ import {
 } from '@/components/data-table';
 import { EditProfileModal } from '@/components/EditProfileModal';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
 	Card,
 	CardContent,
@@ -203,12 +203,14 @@ function AccountPage() {
 							<PaginationControls table={table} noun="bookings" />
 						</CardContent>
 						<CardFooter>
-							<Button asChild variant="outline">
-								<Link to="/account/past-bookings">
-									<Icon icon="tabler:calendar-repeat" className="size-5" />
-									View Past Bookings
-								</Link>
-							</Button>
+							<Link
+								to="/account/past-bookings"
+								data-slot="button"
+								className={buttonVariants({ variant: 'outline' })}
+							>
+								<Icon icon="tabler:calendar-repeat" className="size-5" />
+								View Past Bookings
+							</Link>
 						</CardFooter>
 					</Card>
 				) : (
@@ -226,15 +228,17 @@ function AccountPage() {
 								available rooms and make your next reservation!
 							</p>
 							<div className="flex gap-2">
-								<Button asChild>
-									<Link to="/">Browse Rooms</Link>
-								</Button>
-								<Button asChild variant="outline">
-									<Link to="/account/past-bookings">
-										<Icon icon="tabler:calendar-repeat" className="size-5" />
-										View Past Bookings
-									</Link>
-								</Button>{' '}
+								<Link to="/" data-slot="button" className={buttonVariants()}>
+									Browse Rooms
+								</Link>
+								<Link
+									to="/account/past-bookings"
+									data-slot="button"
+									className={buttonVariants({ variant: 'outline' })}
+								>
+									<Icon icon="tabler:calendar-repeat" className="size-5" />
+									View Past Bookings
+								</Link>{' '}
 							</div>
 						</CardContent>
 					</Card>
@@ -301,12 +305,14 @@ function AccountPage() {
 							</div>
 							<div>
 								<p>Have questions or need assistance?</p>
-								<Button asChild variant="secondary">
-									<Link to="/contact">
-										<Icon icon="tabler:message-circle" className="size-4" />
-										Contact Us
-									</Link>
-								</Button>
+								<Link
+									to="/contact"
+									data-slot="button"
+									className={buttonVariants({ variant: 'secondary' })}
+								>
+									<Icon icon="tabler:message-circle" className="size-4" />
+									Contact Us
+								</Link>
 							</div>
 						</CardContent>
 					</Card>

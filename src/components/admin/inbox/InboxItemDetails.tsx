@@ -2,7 +2,7 @@ import { Icon } from '@iconify/react';
 import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { formatMoney, humanizeCode } from '@/lib/format';
 import {
 	contactReplyHref,
@@ -60,12 +60,16 @@ function ExternalLink({
 	children: ReactNode;
 }) {
 	return (
-		<Button asChild variant="outline" size="sm">
-			<a href={href} target="_blank" rel="noreferrer noopener">
-				{children}
-				<Icon icon="tabler:external-link" className="size-4" />
-			</a>
-		</Button>
+		<a
+			href={href}
+			target="_blank"
+			rel="noreferrer noopener"
+			data-slot="button"
+			className={buttonVariants({ variant: 'outline', size: 'sm' })}
+		>
+			{children}
+			<Icon icon="tabler:external-link" className="size-4" />
+		</a>
 	);
 }
 
@@ -122,12 +126,14 @@ function ContactFormView({
 				and are not verified.
 			</p>
 			<Actions>
-				<Button asChild>
-					<a href={contactReplyHref(d)}>
-						<Icon icon="tabler:arrow-back-up" className="size-4" />
-						Reply by email
-					</a>
-				</Button>
+				<a
+					href={contactReplyHref(d)}
+					data-slot="button"
+					className={buttonVariants()}
+				>
+					<Icon icon="tabler:arrow-back-up" className="size-4" />
+					Reply by email
+				</a>
 			</Actions>
 		</div>
 	);
@@ -375,15 +381,15 @@ function RoomCalendarAction({ roomPublicId }: { roomPublicId: string }) {
 	if (!roomPublicId) return null;
 	return (
 		<Actions>
-			<Button asChild variant="outline" size="sm">
-				<Link
-					to="/admin/property-management/$publicId"
-					params={{ publicId: roomPublicId }}
-				>
-					<Icon icon="tabler:calendar-cog" className="size-4" />
-					Open calendar settings
-				</Link>
-			</Button>
+			<Link
+				to="/admin/property-management/$publicId"
+				params={{ publicId: roomPublicId }}
+				data-slot="button"
+				className={buttonVariants({ variant: 'outline', size: 'sm' })}
+			>
+				<Icon icon="tabler:calendar-cog" className="size-4" />
+				Open calendar settings
+			</Link>
 		</Actions>
 	);
 }

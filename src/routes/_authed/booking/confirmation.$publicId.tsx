@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
@@ -21,6 +21,7 @@ import {
 } from '@/lib/site';
 import { bookingActions } from '@/stores';
 import { parseISODateString } from '@/utils/booking-utils';
+import { cn } from '@/utils/twMerge';
 
 export const Route = createFileRoute('/_authed/booking/confirmation/$publicId')(
 	{
@@ -430,21 +431,25 @@ function BookingConfirmation() {
 				</div>
 				{/* Action Buttons */}
 				<div className="mx-auto flex max-w-lg flex-wrap gap-4 pt-8">
-					<Button asChild variant="secondary" className="flex-1">
-						<Link to="/">
-							<Icon icon="tabler:home" className="size-5" />
-							Go to Home
-						</Link>
-					</Button>
-					<Button asChild className="flex-1">
-						<Link to="/account">
-							<Icon
-								icon="material-symbols:bed-outline-rounded"
-								className="size-5"
-							/>
-							View All Bookings
-						</Link>
-					</Button>
+					<Link
+						to="/"
+						data-slot="button"
+						className={cn(buttonVariants({ variant: 'secondary' }), 'flex-1')}
+					>
+						<Icon icon="tabler:home" className="size-5" />
+						Go to Home
+					</Link>
+					<Link
+						to="/account"
+						data-slot="button"
+						className={cn(buttonVariants(), 'flex-1')}
+					>
+						<Icon
+							icon="material-symbols:bed-outline-rounded"
+							className="size-5"
+						/>
+						View All Bookings
+					</Link>
 				</div>
 			</div>
 		</section>

@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
 
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { signOut } from '@/lib/auth-client';
 import { clearSession, useSession } from '@/lib/session';
 import { useBookingStore } from '@/stores';
@@ -84,33 +84,40 @@ export default function Header() {
 							<div className="flex items-center space-x-2">
 								{/* Continue Booking Button - Shows if there's an active booking in progress */}
 								{booking.hasActiveBooking() && (
-									<Button variant="secondary" asChild>
-										<Link to="/booking" search={{ step: undefined }}>
-											<Icon icon="tabler:clock-check" className="size-5" />
-											<span className="hidden lg:inline">Continue Booking</span>
-										</Link>
-									</Button>
+									<Link
+										to="/booking"
+										search={{ step: undefined }}
+										data-slot="button"
+										className={buttonVariants({ variant: 'secondary' })}
+									>
+										<Icon icon="tabler:clock-check" className="size-5" />
+										<span className="hidden lg:inline">Continue Booking</span>
+									</Link>
 								)}
 								{/* Admin Dashboard Button - Only visible to admin users */}
 								{session.user?.role === 'admin' && (
-									<Button variant="destructive" asChild>
-										<Link to="/admin">
-											<Icon icon="tabler:shield-star" className="size-5" />
-											<span className="hidden lg:inline">Admin</span>
-										</Link>
-									</Button>
+									<Link
+										to="/admin"
+										data-slot="button"
+										className={buttonVariants({ variant: 'destructive' })}
+									>
+										<Icon icon="tabler:shield-star" className="size-5" />
+										<span className="hidden lg:inline">Admin</span>
+									</Link>
 								)}
 								{/* View Bookings Button - Hidden for admin users */}
 								{session.user?.role !== 'admin' && (
-									<Button variant="accent" asChild>
-										<Link to="/account">
-											<Icon
-												icon="material-symbols:bed-outline-rounded"
-												className="size-5"
-											/>
-											<span className="hidden sm:inline">View Bookings</span>
-										</Link>
-									</Button>
+									<Link
+										to="/account"
+										data-slot="button"
+										className={buttonVariants({ variant: 'accent' })}
+									>
+										<Icon
+											icon="material-symbols:bed-outline-rounded"
+											className="size-5"
+										/>
+										<span className="hidden sm:inline">View Bookings</span>
+									</Link>
 								)}
 								<Button className="hidden lg:flex" onClick={handleLogout}>
 									<Icon icon="tabler:logout" className="size-4" />
@@ -122,22 +129,25 @@ export default function Header() {
 							<>
 								{/* Continue Booking Button - Shows if there's an active booking in progress */}
 								{booking.hasActiveBooking() && (
-									<Button variant="secondary" asChild>
-										<Link to="/booking" search={{ step: undefined }}>
-											<Icon icon="tabler:clock-check" className="size-5" />
-											<span className="hidden lg:inline">Continue Booking</span>
-										</Link>
-									</Button>
-								)}
-								<Button variant="accent" asChild>
 									<Link
-										to="/auth/login"
-										search={{ redirect: '/account', error: undefined }}
+										to="/booking"
+										search={{ step: undefined }}
+										data-slot="button"
+										className={buttonVariants({ variant: 'secondary' })}
 									>
-										<Icon icon="tabler:luggage" className="size-5" />
-										View Bookings
+										<Icon icon="tabler:clock-check" className="size-5" />
+										<span className="hidden lg:inline">Continue Booking</span>
 									</Link>
-								</Button>
+								)}
+								<Link
+									to="/auth/login"
+									search={{ redirect: '/account', error: undefined }}
+									data-slot="button"
+									className={buttonVariants({ variant: 'accent' })}
+								>
+									<Icon icon="tabler:luggage" className="size-5" />
+									View Bookings
+								</Link>
 							</>
 						)}
 

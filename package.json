@@ -37,6 +37,7 @@
     "test:smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
+    "@base-ui/react": "1.9.0",
     "@better-auth/drizzle-adapter": "1.7.18",
     "@better-auth/stripe": "1.7.18",
     "@iconify/react": "^6.0.4",

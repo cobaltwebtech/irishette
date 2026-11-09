@@ -3,7 +3,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { Image } from '@unpic/react';
 
 import { HeroSlider } from '@/components/HeroSlider';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 
 import '@/styles/custom-swiper.css';
 import {
@@ -14,6 +14,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from '@/components/ui/card';
+import { cn } from '@/utils/twMerge';
 
 export const Route = createFileRoute('/')({
 	component: HomePage,
@@ -81,12 +82,14 @@ function HomePage() {
 							/>
 							View Our Rooms
 						</Button>
-						<Button size="lg" className="text-background" asChild>
-							<Link to="/account">
-								<Icon icon="tabler:luggage" className="size-6" />
-								View Bookings
-							</Link>
-						</Button>
+						<Link
+							to="/account"
+							data-slot="button"
+							className={cn(buttonVariants({ size: 'lg' }), 'text-background')}
+						>
+							<Icon icon="tabler:luggage" className="size-6" />
+							View Bookings
+						</Link>
 					</div>
 				</div>
 			</section>
@@ -251,15 +254,16 @@ function HomePage() {
 								</div>
 							</CardContent>
 							<CardFooter className="mb-2 flex justify-center">
-								<Button
-									size="lg"
-									asChild
+								<Link
+									to="/rooms/rose-room"
 									onClick={() =>
 										window.scrollTo({ top: 0, behavior: 'smooth' })
 									}
+									data-slot="button"
+									className={buttonVariants({ size: 'lg' })}
 								>
-									<Link to="/rooms/rose-room">View & Book Rose Room</Link>
-								</Button>
+									View & Book Rose Room
+								</Link>
 							</CardFooter>
 						</Card>
 
@@ -352,15 +356,16 @@ function HomePage() {
 								</div>
 							</CardContent>
 							<CardFooter className="mb-2 flex justify-center">
-								<Button
-									size="lg"
-									asChild
+								<Link
+									to="/rooms/texas-room"
 									onClick={() =>
 										window.scrollTo({ top: 0, behavior: 'smooth' })
 									}
+									data-slot="button"
+									className={buttonVariants({ size: 'lg' })}
 								>
-									<Link to="/rooms/texas-room">View & Book Texas Room</Link>
-								</Button>
+									View & Book Texas Room
+								</Link>
 							</CardFooter>
 						</Card>
 					</div>

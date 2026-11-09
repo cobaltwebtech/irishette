@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
 export const Route = createFileRoute('/privacy-policy')({
@@ -351,9 +351,13 @@ function PrivacyPolicyPage() {
 									this Privacy Policy or our data practices, please contact us
 									at:
 								</p>
-								<Button asChild>
-									<Link to="/contact">Contact Us</Link>
-								</Button>
+								<Link
+									to="/contact"
+									data-slot="button"
+									className={buttonVariants()}
+								>
+									Contact Us
+								</Link>
 								<p className="text-muted-foreground">
 									<strong>Email:</strong> info@irishette.com
 								</p>

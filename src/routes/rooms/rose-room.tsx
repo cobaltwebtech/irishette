@@ -6,7 +6,7 @@ import type { DateRange } from 'react-day-picker';
 import RoomAvailabilityCalendar from '@/components/RoomAvailabilityCalendar';
 import BookingInfo from '@/components/RoomBookingInfo';
 import { RoomGallery } from '@/components/RoomGallery';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
 	Card,
 	CardContent,
@@ -283,12 +283,14 @@ function RoseRoomPage() {
 							Can't find the dates you need? Check out the Texas Room
 							availability.
 						</p>
-						<Button asChild variant="secondary">
-							<Link to="/rooms/texas-room">
-								<Icon icon="game-icons:texas" className="size-6 text-red-400" />
-								View Texas Room
-							</Link>
-						</Button>
+						<Link
+							to="/rooms/texas-room"
+							data-slot="button"
+							className={buttonVariants({ variant: 'secondary' })}
+						>
+							<Icon icon="game-icons:texas" className="size-6 text-red-400" />
+							View Texas Room
+						</Link>
 						<p>
 							<span className="bg-red-300 font-bold">
 								DO WE NEED ANYTHING ABOUT PETS OR OTHER NOT ALLOWED ITEMS
@@ -482,9 +484,13 @@ function RoseRoomPage() {
 								>
 									Check Availability
 								</Button>
-								<Button asChild variant="outline" size="lg">
-									<Link to="/">View All Rooms</Link>
-								</Button>
+								<Link
+									to="/"
+									data-slot="button"
+									className={buttonVariants({ variant: 'outline', size: 'lg' })}
+								>
+									View All Rooms
+								</Link>
 							</div>
 						</CardContent>
 					</Card>

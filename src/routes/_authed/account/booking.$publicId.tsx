@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 
 import { CancelBookingButton } from '@/components/booking/CancelBookingButton';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
 	Card,
 	CardContent,
@@ -125,9 +125,9 @@ function BookingDetailPage() {
 			<div className="border-b bg-primary/5">
 				<div className="container mx-auto px-4 py-6">
 					<div className="flex flex-wrap items-center justify-between gap-2">
-						<Button asChild>
-							<Link to="/account">← Back to Account</Link>
-						</Button>
+						<Link to="/account" data-slot="button" className={buttonVariants()}>
+							← Back to Account
+						</Link>
 						<h1 className="text-2xl font-bold text-foreground">
 							Booking Details
 						</h1>

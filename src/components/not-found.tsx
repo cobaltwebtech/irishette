@@ -1,8 +1,9 @@
 import { Icon } from '@iconify/react';
 import { Link } from '@tanstack/react-router';
 
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/utils/twMerge';
 
 export function NotFound() {
 	return (
@@ -33,12 +34,14 @@ export function NotFound() {
 							>
 								← Go Back
 							</Button>
-							<Button asChild size="lg" className="flex-1">
-								<Link to="/">
-									<Icon icon="tabler:home" className="size-5" />
-									Go Home
-								</Link>
-							</Button>
+							<Link
+								to="/"
+								data-slot="button"
+								className={cn(buttonVariants({ size: 'lg' }), 'flex-1')}
+							>
+								<Icon icon="tabler:home" className="size-5" />
+								Go Home
+							</Link>
 						</div>
 					</div>
 				</CardContent>

@@ -9,7 +9,7 @@ import { DisputesPanel } from '@/components/admin/DisputesPanel';
 import { NotificationsPanel } from '@/components/admin/inbox/NotificationsPanel';
 import { CancelBookingButton } from '@/components/booking/CancelBookingButton';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
 	Card,
 	CardContent,
@@ -21,6 +21,7 @@ import {
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
 import { CHECK_OUT_TIME_LABEL } from '@/lib/site';
+import { cn } from '@/utils/twMerge';
 
 export const Route = createFileRoute(
 	'/_authed/_admin/admin/bookings/$publicId',
@@ -126,11 +127,13 @@ function AdminBookingDetailPage() {
 			{/* Header */}
 			<div className="container mx-auto px-4 py-6">
 				<div className="flex flex-wrap items-center justify-between gap-2">
-					<Button asChild variant="outline">
-						<Link to="/admin/bookings/current-bookings">
-							← Back to Bookings
-						</Link>
-					</Button>
+					<Link
+						to="/admin/bookings/current-bookings"
+						data-slot="button"
+						className={buttonVariants({ variant: 'outline' })}
+					>
+						← Back to Bookings
+					</Link>
 					<h1 className="text-2xl font-bold text-foreground">
 						Booking -{' '}
 						<span className="font-mono tracking-wider">
@@ -360,19 +363,22 @@ function AdminBookingDetailPage() {
 					</CardHeader>
 					<CardContent className="space-y-4">
 						{booking.booking.stripePaymentIntentId && (
-							<Button className="h-auto w-full" asChild>
-								<a
-									href={`https://dashboard.stripe.com/acct_1RwOD0B1s28979kR/payments/${booking.booking.stripePaymentIntentId}`}
-									target="_blank"
-									rel="noopener noreferrer"
-									className="inline-flex items-center"
-								>
-									<Icon icon="tabler:external-link" className="size-6" />
-									<span className="text-center text-wrap">
-										View Payment at Stripe
-									</span>
-								</a>
-							</Button>
+							<a
+								href={`https://dashboard.stripe.com/acct_1RwOD0B1s28979kR/payments/${booking.booking.stripePaymentIntentId}`}
+								target="_blank"
+								rel="noopener noreferrer"
+								data-slot="button"
+								className={cn(
+									buttonVariants(),
+									'h-auto w-full',
+									'inline-flex items-center',
+								)}
+							>
+								<Icon icon="tabler:external-link" className="size-6" />
+								<span className="text-center text-wrap">
+									View Payment at Stripe
+								</span>
+							</a>
 						)}
 						<Button
 							onClick={handleResendEmail}

@@ -4,7 +4,7 @@ import { Link, rootRouteId, useMatch, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
 	Collapsible,
@@ -68,12 +68,10 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
 						</Button>
 
 						{isRoot ? (
-							<Button asChild>
-								<Link to="/">
-									<Icon icon="tabler:home" />
-									Go to Home
-								</Link>
-							</Button>
+							<Link to="/" data-slot="button" className={buttonVariants()}>
+								<Icon icon="tabler:home" />
+								Go to Home
+							</Link>
 						) : (
 							<Button variant="outline" onClick={() => window.history.back()}>
 								← Go Back

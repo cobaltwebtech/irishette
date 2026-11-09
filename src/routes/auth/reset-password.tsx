@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import { AuthCard, AuthError } from '@/components/auth/AuthCard';
 import { useAuthRequest } from '@/components/auth/useAuthRequest';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password';
 import { requireNoSession } from '@/lib/auth-check';
@@ -16,6 +16,7 @@ import {
 } from '@/lib/auth-constants';
 import { authLinkErrorMessage, isLinkError } from '@/lib/auth-errors';
 import { firstIssue, passwordSchema } from '@/lib/auth-validation';
+import { cn } from '@/utils/twMerge';
 
 // Better Auth redirects the email link here with ?token=... (valid) or
 // ?error=INVALID_TOKEN (invalid or expired).
@@ -47,12 +48,15 @@ function RequestNewLink({ message }: { message: string }) {
 				{formatLinkLifetime(PASSWORD_RESET_EXPIRES_IN)}. Request a new one to
 				continue.
 			</p>
-			<Button asChild className="w-full">
-				<Link to="/auth/forgot-password" search={{ redirect: undefined }}>
-					<Icon icon="tabler:mail-share" className="size-5" />
-					Request a new reset link
-				</Link>
-			</Button>
+			<Link
+				to="/auth/forgot-password"
+				search={{ redirect: undefined }}
+				data-slot="button"
+				className={cn(buttonVariants(), 'w-full')}
+			>
+				<Icon icon="tabler:mail-share" className="size-5" />
+				Request a new reset link
+			</Link>
 		</AuthCard>
 	);
 }
@@ -120,15 +124,15 @@ function ResetPasswordPage() {
 				<p className="text-center text-muted-foreground">
 					You can now log in with your new password.
 				</p>
-				<Button asChild className="w-full">
-					<Link
-						to="/auth/login"
-						search={{ redirect: undefined, error: undefined }}
-					>
-						<Icon icon="tabler:login-2" className="size-5" />
-						Return to Login
-					</Link>
-				</Button>
+				<Link
+					to="/auth/login"
+					search={{ redirect: undefined, error: undefined }}
+					data-slot="button"
+					className={cn(buttonVariants(), 'w-full')}
+				>
+					<Icon icon="tabler:login-2" className="size-5" />
+					Return to Login
+				</Link>
 			</AuthCard>
 		);
 	}
