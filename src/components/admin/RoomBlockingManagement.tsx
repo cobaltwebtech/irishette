@@ -1,6 +1,7 @@
 import { Icon } from '@iconify/react';
 import { Link } from '@tanstack/react-router';
 import { isTRPCClientError } from '@trpc/client';
+import { startOfDay } from 'date-fns';
 import { useId, useState } from 'react';
 
 import {
@@ -45,6 +46,7 @@ import type {
 	RoomBlockedPeriod,
 	UpdateBlockedPeriod,
 } from '@/lib/room-validation';
+import { useNow } from '@/utils/use-now';
 
 // Helper function to format date strings without timezone offset issues
 function formatDateString(dateString: string): string {
@@ -275,8 +277,7 @@ export function RoomBlockingManagement({
 	};
 
 	// Filter blocked periods to show only current and future periods
-	const today = new Date();
-	today.setHours(0, 0, 0, 0); // Reset time to start of day
+	const today = startOfDay(useNow());
 	const filteredBlockedPeriods = blockedPeriods.filter(
 		(period) => new Date(`${period.endDate}T23:59:59`) >= today,
 	);

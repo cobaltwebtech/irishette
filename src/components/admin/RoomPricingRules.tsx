@@ -1,5 +1,6 @@
 import { Icon } from '@iconify/react';
 import { isTRPCClientError } from '@trpc/client';
+import { startOfDay } from 'date-fns';
 import { useId, useState } from 'react';
 
 import {
@@ -42,6 +43,7 @@ import type {
 	RoomPricingRule,
 	UpdatePricingRule,
 } from '@/lib/room-validation';
+import { useNow } from '@/utils/use-now';
 
 /** Overlap details from a CONFLICT error (data.conflict). */
 interface RuleConflict {
@@ -256,8 +258,7 @@ export function PricingRulesManagement({
 	const [highlightId, setHighlightId] = useState<string | null>(null);
 
 	// Only current and future rules are displayed
-	const today = new Date();
-	today.setHours(0, 0, 0, 0); // Reset time to start of day
+	const today = startOfDay(useNow());
 	const filteredRules = pricingRules.filter(
 		(rule) => new Date(`${rule.endDate}T00:00:00`) >= today,
 	);
@@ -486,7 +487,7 @@ function PricingRuleForm({
 	>({});
 
 	// Today (local) as YYYY-MM-DD, for the date inputs' min.
-	const now = new Date();
+	const now = useNow();
 	const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
 	const [formData, setFormData] = useState<CreatePricingRule>({

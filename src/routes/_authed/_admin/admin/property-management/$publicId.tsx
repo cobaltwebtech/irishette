@@ -162,10 +162,14 @@ function EditRoom() {
 		roomToFormData(room),
 	);
 
-	// Re-sync the form when the room is refetched (e.g. after saving)
-	useEffect(() => {
+	// Re-sync the form when the room is refetched (e.g. after saving). Adjusting
+	// state during render when a prop changes avoids an extra effect pass:
+	// https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+	const [syncedRoom, setSyncedRoom] = useState(room);
+	if (syncedRoom !== room) {
+		setSyncedRoom(room);
 		setFormData(roomToFormData(room));
-	}, [room]);
+	}
 
 	// Show error toast on refetch failures (don't redirect - user might be editing)
 	useEffect(() => {

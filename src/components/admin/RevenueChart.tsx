@@ -8,6 +8,7 @@ import {
 	ChartTooltip,
 	ChartTooltipContent,
 } from '@/components/ui/chart';
+import { useNow } from '@/utils/use-now';
 
 // Type for the monthly revenue data from tRPC
 type MonthlyRevenueData = {
@@ -29,10 +30,11 @@ interface RevenueChartProps {
 }
 
 export function RevenueChart({ data, isLoading }: RevenueChartProps) {
+	const now = useNow();
 	// Generate all 12 months from 11 months ago to current month
 	const generateLast12Months = () => {
 		const months: string[] = [];
-		const currentDate = startOfMonth(new Date());
+		const currentDate = startOfMonth(now);
 
 		for (let i = 11; i >= 0; i--) {
 			const monthDate = subMonths(currentDate, i);
@@ -56,7 +58,7 @@ export function RevenueChart({ data, isLoading }: RevenueChartProps) {
 	const formattedData = completeData.map((item) => {
 		try {
 			// Parse 'YYYY-MM' format and format as 'MMM yyyy' (e.g., "Jan 2024")
-			const date = parse(item.month, 'yyyy-MM', new Date());
+			const date = parse(item.month, 'yyyy-MM', now);
 			return {
 				...item,
 				monthLabel: format(date, 'MMM yyyy'),

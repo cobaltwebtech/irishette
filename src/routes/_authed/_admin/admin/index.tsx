@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTRPC } from '@/integrations/trpc/react';
+import { useNow } from '@/utils/use-now';
 
 // Shared by the loader and the component so the cache keys match.
 // Every room (any status), so bookings for inactive rooms still show the
@@ -60,7 +61,7 @@ function AdminDashboard() {
 	);
 
 	// Filter bookings to get confirmed ones with check-in date today or in the future
-	const today = new Date();
+	const today = useNow();
 	const todayDateString = today.toISOString().slice(0, 10); // 'YYYY-MM-DD'
 
 	// Create a map of room IDs to room names for lookup
