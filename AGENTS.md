@@ -19,7 +19,7 @@ Irishette is a room-booking site (rooms, availability, bookings, payments, admin
 | Email | Resend + react-email templates in `src/components/email/`; every send (booking, admin alerts, Better Auth) goes through `src/lib/email-service.ts` |
 | Bot protection | Cloudflare Turnstile |
 | Env / secrets | **Varlock** (`.env.schema` contract, generated `varlock.d.ts`, local encryption). Cloudflare config via `cf` + `cloudflare.config.ts`; no Wrangler config, no Varlock Cloudflare/Vite integrations (see [Secrets and environment](#secrets-and-environment-varlock)) |
-| UI | Tailwind CSS v4, shadcn/ui (new-york, Stone) + Radix, `sonner` toasts |
+| UI | Tailwind CSS v4, shadcn/ui (new-york, Stone) on **Base UI** (`@base-ui/react`; no Radix), `cn` (the `cn` package, re-exported from `@/utils/twMerge`), Base UI Toast (`@/components/ui/toast`) |
 | Validation | Zod v4 |
 | Toolchain | **Vite+** (`vite-plus`, `vp` CLI): Oxlint (type-aware) + Oxfmt + Vitest 5 behind `vp check` / `vp test`. Config lives in `vite.config.ts` (`lint`, `fmt` blocks). `vite` is an alias of `@voidzero-dev/vite-plus-core` (see [Vite+ notes](#vite-notes)). Biome is removed. |
 | Code review / dead code | **Fallow** (global CLI) |
@@ -84,7 +84,7 @@ Config is the `fmt` and `lint` blocks in `vite.config.ts`. Oxfmt is scoped to co
 
 - **Tabs** for indentation, **single quotes** for JS/TS (CSS keeps double quotes), print width 80.
 - Oxfmt sorts imports (`@/` is internal) and Tailwind classes (in `class`/`className` and `cn`/`cva`/`clsx` calls, using `src/styles/styles.css`). Run `pnpm check:fix` to apply; do not hand-sort.
-- Lint: Oxlint with the `typescript`, `unicorn`, `oxc`, `react`, `jsx-a11y` plugins, `correctness` as errors, plus type-aware rules (`typeAware`/`typeCheck`). `react/purity` and `react/set-state-in-effect` are warnings (known follow-ups); do not add new violations.
+- Lint: Oxlint with the `typescript`, `unicorn`, `oxc`, `react`, `jsx-a11y` plugins, `correctness` as errors, plus type-aware rules (`typeAware`/`typeCheck`). `react/purity` and `react/set-state-in-effect` are warnings until the last booking pages are fixed (then they become errors); do not add new violations. Read the clock with `useNow()` (`src/utils/use-now.ts`), never `new Date()` during render.
 - Suppress with `// oxlint-disable-next-line <rule> -- <reason>` and always give a reason.
 - Fire-and-forget promises need `void` (`typescript/no-floating-promises`).
 - Do not add ESLint, Prettier or Biome, or their config files. Do not reformat unrelated files; run `pnpm check:fix` and review the diff.
@@ -132,6 +132,8 @@ Conventions:
 - Client data fetching uses `@trpc/tanstack-react-query` (`useTRPC()` + `queryOptions`/`mutationOptions`) + TanStack Query; prefer route loaders / `ensureQueryData` for SSR. Never share a QueryClient across requests.
 - Do not call Stripe, D1, or Better Auth server APIs from components; go through tRPC procedures, server functions, or `src/lib` services.
 - The React Compiler is enabled: avoid manual `useMemo`/`useCallback` unless there is a measured reason; follow the Rules of React. (Only vendored shadcn components in `src/components/ui/` still use them.)
+- UI components (`src/components/ui/`) are shadcn wrappers on **Base UI**. Compose with the `render` prop, never `asChild` (gone with Radix): `<DialogTrigger render={<Button variant="outline" />}>Open</DialogTrigger>`. Links that look like buttons are links styled with `buttonVariants` (`<Link className={buttonVariants({ variant })}>`), not `<Button render={<Link />}>` (Base UI's Button gives links `role="button"`). Base UI's `Button` defaults to `type="button"`: submit buttons need `type="submit"`. Style open states with `data-open` / `data-closed` (popups) and `data-popup-open` (triggers), not `data-[state=…]`. `DropdownMenuLabel` must sit inside a `DropdownMenuGroup`.
+- Toasts: `import { toast } from '@/components/ui/toast'`, then `toast.add({ type: 'success' | 'error' | 'info' | 'warning', title, description, timeout })`. The `Toaster` is mounted once in `__root.tsx`. Do not add `sonner`.
 
 ### IDs
 
@@ -217,7 +219,7 @@ Variables: public `BETTER_AUTH_URL`, `STRIPE_PUBLISHABLE_KEY`, `VITE_TURNSTILE_P
 | Vite+ (`vp`) | `pnpm check`, `pnpm exec vp ...` | Lint, format, type check, tests |
 | Fallow | `fallow ...` (global) | Dead code, duplication, architecture, audit/review (see below) |
 | drizzle-kit | `pnpm drizzle-kit ...` | Migration generation |
-| shadcn | `pnpm dlx shadcn@latest add <component>` | Add UI components (also available via the `shadcn` MCP in `.mcp.json`) |
+| shadcn | `pnpm dlx shadcn@latest add <component> --dry-run --diff` | Add UI components (also via the `shadcn` MCP in `.mcp.json`). `components.json` still says `new-york`, which has no Base UI variant, so `add` delivers the **Radix** version: take the Base UI version from a base style (`https://ui.shadcn.com/r/styles/base-vega/<component>.json`) and restyle it like the existing wrappers instead. Never `add --overwrite` an existing wrapper (it drops local customisations). |
 
 Rules:
 - Stripe: use **test mode** only. Never run live-mode or destructive Stripe commands without explicit approval.
