@@ -13,7 +13,7 @@ inbound email) is deferred: `.agents/plans/deferred-email-messaging.md`.
 | File | What |
 |---|---|
 | `src/db/inbox-schema.ts` | `admin_inbox_items` table |
-| `src/lib/inbox.ts` | Sources, kinds, statuses, labels, the per-kind `details` types, `stripePaymentUrl`, `contactReplyHref` (shared, client-safe) |
+| `src/lib/inbox.ts` | Sources, kinds, statuses, labels, the per-kind `details` types, `stripePaymentUrl`, `stripeDisputeUrl`, `contactReplyHref` (shared, client-safe) |
 | `src/lib/inbox-validation.ts` | Zod inputs of the procedures, the keyset cursor, the page's search params |
 | `src/lib/inbox-service.ts` | `createInboxItem` / `createInboxItemInBackground` (server-only) |
 | `src/integrations/trpc/inbox.ts` | The `inbox` tRPC router (all admin; see `TRPC_QUICK_REFERENCE.md`) |
@@ -28,13 +28,15 @@ Every item has a `source` (a tag in the UI and a filter) and a `kind`.
 | Kind | Source | Created by | Dedupe key | Linked to |
 |---|---|---|---|---|
 | `contact_form` | `guest` | The contact form (`src/lib/contact-service.ts`, `CONTACT_FORM.md`) | none (one item per message) | nothing (the guest is not looked up) |
-| `refund_auto` | `system` | `refundUnavailableBooking` (`booking-service.ts`): paid, but the dates were taken, refunded in full | `refund_auto:<bookingId>` | booking, guest |
-| `refund_failed` | `stripe` | Webhook `refund.failed` / `refund.updated` with status `failed` (`stripe-webhook.ts`) | `refund_failed:<refundId>` | booking and guest when found |
+| `refund_auto` | `system` | `refundUnavailableBooking` (`checkout-service.ts`): paid, but the dates were taken, refunded in full | `refund_auto:<bookingId>` | booking, guest |
+| `refund_failed` | `stripe` | Webhook `refund.failed` / `refund.updated` to `failed` (`refund-service.ts`), once per refund | `refund_failed:<refundId>` | booking and guest when found |
+| `refund_issued` | `stripe` | A refund made in the Stripe Dashboard (`refund.created` / `refund.updated`, `refund-service.ts`); app refunds get none. Resurfaces on each status change | `refund:<refundId>` | booking, guest |
+| `payment_dispute` | `stripe` | `charge.dispute.*` (`dispute-service.ts`). No email. Resurfaces on every **newer** Stripe event; replays and older events change nothing (`payment_disputes.last_stripe_event_*`) | `dispute:<stripeDisputeId>` | booking and guest when linked, and the dispute (`payment_dispute_id`) |
 | `ical_sync_failed` | `system` | `alertFeedProblem` (`ical-sync.ts`): a healthy feed starts failing | `ical_sync_failed:<feedId>:<YYYY-MM-DD CT>` | nothing (room link in details) |
 | `ical_conflict` | `system` | `alertConflicts` (`ical-sync.ts`): an imported event overlaps a booking or hold | `ical_conflict:<feedId>:<hash of the conflict set>`, resurfaces at most daily | the first conflicting booking |
 
-Phase 3 adds `payment_dispute` (`stripe`, key `dispute:<stripeDisputeId>`, no
-email) with a `payment_dispute_id` column.
+Deleting a `payment_dispute` item removes only the notification; the dispute
+record in `payment_disputes` stays (a financial record).
 
 `details` is small JSON (`InboxDetailsByKind` in `src/lib/inbox.ts`): amounts,
 Stripe ids, room and feed names, the problem text. Never secrets, card data
@@ -51,6 +53,7 @@ typed it (unverified).
 | `details` | JSON (above) |
 | `status` | `new` \| `read` \| `archived`, shared by all admins; `read_at`, `archived_at` |
 | `booking_id`, `user_id` | Optional links, `ON DELETE SET NULL` |
+| `payment_dispute_id` | `payment_dispute` items: the dispute (`payment_disputes.id`), `ON DELETE SET NULL` |
 | `dedupe_key` | Unique, nullable |
 | `occurrences` | 1 + the number of repeats of the dedupe key |
 | `surfaced_at` | When it was last put in front of admins (created or resurfaced). The list order |

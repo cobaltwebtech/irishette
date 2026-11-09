@@ -16,13 +16,19 @@ import {
 
 // The single availability check (plan 7.2). A stay [checkIn, checkOut) is
 // unavailable if it overlaps:
-// - a confirmed booking, or a pending hold that has not expired;
+// - a confirmed booking, a pending hold that has not expired, or a pending
+//   hold whose (delayed) payment is processing;
 // - an imported external event (end exclusive);
 // - an admin block (inclusive).
-// Used by the calendar, booking creation, PaymentIntent creation and (as SQL)
-// the guarded confirmation update.
+// Used by the calendar, booking creation, Checkout Session creation and (as
+// SQL) the guarded confirmation update.
 
-export const HOLD_MINUTES = 30;
+/**
+ * How long a hold keeps its dates. The hold's Checkout Session expires at the
+ * same moment; Stripe needs at least 30 minutes, so 35 leaves room for clock
+ * skew and the time spent creating the session (plan 02, B5).
+ */
+export const HOLD_MINUTES = 35;
 
 export type ConflictSource = 'direct' | 'block' | (string & {});
 
@@ -46,11 +52,18 @@ interface RangeOptions {
 	now?: Date;
 }
 
-/** Bookings that hold dates: confirmed, or pending with a live hold. */
+/**
+ * Bookings that hold dates: confirmed, pending with a live hold, or pending
+ * with a delayed payment processing (kept past the hold expiry, so nobody
+ * else can take the dates while a bank payment is pending).
+ */
 export function holdsDatesCondition(now: Date): SQL | undefined {
 	return or(
 		eq(bookings.status, 'confirmed'),
-		and(eq(bookings.status, 'pending'), gt(bookings.expiresAt, now)),
+		and(
+			eq(bookings.status, 'pending'),
+			or(gt(bookings.expiresAt, now), eq(bookings.paymentStatus, 'processing')),
+		),
 	);
 }
 
@@ -248,18 +261,29 @@ export async function findBlockConflicts(
 
 /**
  * SQL condition, for an UPDATE/SELECT on `bookings`, that is true when the
- * row's stay overlaps no other confirmed booking, no imported event and no
- * admin block. Used by the guarded confirmation update so the check and the
- * write are one atomic statement.
+ * row's stay overlaps no other confirmed booking, no live (or processing)
+ * hold created earlier, no imported event and no admin block. Used by the
+ * guarded confirmation update so the check and the write are one atomic
+ * statement. (First hold wins while it is live: plan 02 decisions.)
  */
-export const noOverlapForBookingRow = sql`
+export const noOverlapForBookingRow = (now: Date) => sql`
 	NOT EXISTS (
 		SELECT 1 FROM bookings AS other
 		WHERE other.room_id = bookings.room_id
 			AND other.id <> bookings.id
-			AND other.status = 'confirmed'
 			AND other.check_in_date < bookings.check_out_date
 			AND other.check_out_date > bookings.check_in_date
+			AND (
+				other.status = 'confirmed'
+				OR (
+					other.status = 'pending'
+					AND other.created_at < bookings.created_at
+					AND (
+						other.expires_at > ${Math.floor(now.getTime() / 1000)}
+						OR other.payment_status = 'processing'
+					)
+				)
+			)
 	)
 	AND NOT EXISTS (
 		SELECT 1 FROM external_events AS ev

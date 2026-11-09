@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { Database } from '@/db/drizzle-init';
 import { bookings, user } from '@/db/schema-export';
 import { isUniqueViolation } from '@/lib/db-errors';
+import { listDisputes } from '@/lib/dispute-service';
 import { publicIdSchema } from '@/lib/ids';
 import { updateProfileSchema } from '@/lib/user-validation';
 
@@ -110,7 +111,8 @@ export const usersRouter = createTRPCRouter({
 					and(eq(bookings.userId, internalId), ne(bookings.status, 'pending')),
 				)
 				.orderBy(bookings.createdAt);
-			return { user: profile, bookings: userBookings };
+			const disputes = await listDisputes(ctx.db, { userId: internalId });
+			return { user: profile, bookings: userBookings, disputes };
 		}),
 
 	/**

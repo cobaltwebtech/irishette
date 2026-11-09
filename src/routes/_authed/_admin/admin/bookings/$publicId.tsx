@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { BookingInternalNotes } from '@/components/admin/BookingInternalNotes';
+import { DisputesPanel } from '@/components/admin/DisputesPanel';
 import { NotificationsPanel } from '@/components/admin/inbox/NotificationsPanel';
 import { CancelBookingButton } from '@/components/booking/CancelBookingButton';
 import { Badge } from '@/components/ui/badge';
@@ -422,6 +423,11 @@ function AdminBookingDetailPage() {
 						/>
 					</CardContent>
 				</Card>
+
+				<DisputesPanel
+					className="lg:col-span-full"
+					disputes={booking.disputes}
+				/>
 
 				<NotificationsPanel
 					className="lg:col-span-full"

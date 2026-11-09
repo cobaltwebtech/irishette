@@ -1,14 +1,24 @@
 import { Icon } from '@iconify/react';
-import { useSuspenseQuery } from '@tanstack/react-query';
+import {
+	useMutation,
+	useQueryClient,
+	useSuspenseQuery,
+} from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
+import { toast } from 'sonner';
+import { z } from 'zod';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
-import { CHECK_OUT_TIME_LABEL } from '@/lib/site';
+import {
+	CHECK_IN_TIME,
+	CHECK_OUT_TIME_LABEL,
+	formatTimeOfDay,
+} from '@/lib/site';
 import { bookingActions } from '@/stores';
 import { parseISODateString } from '@/utils/booking-utils';
 
@@ -17,9 +27,14 @@ export const Route = createFileRoute('/_authed/booking/confirmation/$publicId')(
 		head: () => ({
 			meta: [
 				{
-					title: 'Booking Confirmed | Irishette.com',
+					title: 'Your Booking | Irishette.com',
 				},
 			],
+		}),
+		// Stripe returns here after redirect-based payment methods (and the
+		// payment step navigates here after checkout.confirm()).
+		validateSearch: z.object({
+			session_id: z.string().max(255).optional(),
 		}),
 		// Auth: the _authed layout. Data: preloaded into the per-request
 		// QueryClient and read with useSuspenseQuery below.
@@ -66,13 +81,77 @@ function BookingNotFound() {
 	);
 }
 
+const CHECK_IN_LABEL = formatTimeOfDay(CHECK_IN_TIME, { withZone: true });
+
+type BannerKind = 'confirmed' | 'processing' | 'unpaid' | 'cancelled';
+
+function bannerKind(status: string, paymentStatus: string): BannerKind {
+	if (status === 'confirmed') return 'confirmed';
+	if (status === 'cancelled') return 'cancelled';
+	return paymentStatus === 'processing' ? 'processing' : 'unpaid';
+}
+
+const BANNERS: Record<
+	BannerKind,
+	{ icon: string; title: string; text: string; tone: string }
+> = {
+	confirmed: {
+		icon: 'tabler:circle-check-filled',
+		title: 'Your Booking is Confirmed!',
+		text: 'You will receive a confirmation email shortly with all the details.',
+		tone: 'text-primary',
+	},
+	processing: {
+		icon: 'tabler:clock-hour-4',
+		title: 'Your Payment is Processing',
+		text: 'Your bank is processing the payment. We hold your dates and will email you as soon as it completes.',
+		tone: 'text-amber-600',
+	},
+	unpaid: {
+		icon: 'tabler:alert-circle',
+		title: 'Payment Not Completed',
+		text: 'We have not received your payment for this booking. If your hold expired, please book again.',
+		tone: 'text-destructive',
+	},
+	cancelled: {
+		icon: 'tabler:circle-x',
+		title: 'This Booking was Cancelled',
+		text: 'Any refund goes back to your original payment method within 5-10 business days.',
+		tone: 'text-destructive',
+	},
+};
+
 function BookingConfirmation() {
 	const { publicId } = Route.useParams();
+	const { session_id: sessionId } = Route.useSearch();
 	const trpc = useTRPC();
+	const queryClient = useQueryClient();
 
 	const { data: bookingData } = useSuspenseQuery(
 		trpc.bookings.getBooking.queryOptions({ publicId }),
 	);
+
+	// Fast path after payment: confirm from the Checkout Session (the
+	// webhook does the same; both are idempotent), then show the real status.
+	const { mutate: confirmCheckout, isPending: confirming } = useMutation(
+		trpc.bookings.confirmCheckout.mutationOptions({
+			onSuccess: (result) => {
+				if (result.status === 'refunded_conflict') {
+					toast.error(
+						'Sorry, these dates were booked elsewhere moments before your payment completed. Your payment has been refunded in full.',
+						{ duration: 10_000 },
+					);
+				}
+			},
+			onSettled: () =>
+				queryClient.invalidateQueries(
+					trpc.bookings.getBooking.queryFilter({ publicId }),
+				),
+		}),
+	);
+	useEffect(() => {
+		if (sessionId) confirmCheckout({ publicId, sessionId });
+	}, [sessionId, publicId, confirmCheckout]);
 
 	// Clear the booking store when component mounts
 	useEffect(() => {
@@ -80,6 +159,7 @@ function BookingConfirmation() {
 	}, []);
 
 	const { booking, room: roomData } = bookingData;
+	const banner = BANNERS[bannerKind(booking.status, booking.paymentStatus)];
 
 	// Calculate number of nights
 	const checkIn = parseISODateString(booking.checkInDate);
@@ -92,21 +172,23 @@ function BookingConfirmation() {
 		<section>
 			<div className="border-b bg-muted">
 				<div className="container mx-auto space-y-1 px-4 py-6 text-center">
-					<p className="animate-bounce text-4xl">🎉</p>
+					{booking.status === 'confirmed' && (
+						<p className="animate-bounce text-4xl">🎉</p>
+					)}
 					<div className="flex items-center justify-center gap-2">
 						<Icon
-							icon="tabler:circle-check-filled"
-							className="size-8 text-primary"
+							icon={confirming ? 'tabler:loader-2' : banner.icon}
+							className={`size-8 ${confirming ? 'animate-spin' : ''} ${banner.tone}`}
 						/>
 						<h1 className="text-2xl font-bold text-foreground">
-							Your Booking is Confirmed!
+							{confirming ? 'Confirming your payment...' : banner.title}
 						</h1>
 					</div>
+					{!confirming && <p>{banner.text}</p>}
 					<p>
-						You will receive a confirmation email shortly with all the details.
-					</p>
-					<p>
-						We look forward to seeing you on{' '}
+						{booking.status === 'cancelled'
+							? 'Your stay was planned for '
+							: 'We look forward to seeing you on '}
 						{new Date(`${booking.checkInDate}T00:00:00`).toLocaleDateString(
 							'en-US',
 							{
@@ -164,7 +246,9 @@ function BookingConfirmation() {
 											day: 'numeric',
 										})}
 									</p>
-									<p className="text-sm text-muted-foreground">After 3:00 PM</p>
+									<p className="text-sm text-muted-foreground">
+										From {CHECK_IN_LABEL}
+									</p>
 								</div>
 								<div>
 									<p className="text-sm font-medium text-muted-foreground">
@@ -242,7 +326,9 @@ function BookingConfirmation() {
 										</p>
 									</>
 								)}
-								<p className="text-lg font-semibold">Total Paid</p>
+								<p className="text-lg font-semibold">
+									{booking.status === 'confirmed' ? 'Total Paid' : 'Total'}
+								</p>
 								<p className="text-right text-lg font-semibold">
 									${booking.totalAmount.toFixed(2)}
 								</p>

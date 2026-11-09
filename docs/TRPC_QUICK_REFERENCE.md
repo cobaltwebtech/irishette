@@ -172,18 +172,18 @@ internal `id`, `userId`, `roomId`, `internalNotes`, Stripe ids,
 | Procedure | Type | Access | Input | Purpose |
 |---|---|---|---|---|
 | `calculateBooking` | query | public, rate-limited | `calculateBookingSchema` (`roomId`, dates, `guestCount`) | Full price (base, fees, taxes, nights, applied rules, tax breakdown). Same `quoteStay` as booking creation |
-| `createBooking` | mutation | user | `createBookingSchema` (room, dates, guest count/name/email/phone, special requests; client prices ignored) | `createHold`: 30-minute pending hold; returns `bookingId`, `publicId` |
-| `createPaymentIntent` | mutation | user (owner) | `bookingIdSchema` | `preparePayment`: PaymentIntent for the Payment Element; returns `clientSecret`, `publishableKey` |
+| `createBooking` | mutation | user | `createBookingSchema` (room, dates, guest count/name/email/phone, special requests; client prices ignored) | `createHold`: 35-minute pending hold (releases expired holds on the dates first: priority rule); returns `bookingId`, `publicId` |
+| `createCheckoutSession` | mutation | user (owner) | `bookingIdSchema` | `prepareCheckout`: the hold's Checkout Session (`ui_mode: 'elements'`). Returns `{ status: 'open', clientSecret }` or `{ status: 'complete' }` (already paid / processing), plus `publicId`, `publishableKey` |
 | `refreshBooking` | mutation | user (owner) | `bookingIdSchema` | `refreshHold`: extend an expired hold if the dates are still free |
-| `confirmPayment` | mutation | user (owner) | `confirmPaymentSchema` (`bookingId`, `paymentIntentId` `pi_...`) | `confirmBookingPayment` after Stripe.js success (idempotent; the webhook is the backup). `CONFLICT` if the dates were taken and the payment was refunded |
+| `confirmCheckout` | mutation | user (owner) | `confirmCheckoutSchema` (`publicId`, `sessionId` `cs_test_...`/`cs_live_...`) | Return-page fast path: `confirmBookingPayment` (idempotent; the webhook is the source of truth). Returns `{ status: 'confirmed' \| 'already_confirmed' \| 'processing' \| 'refunded_conflict', publicId }` |
 | `getBooking` | query | user (owner only) | `bookingPublicIdSchema` | `{ booking, room }` with guest fields only (above) |
-| `adminGetBooking` | query | admin | `bookingPublicIdSchema` | Any booking: the full row, the room (`bookingRoomColumns`) and the guest account (`publicId`, `email`, `name`) |
+| `adminGetBooking` | query | admin | `bookingPublicIdSchema` | Any booking: the full row, the room (`bookingRoomColumns`), the guest account (`publicId`, `email`, `name`) and its payment `disputes` (panel fields, no internal ids) |
 | `getMyBookings` | query | user | `{ limit 1-100 (10), offset, status? }` | The caller's bookings (guest fields) with room name and slug, newest first |
-| `getCancellationQuote` | query | owner or admin | `bookingPublicIdSchema` | Whether the booking can be cancelled now and the refund under its policy |
-| `cancelBooking` | mutation | user (owner only) | `cancelBookingSchema` (`publicId`, `reason?`) | Guest cancellation, refund per policy |
-| `adminCancelBooking` | mutation | admin | `adminCancelBookingSchema` (`publicId`, `refund: 'full' \| 'policy' \| 'none'`, `reason?`) | Admin cancellation with chosen refund |
+| `getCancellationQuote` | query | owner or admin | `bookingPublicIdSchema` | Whether the booking can be cancelled now, the refund under its policy, and `hasOpenDispute` |
+| `cancelBooking` | mutation | user (owner only) | `cancelBookingSchema` (`publicId`, `reason?`) | Guest cancellation, refund per policy. `CONFLICT` while the payment has an open dispute |
+| `adminCancelBooking` | mutation | admin | `adminCancelBookingSchema` (`publicId`, `refund: 'full' \| 'policy' \| 'none'`, `reason?`, `confirmDisputeRefund?`) | Admin cancellation with chosen refund. With an open dispute, a refund needs `confirmDisputeRefund: true` (else `CONFLICT`) |
 | `resendConfirmationEmail` | mutation | owner or admin | `bookingPublicIdSchema` | Re-send the confirmation email; `BAD_REQUEST` unless confirmed, `BAD_GATEWAY` if Resend fails |
-| `adminListBookings` | query | admin | `{ limit 1-100 (10), offset, status?, paymentStatus?, roomId? (idSchema), startDate?, endDate? (isoDateSchema) }` | All bookings with room and guest (id, email, name). `startDate` / `endDate` bound the check-in date and work alone or together |
+| `adminListBookings` | query | admin | `{ limit 1-100 (10), offset, status?, paymentStatus?, roomId? (idSchema), startDate?, endDate? (isoDateSchema) }` | All bookings with room, guest (id, email, name) and `hasOpenDispute`. `startDate` / `endDate` bound the check-in date and work alone or together |
 | `adminUpdateInternalNotes` | mutation | admin | `{ bookingId, internalNotes (max 5000) }` | Set a booking's internal notes |
 | `adminGetMonthlyStats` | query | admin | `{ months 1-24 (12), status: 'confirmed' \| 'all' }` | Booking count and revenue per check-in month |
 
@@ -228,7 +228,7 @@ returned only here. See `ICAL_SYNC_README.md`.
 | Procedure | Type | Access | Input | Purpose |
 |---|---|---|---|---|
 | `adminListGuests` | query | admin | `{ limit 1-100 (50), offset }` | Users with role `user`, with non-pending booking count, `total`, `hasMore` |
-| `adminGetGuestDetails` | query | admin | `{ publicId }` (`publicIdSchema`) | The guest's profile (explicit columns: `publicId`, name, email, `emailVerified`, phone, role, `stripeCustomerId`, `createdAt`; no ban fields or internal id) and their non-pending bookings |
+| `adminGetGuestDetails` | query | admin | `{ publicId }` (`publicIdSchema`) | The guest's profile (explicit columns: `publicId`, name, email, `emailVerified`, phone, role, `stripeCustomerId`, `createdAt`; no ban fields or internal id), their non-pending bookings and their payment `disputes` |
 | `updateProfile` | mutation | user | `updateProfileSchema` (`src/lib/user-validation.ts`): `{ name? (trimmed, 1-100), phoneNumber? (phoneNumberSchema: trimmed, max 20 chars, at least 10 digits; null removes it) }` | Update the caller's own name and phone; omitted fields stay. The only way to change the phone (`additionalFields.phoneNumber` has `input: false` in Better Auth). `CONFLICT` if the phone is used by another account. Email changes go through Better Auth's `changeEmail` |
 
 `users.updatePhoneNumber` was merged into `updateProfile` in plan 02 Phase 2
@@ -270,8 +270,8 @@ The contact form is a TanStack Start server function, not a tRPC procedure
   `bookings.userId = ctx.user.id` unless `allowAdmin` is set and the caller is
   an admin in D1 (`isActiveAdmin`; only checked when the session claims the
   admin role). A booking that exists but is not the caller's is `NOT_FOUND`.
-  `getBooking`, `cancelBooking`, `createPaymentIntent`, `refreshBooking` and
-  `confirmPayment` are owner-only even for admins; admins use
+  `getBooking`, `cancelBooking`, `createCheckoutSession`, `refreshBooking` and
+  `confirmCheckout` are owner-only even for admins; admins use
   `adminGetBooking` and `adminCancelBooking`.
 - **Admin role and bans:** the session comes from `getSession` with Better
   Auth's 5-minute cookie cache. `adminProcedure` therefore re-reads role and
@@ -319,7 +319,7 @@ The contact form is a TanStack Start server function, not a tRPC procedure
 |---|---|---|---|
 | `/api/auth/*` | `src/routes/api/auth.$.ts` | GET, POST, PUT, DELETE, PATCH, OPTIONS | Better Auth handler (`src/lib/auth.ts`): email/password, magic link, phone number, admin, Stripe customer plugin (its own webhook under `/api/auth`, `STRIPE_BETTER_AUTH_WEBHOOK_SECRET`), Turnstile `captcha` on sign-in, sign-up, magic link and password reset. Route middleware `rateLimitRequests('AUTH_RATE_LIMITER')` (30 per minute per IP; the Stripe webhook path is exempt), then Better Auth's own D1 limits; every 429 is logged as `rate-limited`. Returns `500 Auth error` if the handler throws |
 | `/api/csp-report` | `src/routes/api/csp-report.ts` | POST | CSP violation reports (`report-uri` and `report-to` formats), `handleCspReport` (`src/lib/csp-report.ts`). Logs one `csp-violation` line per report to Workers Logs (directive, blocked origin, document path, disposition); stores nothing. Rate-limited per IP (`CSP_REPORT_RATE_LIMITER`). 204, or 400/413/415 |
-| `/api/stripe/webhook` | `src/routes/api/stripe.$.ts` | POST | Booking webhook, `handleStripeWebhook` (`src/lib/stripe-webhook.ts`). Requires JSON and a `stripe-signature` verified with `STRIPE_TRPC_WEBHOOK_SECRET`. Handles `payment_intent.succeeded` (backup confirm), `payment_intent.payment_failed` (log), `charge.refunded` (payment status), `refund.failed` / failed `refund.updated` (admin alert). Other paths under `/api/stripe` are 404 |
+| `/api/stripe/webhook` | `src/routes/api/stripe.$.ts` | POST | Booking webhook, `handleStripeWebhook` (`src/lib/stripe-webhook.ts`). Requires JSON and a `stripe-signature` verified with `STRIPE_TRPC_WEBHOOK_SECRET`. Handles `checkout.session.*` (confirm, processing, release), `refund.*` and `charge.refunded` (refund sync, Dashboard refund emails), `charge.dispute.*` (disputes), `payment_intent.payment_failed` (log); the list is in `STRIPE_WEBHOOKS.md`. Other paths under `/api/stripe` are 404 |
 | `/api/ical/<room publicId>/<token>.ics` | `src/routes/api/ical.$.ts` | GET | iCal export feed, `handleIcalExportRequest` (`src/lib/ical-export.ts`). Token compared in constant time; any mismatch is a plain 404. See `ICAL_SYNC_README.md` |
 | `/api/trpc/*` | `src/routes/api/trpc.$.ts` | GET, POST | tRPC |
 
@@ -429,8 +429,8 @@ a synthetic session.
 | `test/workers/admin-inputs.test.ts`, `users.test.ts` | Admin input validation (ids, dates, single date bound); guest details columns; phone `CONFLICT` |
 | `test/workers/ical-test-url.test.ts` | `testUrl` / feed URL rules (https, no IP or localhost, redirects, size cap) |
 | `test/workers/rate-limit.test.ts`, `auth-rate-limit.test.ts`, `csp-report.test.ts` | Rate limiting bindings and the `rateLimit` middleware, Better Auth's D1 limits, the CSP report endpoint |
-| `test/workers/confirm-payment.test.ts` | `confirmPayment` verification, taken-dates refund, idempotency |
+| `test/workers/checkout.test.ts` | `createCheckoutSession` parameters, reuse and replacement; `confirmCheckout` verification, processing, taken-dates refund, idempotency; the hold priority rule |
 | `test/workers/blocks.test.ts`, `pricing-rules.test.ts`, `rooms-max-guests.test.ts` | Block conflicts, pricing rule overlap and per-night prices, guest limit |
 | `test/workers/ical-route.test.ts`, `ical-sync.test.ts` | Export feed access and contents, admin feed procedures, sync |
-| `test/workers/stripe-webhook.test.ts` | Webhook signature, `payment_intent.succeeded`, `charge.refunded` |
+| `test/workers/stripe-webhook.test.ts` | Webhook signature, `checkout.session.*`, refunds (Dashboard and app), `charge.refunded`, disputes |
 | `test/unit/validation.test.ts` | Zod schemas |

@@ -79,3 +79,21 @@ export function zonedTimeToUtc(
 	if (second !== first) utc = wall - second;
 	return new Date(utc);
 }
+
+const instantFormatter = new Intl.DateTimeFormat('en-US', {
+	timeZone: PROPERTY_TIMEZONE,
+	weekday: 'short',
+	month: 'short',
+	day: 'numeric',
+	year: 'numeric',
+	hour: 'numeric',
+	minute: '2-digit',
+});
+
+/**
+ * An instant as property wall-clock time, e.g. "Tue, Jun 7, 2030, 4:00 PM CT".
+ * Never uses the browser's or the server's time zone.
+ */
+export function formatInstantCT(instant: Date | string | number): string {
+	return `${instantFormatter.format(new Date(instant))} CT`;
+}

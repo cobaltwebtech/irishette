@@ -3,6 +3,7 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 
 import { AdminLayout } from '@/components/admin/AdminLayout';
+import { DisputesPanel } from '@/components/admin/DisputesPanel';
 import { NotificationsPanel } from '@/components/admin/inbox/NotificationsPanel';
 import {
 	createAppColumnHelper,
@@ -341,6 +342,8 @@ function AdminGuestDetail() {
 					</Card>
 				</div>
 			</div>
+
+			<DisputesPanel disputes={guestData.disputes} showBooking />
 
 			<NotificationsPanel userPublicId={user.publicId} />
 

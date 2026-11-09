@@ -43,7 +43,8 @@ export const bookings = sqliteTable(
 
 		// Essential status tracking
 		status: text('status').notNull().default('pending'), // pending, confirmed, cancelled
-		// pending, paid, partially_refunded, refunded, failed
+		// pending, processing (delayed payment method), paid, partially_refunded,
+		// refunded, refund_pending, refund_failed
 		paymentStatus: text('payment_status').notNull().default('pending'),
 
 		// Guest contact (essential for communication)
@@ -57,7 +58,9 @@ export const bookings = sqliteTable(
 
 		// Stripe integration
 		stripeCustomerId: text('stripe_customer_id'),
+		// The hold's current Checkout Session (one open session per hold).
 		stripeSessionId: text('stripe_session_id'),
+		// Set on confirmation (or when a delayed payment starts processing).
 		stripePaymentIntentId: text('stripe_payment_intent_id'),
 
 		// Timestamps (essential for admin dashboard)
@@ -81,7 +84,9 @@ export const bookings = sqliteTable(
 		cancellationReason: text('cancellation_reason'),
 		refundAmount: real('refund_amount'), // dollars refunded (0 if none)
 		stripeRefundId: text('stripe_refund_id'),
-		expiresAt: integer('expires_at', { mode: 'timestamp' }), // For pending bookings - matches Stripe session expiration (30 minutes)
+		// Hold expiry for pending bookings; the Checkout Session expires at the
+		// same moment (HOLD_MINUTES).
+		expiresAt: integer('expires_at', { mode: 'timestamp' }),
 	},
 	(table) => [
 		index('bookings_room_id_idx').on(table.roomId),
@@ -89,6 +94,8 @@ export const bookings = sqliteTable(
 		index('bookings_check_in_date_idx').on(table.checkInDate),
 		index('bookings_created_at_idx').on(table.createdAt),
 		index('bookings_expires_at_idx').on(table.expiresAt), // Index for efficient cleanup queries
+		index('bookings_payment_intent_idx').on(table.stripePaymentIntentId),
+		index('bookings_session_idx').on(table.stripeSessionId),
 		// Availability / overlap lookups.
 		index('bookings_room_status_dates_idx').on(
 			table.roomId,
@@ -99,23 +106,136 @@ export const bookings = sqliteTable(
 	],
 );
 
-// Keep simplified payment tracking
-export const paymentTransactions = sqliteTable('payment_transactions', {
-	id: text('id').primaryKey().$defaultFn(newId),
-	bookingId: text('booking_id')
-		.notNull()
-		.references(() => bookings.id, { onDelete: 'cascade' }),
+// One row per paid booking (the Checkout Session's PaymentIntent and charge).
+export const paymentTransactions = sqliteTable(
+	'payment_transactions',
+	{
+		id: text('id').primaryKey().$defaultFn(newId),
+		bookingId: text('booking_id')
+			.notNull()
+			.references(() => bookings.id, { onDelete: 'cascade' }),
 
-	// Essential Stripe data
-	stripePaymentIntentId: text('stripe_payment_intent_id').unique(),
-	stripeCustomerId: text('stripe_customer_id'), // For customer tracking
-	amount: real('amount').notNull(),
-	status: text('status').notNull(), // pending, succeeded, failed, refunded
+		// Essential Stripe data
+		stripeCheckoutSessionId: text('stripe_checkout_session_id'),
+		stripePaymentIntentId: text('stripe_payment_intent_id').unique(),
+		// The charge (PaymentIntent latest_charge): disputes and refunds
+		// reference it, so they can be matched without a Stripe call.
+		stripeChargeId: text('stripe_charge_id'),
+		stripeCustomerId: text('stripe_customer_id'), // For customer tracking
+		amount: real('amount').notNull(),
+		// Dollars refunded so far (charge.amount_refunded).
+		amountRefunded: real('amount_refunded').notNull().default(0),
+		// succeeded, partially_refunded, refunded
+		status: text('status').notNull(),
 
-	// Payment method info (useful for admin)
-	paymentMethod: text('payment_method'), // card, bank_transfer, etc.
+		// Payment method info (useful for admin)
+		paymentMethod: text('payment_method'), // card, link, us_bank_account, ...
 
-	createdAt: integer('created_at', { mode: 'timestamp' })
-		.$defaultFn(() => new Date())
-		.notNull(),
-});
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.$defaultFn(() => new Date())
+			.notNull(),
+		updatedAt: integer('updated_at', { mode: 'timestamp' })
+			.$defaultFn(() => new Date())
+			.notNull(),
+	},
+	(table) => [
+		index('payment_transactions_booking_idx').on(table.bookingId),
+		index('payment_transactions_charge_idx').on(table.stripeChargeId),
+	],
+);
+
+// Every Stripe refund on a booking's payment: the ones the app makes
+// (cancellations, automatic refunds; source 'app') and the ones made in the
+// Stripe Dashboard (source 'dashboard'). Upserted by the refund webhooks,
+// which compare the stored status to decide what is new.
+export const paymentRefunds = sqliteTable(
+	'payment_refunds',
+	{
+		id: text('id').primaryKey().$defaultFn(newId),
+		stripeRefundId: text('stripe_refund_id').notNull().unique(),
+		bookingId: text('booking_id').references(() => bookings.id, {
+			onDelete: 'set null',
+		}),
+		stripePaymentIntentId: text('stripe_payment_intent_id'),
+		stripeChargeId: text('stripe_charge_id'),
+		source: text('source', { enum: ['app', 'dashboard'] }).notNull(),
+		amount: real('amount').notNull(), // dollars
+		currency: text('currency').notNull(),
+		// pending, requires_action, succeeded, failed, canceled
+		status: text('status').notNull(),
+		// requested_by_customer, duplicate, fraudulent, expired_uncaptured_charge, ...
+		reason: text('reason'),
+		failureReason: text('failure_reason'),
+		// Card network trace reference (ARN), once Stripe has it.
+		reference: text('reference'),
+		stripeCreatedAt: integer('stripe_created_at', { mode: 'timestamp' }),
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.$defaultFn(() => new Date())
+			.notNull(),
+		updatedAt: integer('updated_at', { mode: 'timestamp' })
+			.$defaultFn(() => new Date())
+			.notNull(),
+	},
+	(table) => [index('payment_refunds_booking_idx').on(table.bookingId)],
+);
+
+// Stripe disputes (chargebacks), stored from the charge.dispute.* webhooks
+// and linked to the booking and the guest when the payment is ours. Kept as
+// a financial record: deleting its admin notification leaves it here.
+export const paymentDisputes = sqliteTable(
+	'payment_disputes',
+	{
+		id: text('id').primaryKey().$defaultFn(newId),
+		stripeDisputeId: text('stripe_dispute_id').notNull().unique(),
+		stripeChargeId: text('stripe_charge_id').notNull(),
+		stripePaymentIntentId: text('stripe_payment_intent_id'),
+		// Null when the payment matches no booking ("unlinked payment").
+		bookingId: text('booking_id').references(() => bookings.id, {
+			onDelete: 'set null',
+		}),
+		userId: text('user_id').references(() => user.id, {
+			onDelete: 'set null',
+		}),
+		amount: real('amount').notNull(), // dollars
+		currency: text('currency').notNull(),
+		// fraudulent, product_not_received, duplicate, ...
+		reason: text('reason').notNull(),
+		// warning_needs_response, warning_under_review, warning_closed,
+		// needs_response, under_review, won, lost, prevented
+		status: text('status').notNull(),
+		networkReasonCode: text('network_reason_code'),
+		evidenceDueBy: integer('evidence_due_by', { mode: 'timestamp' }),
+		isChargeRefundable: integer('is_charge_refundable', {
+			mode: 'boolean',
+		}).notNull(),
+		livemode: integer('livemode', { mode: 'boolean' }).notNull(),
+		cardBrand: text('card_brand'),
+		cardLast4: text('card_last4'),
+		stripeCreatedAt: integer('stripe_created_at', {
+			mode: 'timestamp',
+		}).notNull(),
+		closedAt: integer('closed_at', { mode: 'timestamp' }),
+		fundsWithdrawnAt: integer('funds_withdrawn_at', { mode: 'timestamp' }),
+		fundsReinstatedAt: integer('funds_reinstated_at', { mode: 'timestamp' }),
+		// The newest Stripe event applied. Replays and older (out-of-order)
+		// events change nothing and do not resurface the notification.
+		lastStripeEventId: text('last_stripe_event_id').notNull(),
+		lastStripeEventCreated: integer('last_stripe_event_created', {
+			mode: 'timestamp',
+		}).notNull(),
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.$defaultFn(() => new Date())
+			.notNull(),
+		updatedAt: integer('updated_at', { mode: 'timestamp' })
+			.$defaultFn(() => new Date())
+			.notNull(),
+	},
+	(table) => [
+		index('payment_disputes_booking_idx').on(table.bookingId),
+		index('payment_disputes_user_idx').on(table.userId),
+		index('payment_disputes_status_due_idx').on(
+			table.status,
+			table.evidenceDueBy,
+		),
+	],
+);

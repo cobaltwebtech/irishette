@@ -8,7 +8,7 @@ import {
 	inboxStatuses,
 } from '../lib/inbox';
 import { user } from './auth-schema';
-import { bookings } from './booking-schema';
+import { bookings, paymentDisputes } from './booking-schema';
 
 // Internal admin notifications (Stripe and system events). One table, one
 // indexed list query. Items are kept until an admin deletes them.
@@ -36,6 +36,12 @@ export const adminInboxItems = sqliteTable(
 		userId: text('user_id').references(() => user.id, {
 			onDelete: 'set null',
 		}),
+		// The dispute a payment_dispute item is about. Deleting the item keeps
+		// the dispute (a financial record).
+		paymentDisputeId: text('payment_dispute_id').references(
+			() => paymentDisputes.id,
+			{ onDelete: 'set null' },
+		),
 		// Makes creation idempotent across webhook replays and cron retries
 		// (e.g. refund_failed:<refundId>). Null: always a new item.
 		dedupeKey: text('dedupe_key').unique(),

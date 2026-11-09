@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vite-plus/test';
 
 import { publicIdSchema } from '@/lib/ids';
 import {
-	confirmPaymentSchema,
+	confirmCheckoutSchema,
 	createBookingSchema,
 } from '@/lib/payment-validation';
 import { redirectSearchParam } from '@/lib/redirect';
@@ -93,17 +93,19 @@ describe('booking inputs', () => {
 		).toBe(false);
 	});
 
-	it('requires a Stripe PaymentIntent id', () => {
+	it('requires a Stripe Checkout Session id', () => {
+		const publicId = 'seedroomrose0001';
 		expect(
-			confirmPaymentSchema.safeParse({
-				bookingId: 'b1',
-				paymentIntentId: 'pi_123',
+			confirmCheckoutSchema.safeParse({
+				publicId,
+				sessionId: 'cs_test_a1B2c3',
 			}).success,
 		).toBe(true);
-		expect(
-			confirmPaymentSchema.safeParse({ bookingId: 'b1', paymentIntentId: 'x' })
-				.success,
-		).toBe(false);
+		for (const sessionId of ['pi_123', 'cs_test_', 'cs_test_a b', 'x']) {
+			expect(
+				confirmCheckoutSchema.safeParse({ publicId, sessionId }).success,
+			).toBe(false);
+		}
 	});
 });
 

@@ -7,14 +7,18 @@ import {
 	type Booking,
 	bookingRoomColumns,
 	cancelBooking,
-	confirmBookingPayment,
 	createHold,
-	preparePayment,
 	quoteBookingCancellation,
 	quoteStay,
 	refreshHold,
 } from '@/lib/booking-service';
+import { confirmBookingPayment, prepareCheckout } from '@/lib/checkout-service';
 import { isoDateSchema } from '@/lib/date-range';
+import {
+	hasOpenDispute,
+	listDisputes,
+	openDisputeExists,
+} from '@/lib/dispute-service';
 import { sendBookingConfirmationEmail } from '@/lib/email-service';
 import { idSchema } from '@/lib/ids';
 import {
@@ -23,7 +27,7 @@ import {
 	bookingPublicIdSchema,
 	calculateBookingSchema,
 	cancelBookingSchema,
-	confirmPaymentSchema,
+	confirmCheckoutSchema,
 	createBookingSchema,
 } from '@/lib/payment-validation';
 
@@ -151,7 +155,7 @@ export const bookingsRouter = createTRPCRouter({
 			};
 		}),
 
-	/** Holds the dates for 30 minutes as a pending booking. */
+	/** Holds the dates for HOLD_MINUTES (35) as a pending booking. */
 	createBooking: protectedProcedure
 		.input(createBookingSchema)
 		.mutation(async ({ ctx, input }) => {
@@ -159,14 +163,18 @@ export const bookingsRouter = createTRPCRouter({
 			return { bookingId, publicId, success: true };
 		}),
 
-	/** PaymentIntent for the in-app checkout (Payment Element). */
-	createPaymentIntent: protectedProcedure
+	/**
+	 * The hold's Checkout Session (Payment Element on our page). Returns its
+	 * client secret, or status 'complete' when it was already paid.
+	 */
+	createCheckoutSession: protectedProcedure
 		.input(bookingIdSchema)
 		.mutation(async ({ ctx, input }) => {
 			const booking = await findAccessibleBooking(ctx, { id: input.bookingId });
-			const { clientSecret } = await preparePayment(ctx, booking);
+			const result = await prepareCheckout(ctx, booking);
 			return {
-				clientSecret,
+				...result,
+				publicId: booking.publicId,
 				publishableKey: ctx.env.STRIPE_PUBLISHABLE_KEY,
 			};
 		}),
@@ -180,27 +188,24 @@ export const bookingsRouter = createTRPCRouter({
 		}),
 
 	/**
-	 * Confirms after Stripe.js reports success. The webhook does the same as a
-	 * backup; both are idempotent. If the dates were taken meanwhile, the
-	 * payment is refunded and this throws CONFLICT.
+	 * Fast path after checkout.confirm() or the return page
+	 * (?session_id=...): the same idempotent confirmation the webhook runs.
+	 * Returns 'confirmed' / 'already_confirmed', 'processing' (a delayed
+	 * payment method) or 'refunded_conflict' (the dates were taken meanwhile
+	 * and the payment was refunded in full).
 	 */
-	confirmPayment: protectedProcedure
-		.input(confirmPaymentSchema)
+	confirmCheckout: protectedProcedure
+		.input(confirmCheckoutSchema)
 		.mutation(async ({ ctx, input }) => {
-			const booking = await findAccessibleBooking(ctx, { id: input.bookingId });
+			const booking = await findAccessibleBooking(ctx, {
+				publicId: input.publicId,
+			});
 			const outcome = await confirmBookingPayment(
 				ctx,
 				booking.id,
-				input.paymentIntentId,
+				input.sessionId,
 			);
-			if (outcome.status === 'refunded_conflict') {
-				throw new TRPCError({
-					code: 'CONFLICT',
-					message:
-						'Sorry, these dates were booked elsewhere moments before your payment completed. Your payment has been refunded in full.',
-				});
-			}
-			return { success: true, publicId: booking.publicId };
+			return { status: outcome.status, publicId: booking.publicId };
 		}),
 
 	/** The caller's own booking (guest fields) with its room. */
@@ -238,7 +243,8 @@ export const bookingsRouter = createTRPCRouter({
 					.from(user)
 					.where(eq(user.id, booking.userId)),
 			]);
-			return { booking, room: roomRow, user: guest ?? null };
+			const disputes = await listDisputes(ctx.db, { bookingId: booking.id });
+			return { booking, room: roomRow, user: guest ?? null, disputes };
 		}),
 
 	getMyBookings: protectedProcedure
@@ -272,6 +278,11 @@ export const bookingsRouter = createTRPCRouter({
 			const quote = await quoteBookingCancellation(ctx.db, booking);
 			return {
 				status: booking.status,
+				// Guests can't cancel online while it is open; admins refund only
+				// with explicit confirmation (plan 02, 3.4b / B7).
+				hasOpenDispute:
+					booking.status === 'confirmed' &&
+					(await hasOpenDispute(ctx.db, booking.id)),
 				paymentStatus: booking.paymentStatus,
 				canCancel:
 					booking.status !== 'cancelled' &&
@@ -318,6 +329,7 @@ export const bookingsRouter = createTRPCRouter({
 				by: 'admin',
 				refund: input.refund,
 				reason: input.reason ? `admin: ${input.reason}` : undefined,
+				confirmDisputeRefund: input.confirmDisputeRefund,
 			});
 			return { success: true, ...result };
 		}),
@@ -361,7 +373,15 @@ export const bookingsRouter = createTRPCRouter({
 				offset: z.number().min(0).default(0),
 				status: listStatusSchema,
 				paymentStatus: z
-					.enum(['pending', 'paid', 'partially_refunded', 'refunded', 'failed'])
+					.enum([
+						'pending',
+						'processing',
+						'paid',
+						'partially_refunded',
+						'refunded',
+						'refund_pending',
+						'refund_failed',
+					])
 					.optional(),
 				roomId: idSchema.optional(),
 				/** Check-in on or after this date. */
@@ -388,6 +408,7 @@ export const bookingsRouter = createTRPCRouter({
 					booking: bookings,
 					room: { id: room.id, slug: room.slug, basePrice: room.basePrice },
 					user: { id: user.id, email: user.email, name: user.name },
+					hasOpenDispute: openDisputeExists,
 				})
 				.from(bookings)
 				.innerJoin(room, eq(bookings.roomId, room.id))

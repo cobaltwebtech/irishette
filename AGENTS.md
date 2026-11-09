@@ -13,7 +13,7 @@ Irishette is a room-booking site (rooms, availability, bookings, payments, admin
 | Routing / data | TanStack Router (file-based), TanStack Query, TanStack Table, TanStack Store |
 | API | tRPC v11 (`src/integrations/trpc/`) served through TanStack Start server routes in `src/routes/api/` |
 | Auth | Better Auth + `@better-auth/stripe` + Drizzle adapter (`src/lib/auth.ts`) |
-| Payments | Stripe PaymentIntents + Payment Element (`src/lib/booking-service.ts`; webhook handler `src/lib/stripe-webhook.ts`, mounted at `src/routes/api/stripe.$.ts`) |
+| Payments | Stripe Checkout Sessions (`ui_mode: 'elements'`) + Payment Element (`src/lib/checkout-service.ts`; refunds `refund-service.ts`, disputes `dispute-service.ts`; webhook handler `src/lib/stripe-webhook.ts`, mounted at `src/routes/api/stripe.$.ts`) |
 | Database | Cloudflare D1 (binding `DB`) via Drizzle ORM (SQLite dialect) |
 | Other bindings | Rate Limiting bindings `AUTH_RATE_LIMITER`, `API_RATE_LIMITER`, `CSP_REPORT_RATE_LIMITER` (`src/lib/rate-limit.ts`); cron triggers (see `cloudflare.config.ts`). No KV (the old `KV_ICAL_SYNC_LOG` is gone; sync history is in D1). |
 | Email | Resend + react-email templates in `src/components/email/`; every send (booking, admin alerts, Better Auth) goes through `src/lib/email-service.ts` |
@@ -113,7 +113,7 @@ src/routes/api/          Server routes: auth.$ (Better Auth, rate-limited), trpc
 src/integrations/trpc/   init.ts (public/protected/admin procedures, errorFormatter), context.ts + inner-context.ts (per-request context), router.ts, routers: bookings, rooms, availability, ical, policies, users, inbox
 src/core/functions/      TanStack Start server functions (auth-server.ts: getSessionFn; contact.ts: submitContactFn, public)
 src/core/middleware/     TanStack Start middleware: security-headers (global), rate-limit (server routes + rateLimitFnMiddleware for server functions), auth (requireSession/requireAdmin function middleware)
-src/lib/                 Services and validation: auth, auth-client, auth-check (route guards), server-auth (server fn checks), session (useSession), session-user, booking-service, availability, pricing, date-range, cancellation-policy, email-service, stripe(-webhook), ical-sync/-parse/-generate/-export, scheduled-tasks, deps (ServiceDeps), ids, site (domain, contact details, email senders, check-in/out times), inbox (kinds, details types) + inbox-service (createInboxItem), contact-service + turnstile (contact form, Siteverify), *-validation (Zod)
+src/lib/                 Services and validation: auth, auth-client, auth-check (route guards), server-auth (server fn checks), session (useSession), session-user, booking-service, checkout-service, refund-service, dispute-service, availability, pricing, date-range, cancellation-policy, email-service, stripe(-webhook), ical-sync/-parse/-generate/-export, scheduled-tasks, deps (ServiceDeps), ids, site (domain, contact details, email senders, check-in/out times), inbox (kinds, details types) + inbox-service (createInboxItem), contact-service + turnstile (contact form, Siteverify), *-validation (Zod)
 src/db/                  Drizzle schemas (auth-, booking-, room-, policy-, inbox-), schema-export.ts, drizzle-init.ts (createDrizzle, Database type)
 src/components/          UI (ui/ = shadcn, admin/ (admin/inbox/ = notifications), booking/, email/, data-table/)
 src/stores/              TanStack Store booking state
@@ -342,7 +342,7 @@ Tuned in Phase 8 of the 2026-11 upgrade plan. Framework entry points (TanStack S
   | `ui` | `src/components/ui/**` | `ui`, `shared` |
   | `email` | `src/components/email/**` | `email` |
   | `client` | other `src/components/**`, `src/stores/**` | `ui`, `client`, `shared`; `server` type-only |
-  | `server` | server-only services in `src/lib/` (auth, booking-service, availability, deps, email-service, stripe, stripe-webhook, ical-sync, ical-export, scheduled-tasks, admin-query, cancellation-policy-store, rate-limit, server-auth, inbox-service, contact-service, turnstile), `src/db/**`, `src/server.ts`, tRPC init/access/context/routers | anything |
+  | `server` | server-only services in `src/lib/` (auth, booking-service, checkout-service, refund-service, dispute-service, availability, deps, email-service, stripe, stripe-webhook, ical-sync, ical-export, scheduled-tasks, admin-query, cancellation-policy-store, rate-limit, server-auth, inbox-service, contact-service, turnstile), `src/db/**`, `src/server.ts`, tRPC init/access/context/routers | anything |
   | `shared` | the rest of `src/lib/**`, `src/utils/**`, tRPC `react`/`types`/`errors`/`batching` | `shared`; `server` type-only |
 
   Routes and `src/core/` are unzoned. When you add a server-only module to `src/lib/`, add it to the `server` zone. If client code needs a constant that lives in a server file (e.g. a Drizzle schema), move it into a shared module (see `src/lib/ical-feed-sources.ts`) instead of suppressing the violation.

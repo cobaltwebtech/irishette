@@ -21,9 +21,9 @@ const PUBLIC = new Set([
 /** Procedures a signed-in normal user may call (they check ownership). */
 const USER = new Set([
 	'bookings.createBooking',
-	'bookings.createPaymentIntent',
+	'bookings.createCheckoutSession',
 	'bookings.refreshBooking',
-	'bookings.confirmPayment',
+	'bookings.confirmCheckout',
 	'bookings.getBooking',
 	'bookings.getMyBookings',
 	'bookings.getCancellationQuote',
@@ -41,7 +41,9 @@ const REMOVED = [
 	'rooms.bulkAvailability',
 	'bookings.updateBooking',
 	'bookings.checkAvailability',
-	'bookings.createCheckoutSession',
+	// Plan 02 Phase 3: replaced by createCheckoutSession / confirmCheckout.
+	'bookings.createPaymentIntent',
+	'bookings.confirmPayment',
 	'availability.checkRoom',
 	'availability.checkBulk',
 	// Plan 02 Phase 1: unused (the admin UI syncs a whole room).

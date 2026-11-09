@@ -46,9 +46,13 @@ export const calculateBookingSchema = z
 /** A booking the caller owns, by internal id (payment steps). */
 export const bookingIdSchema = z.object({ bookingId: z.string().min(1) });
 
-export const confirmPaymentSchema = z.object({
-	bookingId: z.string().min(1),
-	paymentIntentId: z.string().regex(/^pi_[A-Za-z0-9_]+$/, 'Invalid payment id'),
+/** The return page's fast-path confirmation (?session_id=cs_...). */
+export const confirmCheckoutSchema = z.object({
+	publicId: publicIdSchema,
+	sessionId: z
+		.string()
+		.max(255)
+		.regex(/^cs_(test|live)_[A-Za-z0-9]+$/, 'Invalid checkout session id'),
 });
 
 export const bookingPublicIdSchema = z.object({ publicId: publicIdSchema });
@@ -62,6 +66,8 @@ export const adminCancelBookingSchema = z.object({
 	publicId: publicIdSchema,
 	refund: z.enum(['full', 'policy', 'none']),
 	reason: z.string().trim().max(500).optional(),
+	/** Refund although the payment has an open dispute (plan 02, B7). */
+	confirmDisputeRefund: z.boolean().optional(),
 });
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;

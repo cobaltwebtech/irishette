@@ -21,6 +21,8 @@ export interface NewInboxItem<K extends InboxKind = InboxKind> {
 	details: InboxDetailsByKind[K];
 	bookingId?: string | null;
 	userId?: string | null;
+	/** payment_dispute items: the stored dispute (payment_disputes.id). */
+	paymentDisputeId?: string | null;
 	/**
 	 * Same key = same item: a repeat updates it instead of adding a row
 	 * (webhook replays, cron retries). Omit for one item per call.
@@ -69,6 +71,7 @@ export async function createInboxItem<K extends InboxKind>(
 				details: item.details,
 				bookingId: item.bookingId ?? null,
 				userId: item.userId ?? null,
+				paymentDisputeId: item.paymentDisputeId ?? null,
 				dedupeKey: item.dedupeKey ?? null,
 				surfacedAt: now,
 				createdAt: now,
@@ -82,6 +85,9 @@ export async function createInboxItem<K extends InboxKind>(
 					details: item.details,
 					...(item.bookingId ? { bookingId: item.bookingId } : {}),
 					...(item.userId ? { userId: item.userId } : {}),
+					...(item.paymentDisputeId
+						? { paymentDisputeId: item.paymentDisputeId }
+						: {}),
 					occurrences: sql`${t.occurrences} + 1`,
 					status: sql`CASE WHEN ${resurface} THEN 'new' ELSE ${t.status} END`,
 					readAt: sql`CASE WHEN ${resurface} THEN NULL ELSE ${t.readAt} END`,

@@ -15,12 +15,7 @@ import {
 	settle,
 	trpcError,
 } from './helpers';
-import {
-	mockResend,
-	mockStripeIntentCancel,
-	mockStripePaymentIntents,
-	mockStripeRefunds,
-} from './mocks';
+import { mockResend, mockStripeCheckout, mockStripeRefunds } from './mocks';
 import { ADMIN, ROSE, TEXAS } from './seed';
 
 const guest = () => caller('user');
@@ -426,27 +421,57 @@ describe('cancellation', () => {
 		expect((await bookingRow(booking.id)).cancelledBy).toBe('admin');
 	});
 
-	it('cancelling an unpaid hold cancels its PaymentIntent and refunds nothing', async () => {
-		const cancelled = mockStripeIntentCancel();
-		mockStripePaymentIntents({
-			id: 'pi_hold_1',
-			amount: 25000,
-			status: 'requires_payment_method',
-		});
+	it('cancelling an unpaid hold expires its Checkout Session and refunds nothing', async () => {
+		const checkout = mockStripeCheckout();
+		const session = checkout.add({ id: 'cs_test_hold1' });
 		const booking = await insertBooking({
 			checkInDate: '2034-11-10',
 			checkOutDate: '2034-11-12',
 			status: 'pending',
 			paymentStatus: 'pending',
 			expiresAt: new Date(Date.now() + 20 * 60_000),
-			stripePaymentIntentId: 'pi_hold_1',
+			stripeSessionId: session.id,
 		});
 		const result = await guest().bookings.cancelBooking({
 			publicId: booking.publicId,
 		});
 		expect(result.refundAmount).toBe(0);
-		expect(cancelled).toEqual(['pi_hold_1']);
+		expect(checkout.expired).toEqual(['cs_test_hold1']);
 		expect((await bookingRow(booking.id)).status).toBe('cancelled');
+	});
+
+	it('a hold whose payment is processing cannot be cancelled', async () => {
+		mockStripeCheckout();
+		const booking = await insertBooking({
+			checkInDate: '2034-11-20',
+			checkOutDate: '2034-11-22',
+			status: 'pending',
+			paymentStatus: 'processing',
+			expiresAt: new Date(Date.now() - 60_000),
+		});
+		const error = await trpcError(
+			guest().bookings.cancelBooking({ publicId: booking.publicId }),
+		);
+		expect(error.code).toBe('CONFLICT');
+		expect((await bookingRow(booking.id)).status).toBe('pending');
+	});
+
+	it('refunds carry the booking ids in metadata (no personal data)', async () => {
+		const refunds = mockStripeRefunds();
+		mockResend();
+		const booking = await insertBooking({
+			checkInDate: inDays(20),
+			checkOutDate: inDays(22),
+			stripePaymentIntentId: 'pi_cancel_meta',
+		});
+		await guest().bookings.cancelBooking({ publicId: booking.publicId });
+		await settle();
+		const body = refunds[0].body;
+		expect(body.get('metadata[bookingId]')).toBe(booking.id);
+		expect(body.get('metadata[bookingPublicId]')).toBe(booking.publicId);
+		expect(body.get('metadata[confirmationId]')).toBe(booking.confirmationId);
+		expect(body.get('metadata[source]')).toBe('irishette');
+		expect([...body.values()].join(' ')).not.toContain(booking.guestEmail);
 	});
 
 	it('keeps the policy a booking was made under', async () => {

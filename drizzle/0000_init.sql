@@ -117,20 +117,82 @@ CREATE INDEX `bookings_status_idx` ON `bookings` (`status`);--> statement-breakp
 CREATE INDEX `bookings_check_in_date_idx` ON `bookings` (`check_in_date`);--> statement-breakpoint
 CREATE INDEX `bookings_created_at_idx` ON `bookings` (`created_at`);--> statement-breakpoint
 CREATE INDEX `bookings_expires_at_idx` ON `bookings` (`expires_at`);--> statement-breakpoint
+CREATE INDEX `bookings_payment_intent_idx` ON `bookings` (`stripe_payment_intent_id`);--> statement-breakpoint
+CREATE INDEX `bookings_session_idx` ON `bookings` (`stripe_session_id`);--> statement-breakpoint
 CREATE INDEX `bookings_room_status_dates_idx` ON `bookings` (`room_id`,`status`,`check_in_date`,`check_out_date`);--> statement-breakpoint
+CREATE TABLE `payment_disputes` (
+	`id` text PRIMARY KEY NOT NULL,
+	`stripe_dispute_id` text NOT NULL,
+	`stripe_charge_id` text NOT NULL,
+	`stripe_payment_intent_id` text,
+	`booking_id` text,
+	`user_id` text,
+	`amount` real NOT NULL,
+	`currency` text NOT NULL,
+	`reason` text NOT NULL,
+	`status` text NOT NULL,
+	`network_reason_code` text,
+	`evidence_due_by` integer,
+	`is_charge_refundable` integer NOT NULL,
+	`livemode` integer NOT NULL,
+	`card_brand` text,
+	`card_last4` text,
+	`stripe_created_at` integer NOT NULL,
+	`closed_at` integer,
+	`funds_withdrawn_at` integer,
+	`funds_reinstated_at` integer,
+	`last_stripe_event_id` text NOT NULL,
+	`last_stripe_event_created` integer NOT NULL,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	FOREIGN KEY (`booking_id`) REFERENCES `bookings`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `payment_disputes_stripe_dispute_id_unique` ON `payment_disputes` (`stripe_dispute_id`);--> statement-breakpoint
+CREATE INDEX `payment_disputes_booking_idx` ON `payment_disputes` (`booking_id`);--> statement-breakpoint
+CREATE INDEX `payment_disputes_user_idx` ON `payment_disputes` (`user_id`);--> statement-breakpoint
+CREATE INDEX `payment_disputes_status_due_idx` ON `payment_disputes` (`status`,`evidence_due_by`);--> statement-breakpoint
+CREATE TABLE `payment_refunds` (
+	`id` text PRIMARY KEY NOT NULL,
+	`stripe_refund_id` text NOT NULL,
+	`booking_id` text,
+	`stripe_payment_intent_id` text,
+	`stripe_charge_id` text,
+	`source` text NOT NULL,
+	`amount` real NOT NULL,
+	`currency` text NOT NULL,
+	`status` text NOT NULL,
+	`reason` text,
+	`failure_reason` text,
+	`reference` text,
+	`stripe_created_at` integer,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	FOREIGN KEY (`booking_id`) REFERENCES `bookings`(`id`) ON UPDATE no action ON DELETE set null
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `payment_refunds_stripe_refund_id_unique` ON `payment_refunds` (`stripe_refund_id`);--> statement-breakpoint
+CREATE INDEX `payment_refunds_booking_idx` ON `payment_refunds` (`booking_id`);--> statement-breakpoint
 CREATE TABLE `payment_transactions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`booking_id` text NOT NULL,
+	`stripe_checkout_session_id` text,
 	`stripe_payment_intent_id` text,
+	`stripe_charge_id` text,
 	`stripe_customer_id` text,
 	`amount` real NOT NULL,
+	`amount_refunded` real DEFAULT 0 NOT NULL,
 	`status` text NOT NULL,
 	`payment_method` text,
 	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
 	FOREIGN KEY (`booking_id`) REFERENCES `bookings`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `payment_transactions_stripe_payment_intent_id_unique` ON `payment_transactions` (`stripe_payment_intent_id`);--> statement-breakpoint
+CREATE INDEX `payment_transactions_booking_idx` ON `payment_transactions` (`booking_id`);--> statement-breakpoint
+CREATE INDEX `payment_transactions_charge_idx` ON `payment_transactions` (`stripe_charge_id`);--> statement-breakpoint
 CREATE TABLE `admin_inbox_items` (
 	`id` text PRIMARY KEY NOT NULL,
 	`public_id` text NOT NULL,
@@ -144,13 +206,15 @@ CREATE TABLE `admin_inbox_items` (
 	`archived_at` integer,
 	`booking_id` text,
 	`user_id` text,
+	`payment_dispute_id` text,
 	`dedupe_key` text,
 	`occurrences` integer DEFAULT 1 NOT NULL,
 	`surfaced_at` integer NOT NULL,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL,
 	FOREIGN KEY (`booking_id`) REFERENCES `bookings`(`id`) ON UPDATE no action ON DELETE set null,
-	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null
+	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`payment_dispute_id`) REFERENCES `payment_disputes`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `admin_inbox_items_public_id_unique` ON `admin_inbox_items` (`public_id`);--> statement-breakpoint

@@ -3,6 +3,8 @@ import { type CreateEmailOptions, Resend } from 'resend';
 
 import { AdminBookingNotificationEmail } from '@/components/email/AdminBookingNotificationEmail';
 import { BookingConfirmationEmail } from '@/components/email/BookingConfirmationEmail';
+import type { EmailBookingDetails } from '@/components/email/BookingDetailsSection';
+import { BookingNoticeEmail } from '@/components/email/BookingNoticeEmail';
 import { MagicLinkEmail } from '@/components/email/MagicLinkEmail';
 import {
 	NotificationEmail,
@@ -19,14 +21,18 @@ import {
 	MAGIC_LINK_EXPIRES_IN,
 	PASSWORD_RESET_EXPIRES_IN,
 } from './auth-constants';
+import { formatMoney } from './format';
 import {
-	CHECK_OUT_TIME_LABEL,
+	CHECK_IN_TIME,
+	CHECK_OUT_TIME,
 	CONTACT_EMAIL,
 	EMAIL_FROM_ADMIN,
 	EMAIL_FROM_AUTH,
 	EMAIL_FROM_BOOKINGS,
+	formatTimeOfDay,
 	SITE_URL,
 } from './site';
+import { formatInstantCT } from './timezone';
 
 // All transactional email goes through here. Logs never include email
 // addresses or guest details: only the kind of email and the booking's
@@ -48,10 +54,48 @@ export interface EmailResult {
 	error?: string;
 }
 
-const currency = (amount: number) =>
-	new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
-		amount,
-	);
+const currency = formatMoney;
+
+const stayDate = new Intl.DateTimeFormat('en-US', {
+	timeZone: 'UTC',
+	weekday: 'long',
+	year: 'numeric',
+	month: 'long',
+	day: 'numeric',
+});
+
+/** "2030-06-10" -> "Monday, June 10, 2030" (a property-local stay date). */
+const formatStayDate = (date: string) =>
+	stayDate.format(new Date(`${date}T00:00:00Z`));
+
+/** The booking details every booking email shows (shared email section). */
+export function emailBookingDetails(
+	booking: Booking,
+	room: RoomInfo,
+): EmailBookingDetails {
+	return {
+		confirmationId: booking.confirmationId,
+		roomName: room.name,
+		checkInDate: formatStayDate(booking.checkInDate),
+		checkInTime: formatTimeOfDay(CHECK_IN_TIME, { withZone: true }),
+		checkOutDate: formatStayDate(booking.checkOutDate),
+		checkOutTime: formatTimeOfDay(CHECK_OUT_TIME, { withZone: true }),
+		numberOfNights: booking.numberOfNights,
+		numberOfGuests: booking.numberOfGuests,
+		guestName: booking.guestName,
+		guestEmail: booking.guestEmail,
+		guestPhone: booking.guestPhone,
+		specialRequests: booking.specialRequests,
+		baseAmount: booking.baseAmount,
+		feesAmount: booking.feesAmount ?? 0,
+		taxAmount: booking.taxAmount ?? 0,
+		totalAmount: booking.totalAmount,
+	};
+}
+
+/** Stripe: refunds reach the card in 5-10 business days. */
+const REFUND_TIMING =
+	'Refunds go back to your original payment method. Please allow 5-10 business days for it to appear.';
 
 function guestConfirmation(
 	booking: Booking,
@@ -63,24 +107,27 @@ function guestConfirmation(
 		to: [booking.guestEmail],
 		subject: `Booking Confirmed - ${booking.confirmationId} | Irishette Bed & Breakfast`,
 		react: React.createElement(BookingConfirmationEmail, {
-			confirmationId: booking.confirmationId,
-			guestName: booking.guestName,
-			roomName: room.name,
-			checkInDate: booking.checkInDate,
-			checkOutDate: booking.checkOutDate,
-			numberOfNights: booking.numberOfNights,
-			numberOfGuests: booking.numberOfGuests,
-			guestEmail: booking.guestEmail,
-			guestPhone: booking.guestPhone ?? undefined,
-			specialRequests: booking.specialRequests ?? undefined,
-			baseAmount: booking.baseAmount,
-			taxAmount: booking.taxAmount ?? 0,
-			feesAmount: booking.feesAmount ?? 0,
-			totalAmount: booking.totalAmount,
+			booking: emailBookingDetails(booking, room),
 			accountUrl: `${baseUrl}/account`,
 			siteUrl: SITE_URL,
 			contactEmail: CONTACT_EMAIL,
-			checkOutTime: CHECK_OUT_TIME_LABEL,
+		}),
+	};
+}
+
+function bookingNotice(
+	from: string,
+	to: string[],
+	subject: string,
+	props: Omit<React.ComponentProps<typeof BookingNoticeEmail>, 'contactEmail'>,
+): CreateEmailOptions {
+	return {
+		from,
+		to,
+		subject,
+		react: React.createElement(BookingNoticeEmail, {
+			...props,
+			contactEmail: CONTACT_EMAIL,
 		}),
 	};
 }
@@ -199,71 +246,248 @@ export interface CancellationEmailInfo {
 	adminMessage: string;
 }
 
-/** Guest cancellation notice + admin notification. */
-export async function sendCancellationEmails(
+type NoticeContent = Pick<
+	React.ComponentProps<typeof BookingNoticeEmail>,
+	'preview' | 'heading' | 'paragraphs'
+> & { subject: string };
+
+/**
+ * One booking update for the guest and the admins: both get the highlighted
+ * section and the full booking details; the guest links to their account,
+ * the admins to the booking (amber frame).
+ */
+async function sendBookingNotices(
+	db: Database,
+	env: EmailEnv,
+	booking: Booking,
+	room: RoomInfo,
+	notice: {
+		kind: string;
+		idempotencyKey: string;
+		highlight: React.ComponentProps<typeof BookingNoticeEmail>['highlight'];
+		guest: NoticeContent;
+		admin: NoticeContent;
+	},
+): Promise<EmailResult> {
+	const details = emailBookingDetails(booking, room);
+	const { subject: guestSubject, ...guest } = notice.guest;
+	const emails = [
+		bookingNotice(EMAIL_FROM_BOOKINGS, [booking.guestEmail], guestSubject, {
+			...guest,
+			highlight: notice.highlight,
+			booking: details,
+			button: {
+				label: 'View your bookings',
+				href: `${env.BETTER_AUTH_URL}/account`,
+			},
+		}),
+	];
+	const adminEmails = await getAdminEmails(db);
+	if (adminEmails.length > 0) {
+		const { subject: adminSubject, ...admin } = notice.admin;
+		emails.push(
+			bookingNotice(EMAIL_FROM_ADMIN, adminEmails, adminSubject, {
+				...admin,
+				highlight: notice.highlight,
+				booking: details,
+				button: {
+					label: 'Open booking',
+					href: `${env.BETTER_AUTH_URL}/admin/bookings/${booking.publicId}`,
+				},
+				tone: 'alert',
+			}),
+		);
+	}
+	return sendBatch(env, notice.kind, emails, notice.idempotencyKey);
+}
+
+/** Guest cancellation notice + admin notification (full booking details). */
+export function sendCancellationEmails(
 	db: Database,
 	env: EmailEnv,
 	booking: Booking,
 	room: RoomInfo,
 	info: CancellationEmailInfo,
 ): Promise<EmailResult> {
-	const details = [
-		{ label: 'Confirmation', value: booking.confirmationId },
-		{ label: 'Room', value: room.name },
-		{ label: 'Check-in', value: booking.checkInDate },
-		{ label: 'Check-out', value: booking.checkOutDate },
-		{ label: 'Amount paid', value: currency(booking.totalAmount) },
-		{ label: 'Refund', value: currency(info.refundAmount) },
-	];
-	const emails = [
-		notification(
-			EMAIL_FROM_BOOKINGS,
-			[booking.guestEmail],
-			`Booking Cancelled - ${booking.confirmationId} | Irishette Bed & Breakfast`,
-			{
-				preview: `Your booking ${booking.confirmationId} was cancelled`,
-				heading: 'Your booking was cancelled',
-				paragraphs: [
-					`Hi ${booking.guestName},`,
-					info.guestMessage,
-					info.refundAmount > 0
-						? 'Refunds go back to your original payment method. Please allow 3-5 business days for it to appear.'
-						: 'No refund is due for this cancellation under our cancellation policy.',
-				],
-				details,
-				button: {
-					label: 'View your bookings',
-					href: `${env.BETTER_AUTH_URL}/account`,
-				},
-			},
-		),
-	];
-	const adminEmails = await getAdminEmails(db);
-	if (adminEmails.length > 0) {
-		emails.push(
-			notification(
-				EMAIL_FROM_ADMIN,
-				adminEmails,
-				`Booking Cancelled: ${booking.confirmationId} (${info.cancelledBy})`,
-				{
-					preview: `Booking ${booking.confirmationId} was cancelled`,
-					heading: 'Booking cancelled',
-					paragraphs: [info.adminMessage],
-					details: [{ label: 'Guest', value: booking.guestName }, ...details],
-					button: {
-						label: 'Open booking',
-						href: `${env.BETTER_AUTH_URL}/admin/bookings/${booking.publicId}`,
+	return sendBookingNotices(db, env, booking, room, {
+		kind: `booking cancelled ${booking.confirmationId}`,
+		idempotencyKey: `booking-cancelled/${booking.id}`,
+		highlight: {
+			title: 'Cancellation',
+			rows: [
+				{ label: 'Cancelled by', value: info.cancelledBy },
+				{ label: 'Amount paid', value: currency(booking.totalAmount) },
+				{ label: 'Refund', value: currency(info.refundAmount) },
+			],
+		},
+		guest: {
+			subject: `Booking Cancelled - ${booking.confirmationId} | Irishette Bed & Breakfast`,
+			preview: `Your booking ${booking.confirmationId} was cancelled`,
+			heading: 'Your booking was cancelled',
+			paragraphs: [
+				`Hi ${booking.guestName},`,
+				info.guestMessage,
+				info.refundAmount > 0
+					? REFUND_TIMING
+					: 'No refund is due for this cancellation under our cancellation policy.',
+			],
+		},
+		admin: {
+			subject: `Booking Cancelled: ${booking.confirmationId} (${info.cancelledBy})`,
+			preview: `Booking ${booking.confirmationId} was cancelled`,
+			heading: 'Booking cancelled',
+			paragraphs: [info.adminMessage],
+		},
+	});
+}
+
+/** A refund made in the Stripe Dashboard, as the webhook reports it. */
+export interface RefundEmailInfo {
+	refundId: string;
+	/** Dollars. */
+	amount: number;
+	currency: string;
+	/** pending, requires_action, succeeded, failed, canceled */
+	status: string;
+	reason: string | null;
+	/** Refund creation time (Stripe). */
+	created: Date;
+	/** Dollars refunded on the payment so far, and what is still paid. */
+	totalRefunded: number;
+	remainingPaid: number;
+	cardBrand: string | null;
+	cardLast4: string | null;
+	/** Card network trace reference (ARN), when Stripe has it. */
+	reference: string | null;
+}
+
+const REFUND_REASONS: Record<string, string> = {
+	requested_by_customer: 'Requested by the guest',
+	duplicate: 'Duplicate payment',
+	fraudulent: 'Fraudulent payment',
+	expired_uncaptured_charge: 'Uncaptured payment expired',
+};
+
+const REFUND_STATUSES: Record<string, string> = {
+	pending: 'Pending',
+	requires_action: 'Needs action',
+	succeeded: 'Completed',
+	failed: 'Failed',
+	canceled: 'Cancelled',
+};
+
+/**
+ * Guest + admin emails for a refund made in the Stripe Dashboard, with the
+ * full booking details and the refund details. Idempotent per refund status
+ * (and once more when the trace reference appears).
+ */
+export function sendRefundEmails(
+	db: Database,
+	env: EmailEnv,
+	booking: Booking,
+	room: RoomInfo,
+	refund: RefundEmailInfo,
+): Promise<EmailResult> {
+	const cancelled = booking.status === 'cancelled';
+	const rows = [
+		{ label: 'Refund', value: currency(refund.amount, refund.currency) },
+		{
+			label: 'Status',
+			value: REFUND_STATUSES[refund.status] ?? refund.status,
+		},
+		{
+			label: 'Reason',
+			value: refund.reason
+				? (REFUND_REASONS[refund.reason] ?? refund.reason)
+				: 'Not given',
+		},
+		{
+			label: 'Refunded so far',
+			value: currency(refund.totalRefunded, refund.currency),
+		},
+		{
+			label: 'Remaining paid',
+			value: currency(refund.remainingPaid, refund.currency),
+		},
+		...(refund.cardBrand && refund.cardLast4
+			? [
+					{
+						label: 'Card',
+						value: `${refund.cardBrand.toUpperCase()} ending ${refund.cardLast4}`,
 					},
-					tone: 'alert',
-				},
-			),
-		);
-	}
+				]
+			: []),
+		{ label: 'Date', value: formatInstantCT(refund.created) },
+		...(refund.reference
+			? [{ label: 'Trace reference', value: refund.reference }]
+			: []),
+		{ label: 'Refund ID', value: refund.refundId },
+		{
+			label: 'Booking status',
+			value: cancelled ? 'Cancelled' : 'Confirmed',
+		},
+	];
+	const amount = currency(refund.amount, refund.currency);
+	const status = REFUND_STATUSES[refund.status] ?? refund.status;
+	return sendBookingNotices(db, env, booking, room, {
+		kind: `refund ${refund.status} ${booking.confirmationId}`,
+		idempotencyKey: `refund/${refund.refundId}/${refund.status}${refund.reference ? '/ref' : ''}`,
+		highlight: { title: 'Refund details', rows },
+		guest: {
+			subject: `Refund ${refund.status === 'succeeded' ? 'issued' : 'update'} - ${booking.confirmationId} | Irishette Bed & Breakfast`,
+			preview: `A refund of ${amount} for booking ${booking.confirmationId}`,
+			heading: cancelled
+				? 'Your booking was refunded and cancelled'
+				: 'A refund was issued for your booking',
+			paragraphs: [
+				`Hi ${booking.guestName},`,
+				cancelled
+					? `We refunded your booking ${booking.confirmationId} in full, so it is now cancelled.`
+					: `We issued a partial refund for your booking ${booking.confirmationId}. Your booking is still confirmed.`,
+				REFUND_TIMING,
+			],
+		},
+		admin: {
+			subject: `Refund in Stripe: ${booking.confirmationId} (${status})`,
+			preview: `Refund of ${amount} on ${booking.confirmationId}`,
+			heading: 'A refund was made in the Stripe Dashboard',
+			paragraphs: [
+				cancelled
+					? 'The payment was refunded in full, so the booking was cancelled and its dates are free again.'
+					: 'The payment was partly refunded. The booking stays confirmed.',
+			],
+		},
+	});
+}
+
+/** A delayed payment (bank debit) failed: the hold was released. */
+export function sendPaymentFailedEmail(
+	env: EmailEnv,
+	booking: Booking,
+	room: RoomInfo,
+): Promise<EmailResult> {
 	return sendBatch(
 		env,
-		`booking cancelled ${booking.confirmationId}`,
-		emails,
-		`booking-cancelled/${booking.id}`,
+		`payment failed ${booking.confirmationId}`,
+		[
+			bookingNotice(
+				EMAIL_FROM_BOOKINGS,
+				[booking.guestEmail],
+				`Payment not completed - ${booking.confirmationId} | Irishette Bed & Breakfast`,
+				{
+					preview: `Your payment for booking ${booking.confirmationId} did not go through`,
+					heading: 'Your payment did not go through',
+					paragraphs: [
+						`Hi ${booking.guestName},`,
+						'Your bank reported that the payment for this booking failed, so we could not confirm your stay and the dates were released. You have not been charged.',
+						'You are welcome to book again with another payment method.',
+					],
+					booking: emailBookingDetails(booking, room),
+					button: { label: 'Book again', href: `${env.BETTER_AUTH_URL}/` },
+				},
+			),
+		],
+		`payment-failed/${booking.id}`,
 	);
 }
 

@@ -1,8 +1,8 @@
-import { and, eq, inArray, lte } from 'drizzle-orm';
+import { and, eq, lte, ne } from 'drizzle-orm';
 
 import { bookings, icalSyncChanges, icalSyncLog } from '@/db/schema-export';
 
-import { confirmBookingPayment } from './booking-service';
+import { releaseExpiredHold } from './booking-service';
 import { createServiceDeps, type ServiceDeps } from './deps';
 import { syncAllFeeds } from './ical-sync';
 
@@ -27,71 +27,50 @@ export async function scheduledCalendarSync(deps: ServiceDeps) {
 }
 
 /**
- * Deletes pending holds that expired. A hold whose PaymentIntent succeeded
- * (the guest paid but confirmation never ran) is confirmed instead, or kept
- * if that fails; a hold whose intent is still open has the intent cancelled.
+ * Releases pending holds that expired: their Checkout Session is expired
+ * first so it can't be paid. A hold whose session was paid (confirmation
+ * never ran) is confirmed instead; holds with a delayed payment processing
+ * are kept until the webhook settles them.
  */
 export async function scheduledBookingCleanup(
 	deps: ServiceDeps,
 	now = new Date(),
 ) {
-	const { db, stripe } = deps;
-	const expired = await db
-		.select()
+	const expired = await deps.db
+		.select({
+			id: bookings.id,
+			confirmationId: bookings.confirmationId,
+			stripeSessionId: bookings.stripeSessionId,
+			paymentStatus: bookings.paymentStatus,
+		})
 		.from(bookings)
-		.where(and(eq(bookings.status, 'pending'), lte(bookings.expiresAt, now)));
+		.where(
+			and(
+				eq(bookings.status, 'pending'),
+				lte(bookings.expiresAt, now),
+				ne(bookings.paymentStatus, 'processing'),
+			),
+		);
 
-	const deletable: string[] = [];
+	let deletedCount = 0;
 	let kept = 0;
-	for (const booking of expired) {
-		if (!booking.stripePaymentIntentId) {
-			deletable.push(booking.id);
-			continue;
-		}
+	for (const hold of expired) {
 		try {
-			const intent = await stripe.paymentIntents.retrieve(
-				booking.stripePaymentIntentId,
-			);
-			if (intent.status === 'succeeded') {
-				kept++;
-				await confirmBookingPayment(deps, booking.id, intent.id, now).catch(
-					(error: unknown) =>
-						console.error(
-							`Paid hold ${booking.confirmationId} could not be confirmed:`,
-							error instanceof Error ? error.message : 'Unknown error',
-						),
-				);
-				continue;
-			}
-			if (intent.status === 'processing') {
-				kept++;
-				continue;
-			}
-			if (intent.status !== 'canceled') {
-				await stripe.paymentIntents.cancel(intent.id);
-			}
-			deletable.push(booking.id);
+			if (await releaseExpiredHold(deps, hold, now)) deletedCount++;
+			else kept++;
 		} catch (error) {
 			// Unknown payment state: keep the hold and try again tomorrow.
 			kept++;
 			console.error(
-				`Expired hold ${booking.confirmationId} kept (Stripe check failed):`,
+				`Expired hold ${hold.confirmationId} kept (Stripe check failed):`,
 				error instanceof Error ? error.message : 'Unknown error',
 			);
 		}
 	}
-
-	if (deletable.length > 0) {
-		await db
-			.delete(bookings)
-			.where(
-				and(inArray(bookings.id, deletable), eq(bookings.status, 'pending')),
-			);
-	}
 	console.log(
-		`Expired holds: ${deletable.length} deleted, ${kept} kept (payment found or unknown)`,
+		`Expired holds: ${deletedCount} deleted, ${kept} kept (payment found or unknown)`,
 	);
-	return { deletedCount: deletable.length, kept };
+	return { deletedCount, kept };
 }
 
 /** Deletes iCal sync history older than SYNC_LOG_RETENTION_DAYS. */

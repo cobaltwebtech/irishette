@@ -8,11 +8,13 @@
 export const inboxSources = ['stripe', 'system', 'guest'] as const;
 export type InboxSource = (typeof inboxSources)[number];
 
-/** What happened. Phase 3 adds 'payment_dispute'. */
+/** What happened. */
 export const inboxKinds = [
 	'contact_form',
 	'refund_auto',
 	'refund_failed',
+	'refund_issued',
+	'payment_dispute',
 	'ical_sync_failed',
 	'ical_conflict',
 ] as const;
@@ -32,6 +34,8 @@ export const INBOX_KIND_LABELS: Record<InboxKind, string> = {
 	contact_form: 'Contact form',
 	refund_auto: 'Automatic refund',
 	refund_failed: 'Refund failed',
+	refund_issued: 'Refund in Stripe',
+	payment_dispute: 'Payment dispute',
 	ical_sync_failed: 'Calendar sync failed',
 	ical_conflict: 'Double booking',
 };
@@ -41,6 +45,8 @@ export const INBOX_KIND_SOURCE: Record<InboxKind, InboxSource> = {
 	contact_form: 'guest',
 	refund_auto: 'system',
 	refund_failed: 'stripe',
+	refund_issued: 'stripe',
+	payment_dispute: 'stripe',
 	ical_sync_failed: 'system',
 	ical_conflict: 'system',
 };
@@ -84,6 +90,45 @@ interface RefundFailedDetails {
 	livemode: boolean;
 }
 
+/** A refund made in the Stripe Dashboard (not by the app). */
+interface RefundIssuedDetails {
+	refundId: string;
+	/** Dollars. */
+	amount: number;
+	currency: string;
+	/** pending, requires_action, succeeded, failed, canceled */
+	status: string;
+	reason: string | null;
+	/** Card network trace reference (ARN), when Stripe has it. */
+	reference: string | null;
+	/** Dollars refunded on the payment so far, and what is still paid. */
+	totalRefunded: number;
+	remainingPaid: number;
+	paymentIntentId: string | null;
+	confirmationId: string | null;
+	/** The booking's status after the refund (a full refund cancels it). */
+	bookingStatus: string | null;
+	livemode: boolean;
+}
+
+/** A Stripe dispute (chargeback). The full record is in payment_disputes. */
+interface PaymentDisputeDetails {
+	disputeId: string;
+	/** Dollars. */
+	amount: number;
+	currency: string;
+	reason: string;
+	status: string;
+	/** The Stripe event that last changed it (e.g. charge.dispute.closed). */
+	lastEvent: string;
+	/** UTC instant (ISO), or null once answered/closed. */
+	evidenceDueBy: string | null;
+	paymentIntentId: string | null;
+	chargeId: string;
+	confirmationId: string | null;
+	livemode: boolean;
+}
+
 interface IcalSyncFailedDetails {
 	roomName: string;
 	roomPublicId: string;
@@ -112,6 +157,8 @@ export interface InboxDetailsByKind {
 	contact_form: ContactFormDetails;
 	refund_auto: RefundAutoDetails;
 	refund_failed: RefundFailedDetails;
+	refund_issued: RefundIssuedDetails;
+	payment_dispute: PaymentDisputeDetails;
 	ical_sync_failed: IcalSyncFailedDetails;
 	ical_conflict: IcalConflictDetails;
 }
@@ -121,6 +168,11 @@ export type InboxDetails = InboxDetailsByKind[InboxKind];
 /** Stripe Dashboard link for a PaymentIntent (test or live mode). */
 export function stripePaymentUrl(paymentIntentId: string, livemode: boolean) {
 	return `https://dashboard.stripe.com/${livemode ? '' : 'test/'}payments/${paymentIntentId}`;
+}
+
+/** Stripe Dashboard link for a dispute (test or live mode). */
+export function stripeDisputeUrl(disputeId: string, livemode: boolean) {
+	return `https://dashboard.stripe.com/${livemode ? '' : 'test/'}disputes/${disputeId}`;
 }
 
 /** `mailto:` link that replies to a contact form submission. */

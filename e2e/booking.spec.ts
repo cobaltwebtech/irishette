@@ -1,7 +1,7 @@
 import { credentials, expect, login, test } from './fixtures';
 
 // Full booking with a Stripe sandbox test card. Creates a real sandbox
-// PaymentIntent and a local booking, so it only runs with E2E_STRIPE=1.
+// Checkout Session and a local booking, so it only runs with E2E_STRIPE=1.
 
 test.describe('booking with a test card', () => {
 	test.skip(
@@ -58,9 +58,16 @@ test.describe('booking with a test card', () => {
 		await page.getByLabel('Policies Acknowledgement').check();
 		await page.getByRole('button', { name: /^Pay \$/ }).click();
 
-		await page.waitForURL(/\/booking\/confirmation\/[0-9a-z]{16}$/, {
-			timeout: 90_000,
-		});
-		await expect(page.getByText(/confirm/i).first()).toBeVisible();
+		// The Checkout Session is confirmed, then the confirmation page runs
+		// bookings.confirmCheckout with ?session_id=... and shows the status.
+		await page.waitForURL(
+			/\/booking\/confirmation\/[0-9a-z]{16}\?session_id=cs_test_/,
+			{
+				timeout: 90_000,
+			},
+		);
+		await expect(
+			page.getByRole('heading', { name: 'Your Booking is Confirmed!' }),
+		).toBeVisible({ timeout: 30_000 });
 	});
 });

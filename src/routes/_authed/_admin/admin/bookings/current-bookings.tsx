@@ -118,6 +118,15 @@ const columns = columnHelper.columns([
 			</Badge>
 		),
 	}),
+	columnHelper.accessor('hasOpenDispute', {
+		header: 'Dispute',
+		cell: (info) =>
+			info.getValue() ? (
+				<Badge variant="destructive" className="uppercase">
+					Open dispute
+				</Badge>
+			) : null,
+	}),
 	columnHelper.accessor('booking.totalAmount', {
 		header: ({ column }) => (
 			<SortableHeader column={column}>Amount</SortableHeader>

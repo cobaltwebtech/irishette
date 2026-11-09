@@ -18,11 +18,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
+import { formatMoney } from '@/lib/format';
 
-const currency = (amount: number) =>
-	new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
-		amount,
-	);
+const currency = (amount: number) => formatMoney(amount);
 
 type RefundMode = 'policy' | 'full' | 'none';
 type Quote = RouterOutputs['bookings']['getCancellationQuote'];
@@ -49,7 +47,10 @@ export function CancelBookingButton({
 	const queryClient = useQueryClient();
 	const [open, setOpen] = useState(false);
 	const [reason, setReason] = useState('');
-	const [refund, setRefund] = useState<RefundMode>('policy');
+	// null: the default (no refund while a payment dispute is open, else the
+	// policy refund).
+	const [refundChoice, setRefund] = useState<RefundMode | null>(null);
+	const [confirmDisputeRefund, setConfirmDisputeRefund] = useState(false);
 
 	const quote = useQuery({
 		...trpc.bookings.getCancellationQuote.queryOptions({ publicId }),
@@ -64,7 +65,11 @@ export function CancelBookingButton({
 	);
 	const pending = guestCancel.isPending || adminCancel.isPending;
 
+	const disputed = quote.data?.hasOpenDispute ?? false;
+	const refund: RefundMode = refundChoice ?? (disputed ? 'none' : 'policy');
 	const refundAmount = quote.data ? refundFor(quote.data, mode, refund) : 0;
+	const needsDisputeConfirm =
+		mode === 'admin' && disputed && refund !== 'none' && !confirmDisputeRefund;
 
 	const handleCancel = async () => {
 		try {
@@ -74,6 +79,10 @@ export function CancelBookingButton({
 							publicId,
 							refund,
 							reason: reason || undefined,
+							confirmDisputeRefund:
+								disputed && refund !== 'none'
+									? confirmDisputeRefund
+									: undefined,
 						})
 					: await guestCancel.mutateAsync({
 							publicId,
@@ -122,6 +131,8 @@ export function CancelBookingButton({
 						refundAmount={refundAmount}
 						reason={reason}
 						onReasonChange={setReason}
+						confirmDisputeRefund={confirmDisputeRefund}
+						onConfirmDisputeRefundChange={setConfirmDisputeRefund}
 					/>
 
 					<DialogFooter>
@@ -134,7 +145,9 @@ export function CancelBookingButton({
 							disabled={
 								pending ||
 								!quote.data ||
-								(mode === 'guest' && !quote.data.canCancel)
+								needsDisputeConfirm ||
+								(mode === 'guest' &&
+									(!quote.data.canCancel || quote.data.hasOpenDispute))
 							}
 						>
 							{pending ? 'Cancelling...' : 'Cancel booking'}
@@ -154,6 +167,8 @@ function QuoteDetails({
 	refundAmount,
 	reason,
 	onReasonChange,
+	confirmDisputeRefund,
+	onConfirmDisputeRefundChange,
 }: {
 	quote: UseQueryResult<Quote, { message: string }>;
 	mode: 'guest' | 'admin';
@@ -162,9 +177,12 @@ function QuoteDetails({
 	refundAmount: number;
 	reason: string;
 	onReasonChange: (reason: string) => void;
+	confirmDisputeRefund: boolean;
+	onConfirmDisputeRefundChange: (value: boolean) => void;
 }) {
 	const reasonId = useId();
 	const refundId = useId();
+	const disputeConfirmId = useId();
 	if (quote.isPending) {
 		return (
 			<p className="text-sm text-muted-foreground">Calculating refund...</p>
@@ -185,9 +203,46 @@ function QuoteDetails({
 			</p>
 		);
 	}
+	if (quote.data.hasOpenDispute && mode === 'guest') {
+		return (
+			<p className="text-sm text-destructive">
+				This booking's payment is under review, so it can't be cancelled online.
+				Please{' '}
+				<Link to="/contact" className="underline">
+					contact us
+				</Link>
+				.
+			</p>
+		);
+	}
 	const { data } = quote;
 	return (
 		<div className="space-y-4 text-sm">
+			{mode === 'admin' && data.hasOpenDispute && (
+				<div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-900">
+					<p className="font-semibold">This payment has an open dispute.</p>
+					<p>
+						Refunding a disputed payment can credit the guest twice (once by the
+						refund and again if the dispute is lost). The refund defaults to
+						none.
+					</p>
+					{refund !== 'none' && (
+						<label
+							htmlFor={disputeConfirmId}
+							className="mt-2 flex cursor-pointer items-start gap-2"
+						>
+							<input
+								id={disputeConfirmId}
+								type="checkbox"
+								className="mt-1"
+								checked={confirmDisputeRefund}
+								onChange={(e) => onConfirmDisputeRefundChange(e.target.checked)}
+							/>
+							<span>I understand, refund anyway.</span>
+						</label>
+					)}
+				</div>
+			)}
 			{mode === 'admin' && (
 				<div className="space-y-1">
 					<Label htmlFor={refundId}>Refund</Label>

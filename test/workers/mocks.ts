@@ -61,70 +61,6 @@ export function mockResend() {
 	return sent;
 }
 
-export interface FakePaymentIntent {
-	id: string;
-	amount: number;
-	currency?: string;
-	status?: string;
-	metadata?: Record<string, string>;
-	customer?: string | null;
-}
-
-/** Stripe: GET /v1/payment_intents/:id returns the given intents. */
-export function mockStripePaymentIntents(...intents: FakePaymentIntent[]) {
-	const byId = new Map(intents.map((pi) => [pi.id, pi]));
-	network.use(
-		http.get('https://api.stripe.com/v1/payment_intents/:id', ({ params }) => {
-			const pi = byId.get(String(params.id));
-			if (!pi) {
-				return HttpResponse.json(
-					{
-						error: { type: 'invalid_request_error', code: 'resource_missing' },
-					},
-					{ status: 404 },
-				);
-			}
-			return HttpResponse.json(paymentIntentObject(pi));
-		}),
-	);
-}
-
-export function paymentIntentObject(pi: FakePaymentIntent) {
-	return {
-		id: pi.id,
-		object: 'payment_intent',
-		amount: pi.amount,
-		amount_received: pi.status === 'succeeded' ? pi.amount : 0,
-		currency: pi.currency ?? 'usd',
-		status: pi.status ?? 'succeeded',
-		metadata: pi.metadata ?? {},
-		customer: pi.customer ?? null,
-		latest_charge: `ch_${pi.id}`,
-		livemode: false,
-	};
-}
-
-/** Stripe: POST /v1/payment_intents/:id/cancel succeeds; records the ids. */
-export function mockStripeIntentCancel() {
-	const cancelled: string[] = [];
-	network.use(
-		http.post(
-			'https://api.stripe.com/v1/payment_intents/:id/cancel',
-			({ params }) => {
-				cancelled.push(String(params.id));
-				return HttpResponse.json(
-					paymentIntentObject({
-						id: String(params.id),
-						amount: 0,
-						status: 'canceled',
-					}),
-				);
-			},
-		),
-	);
-	return cancelled;
-}
-
 /** Stripe: POST /v1/refunds succeeds and records the form body. */
 export function mockStripeRefunds() {
 	const refunds: Array<{
@@ -219,4 +155,247 @@ export function mockTurnstile(
 		}),
 	);
 	return requests;
+}
+
+// --- Stripe Checkout Sessions ------------------------------------------------
+
+export interface FakeSession {
+	id: string;
+	status: 'open' | 'complete' | 'expired';
+	payment_status: 'paid' | 'unpaid' | 'no_payment_required';
+	amount_total: number;
+	currency: string;
+	mode: string;
+	client_reference_id: string | null;
+	metadata: Record<string, string>;
+	client_secret: string;
+	expires_at: number;
+	payment_intent: string | null;
+	customer: string | null;
+	livemode: boolean;
+}
+
+interface CreatedSession {
+	body: URLSearchParams;
+	idempotencyKey: string | null;
+	session: FakeSession;
+}
+
+const stripeError = (message: string, status = 400) =>
+	HttpResponse.json(
+		{ error: { type: 'invalid_request_error', message } },
+		{ status },
+	);
+
+/** `expand[0]=a&expand[1]=b` (stripe-node) or `expand[]=a` query values. */
+function expandParams(url: string) {
+	return [...new URL(url).searchParams]
+		.filter(([key]) => key.startsWith('expand['))
+		.map(([, value]) => value);
+}
+
+/** Bracketed form fields with a prefix, e.g. metadata[bookingId]. */
+function formRecord(body: URLSearchParams, prefix: string) {
+	const out: Record<string, string> = {};
+	for (const [key, value] of body) {
+		const match = key.match(new RegExp(`^${prefix}\\[([^\\]]+)\\]$`));
+		if (match) out[match[1]] = value;
+	}
+	return out;
+}
+
+/** Sum of line_items[i][price_data][unit_amount] * quantity. */
+function lineItemsTotal(body: URLSearchParams) {
+	let total = 0;
+	for (let i = 0; body.has(`line_items[${i}][quantity]`); i++) {
+		total +=
+			Number(body.get(`line_items[${i}][price_data][unit_amount]`)) *
+			Number(body.get(`line_items[${i}][quantity]`));
+	}
+	return total;
+}
+
+/**
+ * A stateful fake of Checkout Sessions (create / retrieve / expire), plus
+ * customers.create. `complete(id, paymentStatus)` simulates the guest
+ * paying; `add(session)` seeds an existing session. Retrieve expands
+ * `payment_intent` (with its latest charge and a card payment method) when
+ * asked, like Stripe.
+ */
+export function mockStripeCheckout() {
+	const sessions = new Map<string, FakeSession>();
+	const created: CreatedSession[] = [];
+	const expired: string[] = [];
+	let counter = 0;
+	const seen = new Map<string, FakeSession>();
+
+	const toJson = (s: FakeSession, expand: string[]) => ({
+		object: 'checkout.session',
+		...s,
+		client_secret: s.status === 'open' ? s.client_secret : null,
+		payment_intent:
+			s.payment_intent && expand.includes('payment_intent')
+				? {
+						id: s.payment_intent,
+						object: 'payment_intent',
+						latest_charge: `ch_${s.payment_intent}`,
+						payment_method: expand.includes('payment_intent.payment_method')
+							? { id: 'pm_1', object: 'payment_method', type: 'card' }
+							: 'pm_1',
+						payment_method_types: ['card'],
+						metadata: s.metadata,
+					}
+				: s.payment_intent,
+	});
+
+	network.use(
+		http.post('https://api.stripe.com/v1/customers', () =>
+			HttpResponse.json({ id: 'cus_test_new', object: 'customer' }),
+		),
+		http.post(
+			'https://api.stripe.com/v1/checkout/sessions',
+			async ({ request }) => {
+				const body = new URLSearchParams(await request.text());
+				const idempotencyKey = request.headers.get('idempotency-key');
+				const replay = idempotencyKey ? seen.get(idempotencyKey) : undefined;
+				if (replay) return HttpResponse.json(toJson(replay, []));
+				counter += 1;
+				const id = `cs_test_fake${counter}${Date.now()}`;
+				const session: FakeSession = {
+					id,
+					status: 'open',
+					payment_status: 'unpaid',
+					amount_total: lineItemsTotal(body),
+					currency: 'usd',
+					mode: body.get('mode') ?? 'payment',
+					client_reference_id: body.get('client_reference_id'),
+					metadata: formRecord(body, 'metadata'),
+					client_secret: `${id}_secret_fake`,
+					expires_at: Number(body.get('expires_at')),
+					payment_intent: null,
+					customer: body.get('customer'),
+					livemode: false,
+				};
+				sessions.set(id, session);
+				created.push({ body, idempotencyKey, session });
+				if (idempotencyKey) seen.set(idempotencyKey, session);
+				return HttpResponse.json(toJson(session, []));
+			},
+		),
+		http.get(
+			'https://api.stripe.com/v1/checkout/sessions/:id',
+			({ params, request }) => {
+				const s = sessions.get(String(params.id));
+				if (!s) return stripeError('No such checkout.session', 404);
+				return HttpResponse.json(toJson(s, expandParams(request.url)));
+			},
+		),
+		http.post(
+			'https://api.stripe.com/v1/checkout/sessions/:id/expire',
+			({ params }) => {
+				const s = sessions.get(String(params.id));
+				if (!s) return stripeError('No such checkout.session', 404);
+				if (s.status !== 'open') {
+					return stripeError(
+						'Only Checkout Sessions with a status of open can be expired.',
+					);
+				}
+				s.status = 'expired';
+				expired.push(s.id);
+				return HttpResponse.json(toJson(s, []));
+			},
+		),
+	);
+
+	return {
+		sessions,
+		created,
+		expired,
+		add(session: Partial<FakeSession> & { id: string }) {
+			const full: FakeSession = {
+				status: 'open',
+				payment_status: 'unpaid',
+				amount_total: 0,
+				currency: 'usd',
+				mode: 'payment',
+				client_reference_id: null,
+				metadata: {},
+				client_secret: `${session.id}_secret_fake`,
+				expires_at: Math.floor(Date.now() / 1000) + 1800,
+				payment_intent: null,
+				customer: null,
+				livemode: false,
+				...session,
+			};
+			sessions.set(full.id, full);
+			return full;
+		},
+		/** The guest paid (or a delayed payment started: 'unpaid'). */
+		complete(
+			id: string,
+			paymentStatus: FakeSession['payment_status'] = 'paid',
+		) {
+			const s = sessions.get(id);
+			if (!s) throw new Error(`No fake session ${id}`);
+			s.status = 'complete';
+			s.payment_status = paymentStatus;
+			s.payment_intent = `pi_${id}`;
+			return s;
+		},
+		/** The session as a webhook payload object (not expanded). */
+		object(id: string) {
+			const s = sessions.get(id);
+			if (!s) throw new Error(`No fake session ${id}`);
+			return toJson(s, []);
+		},
+	};
+}
+
+export interface FakeCharge {
+	id: string;
+	amount: number;
+	amount_refunded?: number;
+	payment_intent?: string | null;
+	/** metadata of the (expanded) PaymentIntent. */
+	intentMetadata?: Record<string, string>;
+	brand?: string;
+	last4?: string;
+}
+
+/** Stripe: GET /v1/charges/:id (expands payment_intent when asked). */
+export function mockStripeCharges(...charges: FakeCharge[]) {
+	const byId = new Map(charges.map((c) => [c.id, c]));
+	network.use(
+		http.get('https://api.stripe.com/v1/charges/:id', ({ params, request }) => {
+			const c = byId.get(String(params.id));
+			if (!c) return stripeError('No such charge', 404);
+			const expand = expandParams(request.url);
+			return HttpResponse.json({
+				id: c.id,
+				object: 'charge',
+				amount: c.amount,
+				amount_refunded: c.amount_refunded ?? 0,
+				currency: 'usd',
+				payment_intent:
+					c.payment_intent && expand.includes('payment_intent')
+						? {
+								id: c.payment_intent,
+								object: 'payment_intent',
+								metadata: c.intentMetadata ?? {},
+							}
+						: (c.payment_intent ?? null),
+				payment_method_details: {
+					type: 'card',
+					card: { brand: c.brand ?? 'visa', last4: c.last4 ?? '4242' },
+				},
+				receipt_url: null,
+			});
+		}),
+	);
+	return {
+		set(id: string, patch: Partial<FakeCharge>) {
+			const c = byId.get(id);
+			if (c) Object.assign(c, patch);
+		},
+	};
 }

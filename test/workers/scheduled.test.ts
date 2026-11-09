@@ -16,7 +16,8 @@ import { db, insertBooking, insertFeed } from './helpers';
 import {
 	calendarResponse,
 	mockFeed,
-	mockStripePaymentIntents,
+	mockResend,
+	mockStripeCheckout,
 	vcalendar,
 } from './mocks';
 import { ROSE } from './seed';
@@ -80,23 +81,59 @@ describe('expired pending bookings cleanup (5 8 * * *)', () => {
 		expect(await exists(confirmed.id)).toBe(true);
 	});
 
-	it('keeps an expired hold whose PaymentIntent succeeded', async () => {
+	it('confirms an expired hold whose Checkout Session was paid', async () => {
+		const checkout = mockStripeCheckout();
+		mockResend();
 		const paid = await insertBooking({
 			checkInDate: '2042-04-10',
 			checkOutDate: '2042-04-12',
 			status: 'pending',
 			paymentStatus: 'pending',
 			expiresAt: new Date(Date.now() - 60_000),
-			stripePaymentIntentId: 'pi_paid_late',
+			stripeSessionId: 'cs_test_paid_late',
 		});
-		mockStripePaymentIntents({
-			id: 'pi_paid_late',
-			amount: Math.round(paid.totalAmount * 100),
-			status: 'succeeded',
+		checkout.add({
+			id: 'cs_test_paid_late',
+			amount_total: Math.round(paid.totalAmount * 100),
+			client_reference_id: paid.id,
 			metadata: { bookingId: paid.id },
 		});
+		checkout.complete('cs_test_paid_late');
 		await runCron('5 8 * * *');
 		expect(await exists(paid.id)).toBe(true);
+		const [row] = await db()
+			.select({ status: bookings.status })
+			.from(bookings)
+			.where(eq(bookings.id, paid.id));
+		expect(row.status).toBe('confirmed');
+	});
+
+	it("expires an expired hold's open session before deleting it", async () => {
+		const checkout = mockStripeCheckout();
+		const open = await insertBooking({
+			checkInDate: '2042-05-10',
+			checkOutDate: '2042-05-12',
+			status: 'pending',
+			paymentStatus: 'pending',
+			expiresAt: new Date(Date.now() - 60_000),
+			stripeSessionId: 'cs_test_open_late',
+		});
+		checkout.add({ id: 'cs_test_open_late' });
+		await runCron('5 8 * * *');
+		expect(checkout.expired).toContain('cs_test_open_late');
+		expect(await exists(open.id)).toBe(false);
+	});
+
+	it('keeps an expired hold whose delayed payment is processing', async () => {
+		const processing = await insertBooking({
+			checkInDate: '2042-06-10',
+			checkOutDate: '2042-06-12',
+			status: 'pending',
+			paymentStatus: 'processing',
+			expiresAt: new Date(Date.now() - 60_000),
+		});
+		await runCron('5 8 * * *');
+		expect(await exists(processing.id)).toBe(true);
 	});
 });
 

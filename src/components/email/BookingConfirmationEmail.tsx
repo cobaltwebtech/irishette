@@ -16,68 +16,24 @@ import {
 	Text,
 } from 'react-email';
 
+import {
+	BookingDetailsSection,
+	type EmailBookingDetails,
+} from './BookingDetailsSection';
+
 interface BookingConfirmationEmailProps {
-	confirmationId: string;
-	guestName: string;
-	roomName: string;
-	checkInDate: string;
-	checkOutDate: string;
-	numberOfNights: number;
-	numberOfGuests: number;
-	guestEmail: string;
-	guestPhone?: string;
-	specialRequests?: string;
-	baseAmount: number;
-	taxAmount: number;
-	feesAmount: number;
-	totalAmount: number;
+	booking: EmailBookingDetails;
 	accountUrl: string;
 	/** Public site URL (src/lib/site.ts SITE_URL). */
 	siteUrl: string;
 	/** Contact address shown in the footer (src/lib/site.ts CONTACT_EMAIL). */
 	contactEmail: string;
-	/** Check-out time label, e.g. "11:00 AM" (src/lib/site.ts). */
-	checkOutTime: string;
 }
 
 export const BookingConfirmationEmail: React.FC<
 	BookingConfirmationEmailProps
-> = ({
-	confirmationId,
-	guestName,
-	roomName,
-	checkInDate,
-	checkOutDate,
-	numberOfNights,
-	numberOfGuests,
-	guestEmail,
-	guestPhone,
-	specialRequests,
-	baseAmount,
-	taxAmount,
-	feesAmount,
-	totalAmount,
-	accountUrl,
-	siteUrl,
-	contactEmail,
-	checkOutTime,
-}) => {
-	const formatDate = (dateString: string) => {
-		return new Date(dateString).toLocaleDateString('en-US', {
-			weekday: 'long',
-			year: 'numeric',
-			month: 'long',
-			day: 'numeric',
-		});
-	};
-
-	const formatCurrency = (amount: number) => {
-		return new Intl.NumberFormat('en-US', {
-			style: 'currency',
-			currency: 'USD',
-		}).format(amount);
-	};
-
+> = ({ booking, accountUrl, siteUrl, contactEmail }) => {
+	const { confirmationId } = booking;
 	return (
 		<Html>
 			<Head />
@@ -127,185 +83,7 @@ export const BookingConfirmationEmail: React.FC<
 							</Row>
 						</Section>
 
-						{/* Booking Details */}
-						<Section className="mb-[32px]">
-							<Row>
-								<Column>
-									<Heading
-										as="h3"
-										className="mb-4 border-b border-stone-200 pb-2 text-xl font-bold text-stone-900"
-									>
-										Booking Details
-									</Heading>
-								</Column>
-							</Row>
-
-							{/* Room & Dates */}
-							<Row className="mb-4">
-								<Column className="w-1/2 pr-4">
-									<Text className="mb-1 text-sm font-semibold text-stone-700">
-										Room
-									</Text>
-									<Text className="mb-3 text-base text-stone-900">
-										{roomName}
-									</Text>
-
-									<Text className="mb-1 text-sm font-semibold text-stone-700">
-										Guests
-									</Text>
-									<Text className="mb-3 text-base text-stone-900">
-										{numberOfGuests} guest{numberOfGuests !== 1 ? 's' : ''}
-									</Text>
-								</Column>
-								<Column className="w-1/2 pl-4">
-									<Text className="mb-1 text-sm font-semibold text-stone-700">
-										Check-in
-									</Text>
-									<Text className="mb-3 text-base text-stone-900">
-										{formatDate(checkInDate)}
-									</Text>
-
-									<Text className="mb-1 text-sm font-semibold text-stone-700">
-										Check-out
-									</Text>
-									<Text className="mb-3 text-base text-stone-900">
-										{formatDate(checkOutDate)}
-									</Text>
-								</Column>
-							</Row>
-
-							<Row className="mb-4">
-								<Column>
-									<Text className="mb-1 text-sm font-semibold text-stone-700">
-										Length of Stay
-									</Text>
-									<Text className="text-base text-stone-900">
-										{numberOfNights} night{numberOfNights !== 1 ? 's' : ''}
-									</Text>
-								</Column>
-							</Row>
-						</Section>
-
-						{/* Guest Information */}
-						<Section className="mb-[32px]">
-							<Row>
-								<Column>
-									<Heading
-										as="h3"
-										className="mb-4 border-b border-stone-200 pb-2 text-xl font-bold text-stone-900"
-									>
-										Guest Information
-									</Heading>
-								</Column>
-							</Row>
-							<Row className="mb-2">
-								<Column className="w-1/2 pr-4">
-									<Text className="mb-1 text-sm font-semibold text-stone-700">
-										Name
-									</Text>
-									<Text className="text-base text-stone-900">{guestName}</Text>
-								</Column>
-								<Column className="w-1/2 pl-4">
-									<Text className="mb-1 text-sm font-semibold text-stone-700">
-										Email
-									</Text>
-									<Text className="text-base text-stone-900">{guestEmail}</Text>
-								</Column>
-							</Row>
-							{guestPhone && (
-								<Row className="mb-2">
-									<Column>
-										<Text className="mb-1 text-sm font-semibold text-stone-700">
-											Phone
-										</Text>
-										<Text className="text-base text-stone-900">
-											{guestPhone}
-										</Text>
-									</Column>
-								</Row>
-							)}
-							{specialRequests && (
-								<Row className="mb-2">
-									<Column>
-										<Text className="mb-1 text-sm font-semibold text-stone-700">
-											Special Requests
-										</Text>
-										<Text className="text-base text-stone-900">
-											{specialRequests}
-										</Text>
-									</Column>
-								</Row>
-							)}
-						</Section>
-
-						{/* Pricing Breakdown */}
-						<Section className="mb-[32px] rounded-lg border border-stone-200 bg-stone-50 p-6">
-							<Row>
-								<Column>
-									<Heading
-										as="h3"
-										className="mb-4 text-xl font-bold text-stone-900"
-									>
-										Payment Summary
-									</Heading>
-								</Column>
-							</Row>
-
-							<Row className="mb-2">
-								<Column className="w-2/3">
-									<Text className="text-base text-stone-700">
-										Room Rate ({numberOfNights} night
-										{numberOfNights !== 1 ? 's' : ''})
-									</Text>
-								</Column>
-								<Column className="w-1/3 text-right">
-									<Text className="text-base text-stone-900">
-										{formatCurrency(baseAmount)}
-									</Text>
-								</Column>
-							</Row>
-
-							{feesAmount > 0 && (
-								<Row className="mb-2">
-									<Column className="w-2/3">
-										<Text className="text-base text-stone-700">
-											Service Fee
-										</Text>
-									</Column>
-									<Column className="w-1/3 text-right">
-										<Text className="text-base text-stone-900">
-											{formatCurrency(feesAmount)}
-										</Text>
-									</Column>
-								</Row>
-							)}
-
-							{taxAmount > 0 && (
-								<Row className="mb-4">
-									<Column className="w-2/3">
-										<Text className="text-base text-stone-700">Taxes</Text>
-									</Column>
-									<Column className="w-1/3 text-right">
-										<Text className="text-base text-stone-900">
-											{formatCurrency(taxAmount)}
-										</Text>
-									</Column>
-								</Row>
-							)}
-
-							<Row className="border-t border-stone-300 pt-3">
-								<Column className="w-2/3">
-									<Text className="text-lg font-bold text-stone-900">
-										Total Paid
-									</Text>
-								</Column>
-								<Column className="w-1/3 text-right">
-									<Text className="text-lg font-bold text-green-600">
-										{formatCurrency(totalAmount)}
-									</Text>
-								</Column>
-							</Row>
-						</Section>
+						<BookingDetailsSection booking={booking} />
 
 						{/* Important Information */}
 						<Section className="mb-[32px] rounded-lg border border-blue-200 bg-blue-50 p-6">
@@ -318,10 +96,10 @@ export const BookingConfirmationEmail: React.FC<
 										Important Information
 									</Heading>
 									<Text className="mb-2 text-sm text-blue-800">
-										<strong>Check-in:</strong> 3:00 PM - 8:00 PM
+										<strong>Check-in:</strong> from {booking.checkInTime}
 									</Text>
 									<Text className="mb-2 text-sm text-blue-800">
-										<strong>Check-out:</strong> {checkOutTime}
+										<strong>Check-out:</strong> by {booking.checkOutTime}
 									</Text>
 									<Text className="mb-2 text-sm text-blue-800">
 										<strong>Address:</strong> [Property Address] - Details will

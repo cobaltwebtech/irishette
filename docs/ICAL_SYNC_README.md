@@ -23,7 +23,7 @@ contain the platform's secret and are only returned by admin procedures.
 ### When feeds sync
 
 - Every 30 minutes (cron `*/30 * * * *`, all active feeds in parallel).
-- Before every PaymentIntent (`bookings.createPaymentIntent`): the room's
+- Before every Checkout Session (`bookings.createCheckoutSession`): the room's
   feeds, skipping any attempted in the last 2 minutes, 5-second timeout. Then
   availability is checked again.
 - "Sync now" in the admin UI (`ical.syncRoom`, all of a room's feeds).

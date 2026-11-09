@@ -8,15 +8,16 @@ import type Stripe from 'stripe';
 
 import { bookings } from '@/db/schema-export';
 
-type Booking = typeof bookings.$inferSelect;
-
-import { confirmBookingPayment } from './booking-service';
-import { createServiceDeps, inBackground, type ServiceDeps } from './deps';
-import { sendAdminAlert } from './email-service';
 import {
-	createInboxItemInBackground,
-	type NewInboxItem,
-} from './inbox-service';
+	confirmBookingPayment,
+	loadBooking,
+	markProcessing,
+	releaseExpiredSessionHold,
+	releaseFailedPayment,
+} from './checkout-service';
+import { createServiceDeps, type ServiceDeps } from './deps';
+import { handleDisputeEvent } from './dispute-service';
+import { handleChargeRefunded, handleRefundEvent } from './refund-service';
 
 // Stripe webhook for the booking flow: POST /api/stripe/webhook.
 // (Better Auth's Stripe plugin has its own endpoint under /api/auth.)
@@ -71,23 +72,46 @@ export async function handleStripeWebhook(
 	}
 }
 
+/**
+ * Keep in sync with docs/STRIPE_WEBHOOKS.md ("Booking payments with Checkout
+ * Sessions"): the sandbox and live endpoints subscribe to exactly these.
+ */
 async function dispatch(deps: ServiceDeps, event: Stripe.Event) {
 	switch (event.type) {
-		case 'payment_intent.succeeded':
-			return onPaymentIntentSucceeded(deps, event.data.object);
+		case 'checkout.session.completed':
+		case 'checkout.session.async_payment_succeeded':
+			return onSessionPaidOrCompleted(deps, event.data.object);
+		case 'checkout.session.async_payment_failed':
+			return onSessionPaymentFailed(deps, event.data.object);
+		case 'checkout.session.expired': {
+			const released = await releaseExpiredSessionHold(
+				deps,
+				event.data.object.id,
+			);
+			if (released) {
+				console.log(
+					`Checkout Session ${event.data.object.id} expired: hold ${released} released`,
+				);
+			}
+			return;
+		}
+		case 'refund.created':
+		case 'refund.updated':
+		case 'refund.failed':
+			return handleRefundEvent(deps, event.data.object, event.livemode);
+		case 'charge.refunded':
+			return handleChargeRefunded(deps, event.data.object);
+		case 'charge.dispute.created':
+		case 'charge.dispute.updated':
+		case 'charge.dispute.closed':
+		case 'charge.dispute.funds_withdrawn':
+		case 'charge.dispute.funds_reinstated':
+			await handleDisputeEvent(deps, event);
+			return;
 		case 'payment_intent.payment_failed':
 			console.log(
 				`PaymentIntent ${event.data.object.id} failed; the hold stays until it expires`,
 			);
-			return;
-		case 'charge.refunded':
-			return onChargeRefunded(deps, event.data.object);
-		case 'refund.failed':
-			return onRefundFailed(deps, event.data.object, event.livemode);
-		case 'refund.updated':
-			if (event.data.object.status === 'failed') {
-				return onRefundFailed(deps, event.data.object, event.livemode);
-			}
 			return;
 		default:
 			// Acknowledge everything else so Stripe does not retry.
@@ -95,50 +119,54 @@ async function dispatch(deps: ServiceDeps, event: Stripe.Event) {
 	}
 }
 
-async function findBooking(
+/** Our booking for a Checkout Session: client_reference_id, metadata, stored id. */
+async function findSessionBooking(
 	deps: ServiceDeps,
-	intentId: string,
-	metadataBookingId?: string,
+	session: Stripe.Checkout.Session,
 ) {
-	const { db } = deps;
-	if (metadataBookingId) {
-		const [row] = await db
-			.select()
-			.from(bookings)
-			.where(eq(bookings.id, metadataBookingId));
+	const id = session.metadata?.bookingId ?? session.client_reference_id;
+	if (id) {
+		const row = await loadBooking(deps.db, id);
 		if (row) return row;
 	}
-	const [row] = await db
+	const [row] = await deps.db
 		.select()
 		.from(bookings)
-		.where(eq(bookings.stripePaymentIntentId, intentId));
+		.where(eq(bookings.stripeSessionId, session.id));
 	return row;
 }
 
-/** Backup for the front-end confirm (the guest may close the tab). */
-async function onPaymentIntentSucceeded(
+/**
+ * checkout.session.completed / async_payment_succeeded: confirm when paid;
+ * a completed but unpaid session (delayed payment method) marks the hold
+ * processing. confirmBookingPayment re-reads the session from Stripe.
+ */
+async function onSessionPaidOrCompleted(
 	deps: ServiceDeps,
-	intent: Stripe.PaymentIntent,
+	session: Stripe.Checkout.Session,
 ) {
-	const booking = await findBooking(
-		deps,
-		intent.id,
-		intent.metadata?.bookingId,
-	);
+	if (session.mode !== 'payment') return;
+	const booking = await findSessionBooking(deps, session);
 	if (!booking) {
-		console.log(`PaymentIntent ${intent.id}: no booking (not ours), ignored`);
+		console.log(
+			`Checkout Session ${session.id}: no booking (not ours), ignored`,
+		);
+		return;
+	}
+	if (session.payment_status === 'unpaid') {
+		await markProcessing(deps, booking, session);
 		return;
 	}
 	try {
-		const outcome = await confirmBookingPayment(deps, booking.id, intent.id);
+		const outcome = await confirmBookingPayment(deps, booking.id, session.id);
 		console.log(
-			`PaymentIntent ${intent.id}: booking ${booking.confirmationId} ${outcome.status}`,
+			`Checkout Session ${session.id}: booking ${booking.confirmationId} ${outcome.status}`,
 		);
 	} catch (error) {
 		// Verification failures are permanent: acknowledge, don't retry.
 		if (error instanceof TRPCError && error.code !== 'INTERNAL_SERVER_ERROR') {
 			console.warn(
-				`PaymentIntent ${intent.id}: booking ${booking.confirmationId} not confirmed (${error.code})`,
+				`Checkout Session ${session.id}: booking ${booking.confirmationId} not confirmed (${error.code})`,
 			);
 			return;
 		}
@@ -146,90 +174,16 @@ async function onPaymentIntentSucceeded(
 	}
 }
 
-/** Keeps payment status in sync with refunds (also ones made in the dashboard). */
-async function onChargeRefunded(deps: ServiceDeps, charge: Stripe.Charge) {
-	const intentId =
-		typeof charge.payment_intent === 'string'
-			? charge.payment_intent
-			: charge.payment_intent?.id;
-	if (!intentId) return;
-	const booking = await findBooking(deps, intentId);
-	if (!booking) return;
-	const refunded = charge.amount_refunded / 100;
-	const paymentStatus =
-		charge.amount_refunded >= charge.amount ? 'refunded' : 'partially_refunded';
-	await deps.db
-		.update(bookings)
-		.set({ paymentStatus, refundAmount: refunded, updatedAt: new Date() })
-		.where(eq(bookings.id, booking.id));
-	console.log(
-		`Booking ${booking.confirmationId}: ${paymentStatus} (${refunded})`,
-	);
-}
-
-/** The admin inbox item for a failed refund (dedupe: one per refund). */
-function refundFailedInboxItem(
-	refund: Stripe.Refund,
-	paymentIntentId: string | null,
-	booking: Pick<Booking, 'id' | 'userId' | 'confirmationId'> | undefined,
-	livemode: boolean,
-): NewInboxItem<'refund_failed'> {
-	const amount = refund.amount / 100;
-	const reason = refund.failure_reason ? ` (${refund.failure_reason})` : '';
-	return {
-		kind: 'refund_failed',
-		title: `Refund failed${booking ? `: ${booking.confirmationId}` : ''}`,
-		summary: `Stripe could not complete a refund of $${amount.toFixed(2)}${reason}. Check the payment in Stripe and contact the guest.`,
-		details: {
-			refundId: refund.id,
-			amount,
-			currency: refund.currency,
-			paymentIntentId,
-			confirmationId: booking?.confirmationId ?? null,
-			failureReason: refund.failure_reason ?? null,
-			livemode,
-		},
-		bookingId: booking?.id ?? null,
-		userId: booking?.userId ?? null,
-		dedupeKey: `refund_failed:${refund.id}`,
-	};
-}
-
-async function onRefundFailed(
+/** A delayed payment failed: release the hold and email the guest. */
+async function onSessionPaymentFailed(
 	deps: ServiceDeps,
-	refund: Stripe.Refund,
-	livemode: boolean,
+	session: Stripe.Checkout.Session,
 ) {
-	const intentId =
-		typeof refund.payment_intent === 'string'
-			? refund.payment_intent
-			: refund.payment_intent?.id;
-	const booking = intentId ? await findBooking(deps, intentId) : undefined;
-	console.error(
-		`Refund ${refund.id} failed${booking ? ` for booking ${booking.confirmationId}` : ''}`,
-	);
-	createInboxItemInBackground(
-		deps,
-		refundFailedInboxItem(refund, intentId ?? null, booking, livemode),
-	);
-	inBackground(deps, `refund failed ${refund.id}`, () =>
-		sendAdminAlert(deps.db, deps.env, {
-			subject: `Refund failed${booking ? `: ${booking.confirmationId}` : ''}`,
-			heading: 'A refund failed',
-			paragraphs: [
-				'Stripe could not complete a refund. Check the payment in the Stripe dashboard and contact the guest.',
-			],
-			details: [
-				{ label: 'Refund', value: refund.id },
-				{ label: 'Amount', value: `$${(refund.amount / 100).toFixed(2)}` },
-				...(booking
-					? [{ label: 'Confirmation', value: booking.confirmationId }]
-					: []),
-			],
-			link: booking
-				? { label: 'Open booking', path: `/admin/bookings/${booking.publicId}` }
-				: undefined,
-			idempotencyKey: `refund-failed/${refund.id}`,
-		}),
-	);
+	const booking = await findSessionBooking(deps, session);
+	if (!booking || booking.stripeSessionId !== session.id) return;
+	if (await releaseFailedPayment(deps, booking)) {
+		console.log(
+			`Checkout Session ${session.id}: payment failed, booking ${booking.confirmationId} released`,
+		);
+	}
 }

@@ -1,7 +1,6 @@
 import { TRPCError } from '@trpc/server';
-import { and, eq, getTableColumns } from 'drizzle-orm';
+import { and, eq, getTableColumns, gt, lt, lte, ne } from 'drizzle-orm';
 import { customAlphabet } from 'nanoid';
-import type Stripe from 'stripe';
 
 import type { Database } from '@/db/drizzle-init';
 import {
@@ -12,32 +11,30 @@ import {
 	user,
 } from '@/db/schema-export';
 
-import {
-	type Conflict,
-	checkAvailability,
-	HOLD_MINUTES,
-	noOverlapForBookingRow,
-} from './availability';
+import { checkAvailability, HOLD_MINUTES } from './availability';
 import { quoteCancellation } from './cancellation-policy';
 import {
 	getActiveCancellationPolicy,
 	getBookingCancellationPolicy,
 } from './cancellation-policy-store';
+import {
+	type Booking,
+	closeHoldSession,
+	publicConflicts,
+	recordAppRefund,
+	roomName,
+} from './checkout-service';
 import type { IsoDate } from './date-range';
 import { inBackground, type ServiceDeps } from './deps';
-import {
-	sendAdminAlert,
-	sendBookingConfirmedEmails,
-	sendCancellationEmails,
-} from './email-service';
-import { syncRoomFeeds } from './ical-sync';
+import { hasOpenDispute } from './dispute-service';
+import { sendCancellationEmails } from './email-service';
 import { newId, newPublicId } from './ids';
-import { createInboxItemInBackground } from './inbox-service';
 import type { CreateBookingInput } from './payment-validation';
 import { priceStay, type StayPrice } from './pricing';
+import { stripeBookingMetadata, toCents } from './stripe';
 import { todayIn } from './timezone';
 
-export type Booking = typeof bookings.$inferSelect;
+export type { Booking } from './checkout-service';
 
 // Room columns safe to return with a booking: never the iCal export token.
 const { icalExportToken: _token, ...roomColumns } = getTableColumns(room);
@@ -47,13 +44,6 @@ const generateConfirmationId = customAlphabet(
 	'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789',
 	6,
 );
-
-const toCents = (amount: number) => Math.round(amount * 100);
-
-/** Public conflict shape for guests: dates only, nothing about who booked. */
-function publicConflicts(conflicts: Conflict[]) {
-	return conflicts.map((c) => ({ checkIn: c.checkIn, checkOut: c.checkOut }));
-}
 
 // --- Pricing ---------------------------------------------------------------
 
@@ -131,7 +121,10 @@ export async function createHold(
 	}
 
 	// Going back and resubmitting the form replaces the guest's earlier hold.
-	await releaseOwnHolds(deps, userId, input.roomId);
+	await releaseOwnHolds(deps, userId, input.roomId, now);
+	// First hold wins while it is live; expired holds on these dates are
+	// released, and their Checkout Sessions expired so nobody can pay them.
+	await releaseExpiredHolds(deps, input, now);
 
 	const availability = await checkAvailability(
 		db,
@@ -190,19 +183,21 @@ export async function createHold(
 }
 
 /**
- * Deletes the user's pending holds in a room (cancelling any open
- * PaymentIntent). Holds whose payment succeeded or is processing are kept:
- * the webhook or the cleanup cron confirms them.
+ * Deletes the user's pending holds in a room, expiring their Checkout
+ * Sessions. Holds that were paid or are processing are kept: the webhook (or
+ * closeHoldSession itself) confirms them.
  */
 async function releaseOwnHolds(
-	{ db, stripe }: ServiceDeps,
+	deps: ServiceDeps,
 	userId: string,
 	roomId: string,
+	now: Date,
 ) {
-	const holds = await db
+	const holds = await deps.db
 		.select({
 			id: bookings.id,
-			stripePaymentIntentId: bookings.stripePaymentIntentId,
+			stripeSessionId: bookings.stripeSessionId,
+			paymentStatus: bookings.paymentStatus,
 		})
 		.from(bookings)
 		.where(
@@ -213,21 +208,67 @@ async function releaseOwnHolds(
 			),
 		);
 	for (const hold of holds) {
-		if (hold.stripePaymentIntentId) {
-			const intent = await stripe.paymentIntents.retrieve(
-				hold.stripePaymentIntentId,
-			);
-			if (intent.status === 'succeeded' || intent.status === 'processing') {
-				continue;
-			}
-			if (intent.status !== 'canceled') {
-				await stripe.paymentIntents.cancel(intent.id);
-			}
-		}
-		await db
-			.delete(bookings)
-			.where(and(eq(bookings.id, hold.id), eq(bookings.status, 'pending')));
+		if ((await closeHoldSession(deps, hold, now)) === 'paid') continue;
+		await deleteHold(deps.db, hold.id);
 	}
+}
+
+/** Deletes a pending hold unless a delayed payment started processing. */
+async function deleteHold(db: Database, id: string) {
+	await db
+		.delete(bookings)
+		.where(
+			and(
+				eq(bookings.id, id),
+				eq(bookings.status, 'pending'),
+				ne(bookings.paymentStatus, 'processing'),
+			),
+		);
+}
+
+/**
+ * Releases other guests' expired holds that overlap [checkIn, checkOut),
+ * expiring their Checkout Sessions first. If one turns out to be paid, it
+ * is confirmed (or kept as processing) and the new hold is refused.
+ */
+async function releaseExpiredHolds(
+	deps: ServiceDeps,
+	stay: { roomId: string; checkInDate: IsoDate; checkOutDate: IsoDate },
+	now: Date,
+) {
+	const expired = await deps.db
+		.select({
+			id: bookings.id,
+			stripeSessionId: bookings.stripeSessionId,
+			paymentStatus: bookings.paymentStatus,
+		})
+		.from(bookings)
+		.where(
+			and(
+				eq(bookings.roomId, stay.roomId),
+				eq(bookings.status, 'pending'),
+				lte(bookings.expiresAt, now),
+				ne(bookings.paymentStatus, 'processing'),
+				lt(bookings.checkInDate, stay.checkOutDate),
+				gt(bookings.checkOutDate, stay.checkInDate),
+			),
+		);
+	for (const hold of expired) {
+		if ((await closeHoldSession(deps, hold, now)) === 'closed') {
+			await deleteHold(deps.db, hold.id);
+		}
+	}
+}
+
+/** Releases an expired hold (cron cleanup). False if it was paid meanwhile. */
+export async function releaseExpiredHold(
+	deps: ServiceDeps,
+	hold: Pick<Booking, 'id' | 'stripeSessionId' | 'paymentStatus'>,
+	now = new Date(),
+): Promise<boolean> {
+	if ((await closeHoldSession(deps, hold, now)) === 'paid') return false;
+	await deleteHold(deps.db, hold.id);
+	return true;
 }
 
 /** Extends an expired hold if the dates are still free. */
@@ -272,380 +313,6 @@ export async function refreshHold(
 	return { bookingId: booking.id, refreshed: true, expiresAt };
 }
 
-// --- PaymentIntent -----------------------------------------------------------
-
-const REUSABLE_INTENT_STATUSES = new Set<Stripe.PaymentIntent.Status>([
-	'requires_payment_method',
-	'requires_confirmation',
-	'requires_action',
-]);
-
-/**
- * Returns a PaymentIntent client secret for a pending booking. Checks the hold
- * is live, syncs the room's import feeds (best effort) and re-checks the dates
- * first. Reuses the booking's existing intent when it can still be paid.
- */
-export async function preparePayment(
-	deps: ServiceDeps,
-	booking: Booking,
-	now = new Date(),
-): Promise<{ clientSecret: string }> {
-	const { db, stripe } = deps;
-	if (booking.status !== 'pending') {
-		throw new TRPCError({
-			code: 'BAD_REQUEST',
-			message: 'This booking is not awaiting payment',
-		});
-	}
-	if (!booking.expiresAt || booking.expiresAt <= now) {
-		throw new TRPCError({
-			code: 'BAD_REQUEST',
-			message: 'Your hold on these dates expired. Please refresh the booking.',
-		});
-	}
-
-	// Pick up reservations made on other platforms since the last cron run.
-	await syncRoomFeeds(deps, booking.roomId, { trigger: 'checkout' }).catch(
-		(error: unknown) => {
-			console.warn(
-				'Pre-payment feed sync failed:',
-				error instanceof Error ? error.message : 'Unknown error',
-			);
-		},
-	);
-	const availability = await checkAvailability(
-		db,
-		booking.roomId,
-		booking.checkInDate,
-		booking.checkOutDate,
-		{ excludeBookingId: booking.id, now },
-	);
-	if (!availability.available) {
-		throw new TRPCError({
-			code: 'CONFLICT',
-			message:
-				'These dates were just booked elsewhere. Please choose other dates.',
-			cause: { conflicts: publicConflicts(availability.conflicts) },
-		});
-	}
-
-	const amount = toCents(booking.totalAmount);
-	if (booking.stripePaymentIntentId) {
-		const existing = await stripe.paymentIntents.retrieve(
-			booking.stripePaymentIntentId,
-		);
-		if (
-			REUSABLE_INTENT_STATUSES.has(existing.status) &&
-			existing.amount === amount &&
-			existing.client_secret
-		) {
-			return { clientSecret: existing.client_secret };
-		}
-	}
-
-	const customerId = await ensureStripeCustomer(deps, booking);
-	const intent = await stripe.paymentIntents.create({
-		amount,
-		currency: 'usd',
-		customer: customerId,
-		metadata: {
-			bookingId: booking.id,
-			userId: booking.userId,
-			roomId: booking.roomId,
-			type: 'booking',
-		},
-		automatic_payment_methods: { enabled: true },
-		setup_future_usage: 'off_session',
-	});
-	await db
-		.update(bookings)
-		.set({ stripePaymentIntentId: intent.id, updatedAt: now })
-		.where(eq(bookings.id, booking.id));
-	if (!intent.client_secret) {
-		throw new Error('PaymentIntent created without a client secret');
-	}
-	return { clientSecret: intent.client_secret };
-}
-
-async function ensureStripeCustomer(
-	{ db, stripe }: ServiceDeps,
-	booking: Booking,
-): Promise<string> {
-	const [guest] = await db
-		.select({ stripeCustomerId: user.stripeCustomerId })
-		.from(user)
-		.where(eq(user.id, booking.userId));
-	if (guest?.stripeCustomerId) return guest.stripeCustomerId;
-	const customer = await stripe.customers.create(
-		{
-			email: booking.guestEmail,
-			name: booking.guestName,
-			metadata: { userId: booking.userId },
-		},
-		{ idempotencyKey: `customer/${booking.userId}` },
-	);
-	await db
-		.update(user)
-		.set({ stripeCustomerId: customer.id })
-		.where(eq(user.id, booking.userId));
-	return customer.id;
-}
-
-// --- Confirmation ------------------------------------------------------------
-
-export type ConfirmationOutcome =
-	| { status: 'confirmed'; booking: Booking }
-	| { status: 'already_confirmed'; booking: Booking }
-	| { status: 'refunded_conflict'; booking: Booking };
-
-async function loadBooking(db: Database, id: string) {
-	const [row] = await db.select().from(bookings).where(eq(bookings.id, id));
-	return row;
-}
-
-async function roomName(db: Database, roomId: string) {
-	const [row] = await db
-		.select({ name: room.name })
-		.from(room)
-		.where(eq(room.id, roomId));
-	return { name: row?.name ?? 'Room' };
-}
-
-function verifyIntent(intent: Stripe.PaymentIntent, booking: Booking) {
-	if (intent.status !== 'succeeded') {
-		throw new TRPCError({
-			code: 'BAD_REQUEST',
-			message: 'Payment has not succeeded',
-		});
-	}
-	const mismatch =
-		intent.metadata?.bookingId !== booking.id ||
-		intent.metadata?.userId !== booking.userId ||
-		intent.amount !== toCents(booking.totalAmount) ||
-		intent.currency !== 'usd';
-	if (mismatch) {
-		console.warn(
-			`PaymentIntent ${intent.id} does not match booking ${booking.confirmationId}`,
-		);
-		throw new TRPCError({
-			code: 'BAD_REQUEST',
-			message: 'This payment does not match the booking',
-		});
-	}
-}
-
-/**
- * Confirms a booking after Stripe reports its PaymentIntent succeeded. Used by
- * the front-end confirm and the webhook; idempotent across both.
- *
- * 1. Verifies the intent belongs to this booking (metadata, amount, currency,
- *    user) and succeeded.
- * 2. Confirms with one guarded UPDATE that also checks, atomically, that no
- *    confirmed booking, imported event or block took the dates meanwhile.
- * 3. If the dates were taken: refunds automatically, cancels the booking,
- *    tells the guest and the admins.
- * Emails go out once, from whichever caller changed the booking.
- */
-export async function confirmBookingPayment(
-	deps: ServiceDeps,
-	bookingId: string,
-	paymentIntentId: string,
-	now = new Date(),
-): Promise<ConfirmationOutcome> {
-	const { db, stripe } = deps;
-	const booking = await loadBooking(db, bookingId);
-	if (!booking) {
-		throw new TRPCError({ code: 'NOT_FOUND', message: 'Booking not found' });
-	}
-
-	if (booking.status === 'confirmed') {
-		if (booking.stripePaymentIntentId === paymentIntentId) {
-			return { status: 'already_confirmed', booking };
-		}
-		throw new TRPCError({
-			code: 'BAD_REQUEST',
-			message: 'This booking was already paid with another payment',
-		});
-	}
-	if (
-		booking.status === 'cancelled' &&
-		booking.cancellationReason === 'dates_unavailable' &&
-		booking.stripePaymentIntentId === paymentIntentId
-	) {
-		return { status: 'refunded_conflict', booking };
-	}
-	if (booking.status !== 'pending') {
-		throw new TRPCError({
-			code: 'BAD_REQUEST',
-			message: 'This booking can no longer be paid',
-		});
-	}
-
-	const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
-	verifyIntent(intent, booking);
-
-	const customerId =
-		typeof intent.customer === 'string'
-			? intent.customer
-			: (intent.customer?.id ?? null);
-
-	const [confirmed] = await db
-		.update(bookings)
-		.set({
-			status: 'confirmed',
-			paymentStatus: 'paid',
-			confirmedAt: now,
-			updatedAt: now,
-			stripePaymentIntentId: intent.id,
-			stripeCustomerId: customerId ?? booking.stripeCustomerId,
-		})
-		.where(
-			and(
-				eq(bookings.id, booking.id),
-				eq(bookings.status, 'pending'),
-				noOverlapForBookingRow,
-			),
-		)
-		.returning();
-
-	if (confirmed) {
-		await db
-			.insert(paymentTransactions)
-			.values({
-				bookingId: booking.id,
-				stripePaymentIntentId: intent.id,
-				stripeCustomerId: customerId,
-				amount: booking.totalAmount,
-				status: 'succeeded',
-				paymentMethod: intent.payment_method_types?.[0] ?? 'card',
-			})
-			.onConflictDoNothing();
-		const roomInfo = await roomName(db, booking.roomId);
-		inBackground(deps, `confirmation ${booking.confirmationId}`, () =>
-			sendBookingConfirmedEmails(db, deps.env, confirmed, roomInfo),
-		);
-		return { status: 'confirmed', booking: confirmed };
-	}
-
-	// Nothing changed: another caller confirmed it, or the dates were taken.
-	const current = await loadBooking(db, booking.id);
-	if (
-		current?.status === 'confirmed' &&
-		current.stripePaymentIntentId === intent.id
-	) {
-		return { status: 'already_confirmed', booking: current };
-	}
-	if (current?.status !== 'pending') {
-		if (current?.cancellationReason === 'dates_unavailable') {
-			return { status: 'refunded_conflict', booking: current };
-		}
-		throw new TRPCError({
-			code: 'BAD_REQUEST',
-			message: 'This booking can no longer be paid',
-		});
-	}
-	return refundUnavailableBooking(deps, current, intent, now);
-}
-
-async function refundUnavailableBooking(
-	deps: ServiceDeps,
-	booking: Booking,
-	intent: Stripe.PaymentIntent,
-	now: Date,
-): Promise<ConfirmationOutcome> {
-	const { db, stripe } = deps;
-	const refund = await stripe.refunds.create(
-		{
-			payment_intent: intent.id,
-			metadata: { bookingId: booking.id, reason: 'dates_unavailable' },
-		},
-		{ idempotencyKey: `refund-unavailable/${booking.id}` },
-	);
-	const [cancelled] = await db
-		.update(bookings)
-		.set({
-			status: 'cancelled',
-			paymentStatus: 'refunded',
-			cancelledAt: now,
-			updatedAt: now,
-			cancelledBy: 'system',
-			cancellationReason: 'dates_unavailable',
-			refundAmount: booking.totalAmount,
-			stripePaymentIntentId: intent.id,
-			stripeRefundId: refund.id,
-		})
-		.where(and(eq(bookings.id, booking.id), eq(bookings.status, 'pending')))
-		.returning();
-	if (!cancelled) {
-		const current = await loadBooking(db, booking.id);
-		return { status: 'refunded_conflict', booking: current ?? booking };
-	}
-	await db
-		.insert(paymentTransactions)
-		.values({
-			bookingId: booking.id,
-			stripePaymentIntentId: intent.id,
-			amount: booking.totalAmount,
-			status: 'refunded',
-			paymentMethod: intent.payment_method_types?.[0] ?? 'card',
-		})
-		.onConflictDoNothing();
-
-	console.warn(
-		`Booking ${booking.confirmationId}: dates taken before confirmation, refunded automatically`,
-	);
-	const roomInfo = await roomName(db, booking.roomId);
-	createInboxItemInBackground(deps, {
-		kind: 'refund_auto',
-		title: `Automatic refund: ${booking.confirmationId}`,
-		summary: `${roomInfo.name}, ${booking.checkInDate} to ${booking.checkOutDate}: the dates were taken before the payment was confirmed, so it was refunded in full.`,
-		details: {
-			confirmationId: booking.confirmationId,
-			roomName: roomInfo.name,
-			checkInDate: booking.checkInDate,
-			checkOutDate: booking.checkOutDate,
-			amount: booking.totalAmount,
-			paymentIntentId: intent.id,
-			refundId: refund.id,
-			livemode: intent.livemode,
-		},
-		bookingId: booking.id,
-		userId: booking.userId,
-		dedupeKey: `refund_auto:${booking.id}`,
-	});
-	inBackground(deps, `auto-refund ${booking.confirmationId}`, async () => {
-		await sendCancellationEmails(db, deps.env, cancelled, roomInfo, {
-			refundAmount: booking.totalAmount,
-			cancelledBy: 'system',
-			guestMessage:
-				'We are sorry: the room was booked on another platform moments before your payment completed, so we could not confirm your stay. Your payment has been refunded in full.',
-			adminMessage:
-				'A guest paid, but the dates were taken (another booking, an imported reservation or a block) before the payment was confirmed. The payment was refunded in full automatically.',
-		});
-		await sendAdminAlert(db, deps.env, {
-			subject: `Automatic refund: ${booking.confirmationId}`,
-			heading: 'Payment refunded: dates were no longer available',
-			paragraphs: [
-				'Check the calendar for double bookings on other platforms.',
-			],
-			details: [
-				{ label: 'Confirmation', value: booking.confirmationId },
-				{ label: 'Room', value: roomInfo.name },
-				{
-					label: 'Dates',
-					value: `${booking.checkInDate} to ${booking.checkOutDate}`,
-				},
-			],
-			link: {
-				label: 'Open booking',
-				path: `/admin/bookings/${booking.publicId}`,
-			},
-			idempotencyKey: `auto-refund-alert/${booking.id}`,
-		});
-	});
-	return { status: 'refunded_conflict', booking: cancelled };
-}
-
 // --- Cancellation --------------------------------------------------------------
 
 type RefundMode = 'policy' | 'full' | 'none';
@@ -674,8 +341,10 @@ export async function quoteBookingCancellation(
  * Cancels a booking and refunds through Stripe.
  * - Guests: refund per the booking's policy; not after check-in time.
  * - Admins: 'full' (force majeure), 'policy' or 'none'.
- * Unpaid holds are cancelled without a refund (their PaymentIntent, if any,
- * is cancelled so it can't be paid later).
+ * - With an open payment dispute: guests can't cancel online, and admins
+ *   must confirm explicitly to refund (default: no refund).
+ * Unpaid holds are cancelled without a refund (their Checkout Session is
+ * expired so it can't be paid later).
  */
 export async function cancelBooking(
 	deps: ServiceDeps,
@@ -698,6 +367,11 @@ interface CancelOptions {
 	by: 'guest' | 'admin';
 	refund: RefundMode;
 	reason?: string;
+	/**
+	 * Admins only: refund although the payment has an open dispute (Stripe
+	 * warns this can credit the guest twice). Plan 02, B7.
+	 */
+	confirmDisputeRefund?: boolean;
 }
 
 const bookingChanged = () =>
@@ -706,29 +380,21 @@ const bookingChanged = () =>
 		message: 'This booking changed. Please reload and try again.',
 	});
 
-/** Unpaid hold: cancel its PaymentIntent (if any) so it can't be paid later. */
+/** Unpaid hold: expire its Checkout Session so it can't be paid later. */
 async function cancelHold(
-	{ db, stripe }: ServiceDeps,
+	deps: ServiceDeps,
 	booking: Booking,
 	options: CancelOptions,
 	now: Date,
 ) {
-	if (booking.stripePaymentIntentId) {
-		const intent = await stripe.paymentIntents.retrieve(
-			booking.stripePaymentIntentId,
-		);
-		if (intent.status === 'succeeded' || intent.status === 'processing') {
-			throw new TRPCError({
-				code: 'CONFLICT',
-				message:
-					'A payment for this booking is being processed. Please try again in a minute.',
-			});
-		}
-		if (intent.status !== 'canceled') {
-			await stripe.paymentIntents.cancel(intent.id);
-		}
+	if ((await closeHoldSession(deps, booking, now)) === 'paid') {
+		throw new TRPCError({
+			code: 'CONFLICT',
+			message:
+				'A payment for this booking is being processed. Please try again in a minute.',
+		});
 	}
-	const [cancelled] = await db
+	const [cancelled] = await deps.db
 		.update(bookings)
 		.set({
 			status: 'cancelled',
@@ -738,7 +404,13 @@ async function cancelHold(
 			cancellationReason: options.reason ?? `${options.by}_request`,
 			refundAmount: 0,
 		})
-		.where(and(eq(bookings.id, booking.id), eq(bookings.status, 'pending')))
+		.where(
+			and(
+				eq(bookings.id, booking.id),
+				eq(bookings.status, 'pending'),
+				ne(bookings.paymentStatus, 'processing'),
+			),
+		)
 		.returning();
 	if (!cancelled) throw bookingChanged();
 	return { refundAmount: 0, refundPercent: 0 };
@@ -781,6 +453,22 @@ async function cancelConfirmed(
 	now: Date,
 ) {
 	const { db, stripe } = deps;
+	if (await hasOpenDispute(db, booking.id)) {
+		if (options.by === 'guest') {
+			throw new TRPCError({
+				code: 'CONFLICT',
+				message:
+					'This booking has an open payment dispute, so it cannot be cancelled online. Please contact us.',
+			});
+		}
+		if (options.refund !== 'none' && !options.confirmDisputeRefund) {
+			throw new TRPCError({
+				code: 'CONFLICT',
+				message:
+					'This payment has an open dispute. Refunding it now can credit the guest twice; confirm the refund explicitly or cancel without a refund.',
+			});
+		}
+	}
 	const { paid, refundAmount, refundPercent } = await refundFor(
 		db,
 		booking,
@@ -799,11 +487,15 @@ async function cancelConfirmed(
 			{
 				payment_intent: booking.stripePaymentIntentId,
 				amount: toCents(refundAmount),
-				metadata: { bookingId: booking.id, reason: 'cancellation' },
+				metadata: {
+					...stripeBookingMetadata(booking),
+					reason: 'cancellation',
+				},
 			},
 			{ idempotencyKey: `refund-cancel/${booking.id}` },
 		);
 		refundId = refund.id;
+		await recordAppRefund(db, refund, booking.id, now);
 	}
 
 	const paymentStatus =
@@ -830,7 +522,7 @@ async function cancelConfirmed(
 	if (refundAmount > 0) {
 		await db
 			.update(paymentTransactions)
-			.set({ status: paymentStatus })
+			.set({ status: paymentStatus, updatedAt: now })
 			.where(eq(paymentTransactions.bookingId, booking.id));
 	}
 

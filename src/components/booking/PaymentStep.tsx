@@ -1,10 +1,9 @@
 import { Icon } from '@iconify/react';
 import {
-	Elements,
+	CheckoutElementsProvider,
 	PaymentElement,
-	useElements,
-	useStripe,
-} from '@stripe/react-stripe-js';
+	useCheckoutElements,
+} from '@stripe/react-stripe-js/checkout';
 import { loadStripe, type Stripe } from '@stripe/stripe-js';
 import { useMutation } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
@@ -20,6 +19,13 @@ import { Label } from '@/components/ui/label';
 import { useTRPC } from '@/integrations/trpc/react';
 import { useBookingStore } from '@/stores';
 
+// Payment with a Stripe Checkout Session (ui_mode 'elements'): the server
+// creates one session per hold (bookings.createCheckoutSession) and the
+// Payment Element confirms it with checkout.confirm(). Redirect-based payment
+// methods come back to the confirmation page with ?session_id=..., which
+// runs the same confirmation (bookings.confirmCheckout); the webhook is the
+// source of truth either way.
+
 // Initialize Stripe outside component to avoid recreating
 let stripePromise: Promise<Stripe | null>;
 const getStripe = (publishableKey: string) => {
@@ -29,22 +35,68 @@ const getStripe = (publishableKey: string) => {
 	return stripePromise;
 };
 
-// Inner payment form component that has access to Stripe context
-function PaymentForm() {
-	const stripe = useStripe();
-	const elements = useElements();
+/** A short message for a failed tRPC call, never the whole error object. */
+const errorMessage = (error: unknown, fallback: string) =>
+	isTRPCClientError(error) ? error.message : fallback;
+
+/** Line items and total from the Checkout Session (what Stripe will charge). */
+function CheckoutSummary({
+	lineItems,
+	total,
+	matches,
+}: {
+	lineItems: Array<{ id: string; name: string; total: { amount: string } }>;
+	total: string;
+	matches: boolean;
+}) {
+	return (
+		<div className="space-y-2 rounded-lg border bg-muted p-4 text-sm">
+			{lineItems.map((item) => (
+				<div key={item.id} className="flex justify-between gap-4">
+					<span>{item.name}</span>
+					<span>{item.total.amount}</span>
+				</div>
+			))}
+			<div className="flex justify-between gap-4 border-t pt-2 text-lg font-semibold">
+				<span>Total</span>
+				<span>{total}</span>
+			</div>
+			{!matches && (
+				<p className="text-destructive">
+					The payment total does not match your booking. Please go back and try
+					again.
+				</p>
+			)}
+		</div>
+	);
+}
+
+// Inner payment form component that has access to the Checkout context
+function PaymentForm({ publicId }: { publicId: string }) {
+	const checkoutState = useCheckoutElements();
 	const booking = useBookingStore();
 	const navigate = useNavigate();
 	const policiesId = useId();
 	const [isProcessing, setIsProcessing] = useState(false);
-	const [errorMessage, setErrorMessage] = useState<string | null>(null);
+	const [errorText, setErrorText] = useState<string | null>(null);
 	const [acceptedPolicies, setAcceptedPolicies] = useState(false);
 	const [policyError, setPolicyError] = useState<string | null>(null);
 
-	const trpc = useTRPC();
-	const confirmPaymentMutation = useMutation(
-		trpc.bookings.confirmPayment.mutationOptions(),
-	);
+	if (checkoutState.type === 'loading') {
+		return (
+			<div className="flex justify-center py-8">
+				<Icon icon="tabler:loader-2" className="size-8 animate-spin" />
+			</div>
+		);
+	}
+	if (checkoutState.type === 'error') {
+		return (
+			<p className="text-sm text-destructive">{checkoutState.error.message}</p>
+		);
+	}
+	const { checkout } = checkoutState;
+	const expectedCents = Math.round((booking.pricing?.totalAmount ?? 0) * 100);
+	const totalMatches = checkout.total.total.minorUnitsAmount === expectedCents;
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -54,65 +106,27 @@ function PaymentForm() {
 			setPolicyError('You must accept the policies to continue');
 			return;
 		}
-
 		setPolicyError(null);
-
-		if (!stripe || !elements) {
-			return;
-		}
-
 		setIsProcessing(true);
-		setErrorMessage(null);
+		setErrorText(null);
 
 		try {
-			// Confirm the payment with Stripe
-			const { error, paymentIntent } = await stripe.confirmPayment({
-				elements,
-				redirect: 'if_required',
+			const result = await checkout.confirm({ redirect: 'if_required' });
+			if (result.type === 'error') {
+				setErrorText(result.error.message);
+				toast.error(result.error.message);
+				return;
+			}
+			// Paid (or a delayed payment started): the confirmation page runs
+			// the confirmation and shows the booking's real status.
+			void navigate({
+				to: '/booking/confirmation/$publicId',
+				params: { publicId },
+				search: { session_id: result.session.id },
 			});
-
-			if (error) {
-				setErrorMessage(error.message || 'Payment failed');
-				toast.error(error.message || 'Payment failed');
-			} else if (paymentIntent && paymentIntent.status === 'succeeded') {
-				// Payment succeeded, confirm with backend
-				if (!booking.bookingId) {
-					throw new Error('No booking ID found');
-				}
-				const confirmed = await confirmPaymentMutation.mutateAsync({
-					bookingId: booking.bookingId,
-					paymentIntentId: paymentIntent.id,
-				});
-
-				// Navigate to the confirmation page. Drafts saved before public ids
-				// existed have no bookingPublicId; the server returns it.
-				toast.success('Payment successful!');
-				const publicId = booking.bookingPublicId ?? confirmed.publicId;
-				if (publicId) {
-					void navigate({
-						to: '/booking/confirmation/$publicId',
-						params: { publicId },
-						search: { step: undefined },
-					});
-				} else {
-					void navigate({ to: '/account' });
-				}
-			}
-		} catch (error) {
-			console.error('Payment error:', error);
-			// CONFLICT: the dates were taken meanwhile and the payment was
-			// refunded automatically; the server message explains it.
-			const refunded =
-				isTRPCClientError(error) && error.data?.code === 'CONFLICT';
-			const errorMsg =
-				error instanceof Error ? error.message : 'Payment failed';
-			setErrorMessage(errorMsg);
-			if (refunded) {
-				toast.error(errorMsg, { duration: 10_000 });
-				booking.actions.reset();
-			} else {
-				toast.error('Payment processing failed');
-			}
+		} catch {
+			setErrorText('Payment failed. Please try again.');
+			toast.error('Payment processing failed');
 		} finally {
 			setIsProcessing(false);
 		}
@@ -120,6 +134,12 @@ function PaymentForm() {
 
 	return (
 		<form onSubmit={handleSubmit} className="space-y-6">
+			<CheckoutSummary
+				lineItems={checkout.lineItems}
+				total={checkout.total.total.amount}
+				matches={totalMatches}
+			/>
+
 			<PaymentElement />
 
 			{/* Policy Acceptance Checkbox */}
@@ -175,14 +195,14 @@ function PaymentForm() {
 				)}
 			</div>
 
-			{errorMessage && (
+			{errorText && (
 				<div className="rounded-md border border-destructive bg-destructive/10 px-4 py-3 text-destructive">
 					<div className="flex items-start gap-2">
 						<Icon
 							icon="tabler:alert-circle"
 							className="mt-0.5 size-5 shrink-0"
 						/>
-						<p className="text-sm">{errorMessage}</p>
+						<p className="text-sm">{errorText}</p>
 					</div>
 				</div>
 			)}
@@ -200,7 +220,12 @@ function PaymentForm() {
 
 				<Button
 					type="submit"
-					disabled={!stripe || isProcessing || !acceptedPolicies}
+					disabled={
+						!checkout.canConfirm ||
+						!totalMatches ||
+						isProcessing ||
+						!acceptedPolicies
+					}
 					className="flex-1"
 				>
 					{isProcessing ? (
@@ -211,7 +236,7 @@ function PaymentForm() {
 					) : (
 						<>
 							<Icon icon="tabler:credit-card-pay" className="size-5" />
-							Pay ${booking.pricing?.totalAmount.toFixed(2)}
+							Pay {checkout.total.total.amount}
 						</>
 					)}
 				</Button>
@@ -225,17 +250,19 @@ export function PaymentStep() {
 	const booking = useBookingStore();
 	const trpc = useTRPC();
 	const lenis = useLenis();
+	const navigate = useNavigate();
 	// mutateAsync is stable across renders, so it is safe as an effect dependency
 	const { mutateAsync: refreshBooking } = useMutation(
 		trpc.bookings.refreshBooking.mutationOptions(),
 	);
-	const { mutateAsync: createPaymentIntent } = useMutation(
-		trpc.bookings.createPaymentIntent.mutationOptions(),
+	const { mutateAsync: createCheckoutSession } = useMutation(
+		trpc.bookings.createCheckoutSession.mutationOptions(),
 	);
-	const [clientSecret, setClientSecret] = useState<string | null>(null);
-	const [stripePublishableKey, setStripePublishableKey] = useState<
-		string | null
-	>(null);
+	const [checkoutInfo, setCheckoutInfo] = useState<{
+		clientSecret: string;
+		publishableKey: string;
+		publicId: string;
+	} | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
 
 	// Scroll to top when payment step mounts
@@ -245,7 +272,7 @@ export function PaymentStep() {
 		}
 	}, [lenis]);
 
-	// Create payment intent when component mounts
+	// Create (or reuse) the hold's Checkout Session when the step mounts
 	useEffect(() => {
 		const initializePayment = async () => {
 			try {
@@ -253,41 +280,45 @@ export function PaymentStep() {
 					throw new Error('No booking ID found');
 				}
 
-				// First, check if booking needs refresh (handles expired sessions gracefully)
+				// First, refresh an expired hold if the dates are still free
 				try {
 					const refreshResult = await refreshBooking({
 						bookingId: booking.bookingId,
 					});
-
 					if (refreshResult.refreshed) {
 						toast.success(
 							'Your booking session has been refreshed. Room is still available!',
 							{ duration: 4000 },
 						);
-						console.log('Booking refreshed successfully:', refreshResult);
 					}
 				} catch (refreshError) {
 					// If refresh fails (room no longer available), show error and go back
-					const errorMessage =
-						refreshError instanceof Error
-							? refreshError.message
-							: 'Unable to proceed with this booking';
-					console.error('Failed to refresh booking:', refreshError);
-					toast.error(errorMessage, { duration: 6000 });
+					toast.error(
+						errorMessage(refreshError, 'Unable to proceed with this booking'),
+						{ duration: 6000 },
+					);
 					booking.actions.setStep('details');
 					setIsLoading(false);
 					return;
 				}
 
-				// Proceed with payment intent creation
-				const result = await createPaymentIntent({
+				const result = await createCheckoutSession({
 					bookingId: booking.bookingId,
 				});
-
-				setClientSecret(result.clientSecret);
-				setStripePublishableKey(result.publishableKey);
+				if (result.status === 'complete') {
+					// Already paid (e.g. in another tab): show the booking.
+					void navigate({
+						to: '/booking/confirmation/$publicId',
+						params: { publicId: result.publicId },
+					});
+					return;
+				}
+				setCheckoutInfo({
+					clientSecret: result.clientSecret,
+					publishableKey: result.publishableKey,
+					publicId: result.publicId,
+				});
 			} catch (error) {
-				console.error('Failed to initialize payment:', error);
 				toast.error(
 					isTRPCClientError(error) && error.data?.code === 'CONFLICT'
 						? error.message
@@ -301,7 +332,13 @@ export function PaymentStep() {
 		};
 
 		void initializePayment();
-	}, [booking.bookingId, booking.actions, refreshBooking, createPaymentIntent]);
+	}, [
+		booking.bookingId,
+		booking.actions,
+		refreshBooking,
+		createCheckoutSession,
+		navigate,
+	]);
 
 	if (isLoading) {
 		return (
@@ -319,7 +356,7 @@ export function PaymentStep() {
 		);
 	}
 
-	if (!clientSecret || !stripePublishableKey) {
+	if (!checkoutInfo) {
 		return (
 			<Card>
 				<CardContent className="py-12">
@@ -346,8 +383,7 @@ export function PaymentStep() {
 		);
 	}
 
-	const options = {
-		clientSecret,
+	const elementsOptions = {
 		appearance: {
 			theme: 'stripe' as const,
 			labels: 'floating' as const,
@@ -383,24 +419,18 @@ export function PaymentStep() {
 				</CardTitle>
 			</CardHeader>
 			<CardContent className="space-y-6">
-				{/* Total Amount Display */}
-				<div className="rounded-lg border bg-muted p-4">
-					<div className="flex items-center justify-between">
-						<span className="text-lg font-semibold">Total Amount:</span>
-						<span className="text-2xl font-bold">
-							${booking.pricing?.totalAmount.toFixed(2)}
-						</span>
-					</div>
-					<p className="mt-1 text-sm text-muted-foreground">
-						{booking.pricing?.nights} night
-						{booking.pricing?.nights !== 1 ? 's' : ''}
-					</p>
-				</div>
+				<p className="text-sm text-muted-foreground">
+					{booking.pricing?.nights} night
+					{booking.pricing?.nights !== 1 ? 's' : ''}
+				</p>
 
-				{/* Stripe Elements Form */}
-				<Elements stripe={getStripe(stripePublishableKey)} options={options}>
-					<PaymentForm />
-				</Elements>
+				{/* Stripe Checkout Session + Payment Element */}
+				<CheckoutElementsProvider
+					stripe={getStripe(checkoutInfo.publishableKey)}
+					options={{ clientSecret: checkoutInfo.clientSecret, elementsOptions }}
+				>
+					<PaymentForm publicId={checkoutInfo.publicId} />
+				</CheckoutElementsProvider>
 
 				{/* Security Badge */}
 				<div className="flex items-center justify-center gap-2 border-t pt-4 text-sm text-muted-foreground">

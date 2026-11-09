@@ -3,13 +3,16 @@ import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { formatMoney, humanizeCode } from '@/lib/format';
 import {
 	contactReplyHref,
 	type InboxDetails,
 	type InboxDetailsByKind,
 	type InboxKind,
+	stripeDisputeUrl,
 	stripePaymentUrl,
 } from '@/lib/inbox';
+import { formatInstantCT } from '@/lib/timezone';
 
 // The body of one notification, by kind (src/lib/inbox.ts). Guest-typed text
 // (contact form) is shown as plain text; React escapes it.
@@ -24,11 +27,8 @@ type KindViews = {
 	[K in InboxKind]: (props: { details: InboxDetailsByKind[K] }) => ReactNode;
 };
 
-const currency = (amount: number, code = 'usd') =>
-	new Intl.NumberFormat('en-US', {
-		style: 'currency',
-		currency: code.toUpperCase(),
-	}).format(amount);
+const currency = formatMoney;
+const humanize = humanizeCode;
 
 function DetailList({
 	rows,
@@ -203,6 +203,91 @@ function RefundFailedView({
 	);
 }
 
+function RefundIssuedView({
+	details: d,
+}: {
+	details: InboxDetailsByKind['refund_issued'];
+}) {
+	return (
+		<div className="space-y-4">
+			<DetailList
+				rows={[
+					d.confirmationId && {
+						label: 'Confirmation',
+						value: d.confirmationId,
+					},
+					{ label: 'Refund', value: currency(d.amount, d.currency) },
+					{ label: 'Status', value: humanize(d.status) },
+					{
+						label: 'Reason',
+						value: d.reason ? humanize(d.reason) : 'Not given',
+					},
+					{
+						label: 'Refunded so far',
+						value: currency(d.totalRefunded, d.currency),
+					},
+					{
+						label: 'Still paid',
+						value: currency(d.remainingPaid, d.currency),
+					},
+					d.bookingStatus && { label: 'Booking', value: d.bookingStatus },
+					d.reference && { label: 'Trace reference', value: d.reference },
+					{ label: 'Refund id', value: d.refundId },
+				]}
+			/>
+			<p className="text-sm text-muted-foreground">
+				This refund was made in the Stripe Dashboard. The guest and the admins
+				were emailed. A full refund cancels the booking and frees its dates.
+			</p>
+			{d.paymentIntentId && (
+				<Actions>
+					<ExternalLink href={stripePaymentUrl(d.paymentIntentId, d.livemode)}>
+						Open payment in Stripe
+					</ExternalLink>
+				</Actions>
+			)}
+		</div>
+	);
+}
+
+function PaymentDisputeView({
+	details: d,
+}: {
+	details: InboxDetailsByKind['payment_dispute'];
+}) {
+	return (
+		<div className="space-y-4">
+			<DetailList
+				rows={[
+					{
+						label: 'Confirmation',
+						value: d.confirmationId ?? 'Unlinked payment',
+					},
+					{ label: 'Amount', value: currency(d.amount, d.currency) },
+					{ label: 'Reason', value: humanize(d.reason) },
+					{ label: 'Status', value: humanize(d.status) },
+					d.evidenceDueBy && {
+						label: 'Respond by',
+						value: formatInstantCT(d.evidenceDueBy),
+					},
+					{ label: 'Latest event', value: d.lastEvent },
+					{ label: 'Dispute id', value: d.disputeId },
+				]}
+			/>
+			<p className="text-sm text-muted-foreground">
+				Respond in the Stripe Dashboard. While the dispute is open, guests
+				cannot cancel online and refunds default to none (a refund could credit
+				the guest twice).
+			</p>
+			<Actions>
+				<ExternalLink href={stripeDisputeUrl(d.disputeId, d.livemode)}>
+					Open dispute in Stripe
+				</ExternalLink>
+			</Actions>
+		</div>
+	);
+}
+
 function SyncFailedView({
 	details: d,
 }: {
@@ -273,6 +358,8 @@ const VIEWS: KindViews = {
 	contact_form: ContactFormView,
 	refund_auto: RefundAutoView,
 	refund_failed: RefundFailedView,
+	refund_issued: RefundIssuedView,
+	payment_dispute: PaymentDisputeView,
 	ical_sync_failed: SyncFailedView,
 	ical_conflict: ConflictView,
 };
