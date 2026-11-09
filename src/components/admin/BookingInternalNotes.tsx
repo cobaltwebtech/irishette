@@ -70,11 +70,11 @@ export function BookingInternalNotes({
 	return (
 		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<div className="space-y-2">
-				<DialogTrigger asChild>
-					<Button variant="secondary" size="sm" className="h-8">
-						<Icon icon="tabler:edit" className="size-5" />
-						{currentNotes ? 'Edit' : 'Add Notes'}
-					</Button>
+				<DialogTrigger
+					render={<Button variant="secondary" size="sm" className="h-8" />}
+				>
+					<Icon icon="tabler:edit" className="size-5" />
+					{currentNotes ? 'Edit' : 'Add Notes'}
 				</DialogTrigger>
 				{currentNotes ? (
 					<p className="rounded-md bg-accent/30 p-3 text-sm whitespace-pre-wrap">
