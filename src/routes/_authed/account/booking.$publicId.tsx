@@ -1,7 +1,6 @@
 import { Icon } from '@iconify/react';
 import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { toast } from 'sonner';
 
 import { CancelBookingButton } from '@/components/booking/CancelBookingButton';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +12,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from '@/components/ui/card';
+import { toast } from '@/components/ui/toast';
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
 import { CHECK_OUT_TIME_LABEL } from '@/lib/site';
@@ -84,7 +84,9 @@ function BookingDetailPage() {
 	const resendEmail = useMutation(
 		trpc.bookings.resendConfirmationEmail.mutationOptions({
 			onSuccess: (result) => {
-				toast.success('Email sent successfully!', {
+				toast.add({
+					type: 'success',
+					title: 'Email sent successfully!',
 					description:
 						result.message ||
 						'Confirmation email has been sent to your email address.',
@@ -92,7 +94,9 @@ function BookingDetailPage() {
 			},
 			onError: (error) => {
 				console.error('Failed to resend confirmation email:', error);
-				toast.error('Failed to send email', {
+				toast.add({
+					type: 'error',
+					title: 'Failed to send email',
 					description:
 						error.message ||
 						'Unable to send confirmation email. Please try again.',

@@ -6,7 +6,6 @@ import {
 } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
 
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { RoomBlockingManagement } from '@/components/admin/RoomBlockingManagement';
@@ -16,6 +15,7 @@ import { RoomPricingConfig } from '@/components/admin/RoomPricingConfig';
 import { PricingRulesManagement } from '@/components/admin/RoomPricingRules';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/toast';
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
@@ -171,9 +171,11 @@ function EditRoom() {
 	useEffect(() => {
 		if (roomQuery.error) {
 			console.error('Failed to refresh room data:', roomQuery.error);
-			toast.error('Failed to refresh room data', {
+			toast.add({
+				type: 'error',
+				title: 'Failed to refresh room data',
 				description: 'Using cached data. Changes can still be saved.',
-				duration: 5000,
+				timeout: 5000,
 			});
 		}
 	}, [roomQuery.error]);
@@ -184,15 +186,19 @@ function EditRoom() {
 				// Every room query (public and admin): name and status also appear
 				// in the sidebar, the property list and the public room pages.
 				void queryClient.invalidateQueries(trpc.rooms.pathFilter());
-				toast.success('Room updated successfully!', {
+				toast.add({
+					type: 'success',
+					title: 'Room updated successfully!',
 					description: `${formData.name} has been updated with the latest settings.`,
-					duration: 4000,
+					timeout: 4000,
 				});
 			},
 			onError: (error) => {
-				toast.error('Error updating room', {
+				toast.add({
+					type: 'error',
+					title: 'Error updating room',
 					description: error.message,
-					duration: 5000,
+					timeout: 5000,
 				});
 			},
 		}),

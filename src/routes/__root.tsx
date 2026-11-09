@@ -18,7 +18,7 @@ import Footer from '@/components/Footer';
 import Header from '@/components/Header';
 import { NotFound } from '@/components/not-found';
 import { ScrollRestoration } from '@/components/scroll-restoration';
-import { Toaster } from '@/components/ui/sonner';
+import { Toaster } from '@/components/ui/toast';
 import type { TRPCRouter } from '@/integrations/trpc/router';
 import { type AppSession, sessionQueryOptions } from '@/lib/session';
 import { seo } from '@/utils/seo';

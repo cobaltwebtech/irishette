@@ -2,7 +2,6 @@ import { Icon } from '@iconify/react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { useId, useState } from 'react';
-import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -15,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { toast } from '@/components/ui/toast';
 import { useTRPC } from '@/integrations/trpc/react';
 import { changeEmail } from '@/lib/auth-client';
 import { refreshSession } from '@/lib/session';
@@ -115,20 +115,24 @@ export function EditProfileModal({
 			}
 			if (emailChanged) {
 				await changeEmailMutation.mutateAsync(email.trim());
-				toast.info('Check your email', {
+				toast.add({
+					type: 'info',
+					title: 'Check your email',
 					description:
 						'We sent a link to confirm the change. Your email stays the same until you confirm it.',
-					duration: 8000,
+					timeout: 8000,
 				});
 			}
 			if (nameChanged || phoneChanged) {
 				// Refetch the session so the header and account page update.
 				await refreshSession(queryClient, router);
-				toast.success('Profile updated successfully!');
+				toast.add({ type: 'success', title: 'Profile updated successfully!' });
 			}
 			onOpenChange(false);
 		} catch (error) {
-			toast.error('Failed to update profile', {
+			toast.add({
+				type: 'error',
+				title: 'Failed to update profile',
 				description: error instanceof Error ? error.message : undefined,
 			});
 		}

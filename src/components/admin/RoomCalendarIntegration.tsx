@@ -6,7 +6,6 @@ import {
 	useSuspenseQuery,
 } from '@tanstack/react-query';
 import { useId, useState } from 'react';
-import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,6 +27,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { toast } from '@/components/ui/toast';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
 
@@ -94,19 +94,24 @@ export function RoomCalendarIntegration({ roomId }: { roomId: string }) {
 			const results = await syncRoom.mutateAsync({ roomId, force });
 			const { failed, changes } = syncSummary(results);
 			if (results.length === 0) {
-				toast.info('No active feeds to sync');
+				toast.add({ type: 'info', title: 'No active feeds to sync' });
 			} else if (failed.length > 0) {
-				toast.error(
-					`${failed.length} feed${failed.length === 1 ? '' : 's'} failed`,
-					{ description: failed.map((f) => f.error).join('; ') },
-				);
+				toast.add({
+					type: 'error',
+					title: `${failed.length} feed${failed.length === 1 ? '' : 's'} failed`,
+					description: failed.map((f) => f.error).join('; '),
+				});
 			} else {
-				toast.success('Calendars synced', {
+				toast.add({
+					type: 'success',
+					title: 'Calendars synced',
 					description: `${changes} change${changes === 1 ? '' : 's'} applied.`,
 				});
 			}
 		} catch (error) {
-			toast.error('Sync failed', {
+			toast.add({
+				type: 'error',
+				title: 'Sync failed',
 				description: error instanceof Error ? error.message : undefined,
 			});
 		} finally {
@@ -117,9 +122,12 @@ export function RoomCalendarIntegration({ roomId }: { roomId: string }) {
 	const copy = async (text: string) => {
 		try {
 			await navigator.clipboard.writeText(text);
-			toast.success('Copied to clipboard');
+			toast.add({ type: 'success', title: 'Copied to clipboard' });
 		} catch {
-			toast.error('Copy failed. Select the URL and copy it manually.');
+			toast.add({
+				type: 'error',
+				title: 'Copy failed. Select the URL and copy it manually.',
+			});
 		}
 	};
 
@@ -223,7 +231,9 @@ export function RoomCalendarIntegration({ roomId }: { roomId: string }) {
 															isActive,
 														});
 													} catch (error) {
-														toast.error('Could not update the feed', {
+														toast.add({
+															type: 'error',
+															title: 'Could not update the feed',
 															description:
 																error instanceof Error
 																	? error.message
@@ -351,10 +361,12 @@ export function RoomCalendarIntegration({ roomId }: { roomId: string }) {
 								if (!deleting) return;
 								try {
 									await deleteFeed.mutateAsync({ id: deleting.id });
-									toast.success('Feed removed');
+									toast.add({ type: 'success', title: 'Feed removed' });
 									setDeleting(null);
 								} catch (error) {
-									toast.error('Could not remove the feed', {
+									toast.add({
+										type: 'error',
+										title: 'Could not remove the feed',
 										description:
 											error instanceof Error ? error.message : undefined,
 									});
@@ -392,10 +404,15 @@ export function RoomCalendarIntegration({ roomId }: { roomId: string }) {
 									await queryClient.invalidateQueries(
 										trpc.ical.getExportUrl.pathFilter(),
 									);
-									toast.success('New export URL created');
+									toast.add({
+										type: 'success',
+										title: 'New export URL created',
+									});
 									setConfirmRegenerate(false);
 								} catch (error) {
-									toast.error('Could not regenerate the URL', {
+									toast.add({
+										type: 'error',
+										title: 'Could not regenerate the URL',
 										description:
 											error instanceof Error ? error.message : undefined,
 									});
@@ -449,7 +466,9 @@ function FeedDialog({
 				});
 			}
 			await onSaved();
-			toast.success(feed ? 'Feed updated' : 'Feed added', {
+			toast.add({
+				type: 'success',
+				title: feed ? 'Feed updated' : 'Feed added',
 				description: 'Use "Sync now" to import it right away.',
 			});
 			onClose();

@@ -2,7 +2,6 @@ import { Icon } from '@iconify/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { useEffect, useEffectEvent, useId, useState } from 'react';
-import { toast } from 'sonner';
 import { z } from 'zod';
 
 import { AuthCard, AuthError } from '@/components/auth/AuthCard';
@@ -16,6 +15,7 @@ import { useAuthRequest } from '@/components/auth/useAuthRequest';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password';
+import { toast } from '@/components/ui/toast';
 import { invalidateSession, requireNoSession } from '@/lib/auth-check';
 import { authClient } from '@/lib/auth-client';
 import {
@@ -134,7 +134,7 @@ function LoginPage() {
 				onError: (signInError) =>
 					setNeedsVerification(signInError.code === 'EMAIL_NOT_VERIFIED'),
 				onSuccess: async () => {
-					toast.success('Logged in');
+					toast.add({ type: 'success', title: 'Logged in' });
 					await invalidateSession(queryClient, router);
 					// history.push keeps the full (already sanitized) path + search.
 					router.history.push(redirectTo);

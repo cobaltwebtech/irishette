@@ -5,8 +5,8 @@ import {
 	useQuery,
 	useQueryClient,
 } from '@tanstack/react-query';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
 import type { InboxStatus } from '@/lib/inbox';
@@ -87,7 +87,10 @@ export function useSetInboxStatus() {
 			},
 			onError: (_error, _variables, context) => {
 				restore(queryClient, context?.snapshot);
-				toast.error('Could not update the notifications. Please try again.');
+				toast.add({
+					type: 'error',
+					title: 'Could not update the notifications. Please try again.',
+				});
 			},
 			onSettled: () => queryClient.invalidateQueries(trpc.inbox.pathFilter()),
 		}),
@@ -113,14 +116,19 @@ export function useDeleteInboxItems() {
 	return useMutation(
 		trpc.inbox.adminDelete.mutationOptions({
 			onSuccess: ({ deleted }) => {
-				toast.success(
-					deleted === 1
-						? 'Notification deleted'
-						: `${deleted} notifications deleted`,
-				);
+				toast.add({
+					type: 'success',
+					title:
+						deleted === 1
+							? 'Notification deleted'
+							: `${deleted} notifications deleted`,
+				});
 			},
 			onError: () => {
-				toast.error('Could not delete. Please try again.');
+				toast.add({
+					type: 'error',
+					title: 'Could not delete. Please try again.',
+				});
 			},
 			onSettled: async (_data, _error, { publicIds }) => {
 				const keys = publicIds.map((publicId) =>

@@ -1,7 +1,6 @@
 import { Icon } from '@iconify/react';
 import { isTRPCClientError } from '@trpc/client';
 import { useId, useState } from 'react';
-import { toast } from 'sonner';
 
 import {
 	createAppColumnHelper,
@@ -36,6 +35,7 @@ import {
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { toast } from '@/components/ui/toast';
 import type { TRPCRouter } from '@/integrations/trpc/router';
 import type {
 	CreatePricingRule,
@@ -363,11 +363,17 @@ export function PricingRulesManagement({
 							onSave={async (rule) => {
 								if (editingRule?.id) {
 									await onUpdateRule({ ...rule, id: editingRule.id });
-									toast.success('Pricing rule updated successfully');
+									toast.add({
+										type: 'success',
+										title: 'Pricing rule updated successfully',
+									});
 									setEditingRule(null);
 								} else {
 									await onCreateRule(rule);
-									toast.success('Pricing rule created successfully');
+									toast.add({
+										type: 'success',
+										title: 'Pricing rule created successfully',
+									});
 									setIsCreating(false);
 								}
 								// No need to re-throw since success toasts and modal closing happen here
@@ -431,11 +437,17 @@ export function PricingRulesManagement({
 										if (deletingRule.id) {
 											try {
 												await onDeleteRule(deletingRule.id);
-												toast.success('Pricing rule deleted successfully');
+												toast.add({
+													type: 'success',
+													title: 'Pricing rule deleted successfully',
+												});
 												setDeletingRule(null);
 											} catch (error) {
 												console.error('Failed to delete pricing rule:', error);
-												toast.error('Failed to delete pricing rule');
+												toast.add({
+													type: 'error',
+													title: 'Failed to delete pricing rule',
+												});
 											}
 										}
 									}}
@@ -492,28 +504,31 @@ function PricingRuleForm({
 
 		// Basic validation
 		if (!formData.name.trim()) {
-			toast.error('Rule name is required');
+			toast.add({ type: 'error', title: 'Rule name is required' });
 			return;
 		}
 
 		if (!formData.startDate || !formData.endDate) {
-			toast.error('Start and end dates are required');
+			toast.add({ type: 'error', title: 'Start and end dates are required' });
 			return;
 		}
 
 		// Inclusive dates: a single-night rule has start = end.
 		if (formData.endDate < formData.startDate) {
-			toast.error('End date must be on or after the start date');
+			toast.add({
+				type: 'error',
+				title: 'End date must be on or after the start date',
+			});
 			return;
 		}
 
 		if (formData.endDate < today) {
-			toast.error('End date cannot be in the past');
+			toast.add({ type: 'error', title: 'End date cannot be in the past' });
 			return;
 		}
 
 		if (formData.value <= 0) {
-			toast.error('Value must be greater than 0');
+			toast.add({ type: 'error', title: 'Value must be greater than 0' });
 			return;
 		}
 
@@ -522,7 +537,10 @@ function PricingRuleForm({
 			formData.ruleType === 'surcharge_rate' &&
 			(formData.value < 0 || formData.value > 5)
 		) {
-			toast.error('Surcharge rate must be between 0 and 5 (0% to 500%)');
+			toast.add({
+				type: 'error',
+				title: 'Surcharge rate must be between 0 and 5 (0% to 500%)',
+			});
 			return;
 		}
 
@@ -538,9 +556,11 @@ function PricingRuleForm({
 			setConflict(conflict);
 			setFieldErrors(fieldErrors);
 			if (!conflict) {
-				toast.error('Failed to save pricing rule', {
+				toast.add({
+					type: 'error',
+					title: 'Failed to save pricing rule',
 					description: message,
-					duration: 5000,
+					timeout: 5000,
 				});
 			}
 		} finally {

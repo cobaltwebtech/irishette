@@ -2,7 +2,6 @@ import { Icon } from '@iconify/react';
 import { Link } from '@tanstack/react-router';
 import { isTRPCClientError } from '@trpc/client';
 import { useId, useState } from 'react';
-import { toast } from 'sonner';
 
 import {
 	createAppColumnHelper,
@@ -38,6 +37,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { toast } from '@/components/ui/toast';
 import type { TRPCRouter } from '@/integrations/trpc/router';
 import { daysBetween } from '@/lib/date-range';
 import type {
@@ -254,13 +254,19 @@ export function RoomBlockingManagement({
 	const handleCreatePeriod = async (period: CreateBlockedPeriod) => {
 		await onCreateBlockedPeriod(period);
 		setShowCreateDialog(false);
-		toast.success('Blocked period created successfully!');
+		toast.add({
+			type: 'success',
+			title: 'Blocked period created successfully!',
+		});
 	};
 
 	const handleUpdatePeriod = async (period: UpdateBlockedPeriod) => {
 		await onUpdateBlockedPeriod(period);
 		setEditingPeriod(null);
-		toast.success('Blocked period updated successfully!');
+		toast.add({
+			type: 'success',
+			title: 'Blocked period updated successfully!',
+		});
 	};
 
 	const handleDeletePeriod = async (periodId: string) => {
@@ -416,11 +422,14 @@ function CreateBlockedPeriodDialog({
 		e.preventDefault();
 
 		if (!startDate || !endDate || !reason.trim()) {
-			toast.error('Please fill in all required fields');
+			toast.add({ type: 'error', title: 'Please fill in all required fields' });
 			return;
 		}
 		if (endDate < startDate) {
-			toast.error('End date must be on or after the start date');
+			toast.add({
+				type: 'error',
+				title: 'End date must be on or after the start date',
+			});
 			return;
 		}
 
@@ -556,17 +565,20 @@ function EditBlockedPeriodDialog({
 		e.preventDefault();
 
 		if (!startDate || !endDate || !reason.trim()) {
-			toast.error('Please fill in all required fields');
+			toast.add({ type: 'error', title: 'Please fill in all required fields' });
 			return;
 		}
 
 		if (!period.id) {
-			toast.error('Invalid period - missing ID');
+			toast.add({ type: 'error', title: 'Invalid period - missing ID' });
 			return;
 		}
 
 		if (endDate < startDate) {
-			toast.error('End date must be on or after the start date');
+			toast.add({
+				type: 'error',
+				title: 'End date must be on or after the start date',
+			});
 			return;
 		}
 
@@ -683,13 +695,18 @@ function DeleteBlockedPeriodDialog({
 		setIsDeleting(true);
 		try {
 			await onConfirm();
-			toast.success('Blocked period deleted successfully!');
+			toast.add({
+				type: 'success',
+				title: 'Blocked period deleted successfully!',
+			});
 		} catch (error) {
 			console.error('Error deleting blocked period:', error);
 			const errorMessage =
 				error instanceof Error ? error.message : 'Unknown error';
 
-			toast.error('Failed to delete blocked period', {
+			toast.add({
+				type: 'error',
+				title: 'Failed to delete blocked period',
 				description: errorMessage,
 			});
 		} finally {

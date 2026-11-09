@@ -3,7 +3,6 @@ import type { UseQueryResult } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useId, useState } from 'react';
-import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -16,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { toast } from '@/components/ui/toast';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
 import { formatMoney } from '@/lib/format';
@@ -88,7 +88,9 @@ export function CancelBookingButton({
 							publicId,
 							reason: reason || undefined,
 						});
-			toast.success('Booking cancelled', {
+			toast.add({
+				type: 'success',
+				title: 'Booking cancelled',
 				description:
 					result.refundAmount > 0
 						? `${currency(result.refundAmount)} will be refunded to the original payment method.`
@@ -97,7 +99,9 @@ export function CancelBookingButton({
 			setOpen(false);
 			await queryClient.invalidateQueries(trpc.bookings.pathFilter());
 		} catch (error) {
-			toast.error('Could not cancel the booking', {
+			toast.add({
+				type: 'error',
+				title: 'Could not cancel the booking',
 				description: error instanceof Error ? error.message : undefined,
 			});
 		}

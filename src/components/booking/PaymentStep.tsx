@@ -10,12 +10,12 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { isTRPCClientError } from '@trpc/client';
 import { useLenis } from 'lenis/react';
 import { useEffect, useId, useState } from 'react';
-import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { toast } from '@/components/ui/toast';
 import { useTRPC } from '@/integrations/trpc/react';
 import { useBookingStore } from '@/stores';
 
@@ -114,7 +114,7 @@ function PaymentForm({ publicId }: { publicId: string }) {
 			const result = await checkout.confirm({ redirect: 'if_required' });
 			if (result.type === 'error') {
 				setErrorText(result.error.message);
-				toast.error(result.error.message);
+				toast.add({ type: 'error', title: result.error.message });
 				return;
 			}
 			// Paid (or a delayed payment started): the confirmation page runs
@@ -126,7 +126,7 @@ function PaymentForm({ publicId }: { publicId: string }) {
 			});
 		} catch {
 			setErrorText('Payment failed. Please try again.');
-			toast.error('Payment processing failed');
+			toast.add({ type: 'error', title: 'Payment processing failed' });
 		} finally {
 			setIsProcessing(false);
 		}
@@ -286,17 +286,23 @@ export function PaymentStep() {
 						bookingId: booking.bookingId,
 					});
 					if (refreshResult.refreshed) {
-						toast.success(
-							'Your booking session has been refreshed. Room is still available!',
-							{ duration: 4000 },
-						);
+						toast.add({
+							type: 'success',
+							title:
+								'Your booking session has been refreshed. Room is still available!',
+							timeout: 4000,
+						});
 					}
 				} catch (refreshError) {
 					// If refresh fails (room no longer available), show error and go back
-					toast.error(
-						errorMessage(refreshError, 'Unable to proceed with this booking'),
-						{ duration: 6000 },
-					);
+					toast.add({
+						type: 'error',
+						title: errorMessage(
+							refreshError,
+							'Unable to proceed with this booking',
+						),
+						timeout: 6000,
+					});
 					booking.actions.setStep('details');
 					setIsLoading(false);
 					return;
@@ -319,12 +325,14 @@ export function PaymentStep() {
 					publicId: result.publicId,
 				});
 			} catch (error) {
-				toast.error(
-					isTRPCClientError(error) && error.data?.code === 'CONFLICT'
-						? error.message
-						: 'Failed to initialize payment',
-					{ duration: 6000 },
-				);
+				toast.add({
+					type: 'error',
+					title:
+						isTRPCClientError(error) && error.data?.code === 'CONFLICT'
+							? error.message
+							: 'Failed to initialize payment',
+					timeout: 6000,
+				});
 				booking.actions.setStep('details');
 			} finally {
 				setIsLoading(false);

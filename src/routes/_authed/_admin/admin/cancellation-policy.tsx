@@ -7,7 +7,6 @@ import {
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { isTRPCClientError } from '@trpc/client';
 import { useId, useState } from 'react';
-import { toast } from 'sonner';
 
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +20,7 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { toast } from '@/components/ui/toast';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { TRPCRouter } from '@/integrations/trpc/router';
 
@@ -92,7 +92,9 @@ function CancellationPolicyPage() {
 				})),
 			});
 			await queryClient.invalidateQueries(trpc.policies.pathFilter());
-			toast.success('Cancellation policy saved', {
+			toast.add({
+				type: 'success',
+				title: 'Cancellation policy saved',
 				description:
 					'It applies to new bookings. Existing bookings keep theirs.',
 			});
@@ -106,7 +108,9 @@ function CancellationPolicyPage() {
 					).flatMap((m) => m ?? []),
 				]);
 			} else {
-				toast.error('Could not save the policy', {
+				toast.add({
+					type: 'error',
+					title: 'Could not save the policy',
 					description: error instanceof Error ? error.message : undefined,
 				});
 			}

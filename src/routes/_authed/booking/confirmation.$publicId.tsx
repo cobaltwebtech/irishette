@@ -6,12 +6,12 @@ import {
 } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
-import { toast } from 'sonner';
 import { z } from 'zod';
 
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { toast } from '@/components/ui/toast';
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
 import {
@@ -138,10 +138,12 @@ function BookingConfirmation() {
 		trpc.bookings.confirmCheckout.mutationOptions({
 			onSuccess: (result) => {
 				if (result.status === 'refunded_conflict') {
-					toast.error(
-						'Sorry, these dates were booked elsewhere moments before your payment completed. Your payment has been refunded in full.',
-						{ duration: 10_000 },
-					);
+					toast.add({
+						type: 'error',
+						title:
+							'Sorry, these dates were booked elsewhere moments before your payment completed. Your payment has been refunded in full.',
+						timeout: 10_000,
+					});
 				}
 			},
 			onSettled: () =>

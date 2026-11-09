@@ -1,7 +1,6 @@
 import { Icon } from '@iconify/react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
-import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -14,6 +13,7 @@ import {
 	DialogTrigger,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { toast } from '@/components/ui/toast';
 import { useTRPC } from '@/integrations/trpc/react';
 
 interface BookingInternalNotesProps {
@@ -47,12 +47,17 @@ export function BookingInternalNotes({
 				await queryClient.invalidateQueries(
 					trpc.bookings.adminGetBooking.pathFilter(),
 				);
-				toast.success('Internal notes updated successfully!');
+				toast.add({
+					type: 'success',
+					title: 'Internal notes updated successfully!',
+				});
 				setOpen(false);
 			},
 			onError: (error) => {
 				console.error('Failed to update internal notes:', error);
-				toast.error('Failed to update notes', {
+				toast.add({
+					type: 'error',
+					title: 'Failed to update notes',
 					description:
 						error.message ||
 						'Unable to update internal notes. Please try again.',
