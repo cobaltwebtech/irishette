@@ -19,7 +19,7 @@ Irishette is a room-booking site (rooms, availability, bookings, payments, admin
 | Email | Resend + react-email templates in `src/components/email/`; every send (booking, admin alerts, Better Auth) goes through `src/lib/email-service.ts` |
 | Bot protection | Cloudflare Turnstile |
 | Env / secrets | **Varlock** (`.env.schema` contract, generated `varlock.d.ts`, local encryption). Cloudflare config via `cf` + `cloudflare.config.ts`; no Wrangler config, no Varlock Cloudflare/Vite integrations (see [Secrets and environment](#secrets-and-environment-varlock)) |
-| UI | Tailwind CSS v4, shadcn/ui (new-york, Stone) on **Base UI** (`@base-ui/react`; no Radix), `cn` (the `cn` package, re-exported from `@/utils/twMerge`), Base UI Toast (`@/components/ui/toast`) |
+| UI | Tailwind CSS v4, shadcn/ui (`base-vega` style, Stone) on **Base UI** (`@base-ui/react`; no Radix), `cn` (the `cn` package, re-exported from `@/utils/twMerge`), Base UI Toast (`@/components/ui/toast`) |
 | Validation | Zod v4 |
 | Toolchain | **Vite+** (`vite-plus`, `vp` CLI): Oxlint (type-aware) + Oxfmt + Vitest 5 behind `vp check` / `vp test`. Config lives in `vite.config.ts` (`lint`, `fmt` blocks). `vite` is an alias of `@voidzero-dev/vite-plus-core` (see [Vite+ notes](#vite-notes)). Biome is removed. |
 | Code review / dead code | **Fallow** (global CLI) |
@@ -219,7 +219,7 @@ Variables: public `BETTER_AUTH_URL`, `STRIPE_PUBLISHABLE_KEY`, `VITE_TURNSTILE_P
 | Vite+ (`vp`) | `pnpm check`, `pnpm exec vp ...` | Lint, format, type check, tests |
 | Fallow | `fallow ...` (global) | Dead code, duplication, architecture, audit/review (see below) |
 | drizzle-kit | `pnpm drizzle-kit ...` | Migration generation |
-| shadcn | `pnpm dlx shadcn@latest add <component> --dry-run --diff` | Add UI components (also via the `shadcn` MCP in `.mcp.json`). `components.json` still says `new-york`, which has no Base UI variant, so `add` delivers the **Radix** version: take the Base UI version from a base style (`https://ui.shadcn.com/r/styles/base-vega/<component>.json`) and restyle it like the existing wrappers instead. Never `add --overwrite` an existing wrapper (it drops local customisations). |
+| shadcn | `pnpm dlx shadcn@latest add <component> --dry-run --diff`, then without `--dry-run` | Add UI components (also via the `shadcn` MCP in `.mcp.json`). `components.json` uses the `base-vega` style (Base UI build of the classic shadcn look), so `add` delivers Base UI components. New components import `cn` from the `cn` package directly (same function as `@/utils/twMerge`). Never `add --overwrite` an existing wrapper: they carry local customisations (button variants and sizes, Iconify icons, Radix-era positioning defaults) that the registry version would drop. |
 
 Rules:
 - Stripe: use **test mode** only. Never run live-mode or destructive Stripe commands without explicit approval.

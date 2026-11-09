@@ -29,7 +29,7 @@ Not Radix, no change needed: alert, card, input, password, skeleton, table, text
 
 ## Flagged, not changed
 
-- `components.json` still says `"style": "new-york"` and `shadcn info` reports `base: "radix"`. There is no `base-new-york` style, so `shadcn add <component>` will still deliver Radix variants. Choose later: switch the style to a `base-*` style (changes the look of newly added components), or add components by hand from a base style and restyle them. Not changed here (the plan says not to run `shadcn init --force` without asking).
+- `components.json` was switched from `new-york` to `base-vega` afterwards (2026-11-08, at the user's request), so `shadcn info` reports `base: "base"` and `shadcn add` delivers Base UI components (checked with `add popover tabs --dry-run`: imports `@base-ui/react/*`). Existing wrappers keep their `new-york` classes; do not `add --overwrite` them.
 - The shadcn skills refresh (`pnpm dlx skills update`) was blocked by the session's permission rules; the Phase 0 skills were used.
 
 ## Final build
