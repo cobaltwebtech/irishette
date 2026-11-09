@@ -292,7 +292,6 @@ the admin booking lists show an "Open dispute" badge.
 | Endpoint | Handler | Secret |
 |---|---|---|
 | `/api/stripe/webhook` | `src/routes/api/stripe.$.ts` -> `handleStripeWebhook()` in `src/lib/stripe-webhook.ts` | `STRIPE_TRPC_WEBHOOK_SECRET` |
-| `/api/auth/stripe/webhook` | `@better-auth/stripe` plugin (`src/lib/auth.ts`) | `STRIPE_BETTER_AUTH_WEBHOOK_SECRET` |
 
 `handleStripeWebhook()` requires `Content-Type: application/json` and a
 `stripe-signature` header, then verifies the raw body with
@@ -345,7 +344,6 @@ Declared in `.env.schema`, bound in `cloudflare.config.ts`.
 | `STRIPE_SECRET_KEY` | Secret | Server Stripe client |
 | `STRIPE_PUBLISHABLE_KEY` | `@public` text binding (build time) | Returned by `createCheckoutSession` for `loadStripe` |
 | `STRIPE_TRPC_WEBHOOK_SECRET` | Secret | `/api/stripe/webhook` signature |
-| `STRIPE_BETTER_AUTH_WEBHOOK_SECRET` | Secret | `/api/auth/stripe/webhook` signature |
 | `RESEND_API_KEY` | Secret | Emails |
 | `BETTER_AUTH_URL` | `@public` text binding | `return_url`, links in emails |
 

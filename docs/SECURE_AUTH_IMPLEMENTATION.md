@@ -46,7 +46,7 @@ Plugins, in order (`tanstackStartCookies()` must stay last):
 |---|---|
 | `admin()` | `user.role` (`'user'` by default, `'admin'`), ban fields, `/admin/*` auth endpoints. Promote locally with `pnpm db:make-admin:local` |
 | `magicLink()` | Passwordless sign-in and sign-up (`expiresIn` 15 min). Creates the user if new (with `emailVerified: true` and the optional `name` from the request body) and marks an existing unverified user as verified |
-| `stripe()` | `createCustomerOnSignUp`: a database hook creates a Stripe customer whenever a user row is created (any sign-up method) and stores `user.stripeCustomerId`. Its webhook is verified with `STRIPE_BETTER_AUTH_WEBHOOK_SECRET` |
+| `stripe()` | `createCustomerOnSignUp`: a database hook creates a Stripe customer whenever a user row is created (any sign-up method) and stores `user.stripeCustomerId`; an email change updates the customer. Both are direct API calls. The plugin's webhook (`/api/auth/stripe/webhook`, subscriptions only) is turned off with `disabledPaths` and has no secret (see `docs/STRIPE_WEBHOOKS.md`) |
 | `captcha()` | Cloudflare Turnstile, verified server-side with `TURNSTILE_SECRET_KEY`, on `/sign-in/magic-link`, `/sign-up/email`, `/sign-in/email`, `/request-password-reset`, `/send-verification-email`. It runs as an `onRequest` hook after Better Auth's rate limit and matches the exact path. The client sends the token in the `x-captcha-response` header |
 | `tanstackStartCookies()` | Writes Better Auth's `Set-Cookie` headers from server functions |
 
@@ -78,8 +78,8 @@ Every email states the real link lifetime (`expiresIn` prop on
 
 ## Client
 
-`src/lib/auth-client.ts` creates `authClient` with `magicLinkClient`,
-`adminClient` and `stripeClient`, no `baseURL` (current origin) and
+`src/lib/auth-client.ts` creates `authClient` with `magicLinkClient` and
+`adminClient`, no `baseURL` (current origin) and
 `credentials: 'include'`. It also exports `signOut` and `changeEmail`. Its
 calls return `{ data, error }` and do not throw on an API error, so **every
 call must check `error`** (the forms map it with `authErrorMessage` from
@@ -261,8 +261,7 @@ Observability Query Builder with `message = "rate-limited"`.
 1. **Cloudflare Rate Limiting bindings** (`cloudflare.config.ts`; fast,
    approximate, counted per Cloudflare location):
    - `AUTH_RATE_LIMITER` (30 per minute per IP): route middleware
-     `rateLimitRequests` on `/api/auth/*`, except the Better Auth Stripe
-     webhook (`/api/auth/stripe/*`, verified by signature).
+     `rateLimitRequests` on `/api/auth/*`.
    - `API_RATE_LIMITER` (60 per minute per user or IP and procedure): the tRPC
      `rateLimit` middleware on `bookings.calculateBooking`,
      `rooms.calculatePricing` and `ical.testUrl`.

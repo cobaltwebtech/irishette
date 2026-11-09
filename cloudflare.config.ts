@@ -53,7 +53,6 @@ export default defineConfig({
 				publicValue('STRIPE_PUBLISHABLE_KEY') as string,
 			),
 			STRIPE_SECRET_KEY: bindings.secret(),
-			STRIPE_BETTER_AUTH_WEBHOOK_SECRET: bindings.secret(),
 			STRIPE_TRPC_WEBHOOK_SECRET: bindings.secret(),
 			RESEND_API_KEY: bindings.secret(),
 			TURNSTILE_SECRET_KEY: bindings.secret(),

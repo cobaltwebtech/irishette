@@ -1,17 +1,20 @@
 # Stripe Webhooks
 
-Quick reference for the app's two Stripe webhook endpoints: the Stripe Dashboard
+Quick reference for the app's Stripe webhook endpoint: the Stripe Dashboard
 setup for deployed environments, and local testing with the Stripe CLI.
 
 Use the **sandbox** for development and pre-production. Never point live-mode
 keys or endpoints at a non-production deployment.
 
-## Endpoints
+## Endpoint
 
 | Endpoint | Handler | Secret (env var) | Purpose |
 |---|---|---|---|
-| `/api/stripe/webhook` | `src/routes/api/stripe.$.ts` | `STRIPE_TRPC_WEBHOOK_SECRET` | Booking payments (required) |
-| `/api/auth/stripe/webhook` | `@better-auth/stripe` plugin (`src/lib/auth.ts`) | `STRIPE_BETTER_AUTH_WEBHOOK_SECRET` | Better Auth subscriptions (optional; see below) |
+| `/api/stripe/webhook` | `src/routes/api/stripe.$.ts` | `STRIPE_TRPC_WEBHOOK_SECRET` | Booking payments, refunds, disputes |
+
+This is the only Stripe webhook endpoint. The Better Auth Stripe plugin's own
+webhook (`/api/auth/stripe/webhook`) is disabled (see
+[No Better Auth endpoint](#no-better-auth-endpoint)).
 
 ### Hosts
 
@@ -21,27 +24,23 @@ keys or endpoints at a non-production deployment.
 | Current deployment (pre-production) | `https://irishette.cobaltdev.workers.dev` | Sandbox |
 | Production | `https://<PRODUCTION_HOST>` (TODO: custom domain not chosen yet) | Live |
 
-Full dashboard URLs, for example:
-
-- `https://<PRODUCTION_HOST>/api/stripe/webhook`
-- `https://<PRODUCTION_HOST>/api/auth/stripe/webhook`
+Full dashboard URL, for example `https://<PRODUCTION_HOST>/api/stripe/webhook`.
 
 When the production domain is set, also update `BETTER_AUTH_URL`, set
 `workersDev: false` in `cloudflare.config.ts`, and create the endpoints in
-**live** mode with that host. Each live endpoint gets its own signing secret.
+**live** mode with that host. The live endpoint gets its own signing secret.
 
 ## Dashboard endpoint settings
 
-These apply to both endpoints:
 
 | Setting | Value |
 |---|---|
 | Events from | Your account |
-| Payload style | Snapshot (both handlers need full objects, not thin events) |
+| Payload style | Snapshot (the handler needs full objects, not thin events) |
 | API version | `2026-10-28.endive` (matches `STRIPE_API_VERSION` in `src/lib/stripe.ts`) |
 
-Endpoints created earlier were on `2025-08-27.basil`. Update or recreate them on
-`2026-10-28.endive`, and save each endpoint's new signing secret.
+Endpoints created earlier were on `2025-08-27.basil`. Update or recreate the
+endpoint on `2026-10-28.endive`, and save its new signing secret.
 
 ### `/api/stripe/webhook` (booking payments)
 
@@ -54,8 +53,8 @@ Auth.
 
 #### Booking payments with Checkout Sessions
 
-Plan 02 Phase 3 moves booking payments from raw PaymentIntents to **Checkout
-Sessions** (`ui_mode: 'elements'`, Payment Element on our own page). The same
+Booking payments use **Checkout Sessions** (`ui_mode: 'elements'`, Payment
+Element on our own page; plan 02 Phase 3 replaced the raw PaymentIntents). The
 endpoint (`/api/stripe/webhook`, `STRIPE_TRPC_WEBHOOK_SECRET`) receives the
 events below. Fulfilment is driven by the webhook; the return page
 (`/booking/confirmation/<publicId>?session_id=...`) only runs the same
@@ -116,38 +115,44 @@ payment_intent.payment_failed
 under Settings → Payment methods. Nothing about Link is stored by the app.
 
 Every other event is acknowledged with `200` and ignored. The local listener
-and test commands are under "Local testing" below. The Better Auth endpoint
-(`/api/auth/stripe/webhook`) is unchanged.
+and test commands are under "Local testing" below.
 
-### `/api/auth/stripe/webhook` (Better Auth plugin)
+### No Better Auth endpoint
 
-Suggested name: `better-auth`.
+Do **not** create a dashboard endpoint for `/api/auth/stripe/webhook`. If one
+exists from earlier setups, delete it.
 
-**Currently optional.** `@better-auth/stripe` 1.7.18 acts only on:
+`@better-auth/stripe` 1.7.18 only uses its webhook for subscriptions
+(`checkout.session.completed` in subscription mode and
+`customer.subscription.*`). The app has no subscriptions, so the route is
+turned off with `disabledPaths: ['/stripe/webhook']` in `src/lib/auth.ts`
+(it returns 404) and has no signing secret.
 
-- `checkout.session.completed` (subscription-mode sessions only)
-- `customer.subscription.created`
-- `customer.subscription.updated`
-- `customer.subscription.deleted`
+The plugin still links each user to a Stripe customer without webhooks:
+`createCustomerOnSignUp` creates the customer with a direct API call when the
+user row is created and stores `user.stripeCustomerId`, and an email change
+updates the customer the same way. `ensureStripeCustomer`
+(`src/lib/checkout-service.ts`) reuses that id, or creates it if missing, and
+attaches it to every Checkout Session.
 
-The app does not enable plugin subscriptions and sets no `onEvent` hook, so the
-endpoint has nothing to do today. The plugin creates the Stripe customer at
-sign-up (`createCustomerOnSignUp`) with a direct API call, not a webhook. The
-`customer.created`, `customer.updated` and `customer.deleted` events that were
-configured earlier are ignored by the plugin.
-
-If subscriptions are enabled later, subscribe this endpoint to the four events
-above.
+If subscriptions are ever enabled, remove the `disabledPaths` entry, add a
+signing secret back (`.env.schema`, `cloudflare.config.ts`,
+`scripts/check-client-bundle.mjs`), and subscribe a new endpoint to
+`checkout.session.completed` and `customer.subscription.created` / `updated` /
+`deleted`.
 
 ## Production secrets
 
-Set the signing secrets (and keys) on the deployed Worker; Varlock does not
+Set the signing secret (and keys) on the deployed Worker; Varlock does not
 upload them from `.env.local`:
 
 ```bash
 pnpm dlx wrangler secret put STRIPE_TRPC_WEBHOOK_SECRET --name irishette
-pnpm dlx wrangler secret put STRIPE_BETTER_AUTH_WEBHOOK_SECRET --name irishette
 ```
+
+A Worker that still has a `STRIPE_BETTER_AUTH_WEBHOOK_SECRET` secret from
+earlier deploys no longer reads it; remove it with
+`pnpm dlx wrangler secret delete STRIPE_BETTER_AUTH_WEBHOOK_SECRET --name irishette`.
 
 Or pass `--secrets-file <PATH>` to `cf deploy`. Ask before changing remote secrets.
 
@@ -163,14 +168,12 @@ stripe login          # pick the sandbox used for local development
 stripe config --list  # check which account the CLI is using
 ```
 
-### Start the listeners
+### Start the listener
 
-Run each listener in its own terminal and keep it running while you test.
+Run the listener in its own terminal and keep it running while you test.
 `--latest` formats events with the newest API version, matching the pinned
 `2026-10-28.endive`. Current Stripe CLI versions require `--events`,
 `--all-snapshot` or `--all-thin`.
-
-**Terminal A: booking payments:**
 
 ```bash
 stripe listen --latest \
@@ -178,20 +181,11 @@ stripe listen --latest \
   --forward-to localhost:3000/api/stripe/webhook
 ```
 
-**Terminal B: Better Auth plugin (optional):**
-
-```bash
-stripe listen --latest \
-  --events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted \
-  --forward-to localhost:3000/api/auth/stripe/webhook
-```
-
 ### Configure the local secret
 
-Each listener prints `Ready! Your webhook signing secret is whsec_...`. This
-**CLI secret differs from the dashboard endpoint secrets**. It stays the same
-across `stripe listen` runs for the same CLI login, so both listeners show the
-same value. To print it without starting a listener:
+The listener prints `Ready! Your webhook signing secret is whsec_...`. This
+**CLI secret differs from the dashboard endpoint secret**. It stays the same
+across `stripe listen` runs for the same CLI login. To print it without starting a listener:
 
 ```bash
 stripe listen --print-secret
@@ -199,7 +193,6 @@ stripe listen --print-secret
 
 1. In `.env.local` (gitignored, never committed), set:
    - `STRIPE_TRPC_WEBHOOK_SECRET=<CLI whsec_...>`
-   - `STRIPE_BETTER_AUTH_WEBHOOK_SECRET=<CLI whsec_...>`
    - `STRIPE_SECRET_KEY` / `STRIPE_PUBLISHABLE_KEY`: the same sandbox's keys
 2. Encrypt the sensitive values in place: `pnpm exec varlock encrypt --file .env.local`.
 3. Optionally validate with `pnpm env:check` (redacted; asks for Touch ID).

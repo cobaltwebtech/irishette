@@ -28,14 +28,7 @@ const authHandler = async ({ request }: { request: Request }) => {
 export const Route = createFileRoute('/api/auth/$')({
 	server: {
 		// Approximate per-IP filter in front of Better Auth's strict limits.
-		// The Better Auth Stripe webhook is called from Stripe's shared IPs and
-		// verified by signature, so it is not counted.
-		middleware: [
-			rateLimitRequests('AUTH_RATE_LIMITER', {
-				scope: 'auth',
-				skip: (pathname) => pathname.startsWith('/api/auth/stripe/'),
-			}),
-		],
+		middleware: [rateLimitRequests('AUTH_RATE_LIMITER', { scope: 'auth' })],
 		handlers: {
 			GET: authHandler,
 			POST: authHandler,

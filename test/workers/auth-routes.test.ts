@@ -39,6 +39,22 @@ describe('Better Auth routes', () => {
 		expect(sendOtp.status).toBe(404);
 	});
 
+	it('the Stripe plugin webhook is disabled (subscriptions only; no secret)', async () => {
+		const authInstance = await auth();
+		const response = await authInstance.handler(
+			new Request(`${BASE}/stripe/webhook`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'stripe-signature': 't=1,v1=bad',
+					'cf-connecting-ip': '192.0.2.33',
+				},
+				body: JSON.stringify({ type: 'checkout.session.completed' }),
+			}),
+		);
+		expect(response.status).toBe(404);
+	});
+
 	it('resending a verification email needs a Turnstile token', async () => {
 		const response = await post(
 			'/send-verification-email',

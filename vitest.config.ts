@@ -70,7 +70,6 @@ export default defineConfig({
 								BETTER_AUTH_SECRET: 'test-better-auth-secret-0123456789abcdef',
 								STRIPE_PUBLISHABLE_KEY: 'pk_test_x',
 								STRIPE_SECRET_KEY: 'sk_test_x',
-								STRIPE_BETTER_AUTH_WEBHOOK_SECRET: 'whsec_test_better_auth',
 								STRIPE_TRPC_WEBHOOK_SECRET: 'whsec_test',
 								RESEND_API_KEY: 're_test',
 								TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA',

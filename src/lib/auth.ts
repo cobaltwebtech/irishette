@@ -51,6 +51,9 @@ function createAuth() {
 	return betterAuth({
 		secret: env.BETTER_AUTH_SECRET,
 		baseURL: env.BETTER_AUTH_URL,
+		// The Stripe plugin's webhook only handles subscriptions, which the app
+		// does not use (booking payments go to /api/stripe/webhook). 404 it.
+		disabledPaths: ['/stripe/webhook'],
 		database: drizzleAdapter(createDrizzle(env.DB), {
 			provider: 'sqlite',
 		}),
@@ -133,7 +136,11 @@ function createAuth() {
 			}),
 			stripe({
 				stripeClient,
-				stripeWebhookSecret: env.STRIPE_BETTER_AUTH_WEBHOOK_SECRET,
+				// Required by the plugin's types; its webhook route is disabled
+				// above (`disabledPaths`), so no signing secret is configured.
+				stripeWebhookSecret: '',
+				// Customers are created and kept in sync with direct API calls
+				// (user create/update hooks), not webhooks.
 				createCustomerOnSignUp: true,
 			}),
 			captcha({

@@ -215,7 +215,7 @@ How values reach the app:
 
 Modes: `cf build --mode` is rejected for TanStack Start. For a non-default mode use `varlock run --inject vars -- vite build --mode <m>` then `cf deploy --prebuilt --mode <m>`. Varlock's `APP_ENV` (when added) is independent of the cf/Vite mode.
 
-Variables: public `BETTER_AUTH_URL`, `STRIPE_PUBLISHABLE_KEY`, `VITE_TURNSTILE_PUBLIC_KEY`; sensitive `BETTER_AUTH_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_BETTER_AUTH_WEBHOOK_SECRET`, `STRIPE_TRPC_WEBHOOK_SECRET`, `RESEND_API_KEY`, `TURNSTILE_SECRET_KEY`.
+Variables: public `BETTER_AUTH_URL`, `STRIPE_PUBLISHABLE_KEY`, `VITE_TURNSTILE_PUBLIC_KEY`; sensitive `BETTER_AUTH_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_TRPC_WEBHOOK_SECRET`, `RESEND_API_KEY`, `TURNSTILE_SECRET_KEY`.
 
 ## CLI tools
 
