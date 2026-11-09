@@ -115,12 +115,9 @@ const columns = columnHelper.columns([
 		header: ({ table }) => (
 			<Checkbox
 				aria-label="Select all on this page"
-				checked={
-					table.getIsAllRowsSelected()
-						? true
-						: table.getIsSomeRowsSelected()
-							? 'indeterminate'
-							: false
+				checked={table.getIsAllRowsSelected()}
+				indeterminate={
+					!table.getIsAllRowsSelected() && table.getIsSomeRowsSelected()
 				}
 				onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)}
 			/>
