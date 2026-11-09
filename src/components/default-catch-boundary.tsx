@@ -82,15 +82,13 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
 					{/* Error Details (Collapsible) */}
 					{hasStack && (
 						<Collapsible open={showDetails} onOpenChange={setShowDetails}>
-							<CollapsibleTrigger asChild>
-								<Button variant="link" size="sm">
-									<Icon icon="tabler:bug" />
-									Technical Details
-									<Icon
-										icon="tabler:chevron-down"
-										className={`size-4 transition-transform duration-200 ${showDetails ? 'rotate-180' : ''}`}
-									/>
-								</Button>
+							<CollapsibleTrigger render={<Button variant="link" size="sm" />}>
+								<Icon icon="tabler:bug" />
+								Technical Details
+								<Icon
+									icon="tabler:chevron-down"
+									className={`size-4 transition-transform duration-200 ${showDetails ? 'rotate-180' : ''}`}
+								/>
 							</CollapsibleTrigger>
 							<CollapsibleContent className="space-y-2">
 								<div className="rounded-lg bg-destructive/20 p-4">
