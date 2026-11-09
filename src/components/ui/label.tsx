@@ -1,14 +1,11 @@
-import * as LabelPrimitive from '@radix-ui/react-label';
 import type * as React from 'react';
 
 import { cn } from '@/utils/twMerge';
 
-function Label({
-	className,
-	...props
-}: React.ComponentProps<typeof LabelPrimitive.Root>) {
+function Label({ className, ...props }: React.ComponentProps<'label'>) {
 	return (
-		<LabelPrimitive.Root
+		// oxlint-disable-next-line jsx-a11y/label-has-associated-control -- generic wrapper; callers pass htmlFor or nest the control
+		<label
 			data-slot="label"
 			className={cn(
 				'flex items-center gap-2 text-sm leading-none font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50',
