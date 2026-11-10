@@ -1,6 +1,8 @@
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
 import { type RefObject, useRef, useState } from 'react';
 
+import { cn } from '@/utils/twMerge';
+
 /**
  * State for one Turnstile widget. Tokens are single-use (Siteverify redeems
  * each once), so call `reset()` after every request that sent `headers`,
@@ -24,8 +26,14 @@ export function useTurnstile() {
 }
 
 /**
- * The Turnstile widget (invisible unless a challenge needs the user):
+ * The Turnstile widget:
  * `<TurnstileField widgetRef={turnstile.ref} onToken={turnstile.setToken} />`.
+ *
+ * With `appearance: 'interaction-only'` Turnstile usually passes without
+ * showing anything, so the field takes no space (it stays rendered, only out
+ * of the layout, so the challenge keeps running). It appears when Turnstile
+ * needs the user (`before-interactive-callback`) or has an error or timeout
+ * to show, and then stays visible (no layout shift after the user solves it).
  */
 export function TurnstileField({
 	widgetRef,
@@ -34,25 +42,36 @@ export function TurnstileField({
 	widgetRef: RefObject<TurnstileInstance | null>;
 	onToken: (token: string) => void;
 }) {
+	const [visible, setVisible] = useState(false);
 	return (
-		<Turnstile
-			className="w-full"
-			ref={widgetRef}
-			siteKey={import.meta.env.VITE_TURNSTILE_PUBLIC_KEY}
-			onSuccess={onToken}
-			onError={() => onToken('')}
-			onExpire={() => onToken('')}
-			options={{
-				appearance: 'interaction-only',
-				theme: 'light',
-				size: 'flexible',
-			}}
-			style={{
-				display: 'block',
-				width: '100%',
-				minWidth: '300px',
-				height: '65px',
-			}}
-		/>
+		<div
+			className={cn(
+				'w-full',
+				!visible && 'pointer-events-none absolute size-0 overflow-hidden',
+			)}
+		>
+			<Turnstile
+				className="w-full"
+				ref={widgetRef}
+				siteKey={import.meta.env.VITE_TURNSTILE_PUBLIC_KEY}
+				onSuccess={onToken}
+				onError={() => {
+					setVisible(true);
+					onToken('');
+				}}
+				onExpire={() => onToken('')}
+				onTimeout={() => {
+					setVisible(true);
+					onToken('');
+				}}
+				onBeforeInteractive={() => setVisible(true)}
+				onUnsupported={() => setVisible(true)}
+				options={{
+					appearance: 'interaction-only',
+					theme: 'light',
+					size: 'flexible',
+				}}
+			/>
+		</div>
 	);
 }
