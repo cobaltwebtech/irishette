@@ -21,13 +21,19 @@ function DecimalInput({
 	value,
 	onValueChange,
 	scale = 1,
+	fixed = false,
 	...props
 }: Omit<ComponentProps<typeof Input>, 'value' | 'onChange' | 'type'> & {
 	value: number;
 	onValueChange: (value: number) => void;
 	scale?: number;
+	/** Always show two decimal places (e.g. 100.00) when not being edited. */
+	fixed?: boolean;
 }) {
-	const format = (v: number) => String(Number((v * scale).toFixed(2)));
+	const format = (v: number) => {
+		const n = Number((v * scale).toFixed(2));
+		return fixed ? n.toFixed(2) : String(n);
+	};
 	const parse = (text: string) => {
 		const n = Number.parseFloat(text);
 		return Number.isFinite(n) && n > 0 ? n / scale : 0;
@@ -96,13 +102,30 @@ export function RoomPricingConfig({
 					Pricing, Tax & Guests
 				</CardTitle>
 				<CardDescription>
-					Configure service fee and tax rates applied to room bookings. Any rate
-					can be 0%; zero charges are left off the guest's checkout. Hotel
+					Configure service fee and tax rates applied to room bookings. Hotel
 					occupancy tax is calculated on the room price plus the service fee.
 				</CardDescription>
 			</CardHeader>
-			<CardContent className="space-y-4">
-				<div>
+			<CardContent className="flex flex-wrap gap-4">
+				<div className="min-w-48 flex-1">
+					<Label htmlFor={basePriceId} className="mb-2 text-sm font-medium">
+						Room Nightly Base Price (USD)
+					</Label>
+					<DecimalInput
+						id={basePriceId}
+						fixed
+						step="0.01"
+						min="0"
+						value={basePrice}
+						onValueChange={onBasePriceChange}
+						placeholder="0.00"
+					/>
+					<p className="mt-1 text-xs text-muted-foreground">
+						Current: ${basePrice.toFixed(2)}
+					</p>
+				</div>
+
+				<div className="min-w-48 flex-1">
 					<Label htmlFor={maxGuestsId} className="mb-2 text-sm font-medium">
 						Maximum Guests
 					</Label>
@@ -123,28 +146,11 @@ export function RoomPricingConfig({
 						}
 					/>
 					<p className="mt-1 text-xs text-muted-foreground">
-						Enforced on new bookings (1-10). Existing bookings are not affected.
+						Booking with more guests allowed is blocked at checkout.
 					</p>
 				</div>
 
-				<div>
-					<Label htmlFor={basePriceId} className="mb-2 text-sm font-medium">
-						Room Nightly Base Price (USD)
-					</Label>
-					<DecimalInput
-						id={basePriceId}
-						step="0.01"
-						min="0"
-						value={basePrice}
-						onValueChange={onBasePriceChange}
-						placeholder="0.00"
-					/>
-					<p className="mt-1 text-xs text-muted-foreground">
-						Current: ${basePrice.toFixed(2)}
-					</p>
-				</div>
-
-				<div>
+				<div className="min-w-48 flex-1">
 					<Label
 						htmlFor={serviceFeeRateId}
 						className="mb-2 text-sm font-medium"
@@ -166,7 +172,7 @@ export function RoomPricingConfig({
 					</p>
 				</div>
 
-				<div>
+				<div className="min-w-48 flex-1">
 					<Label htmlFor={stateTaxRateId} className="mb-2 text-sm font-medium">
 						Texas Hotel Occupancy Tax Rate (%)
 					</Label>
@@ -185,7 +191,7 @@ export function RoomPricingConfig({
 					</p>
 				</div>
 
-				<div>
+				<div className="min-w-48 flex-1">
 					<Label htmlFor={cityTaxRateId} className="mb-2 text-sm font-medium">
 						City of Dublin Hotel Occupancy Tax Rate (%)
 					</Label>

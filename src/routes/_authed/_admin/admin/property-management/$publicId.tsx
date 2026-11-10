@@ -320,8 +320,13 @@ function EditRoom() {
 					</Button>
 				</Link>
 				<div className="flex gap-2">
+					<Badge
+						variant={room.status === 'active' ? 'outline' : 'accent'}
+						className="capitalize"
+					>
+						{room.status}
+					</Badge>
 					<Button
-						variant="secondary"
 						onClick={handleSaveRoom}
 						disabled={updateRoomMutation.isPending}
 					>
@@ -332,17 +337,11 @@ function EditRoom() {
 						)}
 						{updateRoomMutation.isPending ? 'Saving...' : 'Save Changes'}
 					</Button>
-					<Badge
-						variant={room.status === 'active' ? 'default' : 'secondary'}
-						className="px-4 py-1 text-lg capitalize"
-					>
-						{room.status}
-					</Badge>
 				</div>
 			</div>
 
 			{/* Room Details */}
-			<div className="grid gap-8 lg:grid-cols-3">
+			<div className="grid gap-8 lg:grid-cols-2">
 				<RoomDetails
 					name={formData.name}
 					slug={formData.slug}

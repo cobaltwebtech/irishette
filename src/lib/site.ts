@@ -10,7 +10,7 @@
 export { PROPERTY_TIMEZONE } from '@/utils/timezone';
 
 export const SITE_NAME = 'Irishette';
-export const SITE_URL = 'https://irishette.com';
+export const SITE_URL = 'https://www.irishette.com';
 
 export const CONTACT_EMAIL = 'info@irishette.com';
 /** Placeholder until the client provides the real number. */

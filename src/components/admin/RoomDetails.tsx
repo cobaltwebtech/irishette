@@ -1,12 +1,18 @@
 import { Icon } from '@iconify/react';
+import { Link } from '@tanstack/react-router';
 import { useId } from 'react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { SITE_URL } from '@/lib/site';
 import { formatDateCT } from '@/utils/timezone';
+
+// Room pages are static routes (src/routes/rooms/*.tsx), keyed by room slug.
+const ROOM_PAGES = {
+	'rose-room': '/rooms/rose-room',
+	'texas-room': '/rooms/texas-room',
+} as const;
 
 interface RoomDetailsProps {
 	name: string;
@@ -40,9 +46,12 @@ export function RoomDetails({
 	const roomNameId = useId();
 	const roomSlugId = useId();
 	const roomDescriptionId = useId();
+	const roomPage = Object.hasOwn(ROOM_PAGES, slug)
+		? ROOM_PAGES[slug as keyof typeof ROOM_PAGES]
+		: undefined;
 
 	return (
-		<Card className="lg:col-span-2">
+		<Card>
 			<CardHeader>
 				<CardTitle className="flex items-center gap-2 text-lg">
 					<Icon icon="tabler:clipboard-data" className="size-6" />
@@ -123,12 +132,18 @@ export function RoomDetails({
 								{formatDateCT(updatedAt)}
 							</span>
 						</div>
-						<div>
-							Public URL:{' '}
-							<span className="font-mono font-semibold">
-								{SITE_URL}/rooms/{slug}
-							</span>
-						</div>
+						{roomPage && (
+							<div>
+								<Link
+									to={roomPage}
+									target="_blank"
+									className="inline-flex items-center gap-1 font-semibold underline-offset-4 hover:underline"
+								>
+									View Room Page
+									<Icon icon="tabler:external-link" className="size-4" />
+								</Link>
+							</div>
+						)}
 					</div>
 				</div>
 			</CardContent>
