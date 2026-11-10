@@ -52,7 +52,7 @@ export interface AppliedRule {
 export interface StayPrice {
 	numberOfNights: number;
 	nights: NightPrice[];
-	/** Room price for all nights (taxable). */
+	/** Room price for all nights (taxable, with the service fee). */
 	baseAmount: number;
 	feesAmount: number;
 	taxAmount: number;
@@ -128,7 +128,8 @@ export function priceNights(
 
 /**
  * Full price of a stay: room price per night, service fee on the room price,
- * and hotel occupancy taxes (state + city) on the room price.
+ * and hotel occupancy taxes (state + city) on the room price plus the
+ * service fee (a mandatory room charge, so part of the taxable receipts).
  */
 export function priceStay(
 	room: PricingRoom,
@@ -158,10 +159,11 @@ export function priceStay(
 		});
 	}
 
-	const stateTaxAmount = roundCents(baseAmount * room.stateTaxRate);
-	const cityTaxAmount = roundCents(baseAmount * room.cityTaxRate);
-	const taxAmount = roundCents(stateTaxAmount + cityTaxAmount);
 	const feesAmount = roundCents(baseAmount * room.serviceFeeRate);
+	const taxableAmount = roundCents(baseAmount + feesAmount);
+	const stateTaxAmount = roundCents(taxableAmount * room.stateTaxRate);
+	const cityTaxAmount = roundCents(taxableAmount * room.cityTaxRate);
+	const taxAmount = roundCents(stateTaxAmount + cityTaxAmount);
 
 	return {
 		numberOfNights: nights.length,
@@ -177,7 +179,7 @@ export function priceStay(
 			stateTaxAmount,
 			cityTaxAmount,
 			totalTaxAmount: taxAmount,
-			taxableAmount: baseAmount,
+			taxableAmount,
 		},
 	};
 }

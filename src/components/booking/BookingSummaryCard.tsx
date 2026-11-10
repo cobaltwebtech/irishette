@@ -126,7 +126,7 @@ export function BookingSummaryCard() {
 							{(booking.pricing.taxes ?? 0) > 0 && (
 								<div className="space-y-1">
 									<div className="flex justify-between text-muted-foreground">
-										<span>Hotel Occupancy Tax</span>
+										<span>Hotel Occupancy Tax (room + service fee)</span>
 										<span>${booking.pricing.taxes.toFixed(2)}</span>
 									</div>
 									{booking.pricing.taxBreakdown && (

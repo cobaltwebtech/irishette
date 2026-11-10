@@ -215,9 +215,9 @@ describe('pricing per night (calendar and checkout)', () => {
 		});
 		expect(calendar.baseAmount).toBe(300);
 		expect(checkout.baseAmount).toBe(300);
-		// 12% fee, 6% + 7% tax on the room price.
+		// 12% fee; 6% + 7% tax on the room price plus the fee.
 		expect(checkout.feesAmount).toBe(36);
-		expect(checkout.taxAmount).toBe(39);
-		expect(checkout.totalAmount).toBe(375);
+		expect(checkout.taxAmount).toBe(43.68);
+		expect(checkout.totalAmount).toBe(379.68);
 	});
 });

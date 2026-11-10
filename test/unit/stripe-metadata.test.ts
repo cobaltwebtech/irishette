@@ -58,6 +58,24 @@ describe('checkoutLineItems', () => {
 		expect(total(items)).toBe(toCents(250));
 	});
 
+	it('uses the tax split stored on the booking', () => {
+		const items = checkoutLineItems(
+			{
+				baseAmount: 200,
+				feesAmount: 24,
+				taxAmount: 29.12,
+				stateTaxAmount: 13.44,
+				cityTaxAmount: 15.68,
+				numberOfNights: 2,
+			},
+			room,
+		);
+		expect(items.map((i) => i.price_data?.unit_amount)).toEqual([
+			20000, 2400, 1344, 1568,
+		]);
+		expect(total(items)).toBe(toCents(253.12));
+	});
+
 	it('leaves out zero lines (a room with no fee or tax)', () => {
 		const items = checkoutLineItems(
 			{ baseAmount: 99.99, feesAmount: 0, taxAmount: 0, numberOfNights: 1 },

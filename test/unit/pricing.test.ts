@@ -110,20 +110,20 @@ describe('rule types', () => {
 });
 
 describe('priceStay', () => {
-	it('adds the service fee and taxes on the room price', () => {
+	it('adds the service fee, and taxes on the room price plus the fee', () => {
 		const price = priceStay(room, [], '2030-06-01', '2030-06-04');
 		expect(price).toMatchObject({
 			numberOfNights: 3,
 			baseAmount: 300,
 			feesAmount: 36,
-			taxAmount: 39,
-			totalAmount: 375,
+			taxAmount: 43.68,
+			totalAmount: 379.68,
 			appliedRules: [],
 		});
 		expect(price.taxBreakdown).toMatchObject({
-			stateTaxAmount: 18,
-			cityTaxAmount: 21,
-			taxableAmount: 300,
+			stateTaxAmount: 20.16,
+			cityTaxAmount: 23.52,
+			taxableAmount: 336,
 		});
 	});
 

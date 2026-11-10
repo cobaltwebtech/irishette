@@ -98,8 +98,7 @@ export function RoomPricingConfig({
 				<CardDescription>
 					Configure service fee and tax rates applied to room bookings. Any rate
 					can be 0%; zero charges are left off the guest's checkout. Hotel
-					occupancy tax is calculated on room price only (excluding service
-					fees).
+					occupancy tax is calculated on the room price plus the service fee.
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="space-y-4">

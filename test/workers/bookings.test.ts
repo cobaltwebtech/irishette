@@ -224,7 +224,15 @@ describe('booking pricing', () => {
 		);
 		const row = await bookingRow(bookingId);
 		expect(row.baseAmount).toBe(200);
-		expect(row.totalAmount).toBe(250);
+		expect(row.totalAmount).toBe(253.12);
+		// The tax snapshot: 6% + 7% on the room price plus the 12% fee.
+		expect(row).toMatchObject({
+			taxableAmount: 224,
+			stateTaxRate: 0.06,
+			cityTaxRate: 0.07,
+			stateTaxAmount: 13.44,
+			cityTaxAmount: 15.68,
+		});
 	});
 });
 

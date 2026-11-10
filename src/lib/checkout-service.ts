@@ -127,21 +127,28 @@ async function ensureStripeCustomer(
 /**
  * Checkout line items from OUR pricing (no automatic_tax): the room, the
  * service fee, and the state and city hotel taxes. They add up to the
- * booking total exactly. Zero lines are left out.
+ * booking total exactly. Zero lines are left out. The tax split is the one
+ * stored on the booking; holds created before the snapshot columns existed
+ * (null) are split from the room's rates on the room price, as they were
+ * priced.
  */
 export function checkoutLineItems(
 	booking: Pick<
 		Booking,
 		'baseAmount' | 'feesAmount' | 'taxAmount' | 'numberOfNights'
-	>,
+	> &
+		Partial<Pick<Booking, 'stateTaxAmount' | 'cityTaxAmount'>>,
 	roomRow: { name: string; stateTaxRate: number; cityTaxRate: number },
 ): Stripe.Checkout.SessionCreateParams.LineItem[] {
 	const tax = booking.taxAmount ?? 0;
+	const hasSnapshot =
+		booking.stateTaxAmount != null && booking.cityTaxAmount != null;
 	const rates = roomRow.stateTaxRate + roomRow.cityTaxRate;
-	// Same rounding as priceStay; the city line takes any remainder so the
-	// lines always add up to the stored tax amount.
-	const stateTax =
-		rates > 0
+	// The city line takes any remainder so the lines always add up to the
+	// stored tax amount.
+	const stateTax = hasSnapshot
+		? Math.min(tax, booking.stateTaxAmount ?? 0)
+		: rates > 0
 			? Math.min(tax, roundCents(booking.baseAmount * roomRow.stateTaxRate))
 			: 0;
 	const cityTax = roundCents(tax - stateTax);
