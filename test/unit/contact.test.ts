@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 
-import { contactSchema } from '@/lib/contact-validation';
-import { contactReplyHref } from '@/lib/inbox';
+import { contactSchema } from '@/lib/inbox/contact-validation';
+import { contactReplyHref } from '@/lib/inbox/inbox';
 import {
 	decodeInboxCursor,
 	encodeInboxCursor,
 	inboxSearchSchema,
-} from '@/lib/inbox-validation';
+} from '@/lib/inbox/inbox-validation';
 
 // The contact form schema, the dashboard's mailto reply link, inbox cursors
 // and the wiring of rateLimitFnMiddleware (Start helpers and the limiter are
@@ -141,8 +141,8 @@ const start = vi.hoisted(() => ({
 vi.mock('@tanstack/react-start/server', () => start);
 vi.mock('cloudflare:workers', () => ({ env: { API_RATE_LIMITER: {} } }));
 const limiter = vi.hoisted(() => ({ isRateLimited: vi.fn() }));
-vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-	...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+vi.mock('@/lib/security/rate-limit', async (importOriginal) => ({
+	...(await importOriginal<typeof import('@/lib/security/rate-limit')>()),
 	isRateLimited: limiter.isRateLimited,
 }));
 

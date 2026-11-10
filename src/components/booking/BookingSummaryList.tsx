@@ -8,8 +8,11 @@ import {
 	CardHeader,
 	CardTitle,
 } from '@/components/ui/card';
-import type { BookingStatus, PaymentStatus } from '@/lib/booking-status';
-import { formatMoney } from '@/lib/format';
+import type {
+	BookingStatus,
+	PaymentStatus,
+} from '@/lib/booking/booking-status';
+import { formatMoney } from '@/utils/format';
 
 import { BookingStatusBadge, PaymentStatusBadge } from './StatusBadges';
 

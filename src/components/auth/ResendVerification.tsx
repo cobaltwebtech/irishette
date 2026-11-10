@@ -2,11 +2,11 @@ import { Icon } from '@iconify/react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { authClient } from '@/lib/auth-client';
+import { authClient } from '@/lib/auth/auth-client';
 import {
 	EMAIL_VERIFICATION_EXPIRES_IN,
 	formatLinkLifetime,
-} from '@/lib/auth-constants';
+} from '@/lib/auth/auth-constants';
 
 import { AuthError } from './AuthCard';
 import { TurnstileField, useTurnstile } from './TurnstileField';

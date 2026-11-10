@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 
-import { requireAuth } from '@/lib/auth-check';
+import { requireAuth } from '@/lib/auth/auth-check';
 
 /**
  * Pathless layout for signed-in pages (/account/*, /booking/confirmation/*,

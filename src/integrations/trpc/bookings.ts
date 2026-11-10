@@ -22,18 +22,21 @@ import {
 	quoteBookingCancellation,
 	quoteStay,
 	refreshHold,
-} from '@/lib/booking-service';
-import { bookingStatusSchema, paymentStatusSchema } from '@/lib/booking-status';
-import { getBookingCancellationPolicy } from '@/lib/cancellation-policy-store';
-import { confirmBookingPayment, prepareCheckout } from '@/lib/checkout-service';
-import { isoDateSchema } from '@/lib/date-range';
+} from '@/lib/booking/booking-service';
+import {
+	bookingStatusSchema,
+	paymentStatusSchema,
+} from '@/lib/booking/booking-status';
+import { getBookingCancellationPolicy } from '@/lib/booking/cancellation-policy-store';
+import {
+	confirmBookingPayment,
+	prepareCheckout,
+} from '@/lib/booking/checkout-service';
 import {
 	hasOpenDispute,
 	listDisputes,
 	openDisputeExists,
-} from '@/lib/dispute-service';
-import { sendBookingConfirmationEmail } from '@/lib/email-service';
-import { idSchema } from '@/lib/ids';
+} from '@/lib/booking/dispute-service';
 import {
 	adminCancelBookingSchema,
 	bookingIdSchema,
@@ -42,9 +45,12 @@ import {
 	cancelBookingSchema,
 	confirmCheckoutSchema,
 	createBookingSchema,
-} from '@/lib/payment-validation';
-import { roundCents } from '@/lib/pricing';
-import { stayPhase } from '@/lib/stay-times';
+} from '@/lib/booking/payment-validation';
+import { roundCents } from '@/lib/booking/pricing';
+import { stayPhase } from '@/lib/booking/stay-times';
+import { sendBookingConfirmationEmail } from '@/lib/email/email-service';
+import { isoDateSchema } from '@/utils/date-range';
+import { idSchema } from '@/utils/ids';
 
 import { isActiveAdmin } from './access';
 import {

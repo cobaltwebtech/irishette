@@ -1,6 +1,6 @@
 import { useRouter } from '@tanstack/react-router';
 
-import { DEFAULT_AUTH_REDIRECT } from '@/lib/redirect';
+import { DEFAULT_AUTH_REDIRECT } from '@/lib/auth/redirect';
 
 /**
  * Where a magic link from the login or signup page lands: the (sanitized)

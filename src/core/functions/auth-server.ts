@@ -2,8 +2,8 @@ import { createServerFn } from '@tanstack/react-start';
 import { getRequestHeaders } from '@tanstack/react-start/server';
 import { z } from 'zod';
 
-import { getAuthSession } from '@/lib/server-auth';
-import { type AppSession, toSessionUser } from '@/lib/session-user';
+import { getAuthSession } from '@/lib/auth/server-auth';
+import { type AppSession, toSessionUser } from '@/lib/auth/session-user';
 
 /**
  * Current session from the request cookies (public: signed-out callers get

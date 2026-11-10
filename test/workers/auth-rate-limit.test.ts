@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test';
 
 import { rateLimit } from '@/db/schema-export';
-import { AUTH_RATE_LIMIT_RULES, auth } from '@/lib/auth';
+import { AUTH_RATE_LIMIT_RULES, auth } from '@/lib/auth/auth';
 
 import { db } from './helpers';
 

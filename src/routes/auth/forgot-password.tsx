@@ -9,14 +9,14 @@ import { EmailField } from '@/components/auth/EmailField';
 import { TurnstileField, useTurnstile } from '@/components/auth/TurnstileField';
 import { useAuthRequest } from '@/components/auth/useAuthRequest';
 import { Button } from '@/components/ui/button';
-import { requireNoSession } from '@/lib/auth-check';
-import { authClient } from '@/lib/auth-client';
+import { requireNoSession } from '@/lib/auth/auth-check';
+import { authClient } from '@/lib/auth/auth-client';
 import {
 	formatLinkLifetime,
 	PASSWORD_RESET_EXPIRES_IN,
-} from '@/lib/auth-constants';
-import { emailSchema } from '@/lib/auth-validation';
-import { redirectSearchParam } from '@/lib/redirect';
+} from '@/lib/auth/auth-constants';
+import { emailSchema } from '@/lib/auth/auth-validation';
+import { redirectSearchParam } from '@/lib/auth/redirect';
 
 export const Route = createFileRoute('/auth/forgot-password')({
 	head: () => ({

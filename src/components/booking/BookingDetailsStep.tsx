@@ -10,9 +10,9 @@ import {
 } from '@/components/booking/use-booking-details-submit';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useSession } from '@/lib/session';
-import { formatStayDate } from '@/lib/timezone';
+import { useSession } from '@/lib/auth/session';
 import { useBookingStore } from '@/stores';
+import { formatStayDate } from '@/utils/timezone';
 
 export function BookingDetailsStep() {
 	const booking = useBookingStore();

@@ -3,11 +3,11 @@ import { Link } from '@tanstack/react-router';
 import {
 	type CancellationTier,
 	refundCutoffs,
-} from '@/lib/cancellation-policy';
-import type { IsoDate } from '@/lib/date-range';
+} from '@/lib/booking/cancellation-policy';
+import { checkInAt } from '@/lib/booking/stay-times';
 import { CHECK_IN_TIME_LABEL } from '@/lib/site';
-import { checkInAt } from '@/lib/stay-times';
-import { formatInstantCT } from '@/lib/timezone';
+import type { IsoDate } from '@/utils/date-range';
+import { formatInstantCT } from '@/utils/timezone';
 
 /**
  * The cancellation windows for a stay, with each tier's cutoff in Central

@@ -21,9 +21,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from '@/components/ui/toast';
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
-import type { BookingStatus, PaymentStatus } from '@/lib/booking-status';
-import { formatStayDate } from '@/lib/timezone';
+import type {
+	BookingStatus,
+	PaymentStatus,
+} from '@/lib/booking/booking-status';
 import { bookingActions } from '@/stores';
+import { formatStayDate } from '@/utils/timezone';
 import { cn } from '@/utils/twMerge';
 
 export const Route = createFileRoute('/_authed/booking/confirmation/$publicId')(

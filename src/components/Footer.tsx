@@ -2,7 +2,7 @@ import { Icon } from '@iconify/react';
 import { Link } from '@tanstack/react-router';
 
 import { CONTACT_PHONE, CONTACT_PHONE_HREF } from '@/lib/site';
-import { yearCT } from '@/lib/timezone';
+import { yearCT } from '@/utils/timezone';
 import { useNow } from '@/utils/use-now';
 
 export default function Footer() {

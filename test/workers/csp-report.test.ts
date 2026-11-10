@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 
-import { MAX_REPORT_BODY_BYTES } from '@/lib/csp-report';
+import { MAX_REPORT_BODY_BYTES } from '@/lib/security/csp-report';
 
 import { fetchWorker } from './helpers';
 

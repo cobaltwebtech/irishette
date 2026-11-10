@@ -36,12 +36,12 @@ the details step's "Back" goes to `/rooms/<booking.roomSlug>`.
   property time: the calendar never uses the browser's clock. Check-in
   before `earliestCheckIn` (today until 9:00 AM CT, then tomorrow) is
   disabled, with a note under the calendar.
-- Applies the same rules as the server, imported from `src/lib/date-range.ts`:
+- Applies the same rules as the server, imported from `src/utils/date-range.ts`:
   `isCheckInDisabled`, `isCheckOutAllowed`, `isStayAvailable`. A day whose
   night is unavailable but whose previous night is free is shown as
   "Checkout Only".
 - Enforces 1 to `MAX_NIGHTS` (30) nights and check-out by `lastCheckOut`
-  (the same limits as the server, `src/lib/date-range.ts`).
+  (the same limits as the server, `src/utils/date-range.ts`).
 - On a complete range, fetches `rooms.calculatePricing` (`staleTime: 0`) and
   reports the room subtotal and nights to the page, which writes the dates and
   a subtotal-only estimate into the store. "Book now" sets step `auth` and
@@ -108,7 +108,7 @@ Status badges are shared (`StatusBadges.tsx`).
 
 ### tRPC procedures (`src/integrations/trpc/bookings.ts`)
 
-Inputs are validated with the schemas in `src/lib/payment-validation.ts`.
+Inputs are validated with the schemas in `src/lib/booking/payment-validation.ts`.
 `findAccessibleBooking` returns the caller's own booking (or any booking for
 admins where allowed); anything else is `NOT_FOUND`, so existence never leaks.
 
@@ -127,16 +127,16 @@ admins where allowed); anything else is `NOT_FOUND`, so existence never leaks.
 | `resendConfirmationEmail` | owner or admin | confirmed bookings only |
 | `adminListBookings`, `adminUpdateInternalNotes`, `adminGetMonthlyStats` | admin | direct queries |
 
-Business logic lives in `src/lib/booking-service.ts` (pricing, holds,
-cancellations), `src/lib/checkout-service.ts` (Checkout Sessions and
-confirmation), `src/lib/refund-service.ts` and `src/lib/dispute-service.ts`
+Business logic lives in `src/lib/booking/booking-service.ts` (pricing, holds,
+cancellations), `src/lib/booking/checkout-service.ts` (Checkout Sessions and
+confirmation), `src/lib/booking/refund-service.ts` and `src/lib/booking/dispute-service.ts`
 (webhooks). Services take
-`ServiceDeps` (`src/lib/deps.ts`: `db`, `env`, `stripe`, `waitUntil`); the
+`ServiceDeps` (`src/lib/server/deps.ts`: `db`, `env`, `stripe`, `waitUntil`); the
 tRPC context satisfies it, and the webhook and cron build one with
 `createServiceDeps`. Emails run through `inBackground` (`waitUntil`, errors
 logged, never thrown).
 
-### Date rules (`src/lib/date-range.ts`)
+### Date rules (`src/utils/date-range.ts`)
 
 Dates are `YYYY-MM-DD` strings compared as strings. A stay's nights are
 `[checkIn, checkOut)`. The same functions run on the server and in the
@@ -155,9 +155,9 @@ Example, block Jun 8-10: check-in Jun 10 rejected, Jun 11 allowed; stay
 Jun 7-8 allowed; stay Jun 7-9 rejected.
 
 "Today" on the server is the property date (`todayIn()`, `America/Chicago`,
-`src/lib/timezone.ts`).
+`src/utils/timezone.ts`).
 
-### Availability (`src/lib/availability.ts`)
+### Availability (`src/lib/booking/availability.ts`)
 
 - `loadUnavailability(db, roomId, from, to)` loads, for the range, bookings
   that hold dates (`holdsDatesCondition`: `confirmed`, `pending` with
@@ -176,7 +176,7 @@ Jun 7-8 allowed; stay Jun 7-9 rejected.
 active rooms only, default window today + 10 months, returns
 `{ room, dateRange, unavailability }` with dates only.
 
-### Pricing (`src/lib/pricing.ts`)
+### Pricing (`src/lib/booking/pricing.ts`)
 
 Pure. `priceStay(room, rules, checkIn, checkOut)`:
 
@@ -236,7 +236,7 @@ automatic refund below).
 still free (otherwise `CONFLICT`); a live hold is left as is.
 
 Expired holds are released by `scheduledBookingCleanup` (cron `5 8 * * *`,
-`src/lib/scheduled-tasks.ts`) through `releaseExpiredHold` /
+`src/lib/server/scheduled-tasks.ts`) through `releaseExpiredHold` /
 `closeHoldSession`: open sessions are expired, then the hold is deleted; a
 paid session is confirmed instead; processing holds are skipped; Stripe
 errors keep the hold for the next run. `checkout.session.expired` releases
@@ -285,7 +285,7 @@ Confirmation does not re-check `expiresAt` or the same-day cutoff: a session
 can only be paid while its hold is live (they expire together), and a
 delayed payment keeps its dates as `processing`.
 
-### Stripe webhook (`src/lib/stripe-webhook.ts`)
+### Stripe webhook (`src/lib/stripe/stripe-webhook.ts`)
 
 `POST /api/stripe/webhook` (route `src/routes/api/stripe.$.ts`; other paths
 404). Requires JSON and a valid `stripe-signature` against
@@ -311,7 +311,7 @@ All date/time rules use **America/Chicago wall-clock time**, whatever the
 server's or browser's time zone. The times are constants in `src/lib/site.ts`:
 `CHECK_IN_TIME` 16:00, `CHECK_OUT_TIME` 11:00, `SAME_DAY_CUTOFF_TIME` 09:00
 (labels `CHECK_IN_TIME_LABEL` etc. are what pages and emails print; the legal
-pages are the one exception). `src/lib/stay-times.ts` turns them into
+pages are the one exception). `src/lib/booking/stay-times.ts` turns them into
 instants: `checkInAt(date)`, `checkOutAt(date)`, `localCutoff(date, time,
 hoursBefore)`, `earliestCheckInDate(now)` and `stayPhase`.
 
@@ -340,7 +340,7 @@ The iCal export stays all-day (date-only) events.
 
 ### Cancellations and refunds
 
-Policy data and the quote are pure (`src/lib/cancellation-policy.ts`):
+Policy data and the quote are pure (`src/lib/booking/cancellation-policy.ts`):
 
 - A policy is a name and tiers `{ minHoursBefore, refundPercent }`.
   `DEFAULT_CANCELLATION_POLICY`: 72 h+ 100%, 24 h+ 50%, less 0%. There is no
@@ -360,7 +360,7 @@ Policy data and the quote are pure (`src/lib/cancellation-policy.ts`):
   quote returns every tier's cutoff (`refundCutoffs`); the UI formats them in
   CT (`formatInstantCT`, "Tue, Jun 7, 2030, 4:00 PM CT").
 
-Storage (`src/lib/cancellation-policy-store.ts`, tables in
+Storage (`src/lib/booking/cancellation-policy-store.ts`, tables in
 `src/db/policy-schema.ts`): `saveCancellationPolicy` adds a new active
 version and deactivates the old one; `getActiveCancellationPolicy` is what new
 holds record in `bookings.cancellation_policy_id`;
@@ -398,7 +398,7 @@ reference as read-only text.
 
 Cancellation emails go to the guest and admins after that.
 
-### Emails (`src/lib/email-service.ts`)
+### Emails (`src/lib/email/email-service.ts`)
 
 Resend with react-email templates in `src/components/email/`. Confirmation,
 cancellation and alert sends pass a Resend idempotency key, so a repeated
@@ -412,7 +412,7 @@ confirm or retry does not send twice. Logs never include addresses.
 | `sendAdminAlert` | Auto-refund, failed refund, iCal problems (each also creates an admin inbox item, `ADMIN_INBOX.md`) | Admins |
 | `sendContactNotification` | Contact form (`CONTACT_FORM.md`); `replyTo` = the guest | `CONTACT_EMAIL` |
 
-Admin addresses come from `getAdminEmails` (`src/lib/admin-query.ts`).
+Admin addresses come from `getAdminEmails` (`src/lib/server/admin-query.ts`).
 
 ### Admin blocks
 
@@ -434,7 +434,7 @@ in the iCal feed.
 
 | Id | Format | Used for |
 |---|---|---|
-| `id` | UUIDv7 (`newId`, `src/lib/ids.ts`), time-ordered TEXT primary key on every table | Internal references, payment procedures (`bookingId`), Stripe metadata |
+| `id` | UUIDv7 (`newId`, `src/utils/ids.ts`), time-ordered TEXT primary key on every table | Internal references, payment procedures (`bookingId`), Stripe metadata |
 | `publicId` | 16 chars `[0-9a-z]` (`newPublicId`), unique; validated by `publicIdSchema` | URLs (`/booking/confirmation/$publicId`, `/account/booking/$publicId`, `/admin/bookings/$publicId`) and `getBooking` / cancel inputs |
 | `confirmationId` | 6 chars from `A-Z` (no I, O) and `0-9` (`generateConfirmationId` in `booking-service.ts`), unique | Shown to guests, in email subjects and in logs |
 
@@ -444,7 +444,7 @@ refunded), `payment_refunds` (every refund, app or Dashboard) and
 `payment_disputes`. On `bookings`, `stripe_session_id` is the hold's current
 Checkout Session (used since Phase 3) and `stripe_payment_intent_id` is set on
 confirmation; `discount_amount` is reserved for discounts and not set yet.
-Statuses are shared enums (`src/lib/booking-status.ts`, Drizzle `text` enums):
+Statuses are shared enums (`src/lib/booking/booking-status.ts`, Drizzle `text` enums):
 booking `status` is `pending` / `confirmed` / `cancelled` (stored; there is no
 `completed`); `paymentStatus` (also `payment_transactions.status`) is
 `pending` / `processing` / `paid` / `partially_refunded` / `refunded` /
@@ -486,16 +486,16 @@ Run with `pnpm test` (or `pnpm test:unit`, `pnpm test:workers`).
 | `src/stores/booking-store.ts`, `use-booking-store.ts` | Client draft (TanStack Store + `localStorage`) |
 | `src/routes/_authed/booking/`, `src/routes/_authed/account/` | Confirmation and guest account pages |
 | `src/integrations/trpc/bookings.ts`, `availability.ts` | Booking procedures, public calendar data |
-| `src/lib/booking-service.ts` | Pricing, holds (priority rule), cancellation |
-| `src/lib/checkout-service.ts` | Checkout Sessions, confirmation, automatic refund |
-| `src/lib/refund-service.ts`, `dispute-service.ts` | Refund and dispute webhooks |
-| `src/lib/availability.ts` | Availability queries and SQL guard |
-| `src/lib/date-range.ts` | Date rules (shared with the client) |
-| `src/lib/pricing.ts` | Per-night pricing |
-| `src/lib/stay-times.ts`, `src/lib/site.ts` | Check-in/out instants, same-day cutoff, stay phase; the time constants |
-| `src/lib/booking-status.ts` | Booking and payment status enums |
-| `src/lib/cancellation-policy.ts`, `cancellation-policy-store.ts` | Refund policy and versions |
-| `src/lib/stripe-webhook.ts` | Stripe webhook handler |
-| `src/lib/email-service.ts` | Booking and admin emails |
-| `src/lib/scheduled-tasks.ts` | Expired hold cleanup cron |
-| `src/lib/payment-validation.ts` | Booking/payment Zod schemas |
+| `src/lib/booking/booking-service.ts` | Pricing, holds (priority rule), cancellation |
+| `src/lib/booking/checkout-service.ts` | Checkout Sessions, confirmation, automatic refund |
+| `src/lib/booking/refund-service.ts`, `dispute-service.ts` | Refund and dispute webhooks |
+| `src/lib/booking/availability.ts` | Availability queries and SQL guard |
+| `src/utils/date-range.ts` | Date rules (shared with the client) |
+| `src/lib/booking/pricing.ts` | Per-night pricing |
+| `src/lib/booking/stay-times.ts`, `src/lib/site.ts` | Check-in/out instants, same-day cutoff, stay phase; the time constants |
+| `src/lib/booking/booking-status.ts` | Booking and payment status enums |
+| `src/lib/booking/cancellation-policy.ts`, `cancellation-policy-store.ts` | Refund policy and versions |
+| `src/lib/stripe/stripe-webhook.ts` | Stripe webhook handler |
+| `src/lib/email/email-service.ts` | Booking and admin emails |
+| `src/lib/server/scheduled-tasks.ts` | Expired hold cleanup cron |
+| `src/lib/booking/payment-validation.ts` | Booking/payment Zod schemas |

@@ -4,9 +4,9 @@ import { env } from 'cloudflare:workers';
 
 import { rateLimitFnMiddleware } from '@/core/middleware/rate-limit';
 import { createDrizzle } from '@/db/drizzle-init';
-import { submitContactForm } from '@/lib/contact-service';
-import { contactSchema } from '@/lib/contact-validation';
-import { clientIp } from '@/lib/rate-limit';
+import { submitContactForm } from '@/lib/inbox/contact-service';
+import { contactSchema } from '@/lib/inbox/contact-validation';
+import { clientIp } from '@/lib/security/rate-limit';
 
 /**
  * The public contact form (docs/CONTACT_FORM.md). Public on purpose: it reads

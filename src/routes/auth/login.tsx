@@ -15,11 +15,14 @@ import { TurnstileField, useTurnstile } from '@/components/auth/TurnstileField';
 import { useAuthMode } from '@/components/auth/useAuthMode';
 import { useAuthRequest } from '@/components/auth/useAuthRequest';
 import { toast } from '@/components/ui/toast';
-import { invalidateSession, requireNoSession } from '@/lib/auth-check';
-import { authClient } from '@/lib/auth-client';
-import { authLinkErrorMessage } from '@/lib/auth-errors';
-import { emailSchema, loginSchema } from '@/lib/auth-validation';
-import { DEFAULT_AUTH_REDIRECT, redirectSearchParam } from '@/lib/redirect';
+import { invalidateSession, requireNoSession } from '@/lib/auth/auth-check';
+import { authClient } from '@/lib/auth/auth-client';
+import { authLinkErrorMessage } from '@/lib/auth/auth-errors';
+import { emailSchema, loginSchema } from '@/lib/auth/auth-validation';
+import {
+	DEFAULT_AUTH_REDIRECT,
+	redirectSearchParam,
+} from '@/lib/auth/redirect';
 
 export const Route = createFileRoute('/auth/login')({
 	head: () => ({

@@ -56,7 +56,7 @@ export default defineConfig({
 			},
 			issues: { enabled: true },
 		},
-		// Keep in sync with CRON_SCHEDULES handling in src/lib/scheduled-tasks.ts.
+		// Keep in sync with CRON_SCHEDULES handling in src/lib/server/scheduled-tasks.ts.
 		triggers: [
 			triggers.scheduled({ schedule: '*/30 * * * *' }), // iCal import sync
 			triggers.scheduled({ schedule: '5 8 * * *' }), // expired pending bookings cleanup (08:05 UTC)
@@ -77,7 +77,7 @@ export default defineConfig({
 			RESEND_API_KEY: bindings.secret(),
 			TURNSTILE_SECRET_KEY: bindings.secret(),
 
-			// Rate Limiting (src/lib/rate-limit.ts). Approximate, per Cloudflare
+			// Rate Limiting (src/lib/security/rate-limit.ts). Approximate, per Cloudflare
 			// location; a first filter in front of Better Auth's strict D1 limits.
 			// `namespace` must be a positive integer unique within the Cloudflare
 			// account (bindings sharing one share counters): 20261-20263 are

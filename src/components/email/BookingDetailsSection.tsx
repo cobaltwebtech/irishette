@@ -2,7 +2,7 @@ import { Column, Heading, Row, Section, Text } from 'react-email';
 
 // The booking details every booking email shows (confirmation, cancellation,
 // refund): the stay, the guest and the price breakdown. Values arrive
-// formatted from src/lib/email-service.ts (dates, times, site constants).
+// formatted from src/lib/email/email-service.ts (dates, times, site constants).
 
 export interface EmailBookingDetails {
 	confirmationId: string;

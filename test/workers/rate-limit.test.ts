@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 
 import { createInnerTRPCContext } from '@/integrations/trpc/inner-context';
 import { trpcRouter } from '@/integrations/trpc/router';
-import { actorKey, isRateLimited } from '@/lib/rate-limit';
+import { actorKey, isRateLimited } from '@/lib/security/rate-limit';
 
 import { trpcError, useClock } from './helpers';
 import { ROSE } from './seed';

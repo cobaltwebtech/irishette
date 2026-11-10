@@ -24,15 +24,13 @@ import {
 	TableRow,
 } from '@/components/ui/table';
 import { useTRPC } from '@/integrations/trpc/react';
-import { formatMoney } from '@/lib/format';
 import {
 	resolveTaxReportSearch,
 	TAX_REPORT_MAX_MONTHS,
 	type TaxReportSelection,
 	taxReportInputSchema,
 	taxReportSearchSchema,
-} from '@/lib/report-validation';
-import { SITE_NAME } from '@/lib/site';
+} from '@/lib/reports/report-validation';
 import {
 	formatMonth,
 	periodLabel,
@@ -45,8 +43,10 @@ import {
 	taxReportCsvRows,
 	toCsv,
 	visibleTaxReportLines,
-} from '@/lib/tax-report';
-import { formatDateTimeCT, formatStayDate, todayIn } from '@/lib/timezone';
+} from '@/lib/reports/tax-report';
+import { SITE_NAME } from '@/lib/site';
+import { formatMoney } from '@/utils/format';
+import { formatDateTimeCT, formatStayDate, todayIn } from '@/utils/timezone';
 import { cn } from '@/utils/twMerge';
 import { useNow, useTodayCT } from '@/utils/use-now';
 

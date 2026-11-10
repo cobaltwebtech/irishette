@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTRPC } from '@/integrations/trpc/react';
-import { formatStayDate } from '@/lib/timezone';
+import { formatStayDate } from '@/utils/timezone';
 import { useTodayCT } from '@/utils/use-now';
 
 // Shared by the loader and the component so the cache keys match.

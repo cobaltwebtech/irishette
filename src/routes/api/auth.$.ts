@@ -2,8 +2,8 @@ import { createFileRoute } from '@tanstack/react-router';
 import { env } from 'cloudflare:workers';
 
 import { rateLimitRequests } from '@/core/middleware/rate-limit';
-import { auth } from '@/lib/auth';
-import { clientIp, logRateLimited } from '@/lib/rate-limit';
+import { auth } from '@/lib/auth/auth';
+import { clientIp, logRateLimited } from '@/lib/security/rate-limit';
 
 // Better Auth handler for all HTTP methods.
 const authHandler = async ({ request }: { request: Request }) => {

@@ -1,4 +1,4 @@
-import '@/lib/zod-config';
+import '@/lib/security/zod-config';
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
 import { createRouter } from '@tanstack/react-router';
 import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query';
@@ -7,7 +7,7 @@ import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import { makeTRPCClient } from '@/integrations/trpc/client';
 import { TRPCProvider } from '@/integrations/trpc/react';
 import type { TRPCRouter } from '@/integrations/trpc/router';
-import { createAuthErrorHandler } from '@/lib/session';
+import { createAuthErrorHandler } from '@/lib/auth/session';
 
 import { routeTree } from './routeTree.gen';
 

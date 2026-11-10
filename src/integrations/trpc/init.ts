@@ -7,7 +7,7 @@ import {
 	clientIp,
 	isRateLimited,
 	type RateLimiterName,
-} from '@/lib/rate-limit';
+} from '@/lib/security/rate-limit';
 
 import { isActiveAdmin, isBanActive } from './access';
 import type { TRPCContext } from './inner-context';
@@ -97,7 +97,7 @@ export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
 /**
  * Per-procedure rate limit with a Cloudflare Rate Limiting binding, keyed by
  * user id when signed in, else by IP. Over the limit: TOO_MANY_REQUESTS (429)
- * and one "rate-limited" line in Workers Logs (src/lib/rate-limit.ts).
+ * and one "rate-limited" line in Workers Logs (src/lib/security/rate-limit.ts).
  */
 export const rateLimit = (limiter: RateLimiterName, scope: string) =>
 	t.middleware(async ({ ctx, next }) => {

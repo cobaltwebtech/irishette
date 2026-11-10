@@ -7,7 +7,7 @@ import {
 	SidebarProvider,
 	SidebarTrigger,
 } from '@/components/ui/sidebar';
-import { useSession } from '@/lib/session';
+import { useSession } from '@/lib/auth/session';
 
 interface AdminLayoutProps {
 	children: React.ReactNode;

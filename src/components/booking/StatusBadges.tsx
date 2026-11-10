@@ -1,6 +1,9 @@
 import { Badge } from '@/components/ui/badge';
-import type { BookingStatus, PaymentStatus } from '@/lib/booking-status';
-import { humanizeCode } from '@/lib/format';
+import type {
+	BookingStatus,
+	PaymentStatus,
+} from '@/lib/booking/booking-status';
+import { humanizeCode } from '@/utils/format';
 
 // Status badges shared by the guest and admin booking pages and lists.
 

@@ -4,11 +4,11 @@ import { z } from 'zod';
 
 import type { Database } from '@/db/drizzle-init';
 import { bookings, user } from '@/db/schema-export';
-import { isUniqueViolation } from '@/lib/db-errors';
-import { listDisputes } from '@/lib/dispute-service';
-import { publicIdSchema } from '@/lib/ids';
-import { stayPhase } from '@/lib/stay-times';
-import { updateProfileSchema } from '@/lib/user-validation';
+import { updateProfileSchema } from '@/lib/auth/user-validation';
+import { listDisputes } from '@/lib/booking/dispute-service';
+import { stayPhase } from '@/lib/booking/stay-times';
+import { isUniqueViolation } from '@/utils/db-errors';
+import { publicIdSchema } from '@/utils/ids';
 
 import { adminProcedure, createTRPCRouter, protectedProcedure } from './init';
 

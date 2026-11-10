@@ -1,6 +1,6 @@
 import { useStore } from '@tanstack/react-store';
 
-import { formatStayDate } from '@/lib/timezone';
+import { formatStayDate } from '@/utils/timezone';
 
 import {
 	type BookingStep,

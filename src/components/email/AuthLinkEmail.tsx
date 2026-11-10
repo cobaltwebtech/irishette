@@ -17,12 +17,12 @@ import {
 
 import { EmailContactRow } from './EmailContactRow';
 
-/** Props every auth link email receives from src/lib/email-service.ts. */
+/** Props every auth link email receives from src/lib/email/email-service.ts. */
 export interface AuthLinkEmailProps {
 	url: string;
 	/** Contact address shown in the footer (src/lib/site.ts CONTACT_EMAIL). */
 	contactEmail: string;
-	/** Link lifetime, e.g. "15 minutes" (src/lib/auth-constants.ts). */
+	/** Link lifetime, e.g. "15 minutes" (src/lib/auth/auth-constants.ts). */
 	expiresIn: string;
 }
 

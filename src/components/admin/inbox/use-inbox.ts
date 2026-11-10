@@ -9,7 +9,7 @@ import {
 import { toast } from '@/components/ui/toast';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
-import type { InboxStatus } from '@/lib/inbox';
+import type { InboxStatus } from '@/lib/inbox/inbox';
 
 // Data hooks of the admin notification pages. Status is shared by all admins.
 

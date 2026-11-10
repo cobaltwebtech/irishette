@@ -3,8 +3,8 @@ import { useNavigate } from '@tanstack/react-router';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { formatStayDate } from '@/lib/timezone';
 import { useBookingStore } from '@/stores';
+import { formatStayDate } from '@/utils/timezone';
 
 /** One tax in the breakdown; hidden when that tax is 0 for the room. */
 function TaxBreakdownLine({

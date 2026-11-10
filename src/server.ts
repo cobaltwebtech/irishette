@@ -5,7 +5,7 @@
 // is passed to the Start handler.
 import handler from '@tanstack/react-start/server-entry';
 
-import { handleScheduledEvent } from '@/lib/scheduled-tasks';
+import { handleScheduledEvent } from '@/lib/server/scheduled-tasks';
 
 export default {
 	fetch(request) {
@@ -13,7 +13,7 @@ export default {
 	},
 
 	/**
-	 * Cron triggers (see cloudflare.config.ts and src/lib/scheduled-tasks.ts).
+	 * Cron triggers (see cloudflare.config.ts and src/lib/server/scheduled-tasks.ts).
 	 */
 	async scheduled(controller, env, ctx) {
 		await handleScheduledEvent(controller, env, ctx);

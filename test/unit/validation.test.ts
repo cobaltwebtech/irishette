@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vite-plus/test';
 
-import { publicIdSchema } from '@/lib/ids';
+import { redirectSearchParam } from '@/lib/auth/redirect';
 import {
 	confirmCheckoutSchema,
 	createBookingSchema,
-} from '@/lib/payment-validation';
-import { redirectSearchParam } from '@/lib/redirect';
+} from '@/lib/booking/payment-validation';
 import {
 	createPricingRuleSchema,
 	createRoomSchema,
 	updatePricingRuleSchema,
 	updateRoomSchema,
-} from '@/lib/room-validation';
+} from '@/lib/booking/room-validation';
+import { publicIdSchema } from '@/utils/ids';
 
 const rule = {
 	roomId: 'room-1',

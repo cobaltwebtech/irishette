@@ -30,8 +30,8 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/toast';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
-import { nextIcalSyncAt } from '@/lib/ical-feed-sources';
-import { formatDateTimeCT } from '@/lib/timezone';
+import { nextIcalSyncAt } from '@/lib/ical/ical-feed-sources';
+import { formatDateTimeCT } from '@/utils/timezone';
 import { useNow } from '@/utils/use-now';
 
 type Feed = RouterOutputs['ical']['listFeeds'][number];

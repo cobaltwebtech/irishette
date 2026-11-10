@@ -16,9 +16,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/toast';
 import { useTRPC } from '@/integrations/trpc/react';
-import { changeEmail } from '@/lib/auth-client';
-import { refreshSession } from '@/lib/session';
-import { phoneNumberSchema } from '@/lib/user-validation';
+import { changeEmail } from '@/lib/auth/auth-client';
+import { refreshSession } from '@/lib/auth/session';
+import { phoneNumberSchema } from '@/lib/auth/user-validation';
 
 interface EditProfileModalProps {
 	open: boolean;

@@ -14,7 +14,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
-import { formatDateCT } from '@/lib/timezone';
+import { formatDateCT } from '@/utils/timezone';
 import { cn } from '@/utils/twMerge';
 
 type BookingRow = RouterOutputs['bookings']['getMyBookings'][number];

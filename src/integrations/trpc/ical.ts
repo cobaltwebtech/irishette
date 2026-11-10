@@ -11,24 +11,24 @@ import {
 	icalSyncLog,
 	room,
 } from '@/db/schema-export';
-import { isUniqueViolation } from '@/lib/db-errors';
-import { icalExportPath } from '@/lib/ical-export';
-import {
-	FEED_TIMEOUT_MS,
-	fetchFeed,
-	readFeedText,
-	UnsafeFeedUrlError,
-} from '@/lib/ical-fetch';
-import { parseIcal } from '@/lib/ical-parse';
-import { syncRoomFeeds } from '@/lib/ical-sync';
-import { idSchema, newIcalExportToken } from '@/lib/ids';
-import { BodyTooLargeError } from '@/lib/read-limited';
 import {
 	createIcalFeedSchema,
 	roomIdSchema,
 	testIcalUrlSchema,
 	updateIcalFeedSchema,
-} from '@/lib/room-validation';
+} from '@/lib/booking/room-validation';
+import { icalExportPath } from '@/lib/ical/ical-export';
+import {
+	FEED_TIMEOUT_MS,
+	fetchFeed,
+	readFeedText,
+	UnsafeFeedUrlError,
+} from '@/lib/ical/ical-fetch';
+import { parseIcal } from '@/lib/ical/ical-parse';
+import { syncRoomFeeds } from '@/lib/ical/ical-sync';
+import { isUniqueViolation } from '@/utils/db-errors';
+import { idSchema, newIcalExportToken } from '@/utils/ids';
+import { BodyTooLargeError } from '@/utils/read-limited';
 
 import { adminProcedure, createTRPCRouter, rateLimit } from './init';
 

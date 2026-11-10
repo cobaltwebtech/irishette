@@ -6,9 +6,9 @@ period, for filing the Texas state return and the City of Dublin return.
 - Page: `/admin/reports/tax` (`src/routes/_authed/_admin/admin/reports/tax.tsx`),
   sidebar "Reports" -> "Hotel Occupancy Tax".
 - Procedure: `reports.adminTaxReport` (admin only), input
-  `taxReportInputSchema` (`src/lib/report-validation.ts`).
-- Server: `getTaxReport` in `src/lib/tax-report-service.ts`.
-- Pure logic (aggregation, periods, CSV): `src/lib/tax-report.ts`.
+  `taxReportInputSchema` (`src/lib/reports/report-validation.ts`).
+- Server: `getTaxReport` in `src/lib/reports/tax-report-service.ts`.
+- Pure logic (aggregation, periods, CSV): `src/lib/reports/tax-report.ts`.
 
 > The figures are bookkeeping aids. Confirm the tax treatment (what is
 > taxable, exemptions, the filing basis) with your CPA before filing.
@@ -19,7 +19,7 @@ period, for filing the Texas state return and the City of Dublin return.
   report covers state HOT (`room.stateTaxRate`, 6%) and city HOT
   (`room.cityTaxRate`) only.
 - **Tax applies to the room price plus the service fee** (`priceStay` in
-  `src/lib/pricing.ts`): `taxableAmount = baseAmount + feesAmount`; each tax
+  `src/lib/booking/pricing.ts`): `taxableAmount = baseAmount + feesAmount`; each tax
   is `taxableAmount * rate`, rounded to cents.
 - Bookings created before this rule were taxed on the room price only. Their
   stored totals are not changed.

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test';
 
-import { escapeText, foldLine, generateIcal } from '@/lib/ical-generate';
-import { parseIcal, unfoldLines } from '@/lib/ical-parse';
+import { escapeText, foldLine, generateIcal } from '@/lib/ical/ical-generate';
+import { parseIcal, unfoldLines } from '@/lib/ical/ical-parse';
 
 const NOW = new Date('2030-01-02T03:04:05Z');
 

@@ -8,7 +8,7 @@ import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vite-plus/test';
 
 import { bookings, icalFeeds, icalSyncLog } from '@/db/schema-export';
-import * as scheduledTasks from '@/lib/scheduled-tasks';
+import * as scheduledTasks from '@/lib/server/scheduled-tasks';
 
 import configSource from '../../cloudflare.config.ts?raw';
 import worker from './entry';

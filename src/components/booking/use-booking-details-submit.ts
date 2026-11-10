@@ -3,8 +3,8 @@ import { useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
 
 import { useTRPC } from '@/integrations/trpc/react';
-import { guestDetailsSchema } from '@/lib/payment-validation';
-import { refreshSession, useSession } from '@/lib/session';
+import { refreshSession, useSession } from '@/lib/auth/session';
+import { guestDetailsSchema } from '@/lib/booking/payment-validation';
 import { useBookingStore } from '@/stores';
 import {
 	type BookingState,

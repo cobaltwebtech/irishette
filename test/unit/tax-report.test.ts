@@ -4,7 +4,7 @@ import {
 	resolveTaxReportSearch,
 	taxReportInputSchema,
 	taxReportSearchSchema,
-} from '@/lib/report-validation';
+} from '@/lib/reports/report-validation';
 import {
 	aggregateTaxReport,
 	monthRange,
@@ -17,7 +17,7 @@ import {
 	taxReportCsvRows,
 	toCsv,
 	yearRange,
-} from '@/lib/tax-report';
+} from '@/lib/reports/tax-report';
 
 const RANGE = { from: '2030-11-01', to: '2030-11-30' };
 

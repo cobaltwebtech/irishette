@@ -3,16 +3,16 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { room } from '@/db/schema-export';
-import { loadUnavailability } from '@/lib/availability';
+import { loadUnavailability } from '@/lib/booking/availability';
+import { earliestCheckInDate } from '@/lib/booking/stay-times';
 import {
 	addDays,
 	addMonths,
 	isoDateSchema,
 	lastBookableDate,
 	MAX_NIGHTS,
-} from '@/lib/date-range';
-import { earliestCheckInDate } from '@/lib/stay-times';
-import { todayIn } from '@/lib/timezone';
+} from '@/utils/date-range';
+import { todayIn } from '@/utils/timezone';
 
 import { createTRPCRouter, publicProcedure } from './init';
 
@@ -20,7 +20,7 @@ export const availabilityRouter = createTRPCRouter({
 	/**
 	 * Unavailable date ranges for a room's booking calendar. Dates only: no
 	 * booking ids, confirmation ids or guest data. The calendar applies the
-	 * same rules as the server (src/lib/date-range.ts).
+	 * same rules as the server (src/utils/date-range.ts).
 	 */
 	getBySlug: publicProcedure
 		.input(

@@ -1,18 +1,19 @@
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
-import { newId, newPublicId } from '../lib/ids';
 import {
 	type InboxDetails,
 	inboxKinds,
 	inboxSources,
 	inboxStatuses,
-} from '../lib/inbox';
+} from '@/lib/inbox/inbox';
+import { newId, newPublicId } from '@/utils/ids';
+
 import { user } from './auth-schema';
 import { bookings, paymentDisputes } from './booking-schema';
 
 // Internal admin notifications (Stripe and system events). One table, one
 // indexed list query. Items are kept until an admin deletes them.
-// Written only through createInboxItem (src/lib/inbox-service.ts); see
+// Written only through createInboxItem (src/lib/inbox/inbox-service.ts); see
 // docs/ADMIN_INBOX.md.
 export const adminInboxItems = sqliteTable(
 	'admin_inbox_items',
@@ -25,7 +26,7 @@ export const adminInboxItems = sqliteTable(
 		// Short text for the list. No guest message bodies, no card data.
 		title: text('title').notNull(),
 		summary: text('summary').notNull(),
-		// Kind-specific fields (src/lib/inbox.ts InboxDetailsByKind).
+		// Kind-specific fields (src/lib/inbox/inbox.ts InboxDetailsByKind).
 		details: text('details', { mode: 'json' }).$type<InboxDetails>().notNull(),
 		status: text('status', { enum: inboxStatuses }).notNull().default('new'),
 		readAt: integer('read_at', { mode: 'timestamp' }),

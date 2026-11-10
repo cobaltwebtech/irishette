@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { SITE_URL } from '@/lib/site';
-import { formatDateCT } from '@/lib/timezone';
+import { formatDateCT } from '@/utils/timezone';
 
 interface RoomDetailsProps {
 	name: string;

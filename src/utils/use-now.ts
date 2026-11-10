@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
-import type { IsoDate } from '@/lib/date-range';
-import { todayIn } from '@/lib/timezone';
+import type { IsoDate } from '@/utils/date-range';
+import { todayIn } from '@/utils/timezone';
 
 /**
  * The time of the component's first render, stable across re-renders.

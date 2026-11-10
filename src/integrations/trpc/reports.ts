@@ -1,5 +1,5 @@
-import { taxReportInputSchema } from '@/lib/report-validation';
-import { getTaxReport } from '@/lib/tax-report-service';
+import { taxReportInputSchema } from '@/lib/reports/report-validation';
+import { getTaxReport } from '@/lib/reports/tax-report-service';
 
 import { adminProcedure, createTRPCRouter } from './init';
 

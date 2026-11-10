@@ -6,7 +6,7 @@ import {
 	authorizeRequest,
 	authorizeSession,
 	ServerFnAuthError,
-} from '@/lib/server-auth';
+} from '@/lib/auth/server-auth';
 
 import { db, fakeSession } from './helpers';
 import { ADMIN, GUEST } from './seed';

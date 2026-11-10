@@ -1,7 +1,7 @@
 import { env, waitUntil as workerWaitUntil } from 'cloudflare:workers';
 
-import type { auth } from '@/lib/auth';
-import { createServiceDeps } from '@/lib/deps';
+import type { auth } from '@/lib/auth/auth';
+import { createServiceDeps } from '@/lib/server/deps';
 
 type AuthInstance = Awaited<ReturnType<typeof auth>>;
 

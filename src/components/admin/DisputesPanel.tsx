@@ -10,9 +10,9 @@ import {
 	CardTitle,
 } from '@/components/ui/card';
 import type { RouterOutputs } from '@/integrations/trpc/types';
-import { formatMoney, humanizeCode } from '@/lib/format';
-import { stripeDisputeUrl } from '@/lib/inbox';
-import { formatInstantCT } from '@/lib/timezone';
+import { stripeDisputeUrl } from '@/lib/inbox/inbox';
+import { formatMoney, humanizeCode } from '@/utils/format';
+import { formatInstantCT } from '@/utils/timezone';
 
 type Dispute = RouterOutputs['bookings']['adminGetBooking']['disputes'][number];
 

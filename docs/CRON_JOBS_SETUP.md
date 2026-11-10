@@ -1,7 +1,7 @@
 # Cron jobs
 
 Cron triggers are declared in `cloudflare.config.ts` and handled by
-`handleScheduledEvent` in `src/lib/scheduled-tasks.ts` (called from the
+`handleScheduledEvent` in `src/lib/server/scheduled-tasks.ts` (called from the
 `scheduled` export in `src/server.ts`). The handler looks the cron string up in
 `CRON_SCHEDULES`; an unknown string is logged and does nothing.
 
@@ -27,7 +27,7 @@ Evaluate a `*/5 * * * *` import cron at production go-live.
 ## Changing a schedule
 
 1. Edit the trigger in `cloudflare.config.ts`.
-2. Edit the key in `CRON_SCHEDULES` (`src/lib/scheduled-tasks.ts`).
+2. Edit the key in `CRON_SCHEDULES` (`src/lib/server/scheduled-tasks.ts`).
 3. `pnpm test:workers` (the cron map test must pass), then deploy.
 
 ## Running a cron locally

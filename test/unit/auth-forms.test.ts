@@ -5,20 +5,20 @@ import {
 	formatLinkLifetime,
 	MAGIC_LINK_EXPIRES_IN,
 	PASSWORD_RESET_EXPIRES_IN,
-} from '@/lib/auth-constants';
+} from '@/lib/auth/auth-constants';
 import {
 	authErrorMessage,
 	authLinkErrorMessage,
 	isLinkError,
-} from '@/lib/auth-errors';
+} from '@/lib/auth/auth-errors';
 import {
 	firstIssue,
 	loginSchema,
 	magicLinkSignupSchema,
 	passwordSchema,
 	registerSchema,
-} from '@/lib/auth-validation';
-import { phoneNumberSchema } from '@/lib/user-validation';
+} from '@/lib/auth/auth-validation';
+import { phoneNumberSchema } from '@/lib/auth/user-validation';
 
 describe('link lifetimes (plan 02, 2.3)', () => {
 	it('magic link 15 minutes, reset and verification 1 hour', () => {

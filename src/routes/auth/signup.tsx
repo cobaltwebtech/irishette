@@ -18,14 +18,20 @@ import { type AuthMode, useAuthMode } from '@/components/auth/useAuthMode';
 import { useAuthRequest } from '@/components/auth/useAuthRequest';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { requireNoSession } from '@/lib/auth-check';
-import { authClient } from '@/lib/auth-client';
+import { requireNoSession } from '@/lib/auth/auth-check';
+import { authClient } from '@/lib/auth/auth-client';
 import {
 	EMAIL_VERIFICATION_EXPIRES_IN,
 	formatLinkLifetime,
-} from '@/lib/auth-constants';
-import { magicLinkSignupSchema, registerSchema } from '@/lib/auth-validation';
-import { DEFAULT_AUTH_REDIRECT, redirectSearchParam } from '@/lib/redirect';
+} from '@/lib/auth/auth-constants';
+import {
+	magicLinkSignupSchema,
+	registerSchema,
+} from '@/lib/auth/auth-validation';
+import {
+	DEFAULT_AUTH_REDIRECT,
+	redirectSearchParam,
+} from '@/lib/auth/redirect';
 
 export const Route = createFileRoute('/auth/signup')({
 	head: () => ({

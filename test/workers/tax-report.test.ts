@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test';
 
 import { paymentRefunds, paymentTransactions } from '@/db/schema-export';
-import { newId } from '@/lib/ids';
+import { newId } from '@/utils/ids';
 
 import { caller, db, insertBooking, trpcError } from './helpers';
 import { TEXAS } from './seed';

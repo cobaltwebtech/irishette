@@ -8,14 +8,14 @@ import { AuthSubmitButton } from '@/components/auth/AuthSubmitButton';
 import { PasswordField } from '@/components/auth/PasswordField';
 import { useAuthRequest } from '@/components/auth/useAuthRequest';
 import { buttonVariants } from '@/components/ui/button';
-import { requireNoSession } from '@/lib/auth-check';
-import { authClient } from '@/lib/auth-client';
+import { requireNoSession } from '@/lib/auth/auth-check';
+import { authClient } from '@/lib/auth/auth-client';
 import {
 	formatLinkLifetime,
 	PASSWORD_RESET_EXPIRES_IN,
-} from '@/lib/auth-constants';
-import { authLinkErrorMessage, isLinkError } from '@/lib/auth-errors';
-import { passwordSchema } from '@/lib/auth-validation';
+} from '@/lib/auth/auth-constants';
+import { authLinkErrorMessage, isLinkError } from '@/lib/auth/auth-errors';
+import { passwordSchema } from '@/lib/auth/auth-validation';
 import { cn } from '@/utils/twMerge';
 
 // Better Auth redirects the email link here with ?token=... (valid) or

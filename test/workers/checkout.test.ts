@@ -6,10 +6,10 @@ import {
 	paymentRefunds,
 	paymentTransactions,
 } from '@/db/schema-export';
-import { HOLD_MINUTES } from '@/lib/availability';
-import { addDays } from '@/lib/date-range';
-import { createStripe } from '@/lib/stripe';
-import { dateInZone } from '@/lib/timezone';
+import { HOLD_MINUTES } from '@/lib/booking/availability';
+import { createStripe } from '@/lib/stripe/stripe';
+import { addDays } from '@/utils/date-range';
+import { dateInZone } from '@/utils/timezone';
 
 import {
 	bookingInput,

@@ -21,9 +21,9 @@ import {
 	createInnerTRPCContext,
 } from '@/integrations/trpc/inner-context';
 import { trpcRouter } from '@/integrations/trpc/router';
-import { newId, newPublicId } from '@/lib/ids';
-import type { InboxKind } from '@/lib/inbox';
-import { checkInAt, checkOutAt } from '@/lib/stay-times';
+import { checkInAt, checkOutAt } from '@/lib/booking/stay-times';
+import type { InboxKind } from '@/lib/inbox/inbox';
+import { newId, newPublicId } from '@/utils/ids';
 
 import worker from './entry';
 import { ADMIN, GUEST, OTHER_GUEST, ROSE } from './seed';

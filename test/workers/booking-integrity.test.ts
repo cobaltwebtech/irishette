@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vite-plus/test';
 
 import { bookings, paymentRefunds } from '@/db/schema-export';
-import { addDays } from '@/lib/date-range';
+import { addDays } from '@/utils/date-range';
 
 import {
 	bookingInput,

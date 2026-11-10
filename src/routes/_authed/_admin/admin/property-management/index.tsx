@@ -37,7 +37,7 @@ import {
 import { toast } from '@/components/ui/toast';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
-import { formatDateCT } from '@/lib/timezone';
+import { formatDateCT } from '@/utils/timezone';
 
 // Same input as the admin sidebar, so both share one cache entry.
 const ROOMS_INPUT = { limit: 100 };

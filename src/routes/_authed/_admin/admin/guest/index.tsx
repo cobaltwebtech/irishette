@@ -12,7 +12,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
-import { formatDateCT } from '@/lib/timezone';
+import { formatDateCT } from '@/utils/timezone';
 
 type GuestRow = RouterOutputs['users']['adminListGuests']['guests'][number];
 

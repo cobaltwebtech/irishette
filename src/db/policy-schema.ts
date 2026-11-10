@@ -7,13 +7,13 @@ import {
 	uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 
-import { newId } from '../lib/ids';
+import { newId } from '@/utils/ids';
 
 // Cancellation & refund policy (docs/cancellation-refund-policy.md), stored so
 // an admin can change it. Policies are versioned: changing the policy creates
 // a new row and deactivates the old one, and each booking keeps the id of the
 // policy it was booked under. A booking with no policy id was booked under the
-// built-in default (src/lib/cancellation-policy.ts DEFAULT_CANCELLATION_POLICY).
+// built-in default (src/lib/booking/cancellation-policy.ts DEFAULT_CANCELLATION_POLICY).
 export const cancellationPolicies = sqliteTable(
 	'cancellation_policies',
 	{
@@ -31,7 +31,7 @@ export const cancellationPolicies = sqliteTable(
 );
 
 // Refund tiers, counted back from check-in at 4:00 PM CT on the local clock
-// (src/lib/cancellation-policy.ts). A cancellation at or before a tier's
+// (src/lib/booking/cancellation-policy.ts). A cancellation at or before a tier's
 // cutoff gets that tier's refund (the most notice first).
 export const cancellationPolicyTiers = sqliteTable(
 	'cancellation_policy_tiers',

@@ -13,9 +13,9 @@ inbound email) is deferred: `.agents/plans/deferred-email-messaging.md`.
 | File | What |
 |---|---|
 | `src/db/inbox-schema.ts` | `admin_inbox_items` table |
-| `src/lib/inbox.ts` | Sources, kinds, statuses, labels, the per-kind `details` types, `stripePaymentUrl`, `stripeDisputeUrl`, `contactReplyHref` (shared, client-safe) |
-| `src/lib/inbox-validation.ts` | Zod inputs of the procedures, the keyset cursor, the page's search params |
-| `src/lib/inbox-service.ts` | `createInboxItem` / `createInboxItemInBackground` (server-only) |
+| `src/lib/inbox/inbox.ts` | Sources, kinds, statuses, labels, the per-kind `details` types, `stripePaymentUrl`, `stripeDisputeUrl`, `contactReplyHref` (shared, client-safe) |
+| `src/lib/inbox/inbox-validation.ts` | Zod inputs of the procedures, the keyset cursor, the page's search params |
+| `src/lib/inbox/inbox-service.ts` | `createInboxItem` / `createInboxItemInBackground` (server-only) |
 | `src/integrations/trpc/inbox.ts` | The `inbox` tRPC router (all admin; see `TRPC_QUICK_REFERENCE.md`) |
 | `src/routes/_authed/_admin/admin/inbox/index.tsx` | The list (server-paginated TanStack Table, filters, bulk actions) |
 | `src/routes/_authed/_admin/admin/inbox/$publicId.tsx` | One item (marks it read on open) |
@@ -27,7 +27,7 @@ Every item has a `source` (a tag in the UI and a filter) and a `kind`.
 
 | Kind | Source | Created by | Dedupe key | Linked to |
 |---|---|---|---|---|
-| `contact_form` | `guest` | The contact form (`src/lib/contact-service.ts`, `CONTACT_FORM.md`) | none (one item per message) | nothing (the guest is not looked up) |
+| `contact_form` | `guest` | The contact form (`src/lib/inbox/contact-service.ts`, `CONTACT_FORM.md`) | none (one item per message) | nothing (the guest is not looked up) |
 | `refund_auto` | `system` | `refundUnavailableBooking` (`checkout-service.ts`): paid, but the dates were taken, refunded in full | `refund_auto:<bookingId>` | booking, guest |
 | `refund_failed` | `stripe` | Webhook `refund.failed` / `refund.updated` to `failed` (`refund-service.ts`), once per refund | `refund_failed:<refundId>` | booking and guest when found |
 | `refund_issued` | `stripe` | A refund made in the Stripe Dashboard (`refund.created` / `refund.updated`, `refund-service.ts`); app refunds get none. Resurfaces on each status change | `refund:<refundId>` | booking, guest |
@@ -38,7 +38,7 @@ Every item has a `source` (a tag in the UI and a filter) and a `kind`.
 Deleting a `payment_dispute` item removes only the notification; the dispute
 record in `payment_disputes` stays (a financial record).
 
-`details` is small JSON (`InboxDetailsByKind` in `src/lib/inbox.ts`): amounts,
+`details` is small JSON (`InboxDetailsByKind` in `src/lib/inbox/inbox.ts`): amounts,
 Stripe ids, room and feed names, the problem text. Never secrets, card data
 or whole webhook payloads. Contact form items hold the message as the guest
 typed it (unverified).
@@ -108,7 +108,7 @@ Items are kept until an admin deletes them (no cron).
 ## Adding a kind
 
 1. Add it to `inboxKinds`, `INBOX_KIND_LABELS`, `INBOX_KIND_SOURCE` and
-   `InboxDetailsByKind` in `src/lib/inbox.ts` (a new source also needs
+   `InboxDetailsByKind` in `src/lib/inbox/inbox.ts` (a new source also needs
    `inboxSources`, `INBOX_SOURCE_LABELS` and a style in
    `src/components/admin/inbox/inbox-ui.tsx`). Kinds and sources are TEXT
    columns, so no migration is needed.

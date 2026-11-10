@@ -24,7 +24,7 @@ import { toast } from '@/components/ui/toast';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { TRPCRouter } from '@/integrations/trpc/router';
 import { CHECK_IN_TIME_LABEL } from '@/lib/site';
-import { formatDateTimeCT } from '@/lib/timezone';
+import { formatDateTimeCT } from '@/utils/timezone';
 
 export const Route = createFileRoute(
 	'/_authed/_admin/admin/cancellation-policy',

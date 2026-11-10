@@ -17,9 +17,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { submitContactFn } from '@/core/functions/contact';
-import type { ContactResult } from '@/lib/contact-service';
-import { contactSchema } from '@/lib/contact-validation';
-import { useSession } from '@/lib/session';
+import { useSession } from '@/lib/auth/session';
+import type { ContactResult } from '@/lib/inbox/contact-service';
+import { contactSchema } from '@/lib/inbox/contact-validation';
 import {
 	CHECK_IN_TIME_LABEL,
 	CHECK_OUT_TIME_LABEL,

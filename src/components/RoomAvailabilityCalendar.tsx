@@ -6,6 +6,8 @@ import type { DateRange } from 'react-day-picker';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { useTRPC } from '@/integrations/trpc/react';
+import { SAME_DAY_CUTOFF_LABEL } from '@/lib/site';
+import { parseISODateString, toISODateString } from '@/utils/booking-utils';
 import {
 	addDays,
 	BOOKING_WINDOW_MONTHS,
@@ -16,9 +18,7 @@ import {
 	isStayAvailable,
 	MAX_NIGHTS,
 	type Unavailability,
-} from '@/lib/date-range';
-import { SAME_DAY_CUTOFF_LABEL } from '@/lib/site';
-import { parseISODateString, toISODateString } from '@/utils/booking-utils';
+} from '@/utils/date-range';
 
 interface RoomAvailabilityCalendarProps {
 	roomSlug: string;
@@ -42,7 +42,7 @@ const EMPTY: Unavailability = { stays: [], events: [], blocks: [] };
 
 /**
  * Booking calendar. Uses the same date rules as the server
- * (src/lib/date-range.ts): a day is unavailable for check-in if its night is
+ * (src/utils/date-range.ts): a day is unavailable for check-in if its night is
  * booked, held, imported or blocked; check-out is allowed on the first
  * unavailable day after an available night ("checkout only").
  */

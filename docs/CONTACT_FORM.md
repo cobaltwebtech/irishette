@@ -13,7 +13,7 @@ deferred (`.agents/plans/deferred-email-messaging.md`).
 
 1. The form (name, email, optional phone, subject, optional booking
    confirmation ID, message) validates with `contactSchema`
-   (`src/lib/contact-validation.ts`) in the browser for field errors, and
+   (`src/lib/inbox/contact-validation.ts`) in the browser for field errors, and
    needs a Turnstile token (invisible widget, `TurnstileField`). Signed-in
    guests get their name, email and phone prefilled; `?booking=ABC123`
    prefills the confirmation ID.
@@ -24,9 +24,9 @@ deferred (`.agents/plans/deferred-email-messaging.md`).
      HTTP 429, `Retry-After: 60`, the usual `rate-limited` log line, and an
      error the form shows ("Too many requests...").
    - `.validator(contactSchema)`: the same schema again on the server.
-   - The handler calls `submitContactForm` (`src/lib/contact-service.ts`).
+   - The handler calls `submitContactForm` (`src/lib/inbox/contact-service.ts`).
 3. `submitContactForm(deps, input, ip)`:
-   - `verifyTurnstile` (`src/lib/turnstile.ts`): Siteverify with
+   - `verifyTurnstile` (`src/lib/inbox/turnstile.ts`): Siteverify with
      `TURNSTILE_SECRET_KEY`, the token and `remoteip` (`cf-connecting-ip`),
      10 s timeout. **Fails closed** (network error, timeout, non-2xx,
      unreadable body). Checks `success` only (the `hostname` / `action`

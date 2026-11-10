@@ -7,7 +7,7 @@
 // .agents/plans/02-cleanup-and-fixes-2026-11.md). The phone number is a
 // placeholder until the client provides the real one.
 
-export { PROPERTY_TIMEZONE } from './timezone';
+export { PROPERTY_TIMEZONE } from '@/utils/timezone';
 
 export const SITE_NAME = 'Irishette';
 export const SITE_URL = 'https://irishette.com';

@@ -2,16 +2,16 @@ import { QueryClient } from '@tanstack/react-query';
 import { isRedirect } from '@tanstack/react-router';
 import { describe, expect, it, vi } from 'vite-plus/test';
 
-import type { AppSession } from '@/lib/session-user';
+import type { AppSession } from '@/lib/auth/session-user';
 
 // getSessionFn is a server function (Better Auth, cloudflare:workers). The
 // guards only read the per-request QueryClient here, which the tests seed.
 vi.mock('@/core/functions/auth-server', () => ({ getSessionFn: vi.fn() }));
 
 const { optionalAuth, requireAdmin, requireAuth, requireNoSession } =
-	await import('@/lib/auth-check');
+	await import('@/lib/auth/auth-check');
 const { freshSessionQueryOptions, sessionQueryOptions } =
-	await import('@/lib/session');
+	await import('@/lib/auth/session');
 
 const user = {
 	id: 'u1',

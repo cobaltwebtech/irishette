@@ -13,7 +13,7 @@ import {
 	RATE_LIMIT_PERIOD_SECONDS,
 	type RateLimiterName,
 	tooManyRequestsResponse,
-} from '@/lib/rate-limit';
+} from '@/lib/security/rate-limit';
 
 /** Thrown by rateLimitFnMiddleware; the client sees this message. */
 export const RATE_LIMITED_MESSAGE =

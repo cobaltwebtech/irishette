@@ -5,14 +5,14 @@ import { Button } from '@/components/ui/button';
 import {
 	formatLinkLifetime,
 	MAGIC_LINK_EXPIRES_IN,
-} from '@/lib/auth-constants';
+} from '@/lib/auth/auth-constants';
 
 import { AuthCard } from './AuthCard';
 
 /**
  * "Check your email" step after a magic link, verification or password reset
  * email was requested. `lifetime` is the link's real expiry
- * (formatLinkLifetime in src/lib/auth-constants.ts).
+ * (formatLinkLifetime in src/lib/auth/auth-constants.ts).
  */
 export function CheckEmailPanel({
 	email,

@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 
-import { handleStripeWebhook } from '@/lib/stripe-webhook';
+import { handleStripeWebhook } from '@/lib/stripe/stripe-webhook';
 
-// Server route for the Stripe webhook (handler in src/lib/stripe-webhook.ts).
+// Server route for the Stripe webhook (handler in src/lib/stripe/stripe-webhook.ts).
 export const Route = createFileRoute('/api/stripe/$')({
 	server: {
 		handlers: {

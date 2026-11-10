@@ -21,7 +21,7 @@ import { NotFound } from '@/components/not-found';
 import { ScrollRestoration } from '@/components/scroll-restoration';
 import { Toaster } from '@/components/ui/toast';
 import type { TRPCRouter } from '@/integrations/trpc/router';
-import { type AppSession, sessionQueryOptions } from '@/lib/session';
+import { type AppSession, sessionQueryOptions } from '@/lib/auth/session';
 import { seo } from '@/utils/seo';
 
 import appCss from '@/styles/styles.css?url';

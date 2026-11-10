@@ -18,7 +18,7 @@ const serverAuth = vi.hoisted(() => {
 	}
 	return { ServerFnAuthError, authorizeRequest: vi.fn() };
 });
-vi.mock('@/lib/server-auth', () => serverAuth);
+vi.mock('@/lib/auth/server-auth', () => serverAuth);
 
 const { requireAdminMiddleware, requireSessionMiddleware } =
 	await import('@/core/middleware/auth');

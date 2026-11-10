@@ -28,7 +28,7 @@ import {
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
-import { formatDateTimeCT } from '@/lib/timezone';
+import { formatDateTimeCT } from '@/utils/timezone';
 import { cn } from '@/utils/twMerge';
 
 type AdminBooking = RouterOutputs['bookings']['adminGetBooking'];

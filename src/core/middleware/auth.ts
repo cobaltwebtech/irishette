@@ -4,8 +4,8 @@ import {
 	setResponseStatus,
 } from '@tanstack/react-start/server';
 
-import { authorizeRequest, ServerFnAuthError } from '@/lib/server-auth';
-import type { SessionUser } from '@/lib/session-user';
+import { authorizeRequest, ServerFnAuthError } from '@/lib/auth/server-auth';
+import type { SessionUser } from '@/lib/auth/session-user';
 
 // Function middleware for TanStack Start server functions that read or write
 // private data. Attach per function, never globally (getSessionFn is public):
@@ -15,9 +15,9 @@ import type { SessionUser } from '@/lib/session-user';
 //     .validator(schema)
 //     .handler(({ context }) => ... context.user ...)
 //
-// Route guards (src/lib/auth-check.ts) are UX only and do not protect server
+// Route guards (src/lib/auth/auth-check.ts) are UX only and do not protect server
 // functions. Failures answer 401 (signed out) or 403 (banned / not an admin).
-// The checks live in src/lib/server-auth.ts (same rules as tRPC's
+// The checks live in src/lib/auth/server-auth.ts (same rules as tRPC's
 // protectedProcedure / adminProcedure).
 
 async function authorize(level: 'user' | 'admin'): Promise<SessionUser> {

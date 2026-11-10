@@ -1,9 +1,9 @@
-import { cancellationPolicyInputSchema } from '@/lib/cancellation-policy';
+import { cancellationPolicyInputSchema } from '@/lib/booking/cancellation-policy';
 import {
 	getActiveCancellationPolicy,
 	listCancellationPolicies,
 	saveCancellationPolicy,
-} from '@/lib/cancellation-policy-store';
+} from '@/lib/booking/cancellation-policy-store';
 
 import { adminProcedure, createTRPCRouter, publicProcedure } from './init';
 

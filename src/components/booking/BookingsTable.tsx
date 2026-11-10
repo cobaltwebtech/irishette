@@ -16,7 +16,7 @@ import {
 } from '@/components/data-table';
 import { Badge } from '@/components/ui/badge';
 import type { RouterOutputs } from '@/integrations/trpc/types';
-import { formatStayDate } from '@/lib/timezone';
+import { formatStayDate } from '@/utils/timezone';
 
 // Booking lists: shared cells, column presets (admin vs account rows) and
 // one `BookingsTable` card. Pages keep choosing which rows to show.

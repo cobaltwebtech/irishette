@@ -6,7 +6,7 @@ import {
 	priceStay,
 	roundCents,
 	ruleNightPrice,
-} from '@/lib/pricing';
+} from '@/lib/booking/pricing';
 
 const room = {
 	basePrice: 100,

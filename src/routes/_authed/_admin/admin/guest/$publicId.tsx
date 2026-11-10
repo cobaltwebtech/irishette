@@ -33,7 +33,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { orNotFound } from '@/integrations/trpc/errors';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
-import { formatDateCT } from '@/lib/timezone';
+import { formatDateCT } from '@/utils/timezone';
 
 type BookingRow =
 	RouterOutputs['users']['adminGetGuestDetails']['bookings'][number];

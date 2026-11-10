@@ -44,12 +44,12 @@ import {
 	INBOX_SOURCE_LABELS,
 	type InboxSource,
 	inboxSources,
-} from '@/lib/inbox';
+} from '@/lib/inbox/inbox';
 import {
 	INBOX_PAGE_SIZES,
 	type InboxView,
 	inboxSearchSchema,
-} from '@/lib/inbox-validation';
+} from '@/lib/inbox/inbox-validation';
 import { cn } from '@/utils/twMerge';
 
 type Row = RouterOutputs['inbox']['adminList']['items'][number];

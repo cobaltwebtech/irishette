@@ -3,7 +3,6 @@ import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 
 import { buttonVariants } from '@/components/ui/button';
-import { formatMoney, humanizeCode } from '@/lib/format';
 import {
 	contactReplyHref,
 	type InboxDetails,
@@ -11,11 +10,12 @@ import {
 	type InboxKind,
 	stripeDisputeUrl,
 	stripePaymentUrl,
-} from '@/lib/inbox';
-import { formatInstantCT } from '@/lib/timezone';
+} from '@/lib/inbox/inbox';
+import { formatMoney, humanizeCode } from '@/utils/format';
+import { formatInstantCT } from '@/utils/timezone';
 import { cn } from '@/utils/twMerge';
 
-// The body of one notification, by kind (src/lib/inbox.ts). Guest-typed text
+// The body of one notification, by kind (src/lib/inbox/inbox.ts). Guest-typed text
 // (contact form) is shown as plain text; React escapes it.
 
 interface Item {

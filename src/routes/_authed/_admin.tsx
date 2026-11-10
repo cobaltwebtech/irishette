@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 
-import { requireAdmin } from '@/lib/auth-check';
+import { requireAdmin } from '@/lib/auth/auth-check';
 
 /**
  * Pathless admin layout (UX guard, see requireAdmin). The real enforcement is

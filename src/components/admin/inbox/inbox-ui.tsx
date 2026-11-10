@@ -6,8 +6,8 @@ import {
 	INBOX_SOURCE_LABELS,
 	type InboxKind,
 	type InboxSource,
-} from '@/lib/inbox';
-import { formatDateTimeCT } from '@/lib/timezone';
+} from '@/lib/inbox/inbox';
+import { formatDateTimeCT } from '@/utils/timezone';
 import { cn } from '@/utils/twMerge';
 
 // Small shared pieces of the admin notification pages and panels.

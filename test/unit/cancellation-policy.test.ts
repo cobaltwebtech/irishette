@@ -5,8 +5,8 @@ import {
 	DEFAULT_CANCELLATION_POLICY,
 	quoteCancellation,
 	refundCutoffs,
-} from '@/lib/cancellation-policy';
-import { zonedTimeToUtc } from '@/lib/timezone';
+} from '@/lib/booking/cancellation-policy';
+import { zonedTimeToUtc } from '@/utils/timezone';
 
 // Windows count back from check-in at 4:00 PM CT on the local clock
 // (plan 02, 3.5 / 3.9). Check-in Jun 10, 2030 at 16:00 CDT = 21:00Z; the 72 h

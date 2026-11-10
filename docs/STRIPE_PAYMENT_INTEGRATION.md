@@ -18,27 +18,27 @@ Stripe commands without explicit approval.
 
 | Package | Version | Where |
 |---|---|---|
-| `stripe` | `23.1.0` (pinned) | Server: `src/lib/stripe.ts` |
+| `stripe` | `23.1.0` (pinned) | Server: `src/lib/stripe/stripe.ts` |
 | `@stripe/stripe-js` | `^10.2.1` | Client: `loadStripe` in `src/components/booking/PaymentStep.tsx` |
 | `@stripe/react-stripe-js` | `^7.0.1` | Client: `CheckoutElementsProvider`, `useCheckoutElements`, `PaymentElement` from `@stripe/react-stripe-js/checkout` |
-| `@better-auth/stripe` | `1.7.18` (pinned, same as `better-auth`) | Customer creation, `src/lib/auth.ts` |
+| `@better-auth/stripe` | `1.7.18` (pinned, same as `better-auth`) | Customer creation, `src/lib/auth/auth.ts` |
 
-`STRIPE_API_VERSION` in `src/lib/stripe.ts` is `2026-10-28.endive`; keep the
+`STRIPE_API_VERSION` in `src/lib/stripe/stripe.ts` is `2026-10-28.endive`; keep the
 webhook endpoints on the same version. `createStripe()` in the same file is the
 only place a server Stripe client is built (server-only). Services get it from
-`ServiceDeps` (`src/lib/deps.ts`): the tRPC context provides one, and the
+`ServiceDeps` (`src/lib/server/deps.ts`): the tRPC context provides one, and the
 webhook and cron handlers build one with `createServiceDeps()`.
 
 ## Files
 
 | File | What |
 |---|---|
-| `src/lib/checkout-service.ts` | Session creation (`prepareCheckout`), confirmation (`confirmBookingPayment`), automatic refund on conflict, hold/session helpers (`closeHoldSession`, `markProcessing`, `releaseFailedPayment`, `releaseExpiredSessionHold`) |
-| `src/lib/booking-service.ts` | Pricing, holds (`createHold`, `refreshHold`, the priority rule), cancellations |
-| `src/lib/refund-service.ts` | Refund webhooks (`refund.*`, `charge.refunded`) |
-| `src/lib/dispute-service.ts` | Dispute webhooks (`charge.dispute.*`), `hasOpenDispute` |
-| `src/lib/stripe-webhook.ts` | Signature check and `dispatch` |
-| `src/lib/stripe.ts` | Client, `stripeBookingMetadata`, `toCents`, `stripeId` |
+| `src/lib/booking/checkout-service.ts` | Session creation (`prepareCheckout`), confirmation (`confirmBookingPayment`), automatic refund on conflict, hold/session helpers (`closeHoldSession`, `markProcessing`, `releaseFailedPayment`, `releaseExpiredSessionHold`) |
+| `src/lib/booking/booking-service.ts` | Pricing, holds (`createHold`, `refreshHold`, the priority rule), cancellations |
+| `src/lib/booking/refund-service.ts` | Refund webhooks (`refund.*`, `charge.refunded`) |
+| `src/lib/booking/dispute-service.ts` | Dispute webhooks (`charge.dispute.*`), `hasOpenDispute` |
+| `src/lib/stripe/stripe-webhook.ts` | Signature check and `dispatch` |
+| `src/lib/stripe/stripe.ts` | Client, `stripeBookingMetadata`, `toCents`, `stripeId` |
 
 ## Payment flow
 
@@ -67,7 +67,7 @@ All payment procedures are `protectedProcedure` and load the booking with
   session is expired so it can't be paid. If Stripe reports the session was
   completed after all, that booking is confirmed (or marked processing) and
   the new hold is refused with `CONFLICT`. Nobody pays and then gets refunded.
-- Checks availability (`checkAvailability()` in `src/lib/availability.ts`): a
+- Checks availability (`checkAvailability()` in `src/lib/booking/availability.ts`): a
   confirmed booking, a live hold, or a hold with `paymentStatus: 'processing'`
   (even past its expiry) blocks the dates.
 - Prices the stay on the server (`quoteStay()`). Prices sent by the client are
@@ -189,7 +189,7 @@ and `checkout.session.expired` skip it. Then:
 
 ### Expired holds (cron)
 
-`scheduledBookingCleanup()` (`5 8 * * *`, `src/lib/scheduled-tasks.ts`)
+`scheduledBookingCleanup()` (`5 8 * * *`, `src/lib/server/scheduled-tasks.ts`)
 releases pending holds past `expiresAt` that are not processing
 (`releaseExpiredHold()` → `closeHoldSession()`):
 
@@ -204,7 +204,7 @@ releases pending holds past `expiresAt` that are not processing
 
 ## Cancellations and refunds
 
-`cancelBooking()` in `src/lib/booking-service.ts`, called by
+`cancelBooking()` in `src/lib/booking/booking-service.ts`, called by
 `bookings.cancelBooking` (guest, refund `policy`) and
 `bookings.adminCancelBooking` (`adminProcedure`, refund `full`, `policy` or
 `none`).
@@ -236,7 +236,7 @@ releases pending holds past `expiresAt` that are not processing
 
 ## Refunds made in the Stripe Dashboard
 
-`handleRefundEvent()` (`src/lib/refund-service.ts`) upserts every refund into
+`handleRefundEvent()` (`src/lib/booking/refund-service.ts`) upserts every refund into
 `payment_refunds` and compares the stored status:
 
 - **App refunds** (`metadata.source === 'irishette'`): status sync only. A
@@ -261,7 +261,7 @@ releases pending holds past `expiresAt` that are not processing
 
 ## Disputes
 
-`handleDisputeEvent()` (`src/lib/dispute-service.ts`) stores each dispute in
+`handleDisputeEvent()` (`src/lib/booking/dispute-service.ts`) stores each dispute in
 `payment_disputes` (upsert by `stripe_dispute_id`) with the amount, reason,
 status, network reason code, evidence due date, card brand/last 4 and the
 closed / funds withdrawn / reinstated times. It links the dispute to the
@@ -279,9 +279,9 @@ the admin booking lists show an "Open dispute" badge.
 ## Customers
 
 - The Better Auth Stripe plugin (`stripe({ createCustomerOnSignUp: true })` in
-  `src/lib/auth.ts`) creates a Stripe customer at sign-up and stores it on
+  `src/lib/auth/auth.ts`) creates a Stripe customer at sign-up and stores it on
   `user.stripeCustomerId`. Plugin subscriptions are not enabled.
-- `ensureStripeCustomer()` in `src/lib/checkout-service.ts` is the fallback for
+- `ensureStripeCustomer()` in `src/lib/booking/checkout-service.ts` is the fallback for
   users without a customer (idempotency key `customer/<userId>`).
 - **No saved cards:** sessions set
   `saved_payment_method_options.payment_method_save: 'disabled'` and no
@@ -291,7 +291,7 @@ the admin booking lists show an "Open dispute" badge.
 
 | Endpoint | Handler | Secret |
 |---|---|---|
-| `/api/stripe/webhook` | `src/routes/api/stripe.$.ts` -> `handleStripeWebhook()` in `src/lib/stripe-webhook.ts` | `STRIPE_TRPC_WEBHOOK_SECRET` |
+| `/api/stripe/webhook` | `src/routes/api/stripe.$.ts` -> `handleStripeWebhook()` in `src/lib/stripe/stripe-webhook.ts` | `STRIPE_TRPC_WEBHOOK_SECRET` |
 
 `handleStripeWebhook()` requires `Content-Type: application/json` and a
 `stripe-signature` header, then verifies the raw body with
@@ -317,7 +317,7 @@ booking confirmation ids and error messages only.
 
 ## Emails
 
-Sent with Resend from `src/lib/email-service.ts`, in the background via
+Sent with Resend from `src/lib/email/email-service.ts`, in the background via
 `inBackground()`. Booking emails share one booking-details section
 (`src/components/email/BookingDetailsSection.tsx`: confirmation id, room,
 check-in/out with times, nights, guests, guest name/email/phone, special

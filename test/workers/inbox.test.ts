@@ -2,8 +2,8 @@ import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vite-plus/test';
 
 import { adminInboxItems } from '@/db/schema-export';
-import type { InboxKind } from '@/lib/inbox';
-import { createInboxItem, type NewInboxItem } from '@/lib/inbox-service';
+import type { InboxKind } from '@/lib/inbox/inbox';
+import { createInboxItem, type NewInboxItem } from '@/lib/inbox/inbox-service';
 
 import { caller, db, insertBooking, trpcError } from './helpers';
 import { GUEST } from './seed';

@@ -1,7 +1,7 @@
 # Testing Cron Jobs in Local Development
 
 The Worker's `scheduled` handler lives in `src/server.ts` and dispatches to
-`handleScheduledEvent` in `src/lib/scheduled-tasks.ts`. Cron triggers are
+`handleScheduledEvent` in `src/lib/server/scheduled-tasks.ts`. Cron triggers are
 declared in `cloudflare.config.ts`.
 
 | Schedule | Task |
@@ -11,7 +11,7 @@ declared in `cloudflare.config.ts`.
 | `15 9 * * *` | iCal sync log cleanup (09:15 UTC) |
 
 Changing a schedule requires updating both `cloudflare.config.ts` and
-`CRON_SCHEDULES` in `src/lib/scheduled-tasks.ts` (see `CRON_JOBS_SETUP.md`).
+`CRON_SCHEDULES` in `src/lib/server/scheduled-tasks.ts` (see `CRON_JOBS_SETUP.md`).
 
 The quickest check is the test suite, which calls the handler directly:
 `pnpm test:workers` (`test/workers/scheduled.test.ts`,

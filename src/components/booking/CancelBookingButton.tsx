@@ -20,7 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/toast';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
-import { formatMoney } from '@/lib/format';
+import { formatMoney } from '@/utils/format';
 
 const currency = (amount: number) => formatMoney(amount);
 

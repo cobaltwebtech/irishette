@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 
 import { rateLimitRequests } from '@/core/middleware/rate-limit';
-import { handleCspReport } from '@/lib/csp-report';
+import { handleCspReport } from '@/lib/security/csp-report';
 
 // Browser CSP violation reports (report-uri and report-to) during the
 // report-only period. Summaries go to Workers Logs; nothing is stored.

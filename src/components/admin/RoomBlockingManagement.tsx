@@ -39,13 +39,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/toast';
 import type { TRPCRouter } from '@/integrations/trpc/router';
-import { daysBetween } from '@/lib/date-range';
 import type {
 	CreateBlockedPeriod,
 	RoomBlockedPeriod,
 	UpdateBlockedPeriod,
-} from '@/lib/room-validation';
-import { formatStayDate } from '@/lib/timezone';
+} from '@/lib/booking/room-validation';
+import { daysBetween } from '@/utils/date-range';
+import { formatStayDate } from '@/utils/timezone';
 import { useTodayCT } from '@/utils/use-now';
 
 /** A block or stay date (YYYY-MM-DD), shown the same for everyone. */

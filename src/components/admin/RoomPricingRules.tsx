@@ -41,8 +41,8 @@ import type {
 	CreatePricingRule,
 	RoomPricingRule,
 	UpdatePricingRule,
-} from '@/lib/room-validation';
-import { formatStayDate } from '@/lib/timezone';
+} from '@/lib/booking/room-validation';
+import { formatStayDate } from '@/utils/timezone';
 import { useTodayCT } from '@/utils/use-now';
 
 /** Overlap details from a CONFLICT error (data.conflict). */

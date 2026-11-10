@@ -5,8 +5,8 @@ platforms through iCal feeds, in both directions.
 
 | Direction | What | Code |
 |---|---|---|
-| Import | Other platforms' reservations block dates here | `src/lib/ical-sync.ts`, `src/lib/ical-parse.ts` |
-| Export | Our bookings and blocks block dates on the platforms | `src/lib/ical-export.ts`, `src/lib/ical-generate.ts` |
+| Import | Other platforms' reservations block dates here | `src/lib/ical/ical-sync.ts`, `src/lib/ical/ical-parse.ts` |
+| Export | Our bookings and blocks block dates on the platforms | `src/lib/ical/ical-export.ts`, `src/lib/ical/ical-generate.ts` |
 
 Admin UI: **Admin → Property → (room) → Calendar Integrations**
 (`src/components/admin/RoomCalendarIntegration.tsx`). Admin API: the `ical`
@@ -29,7 +29,7 @@ contain the platform's secret and are only returned by admin procedures.
 - "Sync now" in the admin UI (`ical.syncRoom`, all of a room's feeds).
 
 Each feed card in the admin UI shows "Next sync at": the next cron boundary
-(`nextIcalSyncAt` in `src/lib/ical-feed-sources.ts`, "Paused" for inactive
+(`nextIcalSyncAt` in `src/lib/ical/ical-feed-sources.ts`, "Paused" for inactive
 feeds). If the cron schedule changes, update `ICAL_SYNC_INTERVAL_MINUTES` there
 too.
 
@@ -38,7 +38,7 @@ Evaluate a 5-minute cron at production go-live.
 ### One sync run (`syncFeed`)
 
 1. **Fetch** with a 10 s timeout and `If-None-Match` / `If-Modified-Since`
-   through `fetchFeed` (`src/lib/ical-fetch.ts`): public `https:` URLs only
+   through `fetchFeed` (`src/lib/ical/ical-fetch.ts`): public `https:` URLs only
    (no IP literals, `localhost` or credentials), checked again on each of up
    to 5 redirects, and bodies over 5 MB are refused. Feed URLs are validated
    with the same rule when saved, and the admin "Test URL" action
@@ -99,7 +99,7 @@ hours).
 
 ## Date rules
 
-Shared by the server and the booking calendar (`src/lib/date-range.ts`):
+Shared by the server and the booking calendar (`src/utils/date-range.ts`):
 
 | Rule | Condition |
 |---|---|

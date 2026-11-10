@@ -8,8 +8,8 @@ import {
 	uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 
-import { icalFeedSources } from '../lib/ical-feed-sources';
-import { newIcalExportToken, newId, newPublicId } from '../lib/ids';
+import { icalFeedSources } from '@/lib/ical/ical-feed-sources';
+import { newIcalExportToken, newId, newPublicId } from '@/utils/ids';
 
 export const room = sqliteTable('room', {
 	id: text('id').primaryKey().$defaultFn(newId),

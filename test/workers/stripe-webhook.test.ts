@@ -8,7 +8,7 @@ import {
 	paymentRefunds,
 	paymentTransactions,
 } from '@/db/schema-export';
-import { createStripe } from '@/lib/stripe';
+import { createStripe } from '@/lib/stripe/stripe';
 
 import {
 	caller,

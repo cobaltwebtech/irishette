@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test';
 
-import { parseCspReports } from '@/lib/csp-report';
+import { parseCspReports } from '@/lib/security/csp-report';
 import {
 	CSP_REPORT_PATH,
 	contentSecurityPolicy,
 	securityHeadersFor,
 	withHeaders,
-} from '@/lib/security-headers';
+} from '@/lib/security/security-headers';
 
 function directive(policy: string, name: string): string[] {
 	const found = policy

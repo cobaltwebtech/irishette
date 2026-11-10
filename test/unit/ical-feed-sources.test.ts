@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test';
 
-import { nextIcalSyncAt } from '@/lib/ical-feed-sources';
+import { nextIcalSyncAt } from '@/lib/ical/ical-feed-sources';
 
 describe('nextIcalSyncAt', () => {
 	it('rounds up to the next :00 or :30 (UTC)', () => {

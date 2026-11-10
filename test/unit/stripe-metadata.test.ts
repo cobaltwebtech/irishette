@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test';
 
-import { checkoutLineItems } from '@/lib/checkout-service';
-import { stripeBookingMetadata, toCents } from '@/lib/stripe';
+import { checkoutLineItems } from '@/lib/booking/checkout-service';
+import { stripeBookingMetadata, toCents } from '@/lib/stripe/stripe';
 
 describe('stripeBookingMetadata', () => {
 	const booking = {

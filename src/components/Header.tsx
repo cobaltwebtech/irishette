@@ -4,8 +4,8 @@ import { Link, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
 
 import { Button, buttonVariants } from '@/components/ui/button';
-import { signOut } from '@/lib/auth-client';
-import { clearSession, useSession } from '@/lib/session';
+import { signOut } from '@/lib/auth/auth-client';
+import { clearSession, useSession } from '@/lib/auth/session';
 import { useBookingStore } from '@/stores';
 import { cn } from '@/utils/twMerge';
 

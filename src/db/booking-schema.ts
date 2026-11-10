@@ -6,8 +6,9 @@ import {
 	text,
 } from 'drizzle-orm/sqlite-core';
 
-import { bookingStatuses, paymentStatuses } from '../lib/booking-status';
-import { newId, newPublicId } from '../lib/ids';
+import { bookingStatuses, paymentStatuses } from '@/lib/booking/booking-status';
+import { newId, newPublicId } from '@/utils/ids';
+
 import { user } from './auth-schema';
 import { cancellationPolicies } from './policy-schema';
 import { room } from './room-schema';
@@ -31,7 +32,7 @@ export const bookings = sqliteTable(
 
 		// Core booking data. Stay dates are property-local YYYY-MM-DD; the
 		// normalized instants (UTC seconds) are check-in at 4:00 PM CT and
-		// check-out at 11:00 AM CT on those dates (src/lib/stay-times.ts).
+		// check-out at 11:00 AM CT on those dates (src/lib/booking/stay-times.ts).
 		checkInDate: text('check_in_date').notNull(),
 		checkOutDate: text('check_out_date').notNull(),
 		checkInAt: integer('check_in_at', { mode: 'timestamp' }).notNull(),
@@ -56,7 +57,7 @@ export const bookings = sqliteTable(
 		stateTaxAmount: real('state_tax_amount'),
 		cityTaxAmount: real('city_tax_amount'),
 
-		// Status (src/lib/booking-status.ts). Stay timing is derived.
+		// Status (src/lib/booking/booking-status.ts). Stay timing is derived.
 		status: text('status', { enum: bookingStatuses })
 			.notNull()
 			.default('pending'),

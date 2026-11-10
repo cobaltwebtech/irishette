@@ -15,11 +15,8 @@ import type { z } from 'zod';
 
 import type { Database } from '@/db/drizzle-init';
 import { room, roomBlockedPeriods, roomPricingRules } from '@/db/schema-export';
-import { blockIsFree, findBlockConflicts } from '@/lib/availability';
-import { quoteStay } from '@/lib/booking-service';
-import { inclusiveRangesOverlap } from '@/lib/date-range';
-import { isUniqueViolation } from '@/lib/db-errors';
-import { newId } from '@/lib/ids';
+import { blockIsFree, findBlockConflicts } from '@/lib/booking/availability';
+import { quoteStay } from '@/lib/booking/booking-service';
 import {
 	adminGetRoomsSchema,
 	calculatePricingSchema,
@@ -35,8 +32,11 @@ import {
 	updateBlockedPeriodSchema,
 	updatePricingRuleSchema,
 	updateRoomSchema,
-} from '@/lib/room-validation';
-import { todayIn } from '@/lib/timezone';
+} from '@/lib/booking/room-validation';
+import { inclusiveRangesOverlap } from '@/utils/date-range';
+import { isUniqueViolation } from '@/utils/db-errors';
+import { newId } from '@/utils/ids';
+import { todayIn } from '@/utils/timezone';
 
 import {
 	adminProcedure,

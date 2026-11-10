@@ -11,9 +11,9 @@ import {
 	CardTitle,
 } from '@/components/ui/card';
 import type { RouterOutputs } from '@/integrations/trpc/types';
-import type { BookingStatus } from '@/lib/booking-status';
+import type { BookingStatus } from '@/lib/booking/booking-status';
 import { CHECK_IN_TIME_LABEL, CHECK_OUT_TIME_LABEL } from '@/lib/site';
-import { formatStayDate } from '@/lib/timezone';
+import { formatStayDate } from '@/utils/timezone';
 
 // Presentational cards shared by the guest booking page, the booking
 // confirmation page and the admin booking page. They take only fields the

@@ -1,7 +1,7 @@
 import { HttpResponse } from 'msw';
 import { describe, expect, it } from 'vite-plus/test';
 
-import { MAX_FEED_BYTES } from '@/lib/ical-fetch';
+import { MAX_FEED_BYTES } from '@/lib/ical/ical-fetch';
 
 import { caller, trpcError } from './helpers';
 import { calendarResponse, mockFeed, vcalendar } from './mocks';

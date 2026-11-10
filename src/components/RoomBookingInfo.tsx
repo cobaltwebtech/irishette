@@ -10,8 +10,8 @@ import {
 	CardHeader,
 	CardTitle,
 } from '@/components/ui/card';
-import { formatStayDate } from '@/lib/timezone';
 import { toISODateString } from '@/utils/booking-utils';
+import { formatStayDate } from '@/utils/timezone';
 
 interface BookingInfoProps {
 	selectedDateRange: DateRange | undefined;

@@ -1,6 +1,9 @@
 import { createMiddleware } from '@tanstack/react-start';
 
-import { securityHeadersFor, withHeaders } from '@/lib/security-headers';
+import {
+	securityHeadersFor,
+	withHeaders,
+} from '@/lib/security/security-headers';
 
 /**
  * Global request middleware (src/start.tsx): adds the security headers and

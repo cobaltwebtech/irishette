@@ -22,8 +22,8 @@ and the iCal export feed are separate HTTP routes (see
 | `src/integrations/trpc/types.ts` | `RouterOutputs` (e.g. `RouterOutputs['bookings']['getMyBookings']`) |
 | `src/routes/api/trpc.$.ts` | HTTP handler (`fetchRequestHandler`) for `GET`/`POST /api/trpc/*` |
 | `src/router.tsx` | `getRouter`: per-request `QueryClient`, tRPC client, options proxy and provider |
-| `src/lib/deps.ts` | `ServiceDeps` / `createServiceDeps`: the `db`, `env`, `stripe`, `waitUntil` part of the context |
-| `src/lib/*-validation.ts` | Zod input schemas (`payment-validation.ts`, `room-validation.ts`, `inbox-validation.ts`, `report-validation.ts`, ...) |
+| `src/lib/server/deps.ts` | `ServiceDeps` / `createServiceDeps`: the `db`, `env`, `stripe`, `waitUntil` part of the context |
+| `src/lib/**/*-validation.ts` | Zod input schemas (`payment-validation.ts`, `room-validation.ts`, `inbox-validation.ts`, `report-validation.ts`, ...) |
 
 ## Request flow
 
@@ -75,7 +75,7 @@ services in `src/lib/` (`booking-service.ts`, `ical-sync.ts`). The Stripe
 webhook and cron handlers build the same deps with `createServiceDeps`.
 
 `createTRPCContext` calls `auth().api.getSession({ headers })`, which honours
-Better Auth's 5-minute session cookie cache (`src/lib/auth.ts`).
+Better Auth's 5-minute session cookie cache (`src/lib/auth/auth.ts`).
 
 ## Procedures and middleware
 
@@ -87,7 +87,7 @@ Better Auth's 5-minute session cookie cache (`src/lib/auth.ts`).
 
 `rateLimit(limiter, scope)` (`init.ts`) is a middleware for individual
 procedures: it counts the call against a Cloudflare Rate Limiting binding
-(`src/lib/rate-limit.ts`), keyed by user id when signed in, else by IP, and
+(`src/lib/security/rate-limit.ts`), keyed by user id when signed in, else by IP, and
 throws `TOO_MANY_REQUESTS` over the limit. Used on `bookings.calculateBooking`,
 `rooms.calculatePricing` and `ical.testUrl` (`API_RATE_LIMITER`, 60 per minute
 per key). The access checks live in `src/integrations/trpc/access.ts`.
@@ -106,7 +106,7 @@ per key). The access checks live in `src/integrations/trpc/access.ts`.
   (`throw new TRPCError({ code: 'CONFLICT', cause: { conflicts } })`), else
   `null`.
 
-Code conventions used by the routers and `src/lib/booking-service.ts`:
+Code conventions used by the routers and `src/lib/booking/booking-service.ts`:
 
 | Code | Used for |
 |---|---|
@@ -157,7 +157,7 @@ Room outputs use `publicRoomColumns` (never `icalExportToken`).
 
 ### `bookings` (`src/integrations/trpc/bookings.ts`)
 
-Schemas are in `src/lib/payment-validation.ts`. Owner checks go through
+Schemas are in `src/lib/booking/payment-validation.ts`. Owner checks go through
 `findAccessibleBooking`, which returns `NOT_FOUND` for other users' bookings.
 
 Guest responses (`getBooking`, `getMyBookings`) select `GUEST_BOOKING_FIELDS`:
@@ -210,7 +210,7 @@ returned only here. See `ICAL_SYNC_README.md`.
 | `createFeed` | mutation | admin | `createIcalFeedSchema` (`roomId`, `source`, `label?`, public https `url`, `isActive`) | Add a feed. `CONFLICT` on duplicate URL for the room |
 | `updateFeed` | mutation | admin | `updateIcalFeedSchema` (`id` + optional fields) | Update a feed; a new URL resets etag, last-modified, counts and error |
 | `deleteFeed` | mutation | admin | `{ id }` | Delete a feed and its imported events |
-| `testUrl` | mutation | admin, rate-limited | `testIcalUrlSchema` (`url`) | Fetch a URL with the sync's rules (`src/lib/ical-fetch.ts`: https only, no IP literals or localhost, also after redirects; 10 s timeout; 5 MB cap) and report whether it is an iCal feed and its event counts |
+| `testUrl` | mutation | admin, rate-limited | `testIcalUrlSchema` (`url`) | Fetch a URL with the sync's rules (`src/lib/ical/ical-fetch.ts`: https only, no IP literals or localhost, also after redirects; 10 s timeout; 5 MB cap) and report whether it is an iCal feed and its event counts |
 | `syncRoom` | mutation | admin | `roomIdSchema` + `force` (default `false`) | "Sync now" for all of a room's feeds (`syncRoomFeeds`) |
 | `getSyncLogs` | query | admin | `{ roomId?, feedId? (idSchema), limit 1-100 (20) }` | Sync runs, newest first, with feed label |
 | `getSyncChanges` | query | admin | `{ syncLogId }` | What one run changed, with the overlapping booking's `publicId` / `confirmationId` |
@@ -218,15 +218,15 @@ returned only here. See `ICAL_SYNC_README.md`.
 | `regenerateExportToken` | mutation | admin | `roomIdSchema` | New export token; returns the new URL (the old one stops working) |
 
 `roomIdSchema`, `createIcalFeedSchema`, `updateIcalFeedSchema` and
-`testIcalUrlSchema` are in `src/lib/room-validation.ts`. Feed URLs must pass
-`isSafeFeedUrl` (`src/lib/ical-fetch.ts`).
+`testIcalUrlSchema` are in `src/lib/booking/room-validation.ts`. Feed URLs must pass
+`isSafeFeedUrl` (`src/lib/ical/ical-fetch.ts`).
 
 ### `policies` (`src/integrations/trpc/policies.ts`)
 
 | Procedure | Type | Access | Input | Purpose |
 |---|---|---|---|---|
 | `getCancellationPolicy` | query | public | none | Active cancellation policy (name, tiers, `isDefault`), shown at checkout with each tier's cutoff in CT. Windows always count back from 4:00 PM CT (no per-policy time or zone) |
-| `saveCancellationPolicy` | mutation | admin | `cancellationPolicyInputSchema` (`name`, `tiers`; `src/lib/cancellation-policy.ts`) | Save a new policy version for future bookings; existing bookings keep theirs |
+| `saveCancellationPolicy` | mutation | admin | `cancellationPolicyInputSchema` (`name`, `tiers`; `src/lib/booking/cancellation-policy.ts`) | Save a new policy version for future bookings; existing bookings keep theirs |
 | `listCancellationPolicies` | query | admin | none | All saved policy versions |
 
 ### `users` (`src/integrations/trpc/users.ts`)
@@ -235,7 +235,7 @@ returned only here. See `ICAL_SYNC_README.md`.
 |---|---|---|---|---|
 | `adminListGuests` | query | admin | `{ limit 1-100 (50), offset }` | Users with role `user`, with non-pending booking count, `total`, `hasMore` |
 | `adminGetGuestDetails` | query | admin | `{ publicId }` (`publicIdSchema`) | The guest's profile (explicit columns: `publicId`, name, email, `emailVerified`, phone, role, `stripeCustomerId`, `createdAt`; no ban fields or internal id), their non-pending bookings (with `stayPhase`) and their payment `disputes` |
-| `updateProfile` | mutation | user | `updateProfileSchema` (`src/lib/user-validation.ts`): `{ name? (trimmed, 1-100), phoneNumber? (phoneNumberSchema: trimmed, max 20 chars, at least 10 digits; null removes it) }` | Update the caller's own name and phone; omitted fields stay. The only way to change the phone (`additionalFields.phoneNumber` has `input: false` in Better Auth). `CONFLICT` if the phone is used by another account. Email changes go through Better Auth's `changeEmail` |
+| `updateProfile` | mutation | user | `updateProfileSchema` (`src/lib/auth/user-validation.ts`): `{ name? (trimmed, 1-100), phoneNumber? (phoneNumberSchema: trimmed, max 20 chars, at least 10 digits; null removes it) }` | Update the caller's own name and phone; omitted fields stay. The only way to change the phone (`additionalFields.phoneNumber` has `input: false` in Better Auth). `CONFLICT` if the phone is used by another account. Email changes go through Better Auth's `changeEmail` |
 
 `users.updatePhoneNumber` was merged into `updateProfile` in plan 02 Phase 2
 (listed in `REMOVED` in `trpc-authz.test.ts`). The booking input's
@@ -244,7 +244,7 @@ returned only here. See `ICAL_SYNC_README.md`.
 ### `inbox` (`src/integrations/trpc/inbox.ts`)
 
 The admin notification inbox (`ADMIN_INBOX.md`). All admin; items are
-addressed by `publicId`. Schemas are in `src/lib/inbox-validation.ts`. List
+addressed by `publicId`. Schemas are in `src/lib/inbox/inbox-validation.ts`. List
 rows carry no `details` JSON and no internal ids.
 
 | Procedure | Type | Access | Input | Purpose |
@@ -261,7 +261,7 @@ rows carry no `details` JSON and no internal ids.
 ### `reports` (`src/integrations/trpc/reports.ts`)
 
 Admin reports (`TAX_REPORTING.md`). Schemas are in
-`src/lib/report-validation.ts`.
+`src/lib/reports/report-validation.ts`.
 
 | Procedure | Type | Access | Input | Returns |
 |---|---|---|---|---|
@@ -274,7 +274,7 @@ The contact form is a TanStack Start server function, not a tRPC procedure
 
 - **Auth is enforced in procedures, not routes.** The `_authed` and
   `_authed/_admin` layouts (`src/routes/_authed.tsx`,
-  `src/routes/_authed/_admin.tsx`, guards in `src/lib/auth-check.ts`) only
+  `src/routes/_authed/_admin.tsx`, guards in `src/lib/auth/auth-check.ts`) only
   redirect for UX. Every procedure behind them is `protectedProcedure` or
   `adminProcedure`. (TanStack Start server functions with private data use
   `requireSessionMiddleware` / `requireAdminMiddleware` instead; see
@@ -294,7 +294,7 @@ The contact form is a TanStack Start server function, not a tRPC procedure
   applies to the next call. `protectedProcedure` rejects a banned session user
   (Better Auth also deletes a banned user's sessions).
 - **Browser side:** the QueryClient's query and mutation caches
-  (`src/router.tsx`, `createAuthErrorHandler` in `src/lib/session.ts`) refresh
+  (`src/router.tsx`, `createAuthErrorHandler` in `src/lib/auth/session.ts`) refresh
   the session and re-run the route guards when a call fails with
   `UNAUTHORIZED` or `FORBIDDEN` (at most every 10 s). The admin layout reads a
   database-fresh session (`freshSessionQueryOptions`) on each SSR load and at
@@ -314,16 +314,16 @@ The contact form is a TanStack Start server function, not a tRPC procedure
   price fields for compatibility and ignores them; `quoteStay` is the single
   price calculation for the calendar, checkout and the hold.
 - **Validation:** every procedure that takes input validates it with Zod.
-  Shared schemas live in `src/lib/payment-validation.ts`,
-  `src/lib/room-validation.ts`, `src/lib/cancellation-policy.ts`;
-  `publicIdSchema` (`src/lib/ids.ts`, 16 chars `[0-9a-z]`), `idSchema`
+  Shared schemas live in `src/lib/booking/payment-validation.ts`,
+  `src/lib/booking/room-validation.ts`, `src/lib/booking/cancellation-policy.ts`;
+  `publicIdSchema` (`src/utils/ids.ts`, 16 chars `[0-9a-z]`), `idSchema`
   (UUIDv7 primary keys in admin inputs) and `isoDateSchema`
-  (`src/lib/date-range.ts`) are reused. Small inputs are inline.
+  (`src/utils/date-range.ts`) are reused. Small inputs are inline.
 - **Errors:** unexpected errors are hidden from clients by `errorFormatter` and
   logged by the handler's `onError`. Do not log input, payment payloads or
   session data.
 - **Server-only modules:** `context.ts`, `inner-context.ts`, `router.ts` and
-  `src/lib/deps.ts` import `cloudflare:workers` or secrets. Components and
+  `src/lib/server/deps.ts` import `cloudflare:workers` or secrets. Components and
   routes import only `react.ts`, `errors.ts`, `types.ts` and `import type`
   from `router.ts`; `client.ts` is isomorphic and imported only by
   `src/router.tsx`.
@@ -332,10 +332,10 @@ The contact form is a TanStack Start server function, not a tRPC procedure
 
 | Route | File | Methods | What |
 |---|---|---|---|
-| `/api/auth/*` | `src/routes/api/auth.$.ts` | GET, POST, PUT, DELETE, PATCH, OPTIONS | Better Auth handler (`src/lib/auth.ts`): email/password, magic link, admin, Stripe customer plugin (customer creation only; its webhook path `/api/auth/stripe/webhook` is disabled and returns 404), Turnstile `captcha` on sign-in, sign-up, magic link and password reset. Route middleware `rateLimitRequests('AUTH_RATE_LIMITER')` (30 per minute per IP), then Better Auth's own D1 limits; every 429 is logged as `rate-limited`. Returns `500 Auth error` if the handler throws |
-| `/api/csp-report` | `src/routes/api/csp-report.ts` | POST | CSP violation reports (`report-uri` and `report-to` formats), `handleCspReport` (`src/lib/csp-report.ts`). Logs one `csp-violation` line per report to Workers Logs (directive, blocked origin, document path, disposition); stores nothing. Rate-limited per IP (`CSP_REPORT_RATE_LIMITER`). 204, or 400/413/415 |
-| `/api/stripe/webhook` | `src/routes/api/stripe.$.ts` | POST | Booking webhook, `handleStripeWebhook` (`src/lib/stripe-webhook.ts`). Requires JSON and a `stripe-signature` verified with `STRIPE_TRPC_WEBHOOK_SECRET`. Handles `checkout.session.*` (confirm, processing, release), `refund.*` and `charge.refunded` (refund sync, Dashboard refund emails), `charge.dispute.*` (disputes), `payment_intent.payment_failed` (log); the list is in `STRIPE_WEBHOOKS.md`. Other paths under `/api/stripe` are 404 |
-| `/api/ical/<room publicId>/<token>.ics` | `src/routes/api/ical.$.ts` | GET | iCal export feed, `handleIcalExportRequest` (`src/lib/ical-export.ts`). Token compared in constant time; any mismatch is a plain 404. See `ICAL_SYNC_README.md` |
+| `/api/auth/*` | `src/routes/api/auth.$.ts` | GET, POST, PUT, DELETE, PATCH, OPTIONS | Better Auth handler (`src/lib/auth/auth.ts`): email/password, magic link, admin, Stripe customer plugin (customer creation only; its webhook path `/api/auth/stripe/webhook` is disabled and returns 404), Turnstile `captcha` on sign-in, sign-up, magic link and password reset. Route middleware `rateLimitRequests('AUTH_RATE_LIMITER')` (30 per minute per IP), then Better Auth's own D1 limits; every 429 is logged as `rate-limited`. Returns `500 Auth error` if the handler throws |
+| `/api/csp-report` | `src/routes/api/csp-report.ts` | POST | CSP violation reports (`report-uri` and `report-to` formats), `handleCspReport` (`src/lib/security/csp-report.ts`). Logs one `csp-violation` line per report to Workers Logs (directive, blocked origin, document path, disposition); stores nothing. Rate-limited per IP (`CSP_REPORT_RATE_LIMITER`). 204, or 400/413/415 |
+| `/api/stripe/webhook` | `src/routes/api/stripe.$.ts` | POST | Booking webhook, `handleStripeWebhook` (`src/lib/stripe/stripe-webhook.ts`). Requires JSON and a `stripe-signature` verified with `STRIPE_TRPC_WEBHOOK_SECRET`. Handles `checkout.session.*` (confirm, processing, release), `refund.*` and `charge.refunded` (refund sync, Dashboard refund emails), `charge.dispute.*` (disputes), `payment_intent.payment_failed` (log); the list is in `STRIPE_WEBHOOKS.md`. Other paths under `/api/stripe` are 404 |
+| `/api/ical/<room publicId>/<token>.ics` | `src/routes/api/ical.$.ts` | GET | iCal export feed, `handleIcalExportRequest` (`src/lib/ical/ical-export.ts`). Token compared in constant time; any mismatch is a plain 404. See `ICAL_SYNC_README.md` |
 | `/api/trpc/*` | `src/routes/api/trpc.$.ts` | GET, POST | tRPC |
 
 The session for route guards comes from the `getSessionFn` server function
@@ -343,7 +343,7 @@ The session for route guards comes from the `getSessionFn` server function
 `SessionUser` (no token, IP or user agent).
 
 Every response also passes the global request middleware in `src/start.tsx`:
-security headers (`src/lib/security-headers.ts`: `X-Content-Type-Options`,
+security headers (`src/lib/security/security-headers.ts`: `X-Content-Type-Options`,
 `Referrer-Policy`, `X-Frame-Options`, and on non-`/api/` responses a
 `Content-Security-Policy-Report-Only` with `Reporting-Endpoints`) and Start's
 CSRF check for server functions.
@@ -403,7 +403,7 @@ function BookingDetailPage() {
 
 ## Adding a procedure
 
-1. Put the input schema in the matching `src/lib/*-validation.ts` (or inline if
+1. Put the input schema in the matching `src/lib/**/*-validation.ts` (or inline if
    it is small and used once). Use `publicIdSchema` / `idSchema` /
    `isoDateSchema` for ids and dates.
 2. Add the procedure to the router file with the narrowest builder:

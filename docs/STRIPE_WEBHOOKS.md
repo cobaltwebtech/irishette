@@ -37,7 +37,7 @@ When the production domain is set, also update `BETTER_AUTH_URL`, set
 |---|---|
 | Events from | Your account |
 | Payload style | Snapshot (the handler needs full objects, not thin events) |
-| API version | `2026-10-28.endive` (matches `STRIPE_API_VERSION` in `src/lib/stripe.ts`) |
+| API version | `2026-10-28.endive` (matches `STRIPE_API_VERSION` in `src/lib/stripe/stripe.ts`) |
 
 Endpoints created earlier were on `2025-08-27.basil`. Update or recreate the
 endpoint on `2026-10-28.endive`, and save its new signing secret.
@@ -49,7 +49,7 @@ Suggested name: `tRPC Endpoint`. Description: booking system payments
 Auth.
 
 **Required.** Keep this list in sync with the `switch (event.type)` in
-`dispatch` (`src/lib/stripe-webhook.ts`).
+`dispatch` (`src/lib/stripe/stripe-webhook.ts`).
 
 #### Booking payments with Checkout Sessions
 
@@ -125,14 +125,14 @@ exists from earlier setups, delete it.
 `@better-auth/stripe` 1.7.18 only uses its webhook for subscriptions
 (`checkout.session.completed` in subscription mode and
 `customer.subscription.*`). The app has no subscriptions, so the route is
-turned off with `disabledPaths: ['/stripe/webhook']` in `src/lib/auth.ts`
+turned off with `disabledPaths: ['/stripe/webhook']` in `src/lib/auth/auth.ts`
 (it returns 404) and has no signing secret.
 
 The plugin still links each user to a Stripe customer without webhooks:
 `createCustomerOnSignUp` creates the customer with a direct API call when the
 user row is created and stores `user.stripeCustomerId`, and an email change
 updates the customer the same way. `ensureStripeCustomer`
-(`src/lib/checkout-service.ts`) reuses that id, or creates it if missing, and
+(`src/lib/booking/checkout-service.ts`) reuses that id, or creates it if missing, and
 attaches it to every Checkout Session.
 
 If subscriptions are ever enabled, remove the `disabledPaths` entry, add a

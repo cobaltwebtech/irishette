@@ -3,10 +3,10 @@ import { HttpResponse, http } from 'msw';
 import { beforeEach, describe, expect, it } from 'vite-plus/test';
 
 import { adminInboxItems } from '@/db/schema-export';
-import { submitContactForm } from '@/lib/contact-service';
-import type { ContactInput } from '@/lib/contact-validation';
+import { submitContactForm } from '@/lib/inbox/contact-service';
+import type { ContactInput } from '@/lib/inbox/contact-validation';
+import { verifyTurnstile } from '@/lib/inbox/turnstile';
 import { CONTACT_EMAIL, EMAIL_FROM_ADMIN } from '@/lib/site';
-import { verifyTurnstile } from '@/lib/turnstile';
 
 import { db, inboxItemsOfKind } from './helpers';
 import { mockResend, mockTurnstile } from './mocks';

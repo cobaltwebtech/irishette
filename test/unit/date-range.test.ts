@@ -12,7 +12,7 @@ import {
 	stayOverlapsEvent,
 	stayOverlapsStay,
 	type Unavailability,
-} from '@/lib/date-range';
+} from '@/utils/date-range';
 
 const stay = (checkIn: string, checkOut: string) => ({ checkIn, checkOut });
 

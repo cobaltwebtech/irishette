@@ -1,6 +1,6 @@
 import { Icon } from '@iconify/react';
 
-import { useSession } from '@/lib/session';
+import { useSession } from '@/lib/auth/session';
 import { useBookingStore } from '@/stores';
 import type { BookingStepItem } from '@/utils/booking-utils';
 

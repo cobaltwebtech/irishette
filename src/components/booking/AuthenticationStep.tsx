@@ -8,13 +8,13 @@ import { TurnstileField, useTurnstile } from '@/components/auth/TurnstileField';
 import { useAuthRequest } from '@/components/auth/useAuthRequest';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { authClient } from '@/lib/auth-client';
+import { authClient } from '@/lib/auth/auth-client';
 import {
 	formatLinkLifetime,
 	MAGIC_LINK_EXPIRES_IN,
-} from '@/lib/auth-constants';
-import { emailSchema } from '@/lib/auth-validation';
-import { useSession } from '@/lib/session';
+} from '@/lib/auth/auth-constants';
+import { emailSchema } from '@/lib/auth/auth-validation';
+import { useSession } from '@/lib/auth/session';
 import { useBookingStore } from '@/stores';
 
 export function AuthenticationStep() {

@@ -14,8 +14,7 @@ import { z } from 'zod';
 
 import type { Database } from '@/db/drizzle-init';
 import { adminInboxItems, bookings, user } from '@/db/schema-export';
-import { publicIdSchema } from '@/lib/ids';
-import type { InboxStatus } from '@/lib/inbox';
+import type { InboxStatus } from '@/lib/inbox/inbox';
 import {
 	decodeInboxCursor,
 	encodeInboxCursor,
@@ -23,7 +22,8 @@ import {
 	inboxFiltersSchema,
 	inboxListSchema,
 	inboxSetStatusSchema,
-} from '@/lib/inbox-validation';
+} from '@/lib/inbox/inbox-validation';
+import { publicIdSchema } from '@/utils/ids';
 
 import { adminProcedure, createTRPCRouter } from './init';
 

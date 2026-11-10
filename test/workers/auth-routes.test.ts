@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test';
 
-import { auth } from '@/lib/auth';
+import { auth } from '@/lib/auth/auth';
 
 // Requests go straight to the Better Auth handler (no Cloudflare rate-limit
 // binding in front), each from its own IP so Better Auth's D1 limits from

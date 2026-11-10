@@ -24,7 +24,7 @@ import type {
 	CreatePricingRule,
 	UpdateBlockedPeriod,
 	UpdatePricingRule,
-} from '@/lib/room-validation';
+} from '@/lib/booking/room-validation';
 
 export const Route = createFileRoute(
 	'/_authed/_admin/admin/property-management/$publicId',

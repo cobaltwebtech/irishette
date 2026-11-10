@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
-import { useSession } from '@/lib/session';
+import { useSession } from '@/lib/auth/session';
 import { bookingSteps, useBookingStore } from '@/stores';
 import { isPricingComplete } from '@/utils/booking-utils';
 

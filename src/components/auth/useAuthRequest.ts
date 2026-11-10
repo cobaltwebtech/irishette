@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import type { z } from 'zod';
 
-import { type AuthClientError, authErrorMessage } from '@/lib/auth-errors';
-import { firstIssue } from '@/lib/auth-validation';
+import { type AuthClientError, authErrorMessage } from '@/lib/auth/auth-errors';
+import { firstIssue } from '@/lib/auth/auth-validation';
 
 /**
  * Submit state for an auth form. `run` sends one Better Auth client request:

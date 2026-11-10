@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vite-plus/test';
 
-import { addMonths, lastBookableDate } from '@/lib/date-range';
 import {
 	checkInAt,
 	checkOutAt,
 	earliestCheckInDate,
 	localCutoff,
 	stayPhase,
-} from '@/lib/stay-times';
+} from '@/lib/booking/stay-times';
 import { isPricingComplete } from '@/utils/booking-utils';
+import { addMonths, lastBookableDate } from '@/utils/date-range';
 
 // Fixed check-in 4:00 PM and check-out 11:00 AM America/Chicago, stored as
 // UTC instants (plan 02, 3.9). The unit project runs with TZ=UTC.
@@ -124,7 +124,7 @@ describe('display formatters (US Central Time, en-US)', () => {
 	const original = process.env.TZ;
 
 	it('stay dates are calendar dates, the same in every time zone', async () => {
-		const { formatStayDate } = await import('@/lib/timezone');
+		const { formatStayDate } = await import('@/utils/timezone');
 		for (const tz of ['UTC', 'Asia/Tokyo', 'Pacific/Honolulu']) {
 			process.env.TZ = tz;
 			expect(formatStayDate('2030-06-10')).toBe('Jun 10, 2030');
@@ -140,7 +140,7 @@ describe('display formatters (US Central Time, en-US)', () => {
 
 	it('instants are shown in Central Time', async () => {
 		const { formatDateCT, formatDateTimeCT, yearCT } =
-			await import('@/lib/timezone');
+			await import('@/utils/timezone');
 		// 03:30Z on Jun 11 is still Jun 10 (10:30 PM CDT) at the property.
 		expect(formatDateCT('2030-06-11T03:30:00Z')).toBe('Jun 10, 2030');
 		expect(formatDateTimeCT('2030-06-11T03:30:00Z')).toBe(
