@@ -224,7 +224,7 @@ function AdminActionsCard({ booking }: { booking: AdminBooking['booking'] }) {
 			<CardContent className="space-y-4">
 				{booking.stripePaymentIntentId && (
 					<a
-						href={`https://dashboard.stripe.com/acct_1RwOD0B1s28979kR/payments/${booking.stripePaymentIntentId}`}
+						href={`https://dashboard.stripe.com/payments/${booking.stripePaymentIntentId}`}
 						target="_blank"
 						rel="noopener noreferrer"
 						data-slot="button"
