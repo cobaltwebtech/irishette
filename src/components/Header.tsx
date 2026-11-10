@@ -29,7 +29,7 @@ export default function Header() {
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
 	return (
-		<header className="sticky top-0 z-50 bg-linear-to-b from-secondary-foreground to-primary">
+		<header className="sticky top-0 z-50 bg-linear-to-b from-secondary-foreground to-primary print:hidden">
 			<div className="container mx-auto px-4 py-2">
 				<div className="flex items-center justify-between">
 					{/* Logo/Brand */}
