@@ -28,6 +28,11 @@ contain the platform's secret and are only returned by admin procedures.
   availability is checked again.
 - "Sync now" in the admin UI (`ical.syncRoom`, all of a room's feeds).
 
+Each feed card in the admin UI shows "Next sync at": the next cron boundary
+(`nextIcalSyncAt` in `src/lib/ical-feed-sources.ts`, "Paused" for inactive
+feeds). If the cron schedule changes, update `ICAL_SYNC_INTERVAL_MINUTES` there
+too.
+
 Evaluate a 5-minute cron at production go-live.
 
 ### One sync run (`syncFeed`)

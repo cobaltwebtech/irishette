@@ -1,5 +1,5 @@
 import { Icon } from '@iconify/react';
-import { useId } from 'react';
+import { type ComponentProps, useId, useState } from 'react';
 
 import {
 	Card,
@@ -10,6 +10,52 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+
+/**
+ * A number input that keeps what the admin types (empty, "0", "7.", ...)
+ * instead of re-formatting on every keystroke, so a value can be cleared and
+ * retyped, including 0. `scale` converts the shown number to the stored one
+ * (100 for percentages stored as decimals). Empty means 0.
+ */
+function DecimalInput({
+	value,
+	onValueChange,
+	scale = 1,
+	...props
+}: Omit<ComponentProps<typeof Input>, 'value' | 'onChange' | 'type'> & {
+	value: number;
+	onValueChange: (value: number) => void;
+	scale?: number;
+}) {
+	const format = (v: number) => String(Number((v * scale).toFixed(2)));
+	const parse = (text: string) => {
+		const n = Number.parseFloat(text);
+		return Number.isFinite(n) && n > 0 ? n / scale : 0;
+	};
+	const [draft, setDraft] = useState(() => format(value));
+	// Re-sync when the value changes from outside (e.g. after saving), but not
+	// while it matches what is being typed. Adjusting state during render:
+	// https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+	const [seen, setSeen] = useState(value);
+	if (seen !== value) {
+		setSeen(value);
+		if (parse(draft) !== value) setDraft(format(value));
+	}
+
+	return (
+		<Input
+			{...props}
+			type="number"
+			inputMode="decimal"
+			value={draft}
+			onChange={(e) => {
+				setDraft(e.target.value);
+				onValueChange(parse(e.target.value));
+			}}
+			onBlur={() => setDraft(format(value))}
+		/>
+	);
+}
 
 interface RoomPricingConfigProps {
 	basePrice: number;
@@ -50,7 +96,8 @@ export function RoomPricingConfig({
 					Pricing, Tax & Guests
 				</CardTitle>
 				<CardDescription>
-					Configure service fee and tax rates applied to room bookings. Hotel
+					Configure service fee and tax rates applied to room bookings. Any rate
+					can be 0%; zero charges are left off the guest's checkout. Hotel
 					occupancy tax is calculated on room price only (excluding service
 					fees).
 				</CardDescription>
@@ -85,13 +132,12 @@ export function RoomPricingConfig({
 					<Label htmlFor={basePriceId} className="mb-2 text-sm font-medium">
 						Room Nightly Base Price (USD)
 					</Label>
-					<Input
+					<DecimalInput
 						id={basePriceId}
-						type="number"
-						step="1.00"
+						step="0.01"
 						min="0"
-						value={basePrice.toFixed(2)}
-						onChange={(e) => onBasePriceChange(parseFloat(e.target.value) || 0)}
+						value={basePrice}
+						onValueChange={onBasePriceChange}
 						placeholder="0.00"
 					/>
 					<p className="mt-1 text-xs text-muted-foreground">
@@ -106,16 +152,14 @@ export function RoomPricingConfig({
 					>
 						Service Fee Rate (%)
 					</Label>
-					<Input
+					<DecimalInput
 						id={serviceFeeRateId}
-						type="number"
-						step="1.00"
+						step="0.01"
 						min="0"
 						max="100"
-						value={(serviceFeeRate * 100).toFixed(2)}
-						onChange={(e) =>
-							onServiceFeeRateChange(parseFloat(e.target.value) / 100 || 0)
-						}
+						scale={100}
+						value={serviceFeeRate}
+						onValueChange={onServiceFeeRateChange}
 						placeholder="0.00"
 					/>
 					<p className="mt-1 text-xs text-muted-foreground">
@@ -127,20 +171,18 @@ export function RoomPricingConfig({
 					<Label htmlFor={stateTaxRateId} className="mb-2 text-sm font-medium">
 						Texas Hotel Occupancy Tax Rate (%)
 					</Label>
-					<Input
+					<DecimalInput
 						id={stateTaxRateId}
-						type="number"
 						step="0.01"
 						min="0"
 						max="100"
-						value={(stateTaxRate * 100).toFixed(2)}
-						onChange={(e) =>
-							onStateTaxRateChange(parseFloat(e.target.value) / 100 || 0)
-						}
-						placeholder="6.00"
+						scale={100}
+						value={stateTaxRate}
+						onValueChange={onStateTaxRateChange}
+						placeholder="0.00"
 					/>
 					<p className="mt-1 text-xs text-muted-foreground">
-						Current: {(stateTaxRate * 100).toFixed(1)}%
+						Current: {(stateTaxRate * 100).toFixed(2)}%
 					</p>
 				</div>
 
@@ -148,16 +190,14 @@ export function RoomPricingConfig({
 					<Label htmlFor={cityTaxRateId} className="mb-2 text-sm font-medium">
 						City of Dublin Hotel Occupancy Tax Rate (%)
 					</Label>
-					<Input
+					<DecimalInput
 						id={cityTaxRateId}
-						type="number"
 						step="0.01"
 						min="0"
 						max="100"
-						value={(cityTaxRate * 100).toFixed(2)}
-						onChange={(e) =>
-							onCityTaxRateChange(parseFloat(e.target.value) / 100 || 0)
-						}
+						scale={100}
+						value={cityTaxRate}
+						onValueChange={onCityTaxRateChange}
 						placeholder="0.00"
 					/>
 					<p className="mt-1 text-xs text-muted-foreground">

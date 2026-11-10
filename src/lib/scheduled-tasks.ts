@@ -100,6 +100,7 @@ type Task = (deps: ServiceDeps) => Promise<unknown>;
 
 /** Cron expression → task. Unknown expressions do nothing. */
 export const CRON_SCHEDULES: Readonly<Record<string, Task>> = {
+	// Keep ICAL_SYNC_INTERVAL_MINUTES (src/lib/ical-feed-sources.ts) in step.
 	'*/30 * * * *': scheduledCalendarSync,
 	'5 8 * * *': (deps) => scheduledBookingCleanup(deps), // 08:05 UTC
 	'15 9 * * *': (deps) => scheduledIcalLogCleanup(deps), // 09:15 UTC

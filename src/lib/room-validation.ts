@@ -13,7 +13,7 @@ const roomStatusSchema = z.enum(['active', 'inactive', 'archived']);
 const rate = (label: string) =>
 	z
 		.number()
-		.min(0, `${label} must be positive`)
+		.min(0, `${label} cannot be negative`)
 		.max(1, `${label} cannot exceed 100%`);
 
 const roomBaseSchema = z.object({
@@ -24,7 +24,7 @@ const roomBaseSchema = z.object({
 		.min(1, 'Room slug is required')
 		.regex(/^[a-z0-9-]+$/, 'Use lowercase letters, numbers and dashes'),
 	description: z.string().optional(),
-	basePrice: z.number().min(0, 'Price must be positive'),
+	basePrice: z.number().min(0, 'Price cannot be negative'),
 	serviceFeeRate: rate('Service fee rate').default(0.12),
 	// Hotel Occupancy Tax rates (as decimals: 0.06 = 6%, 0.07 = 7%)
 	stateTaxRate: rate('State tax rate').default(0.06),

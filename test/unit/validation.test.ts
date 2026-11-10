@@ -8,7 +8,9 @@ import {
 import { redirectSearchParam } from '@/lib/redirect';
 import {
 	createPricingRuleSchema,
+	createRoomSchema,
 	updatePricingRuleSchema,
+	updateRoomSchema,
 } from '@/lib/room-validation';
 
 const rule = {
@@ -20,6 +22,37 @@ const rule = {
 	endDate: '2030-06-10',
 	isActive: true,
 };
+
+describe('room fee and tax rates', () => {
+	const room = { name: 'Rose Room', slug: 'rose-room', basePrice: 120 };
+
+	it('accepts 0% service fee and taxes', () => {
+		const result = createRoomSchema.safeParse({
+			...room,
+			serviceFeeRate: 0,
+			stateTaxRate: 0,
+			cityTaxRate: 0,
+		});
+		expect(result.success).toBe(true);
+		expect(
+			updateRoomSchema.safeParse({
+				id: 'room-1',
+				serviceFeeRate: 0,
+				stateTaxRate: 0,
+				cityTaxRate: 0,
+			}).success,
+		).toBe(true);
+	});
+
+	it('rejects negative rates and rates over 100%', () => {
+		expect(
+			createRoomSchema.safeParse({ ...room, serviceFeeRate: -0.01 }).success,
+		).toBe(false);
+		expect(
+			createRoomSchema.safeParse({ ...room, cityTaxRate: 1.01 }).success,
+		).toBe(false);
+	});
+});
 
 describe('pricing rule schemas', () => {
 	it('accepts a single-night rule (start = end)', () => {

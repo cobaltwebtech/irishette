@@ -30,7 +30,9 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/toast';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
+import { nextIcalSyncAt } from '@/lib/ical-feed-sources';
 import { formatDateTimeCT } from '@/lib/timezone';
+import { useNow } from '@/utils/use-now';
 
 type Feed = RouterOutputs['ical']['listFeeds'][number];
 type FeedSource = Feed['source'];
@@ -48,6 +50,19 @@ const sourceLabel = (source: string) =>
 
 const formatTime = (date: Date | null | undefined) =>
 	date ? formatDateTimeCT(date) : 'Never';
+
+/**
+ * Next scheduled sync for an active feed. Counted from the later of page
+ * load and the last attempt, so it moves forward when the feed list
+ * refetches after a sync.
+ */
+const nextSyncLabel = (feed: Feed, now: Date) => {
+	if (!feed.isActive) return 'Paused';
+	const last = feed.lastAttemptAt?.getTime() ?? 0;
+	return formatDateTimeCT(
+		nextIcalSyncAt(new Date(Math.max(now.getTime(), last))),
+	);
+};
 
 function syncSummary(results: SyncResult[]) {
 	const failed = results.filter(
@@ -67,6 +82,7 @@ function syncSummary(results: SyncResult[]) {
 export function RoomCalendarIntegration({ roomId }: { roomId: string }) {
 	const trpc = useTRPC();
 	const queryClient = useQueryClient();
+	const now = useNow();
 	const { data: feeds } = useSuspenseQuery(
 		trpc.ical.listFeeds.queryOptions({ roomId }),
 	);
@@ -265,7 +281,7 @@ export function RoomCalendarIntegration({ roomId }: { roomId: string }) {
 									<p className="truncate font-mono text-xs text-muted-foreground">
 										{feed.url}
 									</p>
-									<dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
+									<dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-3 lg:grid-cols-5">
 										<div>
 											<dt className="text-muted-foreground">Last success</dt>
 											<dd>{formatTime(feed.lastSuccessAt)}</dd>
@@ -273,6 +289,10 @@ export function RoomCalendarIntegration({ roomId }: { roomId: string }) {
 										<div>
 											<dt className="text-muted-foreground">Last attempt</dt>
 											<dd>{formatTime(feed.lastAttemptAt)}</dd>
+										</div>
+										<div>
+											<dt className="text-muted-foreground">Next sync at</dt>
+											<dd>{nextSyncLabel(feed, now)}</dd>
 										</div>
 										<div>
 											<dt className="text-muted-foreground">Events in feed</dt>

@@ -6,6 +6,27 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatStayDate } from '@/lib/timezone';
 import { useBookingStore } from '@/stores';
 
+/** One tax in the breakdown; hidden when that tax is 0 for the room. */
+function TaxBreakdownLine({
+	label,
+	rate,
+	amount,
+}: {
+	label: string;
+	rate: number;
+	amount: number;
+}) {
+	if (amount <= 0) return null;
+	return (
+		<div className="flex justify-between">
+			<span>
+				• {label} ({Number((rate * 100).toFixed(2))}%)
+			</span>
+			<span>${amount.toFixed(2)}</span>
+		</div>
+	);
+}
+
 export function BookingSummaryCard() {
 	const booking = useBookingStore();
 	const summary = booking.summary;
@@ -110,36 +131,16 @@ export function BookingSummaryCard() {
 									</div>
 									{booking.pricing.taxBreakdown && (
 										<div className="ml-2 space-y-1 text-xs text-muted-foreground">
-											<div className="flex justify-between">
-												<span>
-													• State of Texas (
-													{(
-														booking.pricing.taxBreakdown.stateTaxRate * 100
-													).toFixed(0)}
-													%)
-												</span>
-												<span>
-													$
-													{booking.pricing.taxBreakdown.stateTaxAmount.toFixed(
-														2,
-													)}
-												</span>
-											</div>
-											<div className="flex justify-between">
-												<span>
-													• City of Dublin (
-													{(
-														booking.pricing.taxBreakdown.cityTaxRate * 100
-													).toFixed(0)}
-													%)
-												</span>
-												<span>
-													$
-													{booking.pricing.taxBreakdown.cityTaxAmount.toFixed(
-														2,
-													)}
-												</span>
-											</div>
+											<TaxBreakdownLine
+												label="State of Texas"
+												rate={booking.pricing.taxBreakdown.stateTaxRate}
+												amount={booking.pricing.taxBreakdown.stateTaxAmount}
+											/>
+											<TaxBreakdownLine
+												label="City of Dublin"
+												rate={booking.pricing.taxBreakdown.cityTaxRate}
+												amount={booking.pricing.taxBreakdown.cityTaxAmount}
+											/>
 										</div>
 									)}
 								</div>

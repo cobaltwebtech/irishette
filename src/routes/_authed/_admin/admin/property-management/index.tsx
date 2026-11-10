@@ -34,6 +34,7 @@ import {
 	TableHeader,
 	TableRow,
 } from '@/components/ui/table';
+import { toast } from '@/components/ui/toast';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
 import { formatDateCT } from '@/lib/timezone';
@@ -71,10 +72,7 @@ type RoomFormData = {
 	description: string;
 	basePrice: number;
 	status: RoomStatus;
-	isActive: boolean; // Keep for backward compatibility
 };
-
-type EditMode = 'none' | 'add';
 
 const columnHelper = createAppColumnHelper<RoomRow>();
 
@@ -247,62 +245,52 @@ function RoomsTable({ table }: { table: DataTable<RoomRow> }) {
 	);
 }
 
-function PropertyManagement() {
+const EMPTY_ROOM: RoomFormData = {
+	name: '',
+	slug: '',
+	description: '',
+	basePrice: 0,
+	status: 'active',
+};
+
+/**
+ * New room: name, slug, description, base price and status. Fees, taxes,
+ * guests and calendars start at the defaults and are edited on the room page.
+ */
+function AddRoomForm({ onClose }: { onClose: () => void }) {
 	const roomNameId = useId();
 	const roomSlugId = useId();
 	const roomDescriptionId = useId();
 	const basePriceId = useId();
-	const [editMode, setEditMode] = useState<EditMode>('none');
-	const [formData, setFormData] = useState<RoomFormData>({
-		name: '',
-		slug: '',
-		description: '',
-		basePrice: 0,
-		status: 'active',
-		isActive: true,
-	});
+	const [formData, setFormData] = useState<RoomFormData>(EMPTY_ROOM);
 	const trpc = useTRPC();
 	const queryClient = useQueryClient();
 
-	const { data: roomsData } = useSuspenseQuery(
-		trpc.rooms.adminList.queryOptions(ROOMS_INPUT),
-	);
-
-	const rooms = roomsData.rooms;
-
 	const createRoomMutation = useMutation(
 		trpc.rooms.create.mutationOptions({
-			onSuccess: () => {
+			onSuccess: (_room, variables) => {
 				void queryClient.invalidateQueries(trpc.rooms.adminList.pathFilter());
 				void queryClient.invalidateQueries(trpc.rooms.list.pathFilter());
-				setEditMode('none');
+				onClose();
+				toast.add({
+					type: 'success',
+					title: 'Room added',
+					description: `${variables.name} was created. Open it to set pricing, taxes and calendars.`,
+					timeout: 5000,
+				});
 			},
 			onError: (error) => {
-				console.error('Failed to add room:', error);
+				toast.add({
+					type: 'error',
+					title: 'Could not add the room',
+					description: error.message,
+					timeout: 6000,
+				});
 			},
 		}),
 	);
 
-	// Room CRUD operations
-	const handleAddRoom = () => {
-		setEditMode('add');
-		setFormData({
-			name: '',
-			slug: '',
-			description: '',
-			basePrice: 0,
-			status: 'active',
-			isActive: true,
-		});
-	};
-
-	const handleSaveRoom = async () => {
-		createRoomMutation.mutate(formData);
-	};
-
-	const handleCancelEdit = () => {
-		setEditMode('none');
-	};
+	const handleSaveRoom = () => createRoomMutation.mutate(formData);
 
 	const handleNameChange = (name: string) => {
 		setFormData((prev) => ({
@@ -312,6 +300,141 @@ function PropertyManagement() {
 		}));
 	};
 
+	return (
+		<Card className="mb-6">
+			<CardHeader>
+				<CardTitle className="flex items-center gap-2">Add New Room</CardTitle>
+			</CardHeader>
+			<CardContent className="space-y-4">
+				<div>
+					<label
+						htmlFor={roomNameId}
+						className="mb-1 block text-sm font-medium"
+					>
+						Room Name
+					</label>
+					<Input
+						id={roomNameId}
+						value={formData.name}
+						onChange={(e) => handleNameChange(e.target.value)}
+						placeholder="e.g., Rose Room"
+					/>
+				</div>
+				<div>
+					<label
+						htmlFor={roomSlugId}
+						className="mb-1 block text-sm font-medium"
+					>
+						Slug
+					</label>
+					<Input
+						id={roomSlugId}
+						value={formData.slug}
+						onChange={(e) =>
+							setFormData((prev) => ({ ...prev, slug: e.target.value }))
+						}
+						placeholder="e.g., rose-room"
+					/>
+				</div>
+				<div>
+					<label
+						htmlFor={roomDescriptionId}
+						className="mb-1 block text-sm font-medium"
+					>
+						Description
+					</label>
+					<Input
+						id={roomDescriptionId}
+						value={formData.description}
+						onChange={(e) =>
+							setFormData((prev) => ({
+								...prev,
+								description: e.target.value,
+							}))
+						}
+						placeholder="Room description (optional)"
+					/>
+				</div>
+				<div>
+					<label
+						htmlFor={basePriceId}
+						className="mb-1 block text-sm font-medium"
+					>
+						Base Price ($)
+					</label>
+					<Input
+						id={basePriceId}
+						type="number"
+						step="0.01"
+						min="0"
+						value={formData.basePrice}
+						onChange={(e) =>
+							setFormData((prev) => ({
+								...prev,
+								basePrice: parseFloat(e.target.value) || 0,
+							}))
+						}
+						placeholder="0.00"
+					/>
+				</div>
+				<div className="flex items-center gap-2">
+					<div className="text-sm font-medium">Change Room Status:</div>
+					<DropdownMenu>
+						<DropdownMenuTrigger
+							render={<Button variant="outline" className="capitalize" />}
+						>
+							{formData.status}
+						</DropdownMenuTrigger>
+						<DropdownMenuContent>
+							<DropdownMenuItem
+								onClick={() =>
+									setFormData((prev) => ({
+										...prev,
+										status: 'active',
+									}))
+								}
+							>
+								Active
+							</DropdownMenuItem>
+							<DropdownMenuItem
+								onClick={() =>
+									setFormData((prev) => ({
+										...prev,
+										status: 'inactive',
+									}))
+								}
+							>
+								Inactive
+							</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
+				</div>
+				<div className="flex gap-2">
+					<Button
+						onClick={handleSaveRoom}
+						disabled={createRoomMutation.isPending}
+					>
+						{createRoomMutation.isPending ? 'Adding…' : 'Add Room'}
+					</Button>
+					<Button variant="outline" onClick={onClose}>
+						Cancel
+					</Button>
+				</div>
+			</CardContent>
+		</Card>
+	);
+}
+
+function PropertyManagement() {
+	const [adding, setAdding] = useState(false);
+	const trpc = useTRPC();
+
+	const { data: roomsData } = useSuspenseQuery(
+		trpc.rooms.adminList.queryOptions(ROOMS_INPUT),
+	);
+
+	const rooms = roomsData.rooms;
+
 	const table = useAppTable({
 		data: rooms,
 		columns,
@@ -319,133 +442,20 @@ function PropertyManagement() {
 
 	return (
 		<AdminLayout title="Property Management">
-			<div className="mb-6">
+			<div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
 				<p className="text-muted-foreground">Manage rooms for the property</p>
+				{!adding && rooms.length > 0 && (
+					<Button
+						onClick={() => setAdding(true)}
+						className="flex items-center gap-2"
+					>
+						<Icon icon="tabler:circle-plus-filled" />
+						Add Room
+					</Button>
+				)}
 			</div>
 
-			{/* Add Room Form */}
-			{editMode === 'add' && (
-				<Card className="mb-6">
-					<CardHeader>
-						<CardTitle className="flex items-center gap-2">
-							Add New Room
-						</CardTitle>
-					</CardHeader>
-					<CardContent className="space-y-4">
-						<div>
-							<label
-								htmlFor={roomNameId}
-								className="mb-1 block text-sm font-medium"
-							>
-								Room Name
-							</label>
-							<Input
-								id={roomNameId}
-								value={formData.name}
-								onChange={(e) => handleNameChange(e.target.value)}
-								placeholder="e.g., Rose Room"
-							/>
-						</div>
-						<div>
-							<label
-								htmlFor={roomSlugId}
-								className="mb-1 block text-sm font-medium"
-							>
-								Slug
-							</label>
-							<Input
-								id={roomSlugId}
-								value={formData.slug}
-								onChange={(e) =>
-									setFormData((prev) => ({ ...prev, slug: e.target.value }))
-								}
-								placeholder="e.g., rose-room"
-							/>
-						</div>
-						<div>
-							<label
-								htmlFor={roomDescriptionId}
-								className="mb-1 block text-sm font-medium"
-							>
-								Description
-							</label>
-							<Input
-								id={roomDescriptionId}
-								value={formData.description}
-								onChange={(e) =>
-									setFormData((prev) => ({
-										...prev,
-										description: e.target.value,
-									}))
-								}
-								placeholder="Room description (optional)"
-							/>
-						</div>
-						<div>
-							<label
-								htmlFor={basePriceId}
-								className="mb-1 block text-sm font-medium"
-							>
-								Base Price ($)
-							</label>
-							<Input
-								id={basePriceId}
-								type="number"
-								step="0.01"
-								min="0"
-								value={formData.basePrice}
-								onChange={(e) =>
-									setFormData((prev) => ({
-										...prev,
-										basePrice: parseFloat(e.target.value) || 0,
-									}))
-								}
-								placeholder="0.00"
-							/>
-						</div>
-						<div className="flex items-center gap-2">
-							<div className="text-sm font-medium">Change Room Status:</div>
-							<DropdownMenu>
-								<DropdownMenuTrigger
-									render={<Button variant="outline" className="capitalize" />}
-								>
-									{formData.status}
-								</DropdownMenuTrigger>
-								<DropdownMenuContent>
-									<DropdownMenuItem
-										onClick={() =>
-											setFormData((prev) => ({
-												...prev,
-												status: 'active',
-												isActive: true,
-											}))
-										}
-									>
-										Active
-									</DropdownMenuItem>
-									<DropdownMenuItem
-										onClick={() =>
-											setFormData((prev) => ({
-												...prev,
-												status: 'inactive',
-												isActive: false,
-											}))
-										}
-									>
-										Inactive
-									</DropdownMenuItem>
-								</DropdownMenuContent>
-							</DropdownMenu>
-						</div>
-						<div className="flex gap-2">
-							<Button onClick={handleSaveRoom}>Add Room</Button>
-							<Button variant="outline" onClick={handleCancelEdit}>
-								Cancel
-							</Button>
-						</div>
-					</CardContent>
-				</Card>
-			)}
+			{adding && <AddRoomForm onClose={() => setAdding(false)} />}
 
 			{/* Rooms List */}
 			{rooms.length === 0 ? (
@@ -456,7 +466,10 @@ function PropertyManagement() {
 						<p className="text-muted-foreground">
 							Get started by adding your first room.
 						</p>
-						<Button onClick={handleAddRoom} className="flex items-center gap-2">
+						<Button
+							onClick={() => setAdding(true)}
+							className="flex items-center gap-2"
+						>
 							<Icon icon="tabler:circle-plus-filled" />
 							Add Your First Room
 						</Button>
