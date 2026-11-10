@@ -13,8 +13,8 @@ and the iCal export feed are separate HTTP routes (see
 | `src/integrations/trpc/init.ts` | `initTRPC` with the superjson transformer and `errorFormatter`; exports `createTRPCRouter`, `publicProcedure`, `protectedProcedure`, `adminProcedure` |
 | `src/integrations/trpc/context.ts` | `createTRPCContext({ headers })`: resolves the Better Auth session from the request headers, then calls `createInnerTRPCContext` |
 | `src/integrations/trpc/inner-context.ts` | `createInnerTRPCContext({ session, headers?, waitUntil? })` and the `TRPCContext` / `AuthSession` types. Tests call it directly with a synthetic session |
-| `src/integrations/trpc/router.ts` | `trpcRouter` (`rooms`, `bookings`, `availability`, `ical`, `policies`, `users`, `inbox`) and the `TRPCRouter` type |
-| `src/integrations/trpc/{rooms,bookings,availability,ical,policies,users,inbox}.ts` | The routers |
+| `src/integrations/trpc/router.ts` | `trpcRouter` (`rooms`, `bookings`, `availability`, `ical`, `policies`, `users`, `inbox`, `reports`) and the `TRPCRouter` type |
+| `src/integrations/trpc/{rooms,bookings,availability,ical,policies,users,inbox,reports}.ts` | The routers |
 | `src/integrations/trpc/client.ts` | `makeTRPCClient`: `localLink` on the server, `httpBatchLink` in the browser |
 | `src/integrations/trpc/react.ts` | `TRPCProvider` and `useTRPC` (`@trpc/tanstack-react-query`) |
 | `src/integrations/trpc/batching.ts` | `MAX_BATCH_SIZE = 20`, shared by the client link (`maxItems`) and the handler (`maxBatchSize`) |
@@ -23,7 +23,7 @@ and the iCal export feed are separate HTTP routes (see
 | `src/routes/api/trpc.$.ts` | HTTP handler (`fetchRequestHandler`) for `GET`/`POST /api/trpc/*` |
 | `src/router.tsx` | `getRouter`: per-request `QueryClient`, tRPC client, options proxy and provider |
 | `src/lib/deps.ts` | `ServiceDeps` / `createServiceDeps`: the `db`, `env`, `stripe`, `waitUntil` part of the context |
-| `src/lib/*-validation.ts` | Zod input schemas (`payment-validation.ts`, `room-validation.ts`, `inbox-validation.ts`, ...) |
+| `src/lib/*-validation.ts` | Zod input schemas (`payment-validation.ts`, `room-validation.ts`, `inbox-validation.ts`, `report-validation.ts`, ...) |
 
 ## Request flow
 
@@ -257,6 +257,15 @@ rows carry no `details` JSON and no internal ids.
 | `adminDelete` | mutation | admin | `inboxDeleteSchema` (`publicIds` 1-100) | Delete for good |
 | `adminListForBooking` | query | admin | `{ bookingPublicId }` | The 20 latest items linked to a booking (admin booking page) |
 | `adminListForUser` | query | admin | `{ userPublicId }` | The 20 latest items linked to a guest (admin guest page) |
+
+### `reports` (`src/integrations/trpc/reports.ts`)
+
+Admin reports (`TAX_REPORTING.md`). Schemas are in
+`src/lib/report-validation.ts`.
+
+| Procedure | Type | Access | Input | Returns |
+|---|---|---|---|---|
+| `adminTaxReport` | query | admin | `taxReportInputSchema` (`from`, `to`: Central Time `YYYY-MM-DD`, inclusive, `from <= to`, at most 24 months) | Hotel Occupancy Tax report by payment date: `summary` and `months` (payments, refunds, net), `rows` (one per payment or succeeded refund, with the booking's `publicId`, confirmation id, guest name, room and stay dates; no email or phone), `unlinkedRefunds`, `estimatedRows`. Amounts are integer cents |
 
 The contact form is a TanStack Start server function, not a tRPC procedure
 (`CONTACT_FORM.md`).

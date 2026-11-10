@@ -100,7 +100,7 @@ throws `CONFLICT`.
 |---|---|
 | `mode` / `ui_mode` | `payment` / `elements` |
 | `customer` | The user's Stripe customer (`ensureStripeCustomer()`); its email is the Checkout email and lets Link recognise returning Link users |
-| `line_items` | `price_data` from **our** pricing (`checkoutLineItems()`): "Room, N nights", "Service fee", "State hotel occupancy tax", "City hotel occupancy tax" (zero lines left out). No `automatic_tax`. |
+| `line_items` | `price_data` from **our** pricing (`checkoutLineItems()`): "Room, N nights", "Service fee", "State hotel occupancy tax", "City hotel occupancy tax" (zero lines left out). The taxes are on the room price plus the service fee; the two tax lines are the amounts stored on the booking (`stateTaxAmount`, `cityTaxAmount`; see `TAX_REPORTING.md`). No `automatic_tax`. |
 | `client_reference_id` | Booking `id` |
 | `metadata`, `payment_intent_data.metadata` | `stripeBookingMetadata()`: `bookingId`, `bookingPublicId`, `confirmationId`, `source: 'irishette'`. No personal data. |
 | `payment_intent_data.description` | `Irishette booking <confirmationId>` |

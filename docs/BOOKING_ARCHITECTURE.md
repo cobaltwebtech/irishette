@@ -185,7 +185,11 @@ Pure. `priceStay(room, rules, checkIn, checkOut)`:
    `fixed_amount` (`base + value`), `absolute_price` (`value`). If legacy data
    has overlapping active rules, the earliest `activatedAt` wins.
 2. `baseAmount` = sum of nights. `feesAmount` = `baseAmount * serviceFeeRate`.
-   `taxAmount` = state + city tax on `baseAmount`. All rounded to cents.
+   `taxAmount` = state + city hotel occupancy tax on `baseAmount +
+   feesAmount` (the service fee is taxable). All rounded to cents.
+   `createBooking` also stores the tax snapshot on the booking
+   (`taxableAmount`, `stateTaxRate`, `cityTaxRate`, `stateTaxAmount`,
+   `cityTaxAmount`) for the tax report (`TAX_REPORTING.md`).
 3. There is **no guest-count surcharge**; the guest count does not affect
    the price (`calculateBooking` accepts it but ignores it).
 

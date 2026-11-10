@@ -111,14 +111,14 @@ src/server.ts            Custom Worker entry: fetch -> TanStack Start handler; s
 src/start.tsx, router.tsx  TanStack Start / Router setup. start.tsx: global request middleware (security headers + report-only CSP, CSRF for server functions). router.tsx creates a QueryClient and tRPC client PER REQUEST (SSR uses a local in-process link, no HTTP) and refreshes the session on tRPC UNAUTHORIZED/FORBIDDEN
 src/routes/              File-based routes: _authed.tsx (signed-in layout) -> _authed/account/, _authed/booking/, _authed/_admin.tsx -> _authed/_admin/admin/; public auth/, booking/, rooms/; api/
 src/routes/api/          Server routes: auth.$ (Better Auth, rate-limited), trpc.$ (tRPC), stripe.$ (webhook), ical.$ (iCal export feed), csp-report (CSP violation reports -> Workers Logs)
-src/integrations/trpc/   init.ts (public/protected/admin procedures, errorFormatter), context.ts + inner-context.ts (per-request context), router.ts, routers: bookings, rooms, availability, ical, policies, users, inbox
+src/integrations/trpc/   init.ts (public/protected/admin procedures, errorFormatter), context.ts + inner-context.ts (per-request context), router.ts, routers: bookings, rooms, availability, ical, policies, users, inbox, reports
 src/core/functions/      TanStack Start server functions (auth-server.ts: getSessionFn; contact.ts: submitContactFn, public)
 src/core/middleware/     TanStack Start middleware: security-headers (global), rate-limit (server routes + rateLimitFnMiddleware for server functions), auth (requireSession/requireAdmin function middleware)
-src/lib/                 Services and validation: auth, auth-client, auth-check (route guards), server-auth (server fn checks), session (useSession), session-user, booking-service, checkout-service, refund-service, dispute-service, booking-status (status enums), stay-times (check-in/out instants, same-day cutoff, stay phase), format, availability, pricing, date-range, cancellation-policy, email-service, stripe(-webhook), ical-sync/-parse/-generate/-export, scheduled-tasks, deps (ServiceDeps), ids, site (domain, contact details, email senders, check-in/out times), inbox (kinds, details types) + inbox-service (createInboxItem), contact-service + turnstile (contact form, Siteverify), *-validation (Zod)
+src/lib/                 Services and validation: auth, auth-client, auth-check (route guards), server-auth (server fn checks), session (useSession), session-user, booking-service, checkout-service, refund-service, dispute-service, booking-status (status enums), stay-times (check-in/out instants, same-day cutoff, stay phase), format, availability, pricing, date-range, cancellation-policy, email-service, stripe(-webhook), ical-sync/-parse/-generate/-export, scheduled-tasks, deps (ServiceDeps), ids, site (domain, contact details, email senders, check-in/out times), inbox (kinds, details types) + inbox-service (createInboxItem), contact-service + turnstile (contact form, Siteverify), tax-report (pure: aggregation in cents, periods, CSV) + tax-report-service (hotel occupancy tax report query), *-validation (Zod)
 src/db/                  Drizzle schemas (auth-, booking-, room-, policy-, inbox-), schema-export.ts, drizzle-init.ts (createDrizzle, Database type)
 src/components/          UI (ui/ = shadcn, admin/ (admin/inbox/ = notifications), booking/ (booking/detail/ = cards shared by the admin, account and confirmation pages; BookingsTable = booking lists), rooms/ (room page sections), auth/, email/, data-table/)
 src/stores/              TanStack Store booking state
-drizzle/                 Generated SQL migrations: a single fresh baseline 0000_init.sql (applied via `cf d1 migrations apply`)
+drizzle/                 Generated SQL migrations: the baseline 0000_init.sql plus later migrations (applied via `cf d1 migrations apply`)
 scripts/                 d1-local.mjs (local D1 helpers), smoke.mjs, check-client-bundle.mjs (post-build secret-name check)
 cloudflare.config.ts     Worker config (bindings, cron triggers, compat flags). Replaces wrangler.jsonc.
 docs/                    Feature/architecture notes (see below)
@@ -165,6 +165,7 @@ Conventions:
 `docs/` has one current note per area. Check the matching one first:
 - Booking: `BOOKING_ARCHITECTURE.md`
 - Admin notifications (inbox), contact form: `ADMIN_INBOX.md`, `CONTACT_FORM.md`
+- Hotel occupancy tax (what is taxed, booking tax snapshot, admin report): `TAX_REPORTING.md`
 - tRPC: `TRPC_QUICK_REFERENCE.md` (every procedure with its access level)
 - Auth / sessions: `SECURE_AUTH_IMPLEMENTATION.md`
 - Stripe: `STRIPE_PAYMENT_INTEGRATION.md`, `STRIPE_WEBHOOKS.md` (dashboard and Stripe CLI setup)
@@ -353,7 +354,7 @@ Tuned in Phase 8 of the 2026-11 upgrade plan and tightened in plan 02 (Phase 7).
   | `ui` | `src/components/ui/**` | `ui`, `shared` |
   | `email` | `src/components/email/**` | `email` |
   | `client` | other `src/components/**`, `src/stores/**` | `ui`, `client`, `shared`; `server` type-only |
-  | `server` | server-only services in `src/lib/` (auth, booking-service, checkout-service, refund-service, dispute-service, availability, deps, email-service, stripe, stripe-webhook, ical-sync, ical-export, scheduled-tasks, admin-query, cancellation-policy-store, rate-limit, server-auth, inbox-service, contact-service, turnstile), `src/db/**`, `src/server.ts`, tRPC init/access/context/routers | anything |
+  | `server` | server-only services in `src/lib/` (auth, booking-service, checkout-service, refund-service, dispute-service, availability, deps, email-service, stripe, stripe-webhook, ical-sync, ical-export, scheduled-tasks, admin-query, cancellation-policy-store, rate-limit, server-auth, inbox-service, contact-service, turnstile, tax-report-service), `src/db/**`, `src/server.ts`, tRPC init/access/context/routers | anything |
   | `shared` | the rest of `src/lib/**`, `src/utils/**`, tRPC `react`/`types`/`errors`/`batching` | `shared`; `server` type-only |
 
   Routes and `src/core/` are unzoned. When you add a server-only module to `src/lib/`, add it to the `server` zone. If client code needs a constant that lives in a server file (e.g. a Drizzle schema), move it into a shared module (see `src/lib/ical-feed-sources.ts`) instead of suppressing the violation.
