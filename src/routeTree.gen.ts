@@ -44,6 +44,7 @@ import { Route as AuthedAdminAdminInboxIndexRouteImport } from './routes/_authed
 import { Route as AuthedAdminAdminInboxPublicIdRouteImport } from './routes/_authed/_admin/admin/inbox/$publicId'
 import { Route as AuthedAdminAdminPropertyManagementIndexRouteImport } from './routes/_authed/_admin/admin/property-management/index'
 import { Route as AuthedAdminAdminPropertyManagementPublicIdRouteImport } from './routes/_authed/_admin/admin/property-management/$publicId'
+import { Route as AuthedAdminAdminReportsTaxRouteImport } from './routes/_authed/_admin/admin/reports/tax'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -232,6 +233,12 @@ const AuthedAdminAdminPropertyManagementPublicIdRoute =
     path: '/admin/property-management/$publicId',
     getParentRoute: () => AuthedAdminRoute,
   } as any)
+const AuthedAdminAdminReportsTaxRoute =
+  AuthedAdminAdminReportsTaxRouteImport.update({
+    id: '/admin/reports/tax',
+    path: '/admin/reports/tax',
+    getParentRoute: () => AuthedAdminRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -264,6 +271,7 @@ export interface FileRoutesByFullPath {
   '/admin/guest/$publicId': typeof AuthedAdminAdminGuestPublicIdRoute
   '/admin/inbox/$publicId': typeof AuthedAdminAdminInboxPublicIdRoute
   '/admin/property-management/$publicId': typeof AuthedAdminAdminPropertyManagementPublicIdRoute
+  '/admin/reports/tax': typeof AuthedAdminAdminReportsTaxRoute
   '/admin/guest/': typeof AuthedAdminAdminGuestIndexRoute
   '/admin/inbox/': typeof AuthedAdminAdminInboxIndexRoute
   '/admin/property-management/': typeof AuthedAdminAdminPropertyManagementIndexRoute
@@ -299,6 +307,7 @@ export interface FileRoutesByTo {
   '/admin/guest/$publicId': typeof AuthedAdminAdminGuestPublicIdRoute
   '/admin/inbox/$publicId': typeof AuthedAdminAdminInboxPublicIdRoute
   '/admin/property-management/$publicId': typeof AuthedAdminAdminPropertyManagementPublicIdRoute
+  '/admin/reports/tax': typeof AuthedAdminAdminReportsTaxRoute
   '/admin/guest': typeof AuthedAdminAdminGuestIndexRoute
   '/admin/inbox': typeof AuthedAdminAdminInboxIndexRoute
   '/admin/property-management': typeof AuthedAdminAdminPropertyManagementIndexRoute
@@ -337,6 +346,7 @@ export interface FileRoutesById {
   '/_authed/_admin/admin/guest/$publicId': typeof AuthedAdminAdminGuestPublicIdRoute
   '/_authed/_admin/admin/inbox/$publicId': typeof AuthedAdminAdminInboxPublicIdRoute
   '/_authed/_admin/admin/property-management/$publicId': typeof AuthedAdminAdminPropertyManagementPublicIdRoute
+  '/_authed/_admin/admin/reports/tax': typeof AuthedAdminAdminReportsTaxRoute
   '/_authed/_admin/admin/guest/': typeof AuthedAdminAdminGuestIndexRoute
   '/_authed/_admin/admin/inbox/': typeof AuthedAdminAdminInboxIndexRoute
   '/_authed/_admin/admin/property-management/': typeof AuthedAdminAdminPropertyManagementIndexRoute
@@ -374,6 +384,7 @@ export interface FileRouteTypes {
     | '/admin/guest/$publicId'
     | '/admin/inbox/$publicId'
     | '/admin/property-management/$publicId'
+    | '/admin/reports/tax'
     | '/admin/guest/'
     | '/admin/inbox/'
     | '/admin/property-management/'
@@ -409,6 +420,7 @@ export interface FileRouteTypes {
     | '/admin/guest/$publicId'
     | '/admin/inbox/$publicId'
     | '/admin/property-management/$publicId'
+    | '/admin/reports/tax'
     | '/admin/guest'
     | '/admin/inbox'
     | '/admin/property-management'
@@ -446,6 +458,7 @@ export interface FileRouteTypes {
     | '/_authed/_admin/admin/guest/$publicId'
     | '/_authed/_admin/admin/inbox/$publicId'
     | '/_authed/_admin/admin/property-management/$publicId'
+    | '/_authed/_admin/admin/reports/tax'
     | '/_authed/_admin/admin/guest/'
     | '/_authed/_admin/admin/inbox/'
     | '/_authed/_admin/admin/property-management/'
@@ -720,6 +733,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAdminAdminPropertyManagementPublicIdRouteImport
       parentRoute: typeof AuthedAdminRoute
     }
+    '/_authed/_admin/admin/reports/tax': {
+      id: '/_authed/_admin/admin/reports/tax'
+      path: '/admin/reports/tax'
+      fullPath: '/admin/reports/tax'
+      preLoaderRoute: typeof AuthedAdminAdminReportsTaxRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
   }
 }
 
@@ -732,6 +752,7 @@ interface AuthedAdminRouteChildren {
   AuthedAdminAdminGuestPublicIdRoute: typeof AuthedAdminAdminGuestPublicIdRoute
   AuthedAdminAdminInboxPublicIdRoute: typeof AuthedAdminAdminInboxPublicIdRoute
   AuthedAdminAdminPropertyManagementPublicIdRoute: typeof AuthedAdminAdminPropertyManagementPublicIdRoute
+  AuthedAdminAdminReportsTaxRoute: typeof AuthedAdminAdminReportsTaxRoute
   AuthedAdminAdminGuestIndexRoute: typeof AuthedAdminAdminGuestIndexRoute
   AuthedAdminAdminInboxIndexRoute: typeof AuthedAdminAdminInboxIndexRoute
   AuthedAdminAdminPropertyManagementIndexRoute: typeof AuthedAdminAdminPropertyManagementIndexRoute
@@ -750,6 +771,7 @@ const AuthedAdminRouteChildren: AuthedAdminRouteChildren = {
   AuthedAdminAdminInboxPublicIdRoute: AuthedAdminAdminInboxPublicIdRoute,
   AuthedAdminAdminPropertyManagementPublicIdRoute:
     AuthedAdminAdminPropertyManagementPublicIdRoute,
+  AuthedAdminAdminReportsTaxRoute: AuthedAdminAdminReportsTaxRoute,
   AuthedAdminAdminGuestIndexRoute: AuthedAdminAdminGuestIndexRoute,
   AuthedAdminAdminInboxIndexRoute: AuthedAdminAdminInboxIndexRoute,
   AuthedAdminAdminPropertyManagementIndexRoute:

@@ -138,3 +138,13 @@
 		@apply bg-background text-foreground;
 	}
 }
+
+/* Printed admin reports (Print / Save as PDF): the report only, no chrome. */
+@media print {
+	[data-slot="sidebar"] {
+		display: none !important;
+	}
+	@page {
+		margin: 12mm;
+	}
+}

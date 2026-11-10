@@ -107,6 +107,17 @@ export function AdminSidebar({
 			],
 		},
 		{
+			title: 'Reports',
+			url: '/admin/reports/tax',
+			icon: 'tabler:report-money',
+			items: [
+				{
+					title: 'Hotel Occupancy Tax',
+					url: '/admin/reports/tax',
+				},
+			],
+		},
+		{
 			title: 'Policies',
 			url: '/admin/cancellation-policy',
 			icon: 'tabler:receipt-refund',

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vite-plus/test';
 
-import { taxReportInputSchema } from '@/lib/report-validation';
+import {
+	resolveTaxReportSearch,
+	taxReportInputSchema,
+	taxReportSearchSchema,
+} from '@/lib/report-validation';
 import {
 	aggregateTaxReport,
 	monthRange,
@@ -281,6 +285,54 @@ describe('taxReportInputSchema', () => {
 		expect(ok('2029-01-01', '2031-01-01')).toBe(false);
 		expect(ok('2030-02-30', '2030-03-01')).toBe(false);
 		expect(ok('11/01/2030', '2030-11-30')).toBe(false);
+	});
+});
+
+describe('resolveTaxReportSearch', () => {
+	const TODAY = '2030-11-09';
+	const resolve = (search: Record<string, unknown>) =>
+		resolveTaxReportSearch(taxReportSearchSchema.parse(search), TODAY);
+
+	it('defaults to the current month', () => {
+		expect(resolve({})).toEqual({
+			preset: 'month',
+			period: '2030-11',
+			range: { from: '2030-11-01', to: '2030-11-30' },
+		});
+	});
+
+	it('uses the asked period, or the current one if it does not fit', () => {
+		expect(resolve({ preset: 'quarter', period: '2030-Q1' }).range).toEqual({
+			from: '2030-01-01',
+			to: '2030-03-31',
+		});
+		expect(resolve({ preset: 'quarter', period: '2030-11' })).toMatchObject({
+			period: '2030-Q4',
+			range: { from: '2030-10-01', to: '2030-12-31' },
+		});
+		expect(resolve({ preset: 'year' }).period).toBe('2030');
+		expect(resolve({ preset: 'nope', period: 42 }).period).toBe('2030-11');
+	});
+
+	it('custom: the asked range, or the current month if it is invalid', () => {
+		expect(
+			resolve({ preset: 'custom', from: '2030-03-15', to: '2030-04-14' }),
+		).toEqual({
+			preset: 'custom',
+			period: null,
+			range: { from: '2030-03-15', to: '2030-04-14' },
+		});
+		for (const search of [
+			{ preset: 'custom' },
+			{ preset: 'custom', from: '2030-04-14', to: '2030-03-15' },
+			{ preset: 'custom', from: '2030-02-31', to: '2030-03-15' },
+			{ preset: 'custom', from: '2020-01-01', to: '2030-03-15' },
+		]) {
+			expect(resolve(search).range).toEqual({
+				from: '2030-11-01',
+				to: '2030-11-30',
+			});
+		}
 	});
 });
 
