@@ -485,7 +485,7 @@ function DetailCard({ report }: { report: TaxReport }) {
 						No payments or refunds in this period.
 					</p>
 				) : (
-					<Table className="print:text-[10px]">
+					<Table className="print:text-xs">
 						<TableHeader>
 							<TableRow>
 								<TableHead>Date</TableHead>

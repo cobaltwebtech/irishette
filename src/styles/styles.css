@@ -141,8 +141,9 @@
 
 /* Printed admin reports (Print / Save as PDF): the report only, no chrome. */
 @media print {
+	/* Unlayered, so it wins over the sidebar's Tailwind display utilities. */
 	[data-slot="sidebar"] {
-		display: none !important;
+		display: none;
 	}
 	@page {
 		margin: 12mm;

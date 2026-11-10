@@ -162,42 +162,57 @@ function allocate(amount: number, mix: Mix) {
 	return { room: amount - fees - stateTax - cityTax, fees, stateTax, cityTax };
 }
 
+const NO_BOOKING = {
+	bookingPublicId: null,
+	confirmationId: null,
+	guestName: null,
+	roomName: null,
+	checkInDate: null,
+	checkOutDate: null,
+};
+
+const bookingFields = (b: TaxReportBooking) => ({
+	bookingPublicId: b.publicId,
+	confirmationId: b.confirmationId,
+	guestName: b.guestName,
+	roomName: b.roomName,
+	checkInDate: b.checkInDate,
+	checkOutDate: b.checkOutDate,
+});
+
+/** The row's money parts (unsigned cents); all zero without a booking. */
+function rowParts(amount: number, mix: Mix | null) {
+	if (!mix) return { room: 0, fees: 0, taxable: 0, stateTax: 0, cityTax: 0 };
+	const parts = allocate(amount, mix);
+	return {
+		...parts,
+		taxable: mix.feesTaxed ? parts.room + parts.fees : parts.room,
+	};
+}
+
 function toRow(
 	type: TaxReportRow['type'],
 	entry: TaxReportEntry,
 ): TaxReportRow {
-	const sign = type === 'payment' ? 1 : -1;
+	// Adding 0 keeps -0 out of the rows.
+	const signed = (cents: number) => (type === 'payment' ? cents : -cents) + 0;
 	const amount = toCents(entry.amount);
-	const b = entry.booking;
-	const mix = b ? bookingMix(b) : null;
-	const parts = mix
-		? allocate(amount, mix)
-		: { room: 0, fees: 0, stateTax: 0, cityTax: 0 };
-	const taxable = mix
-		? mix.feesTaxed
-			? parts.room + parts.fees
-			: parts.room
-		: 0;
+	const mix = entry.booking ? bookingMix(entry.booking) : null;
+	const parts = rowParts(amount, mix);
 	return {
 		id: entry.id,
 		type,
 		at: entry.at,
 		date: dateInZone(entry.at),
-		bookingPublicId: b?.publicId ?? null,
-		confirmationId: b?.confirmationId ?? null,
-		guestName: b?.guestName ?? null,
-		roomName: b?.roomName ?? null,
-		checkInDate: b?.checkInDate ?? null,
-		checkOutDate: b?.checkOutDate ?? null,
-		// `|| 0` keeps -0 out of the rows.
-		room: sign * parts.room || 0,
-		fees: sign * parts.fees || 0,
-		taxable: sign * taxable || 0,
-		stateTax: sign * parts.stateTax || 0,
-		cityTax: sign * parts.cityTax || 0,
-		total: sign * amount || 0,
+		...(entry.booking ? bookingFields(entry.booking) : NO_BOOKING),
+		room: signed(parts.room),
+		fees: signed(parts.fees),
+		taxable: signed(parts.taxable),
+		stateTax: signed(parts.stateTax),
+		cityTax: signed(parts.cityTax),
+		total: signed(amount),
 		estimated: mix?.estimated ?? false,
-		linked: b !== null,
+		linked: entry.booking !== null,
 	};
 }
 
