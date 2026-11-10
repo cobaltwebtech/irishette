@@ -46,6 +46,15 @@ export const bookings = sqliteTable(
 		// Reserved for discounts (e.g. Checkout promotion codes); not set yet.
 		discountAmount: real('discount_amount').default(0),
 		totalAmount: real('total_amount').notNull(),
+		// Hotel occupancy tax snapshot, written when the booking is created
+		// (dollars; rates as fractions). Null on bookings made before the
+		// snapshot existed: the tax report estimates those from the room's
+		// current rates (docs/TAX_REPORTING.md).
+		taxableAmount: real('taxable_amount'),
+		stateTaxRate: real('state_tax_rate'),
+		cityTaxRate: real('city_tax_rate'),
+		stateTaxAmount: real('state_tax_amount'),
+		cityTaxAmount: real('city_tax_amount'),
 
 		// Status (src/lib/booking-status.ts). Stay timing is derived.
 		status: text('status', { enum: bookingStatuses })
