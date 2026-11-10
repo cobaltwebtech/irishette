@@ -65,6 +65,7 @@
           "src/lib/inbox-service.ts",
           "src/lib/contact-service.ts",
           "src/lib/turnstile.ts",
+          "src/lib/tax-report-service.ts",
           "src/db/**",
           "src/server.ts",
           "src/integrations/trpc/init.ts",
@@ -78,7 +79,8 @@
           "src/integrations/trpc/ical.ts",
           "src/integrations/trpc/policies.ts",
           "src/integrations/trpc/availability.ts",
-          "src/integrations/trpc/inbox.ts"
+          "src/integrations/trpc/inbox.ts",
+          "src/integrations/trpc/reports.ts"
         ]
       },
       {
