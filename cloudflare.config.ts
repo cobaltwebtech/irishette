@@ -35,7 +35,27 @@ export default defineConfig({
 		compatibilityDate: '2026-11-01',
 		compatibilityFlags: ['nodejs_compat'],
 		workersDev: true, // false when going to production with a custom domain
-		observability: { enabled: true },
+		// Workers Observability: logs, traces and real-time Issues (issue
+		// detection), all sampled at 100%.
+		observability: {
+			enabled: true,
+			headSamplingRate: 1,
+			// Strip query strings from logged/traced URLs: password reset and
+			// magic link URLs carry single-use tokens in `?token=`.
+			redactQueryString: true,
+			logs: {
+				enabled: true,
+				headSamplingRate: 1,
+				invocationLogs: true,
+				persist: true,
+			},
+			traces: {
+				enabled: true,
+				headSamplingRate: 1,
+				persist: true,
+			},
+			issues: { enabled: true },
+		},
 		// Keep in sync with CRON_SCHEDULES handling in src/lib/scheduled-tasks.ts.
 		triggers: [
 			triggers.scheduled({ schedule: '*/30 * * * *' }), // iCal import sync
