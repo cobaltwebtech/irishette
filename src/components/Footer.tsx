@@ -19,7 +19,7 @@ export default function Footer() {
 							className="inline-block transition-opacity hover:opacity-80"
 						>
 							<img
-								src="/irishette-logo.png"
+								src="/icons/irishette-logo.png"
 								alt="Irishette logo"
 								width={384}
 								height={384}
