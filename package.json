@@ -82,7 +82,6 @@
   "devDependencies": {
     "@cloudflare/vite-plugin": "2.0.0-beta.v.12",
     "@cloudflare/vitest-plugin": "^1.6.0",
-    "@libsql/client": "^0.18.0",
     "@msw/cloudflare": "^0.2.0",
     "@playwright/test": "^1.65.0",
     "@tailwindcss/vite": "^4.3.5",

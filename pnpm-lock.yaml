@@ -309,9 +309,6 @@ importers:
       '@cloudflare/vitest-plugin':
         specifier: ^1.6.0
         version: 1.6.0(@types/node@26.6.6)(vitest@5.1.0)
-      '@libsql/client':
-        specifier: ^0.18.0
-        version: 0.18.0
       '@msw/cloudflare':
         specifier: ^0.2.0
         version: 0.2.0(msw@3.0.4(@types/node@26.6.6)(@voidzero-dev/vite-plus-core@1.5.0(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.6.1)(tsx@4.23.15)(typescript@7.0.2))(supports-color@10.2.2)(typescript@7.0.2))(supports-color@10.2.2)
@@ -5499,10 +5496,12 @@ snapshots:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
+    optional: true
 
   '@libsql/core@0.18.0':
     dependencies:
       js-base64: 3.9.6
+    optional: true
 
   '@libsql/darwin-arm64@0.5.29':
     optional: true
@@ -5517,6 +5516,7 @@ snapshots:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
+    optional: true
 
   '@libsql/isomorphic-ws@0.1.5':
     dependencies:
@@ -5525,6 +5525,7 @@ snapshots:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
+    optional: true
 
   '@libsql/linux-arm-gnueabihf@0.5.29':
     optional: true
@@ -5586,7 +5587,8 @@ snapshots:
       '@neodrag/core': 3.0.0-next.11
       solid-js: 1.9.18
 
-  '@neon-rs/load@0.0.4': {}
+  '@neon-rs/load@0.0.4':
+    optional: true
 
   '@noble/ciphers@2.4.0': {}
 
@@ -7129,7 +7131,8 @@ snapshots:
 
   dequal@2.0.3: {}
 
-  detect-libc@2.0.2: {}
+  detect-libc@2.0.2:
+    optional: true
 
   detect-libc@2.1.2: {}
 
@@ -7407,7 +7410,8 @@ snapshots:
 
   jose@6.2.15: {}
 
-  js-base64@3.9.6: {}
+  js-base64@3.9.6:
+    optional: true
 
   js-tokens@4.0.0: {}
 
@@ -7454,6 +7458,7 @@ snapshots:
       '@libsql/linux-x64-gnu': 0.5.29
       '@libsql/linux-x64-musl': 0.5.29
       '@libsql/win32-x64-msvc': 0.5.29
+    optional: true
 
   lightningcss-android-arm64@1.33.0:
     optional: true
@@ -7774,7 +7779,8 @@ snapshots:
 
   prismjs@1.30.0: {}
 
-  promise-limit@2.7.0: {}
+  promise-limit@2.7.0:
+    optional: true
 
   prompts@2.4.2:
     dependencies:
