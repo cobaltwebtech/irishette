@@ -5,7 +5,8 @@
     "unused-exports": "error",
     "unused-types": "error",
     "boundary-violation": "error",
-    "policy-violation": "off"
+    "policy-violation": "off",
+    "unused-dependencies": "warn"
   },
   "duplicates": {
     "threshold": 6
