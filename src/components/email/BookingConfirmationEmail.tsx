@@ -20,17 +20,33 @@ import {
 } from './BookingDetailsSection';
 import { EmailContactRow } from './EmailContactRow';
 import { EmailLogo, type EmailBrandProps } from './EmailLogo';
+import {
+	ReservationMarkup,
+	type ReservationMarkupData,
+} from './ReservationMarkup';
 
 interface BookingConfirmationEmailProps extends EmailBrandProps {
 	booking: EmailBookingDetails;
 	accountUrl: string;
 	/** Contact address shown in the footer (src/lib/site.ts CONTACT_EMAIL). */
 	contactEmail: string;
+	/** Street address (src/lib/site.ts PROPERTY_ADDRESS). */
+	propertyAddress: string;
+	/** Reservation card markup for Gmail/Outlook; omitted when not available. */
+	reservation?: ReservationMarkupData;
 }
 
 export const BookingConfirmationEmail: React.FC<
 	BookingConfirmationEmailProps
-> = ({ booking, accountUrl, logoUrl, siteUrl, contactEmail }) => {
+> = ({
+	booking,
+	accountUrl,
+	logoUrl,
+	siteUrl,
+	contactEmail,
+	propertyAddress,
+	reservation,
+}) => {
 	const { confirmationId } = booking;
 	return (
 		<Html>
@@ -40,6 +56,7 @@ export const BookingConfirmationEmail: React.FC<
 			</Preview>
 			<Tailwind>
 				<Body className="mx-auto my-auto bg-white px-2 font-sans">
+					{reservation ? <ReservationMarkup data={reservation} /> : null}
 					<Container className="mx-auto my-[40px] max-w-[600px] rounded border border-solid border-stone-300 bg-stone-100 p-[20px]">
 						{/* Header */}
 						<Section className="my-[20px] px-[32px] py-[20px]">
@@ -98,8 +115,7 @@ export const BookingConfirmationEmail: React.FC<
 										<strong>Check-out:</strong> by {booking.checkOutTime}
 									</Text>
 									<Text className="mb-2 text-sm text-blue-800">
-										<strong>Address:</strong> [Property Address] - Details will
-										be provided closer to your arrival
+										<strong>Address:</strong> {propertyAddress}
 									</Text>
 									<Text className="text-sm text-blue-800">
 										<strong>Contact:</strong> Please reply to this email if you

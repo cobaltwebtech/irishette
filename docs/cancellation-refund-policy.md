@@ -25,7 +25,7 @@ At irishette.com, we understand that plans can change. This Cancellation and Ref
 Cancellations must be made through one of the following methods:
 
 1. **Online:** Visit our [Manage Bookings page](https://irishette.com/manage-bookings) and follow the cancellation instructions
-2. **Telephone:** Call us at **(123) 456-7890**
+2. **Telephone:** Call us at **254-454-5558**
 
 Cancellations are effective based on the date and time we receive your cancellation request, not when you decide to cancel. We recommend canceling as early as possible to avoid penalties.
 
@@ -95,7 +95,7 @@ We reserve the right to modify this Cancellation and Refund Policy at any time. 
 If you have questions about this Cancellation and Refund Policy or need assistance with a cancellation, please contact us:
 
 **irishette.com**  
-Phone: **(123) 456-7890**  
+Phone: **254-454-5558**  
 Email: [Your Contact Email]  
 Manage Bookings: [https://irishette.com/manage-bookings](https://irishette.com/manage-bookings)
 

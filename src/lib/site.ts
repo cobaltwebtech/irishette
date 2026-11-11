@@ -4,8 +4,7 @@
 // GO-LIVE: the domain, the senders, the reply-to/contact address and the
 // phone number are hardcoded on purpose and must be switched to the
 // production values before launch (see "Domain switch checklist" in
-// .agents/plans/02-cleanup-and-fixes-2026-11.md). The phone number is a
-// placeholder until the client provides the real one.
+// .agents/plans/02-cleanup-and-fixes-2026-11.md).
 
 export { PROPERTY_TIMEZONE } from '@/utils/timezone';
 
@@ -15,11 +14,52 @@ export const SITE_URL = 'https://www.irishette.com';
 /** The logo (public/icons), served from the deployed host. */
 export const LOGO_PATH = '/icons/irishette-logo.png';
 
-export const CONTACT_EMAIL = 'info@irishette.com';
-/** Placeholder until the client provides the real number. */
-export const CONTACT_PHONE = '(123) 456-7890';
-/** `tel:` link for CONTACT_PHONE (keep the two in sync). */
-export const CONTACT_PHONE_HREF = 'tel:+1234567890';
+export const CONTACT_EMAIL = 'bookings@irishette.com';
+/**
+ * The property phone in full international (E.164) format: for `tel:` links,
+ * structured data and anything a machine reads. The one place the number is
+ * written; the display form below is derived from it.
+ */
+export const CONTACT_PHONE_E164 = '+12544545558';
+/** `tel:` link for the property phone. */
+export const CONTACT_PHONE_HREF = `tel:${CONTACT_PHONE_E164}`;
+
+/** "+12544545558" -> "254-454-5558" (US numbers; anything else is unchanged). */
+export function formatPhoneDisplay(e164: string): string {
+	const match = /^\+1(\d{3})(\d{3})(\d{4})$/.exec(e164);
+	return match ? `${match[1]}-${match[2]}-${match[3]}` : e164;
+}
+/** The phone as shown on pages and in emails: "254-454-5558". */
+export const CONTACT_PHONE = formatPhoneDisplay(CONTACT_PHONE_E164);
+
+/** Street address of the property (schema.org PostalAddress fields). */
+export interface PropertyAddress {
+	streetAddress: string;
+	addressLocality: string;
+	/** State, e.g. "TX". */
+	addressRegion: string;
+	postalCode: string;
+	/** ISO 3166-1 alpha-2, e.g. "US". */
+	addressCountry: string;
+}
+
+/**
+ * Where guests stay. Shown in the footer and the booking confirmation email,
+ * and sent as structured data for the Gmail/Outlook reservation card
+ * (docs/EMAIL_RESERVATION_MARKUP.md).
+ */
+export const PROPERTY_ADDRESS: PropertyAddress = {
+	streetAddress: '506 W Mesquite St',
+	addressLocality: 'Dublin',
+	addressRegion: 'TX',
+	postalCode: '76446',
+	addressCountry: 'US',
+};
+
+/** "506 W Mesquite St, Dublin, TX 76446" */
+export function formatAddress(a: PropertyAddress): string {
+	return `${a.streetAddress}, ${a.addressLocality}, ${a.addressRegion} ${a.postalCode}`;
+}
 
 /** A sender in the named-address form the Email Service binding accepts. */
 export interface EmailSender {

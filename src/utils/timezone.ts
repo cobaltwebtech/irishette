@@ -80,6 +80,25 @@ export function zonedTimeToUtc(
 	return new Date(utc);
 }
 
+/**
+ * ISO 8601 timestamp of `instant` in `timeZone` with its UTC offset, e.g.
+ * `2030-06-10T16:00:00-05:00` (machine-readable markup; not for display).
+ */
+export function formatInstantIso(
+	instant: Date,
+	timeZone = PROPERTY_TIMEZONE,
+): string {
+	const offset = offsetMs(timeZone, instant);
+	const local = new Date(
+		Math.floor(instant.getTime() / 1000) * 1000 + offset,
+	).toISOString();
+	const minutes = Math.abs(offset) / 60_000;
+	const sign = offset < 0 ? '-' : '+';
+	const hh = String(Math.floor(minutes / 60)).padStart(2, '0');
+	const mm = String(minutes % 60).padStart(2, '0');
+	return `${local.slice(0, 19)}${sign}${hh}:${mm}`;
+}
+
 // --- Display (all pages and emails show US Central Time) ----------------------
 // Guests check in at the property, so every date and time is shown in
 // America/Chicago, never in the browser's or the server's time zone, and

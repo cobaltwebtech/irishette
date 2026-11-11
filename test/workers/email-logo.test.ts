@@ -66,5 +66,8 @@ describe('email logo', () => {
 		// guest confirmation + admin notification + notice + alert
 		expect(html).toHaveLength(4);
 		html.forEach(expectLogo);
+		// Only the guest confirmation (first) carries reservation markup.
+		expect(html[0]).toContain('ld+json');
+		html.slice(1).forEach((h) => expect(h).not.toContain('ld+json'));
 	});
 });

@@ -12,6 +12,7 @@ import {
 	type NotificationEmailProps,
 } from '@/components/email/NotificationEmail';
 import { PasswordReset } from '@/components/email/PasswordReset';
+import type { ReservationMarkupData } from '@/components/email/ReservationMarkup';
 import type { Database } from '@/db/drizzle-init';
 import type { bookings } from '@/db/schema-export';
 import {
@@ -26,16 +27,25 @@ import {
 	CHECK_IN_TIME,
 	CHECK_OUT_TIME,
 	CONTACT_EMAIL,
+	CONTACT_PHONE_E164,
 	EMAIL_FROM_ADMIN,
 	EMAIL_FROM_AUTH,
 	EMAIL_FROM_BOOKINGS,
 	type EmailSender,
+	formatAddress,
 	formatTimeOfDay,
 	LOGO_PATH,
+	PROPERTY_ADDRESS,
+	type PropertyAddress,
+	SITE_NAME,
 	SITE_URL,
 } from '@/lib/site';
 import { formatMoney } from '@/utils/format';
-import { formatInstantCT, formatStayDate } from '@/utils/timezone';
+import {
+	formatInstantCT,
+	formatInstantIso,
+	formatStayDate,
+} from '@/utils/timezone';
 
 // All transactional email goes through here, sent with the Cloudflare Email
 // Service binding (env.EMAIL). Logs never include email addresses or guest
@@ -111,6 +121,36 @@ function branding(baseUrl: string): EmailBrandProps {
 	};
 }
 
+/**
+ * schema.org reservation markup for the confirmation email, or undefined
+ * when the booking is not confirmed (a re-sent email for a cancelled booking
+ * must not say "Confirmed").
+ */
+export function reservationMarkup(
+	booking: Booking,
+	room: RoomInfo,
+	baseUrl: string,
+	address: PropertyAddress = PROPERTY_ADDRESS,
+): ReservationMarkupData | undefined {
+	if (booking.status !== 'confirmed') return undefined;
+	return {
+		reservationNumber: booking.confirmationId,
+		guestName: booking.guestName,
+		guestEmail: booking.guestEmail,
+		propertyName: `${SITE_NAME} Bed & Breakfast`,
+		propertyUrl: SITE_URL,
+		telephone: CONTACT_PHONE_E164,
+		address,
+		checkinDate: formatInstantIso(booking.checkInAt),
+		checkoutDate: formatInstantIso(booking.checkOutAt),
+		roomName: room.name,
+		price: booking.totalAmount.toFixed(2),
+		priceCurrency: 'USD',
+		bookingUrl: `${baseUrl}/account/booking/${booking.publicId}`,
+		modifiedTime: formatInstantIso(booking.updatedAt),
+	};
+}
+
 function guestConfirmation(
 	booking: Booking,
 	room: RoomInfo,
@@ -123,6 +163,8 @@ function guestConfirmation(
 		element: React.createElement(BookingConfirmationEmail, {
 			booking: emailBookingDetails(booking, room),
 			accountUrl: `${baseUrl}/account`,
+			reservation: reservationMarkup(booking, room, baseUrl),
+			propertyAddress: formatAddress(PROPERTY_ADDRESS),
 			...branding(baseUrl),
 			contactEmail: CONTACT_EMAIL,
 		}),

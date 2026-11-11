@@ -1,7 +1,12 @@
 import { Icon } from '@iconify/react';
 import { Link } from '@tanstack/react-router';
 
-import { CONTACT_PHONE, CONTACT_PHONE_HREF, LOGO_PATH } from '@/lib/site';
+import {
+	CONTACT_PHONE,
+	CONTACT_PHONE_HREF,
+	LOGO_PATH,
+	PROPERTY_ADDRESS,
+} from '@/lib/site';
 import { yearCT } from '@/utils/timezone';
 import { useNow } from '@/utils/use-now';
 
@@ -83,8 +88,12 @@ export default function Footer() {
 							<div className="flex items-start gap-2">
 								<Icon icon="tabler:map-pin" className="size-5" />
 								<div className="text-center md:text-right">
-									<p>123 Main Street</p>
-									<p>Dublin, TX 76446</p>
+									<p>{PROPERTY_ADDRESS.streetAddress}</p>
+									<p>
+										{PROPERTY_ADDRESS.addressLocality},{' '}
+										{PROPERTY_ADDRESS.addressRegion}{' '}
+										{PROPERTY_ADDRESS.postalCode}
+									</p>
 									<p>United States</p>
 								</div>
 							</div>

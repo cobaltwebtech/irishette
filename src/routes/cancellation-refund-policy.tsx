@@ -117,7 +117,7 @@ function CancellationRefundPolicyPage() {
 									</li>
 									<li>
 										<strong>Telephone:</strong> Call us at{' '}
-										<strong>(123) 456-7890</strong>
+										<strong>254-454-5558</strong>
 									</li>
 								</ol>
 								<p className="mt-3 leading-relaxed text-muted-foreground">
@@ -308,7 +308,7 @@ function CancellationRefundPolicyPage() {
 								</p>
 								<div className="space-y-2">
 									<p className="text-muted-foreground">
-										<strong>Phone:</strong> (123) 456-7890
+										<strong>Phone:</strong> 254-454-5558
 									</p>
 									<p className="text-muted-foreground">
 										<strong>Email:</strong> info@irishette.com

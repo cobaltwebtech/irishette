@@ -7,7 +7,9 @@ import {
 	CHECK_OUT_TIME_LABEL,
 	SAME_DAY_CUTOFF_LABEL,
 	CONTACT_PHONE,
+	CONTACT_PHONE_E164,
 	CONTACT_PHONE_HREF,
+	formatPhoneDisplay,
 	formatTimeOfDay,
 	PROPERTY_TIMEZONE,
 } from '@/lib/site';
@@ -22,9 +24,15 @@ describe('site constants', () => {
 		expect(SAME_DAY_CUTOFF_LABEL).toBe('9:00 AM CT');
 	});
 
-	it('keeps the tel: link in sync with the displayed phone digits', () => {
-		const digits = CONTACT_PHONE.replaceAll(/\D/g, '');
-		expect(CONTACT_PHONE_HREF.replaceAll(/\D/g, '')).toContain(digits);
+	it('shows the phone as 254-454-5558 and links the full international number', () => {
+		expect(CONTACT_PHONE).toBe('254-454-5558');
+		expect(CONTACT_PHONE_E164).toBe('+12544545558');
+		expect(CONTACT_PHONE_HREF).toBe('tel:+12544545558');
+	});
+
+	it('formats US numbers and leaves other numbers unchanged', () => {
+		expect(formatPhoneDisplay('+12125550123')).toBe('212-555-0123');
+		expect(formatPhoneDisplay('+442071838750')).toBe('+442071838750');
 	});
 });
 

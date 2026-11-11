@@ -175,6 +175,7 @@ Conventions:
 `docs/` has one current note per area. Check the matching one first:
 - Booking: `BOOKING_ARCHITECTURE.md`
 - Admin notifications (inbox), contact form: `ADMIN_INBOX.md`, `CONTACT_FORM.md`
+- Email reservation card markup (Gmail/Outlook), go-live checklist: `EMAIL_RESERVATION_MARKUP.md`
 - Hotel occupancy tax (what is taxed, booking tax snapshot, admin report): `TAX_REPORTING.md`
 - tRPC: `TRPC_QUICK_REFERENCE.md` (every procedure with its access level)
 - Auth / sessions: `SECURE_AUTH_IMPLEMENTATION.md`
