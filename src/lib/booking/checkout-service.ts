@@ -462,7 +462,7 @@ export async function releaseFailedPayment(
 	if (!released) return false;
 	const roomInfo = await roomName(deps.db, booking.roomId);
 	inBackground(deps, `payment failed ${booking.confirmationId}`, () =>
-		sendPaymentFailedEmail(deps.env, released, roomInfo),
+		sendPaymentFailedEmail(deps.db, deps.env, released, roomInfo),
 	);
 	return true;
 }

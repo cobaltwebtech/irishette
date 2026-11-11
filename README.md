@@ -12,7 +12,7 @@ Expedia and other platforms. It runs as a single Cloudflare Worker.
 | Data | Cloudflare D1 with Drizzle ORM (`src/db/`, migrations in `drizzle/`) |
 | Auth | Better Auth (email/password, magic link, Turnstile, Stripe customer) |
 | Payments | Stripe (PaymentIntents + Payment Element; webhook at `/api/stripe/webhook`) |
-| Email | Resend + react-email (`src/components/email/`) |
+| Email | Cloudflare Email Service + react-email (`src/components/email/`) |
 | Config | `cloudflare.config.ts` + the `cf` CLI; env contract in `.env.schema` (Varlock) |
 | Tooling | pnpm, Vite+ (`vp`: Oxlint, Oxfmt, Vitest), Playwright, Fallow |
 
@@ -61,7 +61,7 @@ pnpm db:make-admin:local you@example.com
   tRPC procedures (auth sweep, leaks, bookings, payments, pricing rules,
   blocks, cancellations), the Stripe webhook, the iCal export route and the
   cron handlers. Local D1 with migrations, test-only bindings, and msw for
-  Stripe, Resend and feed URLs (unmocked requests fail).
+  Stripe and feed URLs, and a stub for the `EMAIL` binding (unmocked requests and email sends fail).
 - **E2E** (`e2e/`, Playwright): hard reloads, auth redirects, the calendar.
   Signed-in tests need `E2E_USER_EMAIL`/`E2E_USER_PASSWORD` (and the admin
   equivalents); the Stripe booking test also needs `E2E_STRIPE=1`. See

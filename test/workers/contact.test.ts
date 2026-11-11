@@ -1,5 +1,4 @@
 import { env } from 'cloudflare:workers';
-import { HttpResponse, http } from 'msw';
 import { beforeEach, describe, expect, it } from 'vite-plus/test';
 
 import { adminInboxItems } from '@/db/schema-export';
@@ -9,8 +8,7 @@ import { verifyTurnstile } from '@/lib/inbox/turnstile';
 import { CONTACT_EMAIL, EMAIL_FROM_ADMIN } from '@/lib/site';
 
 import { db, inboxItemsOfKind } from './helpers';
-import { mockResend, mockTurnstile } from './mocks';
-import { network } from './network';
+import { mockEmail, mockTurnstile } from './mocks';
 
 // The contact form service (the Start server function only adds the rate
 // limit and the Zod validator; see test/unit/contact.test.ts).
@@ -34,7 +32,7 @@ beforeEach(async () => {
 describe('submitContactForm', () => {
 	it('verifies Turnstile, stores a guest notification and emails CONTACT_EMAIL', async () => {
 		const siteverify = mockTurnstile({ success: true });
-		const sent = mockResend();
+		const sent = mockEmail();
 
 		const result = await submitContactForm(deps(), input, '203.0.113.7');
 		expect(result).toEqual({ ok: true });
@@ -78,7 +76,7 @@ describe('submitContactForm', () => {
 			success: false,
 			'error-codes': ['invalid-input-response'],
 		});
-		const sent = mockResend();
+		const sent = mockEmail();
 		const result = await submitContactForm(deps(), input, null);
 		expect(result).toEqual({ ok: false, reason: 'turnstile' });
 		expect(sent).toHaveLength(0);
@@ -87,7 +85,7 @@ describe('submitContactForm', () => {
 
 	it('fails closed when Siteverify errors', async () => {
 		mockTurnstile({ status: 500 });
-		const sent = mockResend();
+		const sent = mockEmail();
 		const result = await submitContactForm(deps(), input, null);
 		expect(result).toEqual({ ok: false, reason: 'unavailable' });
 		expect(sent).toHaveLength(0);
@@ -96,14 +94,7 @@ describe('submitContactForm', () => {
 
 	it('still succeeds when only the email fails (the dashboard has it)', async () => {
 		mockTurnstile({ success: true });
-		network.use(
-			http.post('https://api.resend.com/emails', () =>
-				HttpResponse.json(
-					{ name: 'application_error', message: 'down' },
-					{ status: 500 },
-				),
-			),
-		);
+		mockEmail({ failFirst: 1 });
 		const result = await submitContactForm(deps(), input, null);
 		expect(result).toEqual({ ok: true });
 		expect(await inboxItemsOfKind('contact_form')).toHaveLength(1);

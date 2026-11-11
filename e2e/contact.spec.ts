@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures';
 
 // The public contact form. Submitting it in `pnpm dev` sends a REAL email
-// through Resend (to CONTACT_EMAIL), so that test runs only with
+// through Cloudflare Email Service (to CONTACT_EMAIL), so that test runs only with
 // E2E_CONTACT=1.
 
 /** Retries the first click: in dev, a click before hydration does nothing. */
@@ -48,7 +48,7 @@ test('submitting the contact form shows the thank-you state', async ({
 }) => {
 	test.skip(
 		process.env.E2E_CONTACT !== '1',
-		'Sends a real email through Resend; set E2E_CONTACT=1',
+		'Sends a real email through Cloudflare Email Service; set E2E_CONTACT=1',
 	);
 	await page.goto('/contact');
 	await page.getByLabel('Name *').fill('E2E Test');

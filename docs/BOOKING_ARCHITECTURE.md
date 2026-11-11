@@ -400,9 +400,14 @@ Cancellation emails go to the guest and admins after that.
 
 ### Emails (`src/lib/email/email-service.ts`)
 
-Resend with react-email templates in `src/components/email/`. Confirmation,
-cancellation and alert sends pass a Resend idempotency key, so a repeated
-confirm or retry does not send twice. Logs never include addresses.
+Cloudflare Email Service (the `EMAIL` binding) with react-email templates in
+`src/components/email/`, rendered to HTML and plain text. The service has no
+idempotency key, so confirmation, cancellation, refund and payment-failed sends
+claim a key per message in D1 (`sent_emails`, `src/lib/email/email-dedupe.ts`),
+so a repeated confirm, webhook replay or retry does not send twice; a failed
+send releases its claim. Admin alerts are throttled instead: one email per
+alert per hour, repeats are counted and reported in the next one. The daily
+cron purges rows older than 7 days. Logs never include addresses.
 
 | Function | When | Recipients |
 |---|---|---|

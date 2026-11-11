@@ -52,8 +52,8 @@ Plugins, in order (`tanstackStartCookies()` must stay last):
 
 ### Emails
 
-All four hooks call `src/lib/email/email-service.ts`, which sends through Resend
-(`FROM_AUTH`) and **throws** on delivery failure, so Better Auth reports an
+All four hooks call `src/lib/email/email-service.ts`, which sends through the Cloudflare
+Email Service binding (`EMAIL_FROM_AUTH`) and **throws** on delivery failure, so Better Auth reports an
 error instead of claiming the email was sent.
 
 | Flow | Trigger | Sent to |

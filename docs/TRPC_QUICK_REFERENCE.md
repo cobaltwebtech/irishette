@@ -113,7 +113,7 @@ Code conventions used by the routers and `src/lib/booking/booking-service.ts`:
 | `UNAUTHORIZED` | Not signed in (middleware) |
 | `FORBIDDEN` | Signed in but banned, or not an admin (middleware). The only auth codes: the browser refreshes the session on either (below) |
 | `TOO_MANY_REQUESTS` | Over a `rateLimit` binding limit |
-| `BAD_GATEWAY` | An external provider failed and the client should see why (`resendConfirmationEmail` when Resend fails) |
+| `BAD_GATEWAY` | An external provider failed and the client should see why (`resendConfirmationEmail` when the email service fails) |
 | `NOT_FOUND` | Missing row, **and** a booking that exists but belongs to someone else (no existence leak) |
 | `BAD_REQUEST` | Zod input errors; business rules (past dates, guest count over `maxGuests`, inactive room, end before start, resend for a non-confirmed booking) |
 | `CONFLICT` | Dates taken (`createBooking` sends `cause.conflicts` with dates only), payment confirmed after the dates were taken (refunded), overlapping pricing rule (`cause.conflict`), block over reservations or another block (`cause.conflicts`), unique violations (room slug, feed URL, phone number), stale booking state |

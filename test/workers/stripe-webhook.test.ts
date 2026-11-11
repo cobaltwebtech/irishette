@@ -19,7 +19,7 @@ import {
 	settle,
 	trpcError,
 } from './helpers';
-import { mockResend, mockStripeCharges, mockStripeCheckout } from './mocks';
+import { mockEmail, mockStripeCharges, mockStripeCheckout } from './mocks';
 import { ADMIN, GUEST } from './seed';
 
 const WEBHOOK_URL = 'http://localhost/api/stripe/webhook';
@@ -164,7 +164,7 @@ describe('checkout.session.completed', () => {
 		{ timeout: 20_000 },
 		async () => {
 			const checkout = mockStripeCheckout();
-			const sent = mockResend();
+			const sent = mockEmail();
 			const { booking, session } = await pendingBookingWithSession(checkout);
 			checkout.complete(session.id);
 			const completed = event(
@@ -228,7 +228,7 @@ describe('checkout.session.completed', () => {
 				});
 			}
 			const checkout = mockStripeCheckout();
-			mockResend();
+			mockEmail();
 			const { booking, session } = await pendingBookingWithSession(checkout);
 			checkout.complete(session.id);
 			await send(
@@ -246,7 +246,7 @@ describe('checkout.session.completed', () => {
 describe('delayed payments', () => {
 	it('async_payment_succeeded confirms a processing hold', async () => {
 		const checkout = mockStripeCheckout();
-		mockResend();
+		mockEmail();
 		const { booking, session } = await pendingBookingWithSession(checkout, {
 			paymentStatus: 'processing',
 			expiresAt: new Date(Date.now() - 60_000),
@@ -267,7 +267,7 @@ describe('delayed payments', () => {
 
 	it('async_payment_failed releases the hold and emails the guest', async () => {
 		const checkout = mockStripeCheckout();
-		const sent = mockResend();
+		const sent = mockEmail();
 		const { booking, session } = await pendingBookingWithSession(checkout, {
 			paymentStatus: 'processing',
 		});
@@ -306,7 +306,7 @@ describe('checkout.session.expired', () => {
 
 describe('charge.refunded', () => {
 	it('records partial and full refunds made in Stripe (totals only)', async () => {
-		const sent = mockResend();
+		const sent = mockEmail();
 		const booking = await paidBooking('pi_refunded_in_dashboard');
 		const charge = (amountRefunded: number) =>
 			event('charge.refunded', {
@@ -361,7 +361,7 @@ describe('refunds made in the Stripe Dashboard', () => {
 		'a full refund cancels the booking, emails guest and admins, and adds an inbox item',
 		{ timeout: 20_000 },
 		async () => {
-			const sent = mockResend();
+			const sent = mockEmail();
 			const booking = await paidBooking('pi_dash_full');
 			mockStripeCharges({
 				id: 'ch_pi_dash_full',
@@ -438,7 +438,7 @@ describe('refunds made in the Stripe Dashboard', () => {
 	);
 
 	it('a partial refund keeps the booking confirmed and updates the amounts', async () => {
-		mockResend();
+		mockEmail();
 		const booking = await paidBooking('pi_dash_partial');
 		mockStripeCharges({
 			id: 'ch_pi_dash_partial',
@@ -469,7 +469,7 @@ describe('refunds made in the Stripe Dashboard', () => {
 	});
 
 	it('refunds the app made only sync their status (no second email)', async () => {
-		const sent = mockResend();
+		const sent = mockEmail();
 		const booking = await paidBooking('pi_app_refund');
 		await send(
 			event(
@@ -495,7 +495,7 @@ describe('refunds made in the Stripe Dashboard', () => {
 describe('refund.failed', () => {
 	it('alerts the admins once and adds one inbox item', async () => {
 		const booking = await paidBooking('pi_refund_fails');
-		const sent = mockResend();
+		const sent = mockEmail();
 		const failed = event(
 			'refund.failed',
 			refundObject({
@@ -581,7 +581,7 @@ describe('charge.dispute.*', () => {
 		'stores and links the dispute, notifies the inbox (no email) and resurfaces on newer events only',
 		{ timeout: 20_000 },
 		async () => {
-			const sent = mockResend();
+			const sent = mockEmail();
 			const booking = await paidBooking('pi_disputed');
 			mockStripeCharges({
 				id: 'ch_pi_disputed',

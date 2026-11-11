@@ -308,7 +308,7 @@ Responses and retries:
   (`payment_transactions.stripe_payment_intent_id`,
   `payment_refunds.stripe_refund_id`, `payment_disputes.stripe_dispute_id`,
   inbox `dedupe_key`), the stored refund status and dispute event order,
-  Stripe idempotency keys, and Resend idempotency keys.
+  Stripe idempotency keys, and the `sent_emails` claims that stop duplicate emails.
 
 **Never log** guest names, email addresses, phone numbers, card or payment
 method data, client secrets, full event payloads, signatures or webhook
@@ -317,20 +317,20 @@ booking confirmation ids and error messages only.
 
 ## Emails
 
-Sent with Resend from `src/lib/email/email-service.ts`, in the background via
+Sent with Cloudflare Email Service (the `EMAIL` binding) from `src/lib/email/email-service.ts`, in the background via
 `inBackground()`. Booking emails share one booking-details section
 (`src/components/email/BookingDetailsSection.tsx`: confirmation id, room,
 check-in/out with times, nights, guests, guest name/email/phone, special
 requests, price breakdown); cancellation, refund and payment-failed emails use
 `BookingNoticeEmail`.
 
-| Function | Trigger | Recipients | Idempotency key |
+| Function | Trigger | Recipients | Dedupe key (`sent_emails`, one claim per message: `<key>#<index>`) |
 |---|---|---|---|
 | `sendBookingConfirmedEmails` | Booking confirmed | Guest + admins | `booking-confirmed/<bookingId>` |
 | `sendCancellationEmails` | Cancellation or automatic refund | Guest + admins | `booking-cancelled/<bookingId>` |
 | `sendRefundEmails` | Dashboard refund (new, succeeded, trace reference) | Guest + admins | `refund/<refundId>/<status>[/ref]` |
 | `sendPaymentFailedEmail` | `checkout.session.async_payment_failed` | Guest | `payment-failed/<bookingId>` |
-| `sendAdminAlert` | Automatic refund / refund failed | Admins | `auto-refund-alert/<bookingId>` / `refund-failed/<refundId>` |
+| `sendAdminAlert` | Automatic refund / refund failed | Admins | Throttled: one per alert per hour, keyed `alert:<key or subject>@<hour>` (`auto-refund-alert/<bookingId>` / `refund-failed/<refundId>`) |
 | `sendBookingConfirmationEmail` | `bookings.resendConfirmationEmail` | Guest | None (intentional resend) |
 
 Guest copy says refunds take 5-10 business days (Stripe).
@@ -344,7 +344,6 @@ Declared in `.env.schema`, bound in `cloudflare.config.ts`.
 | `STRIPE_SECRET_KEY` | Secret | Server Stripe client |
 | `STRIPE_PUBLISHABLE_KEY` | `@public` text binding (build time) | Returned by `createCheckoutSession` for `loadStripe` |
 | `STRIPE_TRPC_WEBHOOK_SECRET` | Secret | `/api/stripe/webhook` signature |
-| `RESEND_API_KEY` | Secret | Emails |
 | `BETTER_AUTH_URL` | `@public` text binding | `return_url`, links in emails |
 
 ## Tests
@@ -356,7 +355,7 @@ Declared in `.env.schema`, bound in `cloudflare.config.ts`.
 | `test/workers/bookings.test.ts` | Holds, pricing, cancellation refunds by policy and their metadata, cancelling a hold expires its session, processing holds can't be cancelled |
 | `test/workers/scheduled.test.ts` | Expired hold cleanup: paid session confirmed, open session expired, processing kept |
 | `test/unit/stripe-metadata.test.ts` | `stripeBookingMetadata` keys and no personal data; `checkoutLineItems` totals |
-| `test/workers/mocks.ts` | msw: `mockStripeCheckout` (stateful sessions: create / retrieve with expand / expire, `complete()`), `mockStripeCharges`, `mockStripeRefunds`, `mockResend` |
+| `test/workers/mocks.ts` | msw: `mockStripeCheckout` (stateful sessions: create / retrieve with expand / expire, `complete()`), `mockStripeCharges`, `mockStripeRefunds`; `mockEmail` (stub for the `EMAIL` binding) |
 | `e2e/booking.spec.ts` | Full booking with test card `4242 4242 4242 4242` against the sandbox (`E2E_STRIPE=1`) |
 
 The Workers tests use fake keys from `vitest.config.ts` (webhook secret

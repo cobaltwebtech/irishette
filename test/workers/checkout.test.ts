@@ -23,7 +23,7 @@ import {
 	settle,
 	trpcError,
 } from './helpers';
-import { mockResend, mockStripeCheckout, mockStripeRefunds } from './mocks';
+import { mockEmail, mockStripeCheckout, mockStripeRefunds } from './mocks';
 import { ADMIN, OTHER_GUEST } from './seed';
 
 // Checkout Sessions (plan 02, 3.1-3.3): one session per hold, built from our
@@ -200,7 +200,7 @@ describe('createCheckoutSession', () => {
 
 	it('reports a session that was already paid and confirms the booking', async () => {
 		const checkout = mockStripeCheckout();
-		mockResend();
+		mockEmail();
 		const { booking } = await paidBooking(checkout);
 		const result = await guest().bookings.createCheckoutSession({
 			bookingId: booking.id,
@@ -250,7 +250,7 @@ describe('confirmCheckout verification', () => {
 		'rejects a session with a mismatched %s',
 		async (label, patch) => {
 			const checkout = mockStripeCheckout();
-			mockResend();
+			mockEmail();
 			const { booking, session } = await paidBooking(checkout);
 			Object.assign(checkout.sessions.get(session.id) ?? {}, patch);
 			const error = await trpcError(
@@ -268,7 +268,7 @@ describe('confirmCheckout verification', () => {
 describe('confirmation', () => {
 	it('confirms, stores the payment ids and records the transaction', async () => {
 		const checkout = mockStripeCheckout();
-		const sent = mockResend();
+		const sent = mockEmail();
 		const { booking, session } = await paidBooking(checkout);
 		const result = await guest().bookings.confirmCheckout({
 			publicId: booking.publicId,
@@ -336,7 +336,7 @@ describe('confirmation', () => {
 		async () => {
 			const checkout = mockStripeCheckout();
 			const refunds = mockStripeRefunds();
-			const sent = mockResend();
+			const sent = mockEmail();
 			const { booking, session } = await paidBooking(checkout);
 			// An Airbnb reservation arrived via iCal sync after checkout started.
 			const feed = await insertFeed();
@@ -379,7 +379,7 @@ describe('confirmation', () => {
 	it('the webhook path refunds too, once, and returns 200', async () => {
 		const checkout = mockStripeCheckout();
 		const refunds = mockStripeRefunds();
-		mockResend();
+		mockEmail();
 		const { booking, session } = await paidBooking(checkout);
 		const feed = await insertFeed();
 		await insertExternalEvent({
@@ -405,7 +405,7 @@ describe('confirmation', () => {
 		{ timeout: 30_000 },
 		async () => {
 			const checkout = mockStripeCheckout();
-			const sent = mockResend();
+			const sent = mockEmail();
 			const { booking, session } = await paidBooking(checkout);
 			const input = { publicId: booking.publicId, sessionId: session.id };
 
@@ -450,7 +450,7 @@ describe('first hold wins while it is live', () => {
 
 	it('confirms an expired hold that was paid after all and refuses the new hold', async () => {
 		const checkout = mockStripeCheckout();
-		mockResend();
+		mockEmail();
 		const { booking: old } = await paidBooking(checkout, 'paid', {
 			userId: OTHER_GUEST.id,
 			expiresAt: new Date(Date.now() - 60_000),

@@ -16,7 +16,7 @@ import {
 	trpcError,
 	useClock,
 } from './helpers';
-import { mockResend, mockStripeCheckout, mockStripeRefunds } from './mocks';
+import { mockEmail, mockStripeCheckout, mockStripeRefunds } from './mocks';
 import { ADMIN, ROSE, TEXAS } from './seed';
 
 const guest = () => caller('user');
@@ -310,7 +310,7 @@ describe('access and ownership', () => {
 	});
 
 	it('resendConfirmationEmail takes the publicId (owner)', async () => {
-		mockResend();
+		mockEmail();
 		const booking = await insertBooking({
 			checkInDate: '2034-06-13',
 			checkOutDate: '2034-06-14',
@@ -346,7 +346,7 @@ describe('cancellation', () => {
 
 	it('cancelling frees the dates', async () => {
 		mockStripeRefunds();
-		mockResend();
+		mockEmail();
 		const booking = await insertBooking({
 			checkInDate: '2034-09-10',
 			checkOutDate: '2034-09-12',
@@ -364,7 +364,7 @@ describe('cancellation', () => {
 
 	it('refunds in full more than 72 hours ahead, and emails guest and admins', async () => {
 		const refunds = mockStripeRefunds();
-		const sent = mockResend();
+		const sent = mockEmail();
 		const booking = await insertBooking({
 			checkInDate: inDays(10),
 			checkOutDate: inDays(12),
@@ -392,7 +392,7 @@ describe('cancellation', () => {
 
 	it('refunds 50% between 24 and 72 hours ahead', async () => {
 		const refunds = mockStripeRefunds();
-		mockResend();
+		mockEmail();
 		const booking = await insertBooking({
 			checkInDate: inDays(2),
 			checkOutDate: inDays(4),
@@ -416,7 +416,7 @@ describe('cancellation', () => {
 
 	it('guests cannot cancel after check-in time; admins can, with a full refund', async () => {
 		const refunds = mockStripeRefunds();
-		mockResend();
+		mockEmail();
 		const booking = await insertBooking({
 			checkInDate: inDays(-1),
 			checkOutDate: inDays(1),
@@ -475,7 +475,7 @@ describe('cancellation', () => {
 
 	it('refunds carry the booking ids in metadata (no personal data)', async () => {
 		const refunds = mockStripeRefunds();
-		mockResend();
+		mockEmail();
 		const booking = await insertBooking({
 			checkInDate: inDays(20),
 			checkOutDate: inDays(22),
@@ -492,7 +492,7 @@ describe('cancellation', () => {
 	});
 
 	it('keeps the policy a booking was made under', async () => {
-		mockResend();
+		mockEmail();
 		const before = await guest().bookings.createBooking(
 			bookingInput({ checkInDate: inDays(30), checkOutDate: inDays(32) }),
 		);

@@ -237,7 +237,7 @@ fixtures needed:
 | Dispute | Pay with `4000 0000 0000 0259` | `charge.dispute.created` (and `funds_withdrawn`): a `payment_dispute` notification and the "Payment disputes" panel on the booking; guest cancel is blocked |
 | Expired session | Start checkout and wait for the hold to expire (35 min), or trigger `checkout.session.expired` for a real session | The hold is released |
 
-Guest emails go to the address on the booking through Resend: use your own
+Guest emails go to the address on the booking through Cloudflare Email Service: use your own
 test address.
 
 ### Troubleshooting

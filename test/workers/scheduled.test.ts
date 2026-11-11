@@ -16,7 +16,7 @@ import { db, insertBooking, insertFeed } from './helpers';
 import {
 	calendarResponse,
 	mockFeed,
-	mockResend,
+	mockEmail,
 	mockStripeCheckout,
 	vcalendar,
 } from './mocks';
@@ -83,7 +83,7 @@ describe('expired pending bookings cleanup (5 8 * * *)', () => {
 
 	it('confirms an expired hold whose Checkout Session was paid', async () => {
 		const checkout = mockStripeCheckout();
-		mockResend();
+		mockEmail();
 		const paid = await insertBooking({
 			checkInDate: '2042-04-10',
 			checkOutDate: '2042-04-12',

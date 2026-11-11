@@ -74,8 +74,12 @@ export default defineConfig({
 			),
 			STRIPE_SECRET_KEY: bindings.secret(),
 			STRIPE_TRPC_WEBHOOK_SECRET: bindings.secret(),
-			RESEND_API_KEY: bindings.secret(),
 			TURNSTILE_SECRET_KEY: bindings.secret(),
+
+			// Cloudflare Email Service (src/lib/email/email-service.ts). Sender
+			// domains are onboarded in the dashboard (Compute > Email Service).
+			// `remote: true`: `pnpm dev` sends real email through the account.
+			EMAIL: bindings.sendEmail({ dev: { remote: true } }),
 
 			// Rate Limiting (src/lib/security/rate-limit.ts). Approximate, per Cloudflare
 			// location; a first filter in front of Better Auth's strict D1 limits.

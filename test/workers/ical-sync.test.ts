@@ -18,7 +18,7 @@ import {
 	insertBooking,
 	insertFeed,
 } from './helpers';
-import { calendarResponse, mockFeed, mockResend, vcalendar } from './mocks';
+import { calendarResponse, mockFeed, mockEmail, vcalendar } from './mocks';
 import { ADMIN } from './seed';
 
 // Import sync, driven through the real cron handler (*/30). Feeds are
@@ -227,7 +227,7 @@ describe('feed validation (protect stored data)', () => {
 				() => calendarResponse(first),
 				() => new HttpResponse('boom', { status: 500 }),
 			]);
-			const sent = mockResend();
+			const sent = mockEmail();
 			await runSync();
 			await runSync();
 			expect(await eventsFor(feed.id)).toHaveLength(2);
@@ -256,7 +256,7 @@ describe('feed validation (protect stored data)', () => {
 				() => calendarResponse(first),
 				() => calendarResponse(vcalendar([])),
 			]);
-			const sent = mockResend();
+			const sent = mockEmail();
 			await runSync();
 			await runSync();
 			expect(await eventsFor(feed.id)).toHaveLength(2);
@@ -276,7 +276,7 @@ describe('feed validation (protect stored data)', () => {
 				() => calendarResponse(first),
 				() => HttpResponse.html('<html><body>Sign in</body></html>'),
 			]);
-			mockResend();
+			mockEmail();
 			await runSync();
 			await runSync();
 			expect(await eventsFor(feed.id)).toHaveLength(2);
@@ -303,7 +303,7 @@ describe('feed validation (protect stored data)', () => {
 						vcalendar([event('a@x', '2040-01-10', '2040-01-11')]),
 					),
 			]);
-			mockResend();
+			mockEmail();
 			await runSync();
 			await runSync();
 			expect(await eventsFor(feed.id)).toHaveLength(4);
@@ -356,7 +356,7 @@ describe('conflicts', () => {
 						vcalendar([event('c@x', '2040-03-11', '2040-03-13')]),
 					),
 			]);
-			const sent = mockResend();
+			const sent = mockEmail();
 			await runSync();
 			expect(sent.some((e) => e.to.includes(ADMIN.email))).toBe(true);
 			const items = (await inboxItemsOfKind('ical_conflict')).filter((i) =>

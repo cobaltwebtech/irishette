@@ -15,7 +15,7 @@ import {
 	useClock,
 } from './helpers';
 import {
-	mockResend,
+	mockEmail,
 	mockStripeRefunds,
 	mockStripeRefundsFailing,
 } from './mocks';
@@ -124,7 +124,7 @@ describe('cancellation windows and refunds', () => {
 
 	it('records the applied tier and refunds with the amount in the idempotency key', async () => {
 		const refunds = mockStripeRefunds();
-		mockResend();
+		mockEmail();
 		const booking = await paid(20);
 		const result = await guest().bookings.cancelBooking({
 			publicId: booking.publicId,
@@ -163,7 +163,7 @@ describe('cancellation windows and refunds', () => {
 
 	it('after a partial refund in Stripe: the policy percent of the total, capped at what is left', async () => {
 		const refunds = mockStripeRefunds();
-		mockResend();
+		mockEmail();
 		const booking = await paid(20, {
 			paymentStatus: 'partially_refunded',
 			refundAmount: 200,
@@ -191,7 +191,7 @@ describe('cancellation windows and refunds', () => {
 
 	it('a booking already refunded in full makes no Stripe call', async () => {
 		const refunds = mockStripeRefunds();
-		mockResend();
+		mockEmail();
 		const booking = await paid(20, {
 			paymentStatus: 'refunded',
 			refundAmount: 250,
@@ -208,7 +208,7 @@ describe('cancellation windows and refunds', () => {
 
 	it('saves the cancellation first: a failed refund leaves it cancelled, refund_failed, admins alerted', async () => {
 		const attempts = mockStripeRefundsFailing();
-		const sent = mockResend();
+		const sent = mockEmail();
 		const booking = await paid(20);
 		const result = await guest().bookings.cancelBooking({
 			publicId: booking.publicId,

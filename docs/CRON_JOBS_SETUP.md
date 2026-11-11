@@ -12,7 +12,7 @@ in `cloudflare.config.ts` and the keys of `CRON_SCHEDULES` differ.
 |---|---|---|
 | `*/30 * * * *` | `scheduledCalendarSync` | Imports all active iCal feeds in parallel (`Promise.allSettled`). See `ICAL_SYNC_README.md`. |
 | `5 8 * * *` | `scheduledBookingCleanup` | Deletes expired pending holds. An open Checkout Session is expired first; a hold whose session was paid is confirmed instead (or kept if that fails); holds with a delayed payment `processing` are skipped; if Stripe can't be reached the hold is kept until the next run. |
-| `15 9 * * *` | `scheduledIcalLogCleanup` | Deletes iCal sync history (`ical_sync_log`, `ical_sync_changes`) older than 30 days. |
+| `15 9 * * *` | `scheduledIcalLogCleanup`, then `scheduledSentEmailCleanup` | Deletes iCal sync history (`ical_sync_log`, `ical_sync_changes`) older than 30 days, and email dedupe rows (`sent_emails`) older than 7 days. |
 
 Errors are logged with the cron string and rethrown, so failures show in
 Workers observability (`pnpm tail`, or the dashboard). Feed errors are also

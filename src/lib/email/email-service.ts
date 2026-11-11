@@ -1,5 +1,5 @@
 import React from 'react';
-import { type CreateEmailOptions, Resend } from 'resend';
+import { render } from 'react-email';
 
 import { AdminBookingNotificationEmail } from '@/components/email/AdminBookingNotificationEmail';
 import { BookingConfirmationEmail } from '@/components/email/BookingConfirmationEmail';
@@ -19,6 +19,7 @@ import {
 	MAGIC_LINK_EXPIRES_IN,
 	PASSWORD_RESET_EXPIRES_IN,
 } from '@/lib/auth/auth-constants';
+import { claimAlert, claimEmail, releaseEmail } from '@/lib/email/email-dedupe';
 import { getAdminEmails } from '@/lib/server/admin-query';
 import {
 	CHECK_IN_TIME,
@@ -27,20 +28,31 @@ import {
 	EMAIL_FROM_ADMIN,
 	EMAIL_FROM_AUTH,
 	EMAIL_FROM_BOOKINGS,
+	type EmailSender,
 	formatTimeOfDay,
 	SITE_URL,
 } from '@/lib/site';
 import { formatMoney } from '@/utils/format';
 import { formatInstantCT, formatStayDate } from '@/utils/timezone';
 
-// All transactional email goes through here. Logs never include email
-// addresses or guest details: only the kind of email and the booking's
+// All transactional email goes through here, sent with the Cloudflare Email
+// Service binding (env.EMAIL). Logs never include email addresses or guest
+// details: only the kind of email, the error code and the booking's
 // confirmation id. Senders and contact details live in src/lib/site.ts
 // (they change at go-live).
 
 export interface EmailEnv {
-	RESEND_API_KEY: string;
+	EMAIL: SendEmail;
 	BETTER_AUTH_URL: string;
+}
+
+/** A message before rendering; `element` becomes the HTML and plain text. */
+interface OutgoingEmail {
+	from: EmailSender;
+	to: string[];
+	subject: string;
+	element: React.ReactElement;
+	replyTo?: string;
 }
 
 type Booking = typeof bookings.$inferSelect;
@@ -88,12 +100,12 @@ function guestConfirmation(
 	booking: Booking,
 	room: RoomInfo,
 	baseUrl: string,
-): CreateEmailOptions {
+): OutgoingEmail {
 	return {
 		from: EMAIL_FROM_BOOKINGS,
 		to: [booking.guestEmail],
 		subject: `Booking Confirmed - ${booking.confirmationId} | Irishette Bed & Breakfast`,
-		react: React.createElement(BookingConfirmationEmail, {
+		element: React.createElement(BookingConfirmationEmail, {
 			booking: emailBookingDetails(booking, room),
 			accountUrl: `${baseUrl}/account`,
 			siteUrl: SITE_URL,
@@ -103,16 +115,16 @@ function guestConfirmation(
 }
 
 function bookingNotice(
-	from: string,
+	from: EmailSender,
 	to: string[],
 	subject: string,
 	props: Omit<React.ComponentProps<typeof BookingNoticeEmail>, 'contactEmail'>,
-): CreateEmailOptions {
+): OutgoingEmail {
 	return {
 		from,
 		to,
 		subject,
-		react: React.createElement(BookingNoticeEmail, {
+		element: React.createElement(BookingNoticeEmail, {
 			...props,
 			contactEmail: CONTACT_EMAIL,
 		}),
@@ -124,12 +136,12 @@ function adminBookingNotification(
 	room: RoomInfo,
 	adminEmails: string[],
 	baseUrl: string,
-): CreateEmailOptions {
+): OutgoingEmail {
 	return {
 		from: EMAIL_FROM_ADMIN,
 		to: adminEmails,
 		subject: `New Booking Alert: ${booking.confirmationId} - ${booking.guestName}`,
-		react: React.createElement(AdminBookingNotificationEmail, {
+		element: React.createElement(AdminBookingNotificationEmail, {
 			confirmationId: booking.confirmationId,
 			guestName: booking.guestName,
 			guestEmail: booking.guestEmail,
@@ -147,48 +159,99 @@ function adminBookingNotification(
 }
 
 function notification(
-	from: string,
+	from: EmailSender,
 	to: string[],
 	subject: string,
 	props: NotificationEmailProps,
-): CreateEmailOptions {
+): OutgoingEmail {
 	return {
 		from,
 		to,
 		subject,
-		react: React.createElement(NotificationEmail, props),
+		element: React.createElement(NotificationEmail, props),
 	};
 }
 
-async function sendBatch(
-	env: Pick<EmailEnv, 'RESEND_API_KEY'>,
+/** Strips anything that looks like an email address from a log line. */
+function redactAddresses(text: string): string {
+	return text.replace(/[^\s<>"',;]+@[^\s<>"',;]+/g, '[email]');
+}
+
+function describeError(error: unknown): string {
+	if (!(error instanceof Error)) return 'Unknown error';
+	const code =
+		'code' in error && typeof error.code === 'string' ? error.code : '';
+	return `${code ? `${code}: ` : ''}${redactAddresses(error.message)}`;
+}
+
+async function sendOne(env: Pick<EmailEnv, 'EMAIL'>, email: OutgoingEmail) {
+	const [html, text] = await Promise.all([
+		render(email.element),
+		render(email.element, { plainText: true }),
+	]);
+	await env.EMAIL.send({
+		from: email.from,
+		to: email.to,
+		subject: email.subject,
+		html,
+		text,
+		replyTo: email.replyTo,
+	});
+}
+
+/**
+ * Sends one message. With `claim`, the message is claimed in D1 first (a
+ * message already claimed counts as sent), and the claim is released when the
+ * send fails so a retry can send it. Returns false only on failure.
+ */
+async function deliverOne(
+	env: Pick<EmailEnv, 'EMAIL'>,
 	kind: string,
-	emails: CreateEmailOptions[],
-	idempotencyKey?: string,
+	email: OutgoingEmail,
+	claim?: { db: Database; key: string },
+): Promise<boolean> {
+	let claimed = false;
+	try {
+		if (claim) {
+			if (!(await claimEmail(claim.db, claim.key, 'message'))) return true;
+			claimed = true;
+		}
+		await sendOne(env, email);
+		return true;
+	} catch (error) {
+		console.error(`Email (${kind}) failed:`, describeError(error));
+		if (claim && claimed) {
+			await releaseEmail(claim.db, claim.key).catch(() => undefined);
+		}
+		return false;
+	}
+}
+
+/**
+ * Sends the messages one by one. With `dedupe`, each message is claimed as
+ * `<key>#<index>`, so a replayed webhook or a cron retry never sends it twice.
+ * A failed message does not stop the others. A Worker killed between the
+ * claim and the send loses that message (it is not retried).
+ */
+async function deliver(
+	env: Pick<EmailEnv, 'EMAIL'>,
+	kind: string,
+	emails: OutgoingEmail[],
+	dedupe?: { db: Database; key: string },
 ): Promise<EmailResult> {
 	if (emails.length === 0) return { success: true };
-	if (!env.RESEND_API_KEY) {
-		console.error(`Email (${kind}) not sent: RESEND_API_KEY is not set`);
+	if (!env.EMAIL) {
+		console.error(`Email (${kind}) not sent: the EMAIL binding is missing`);
 		return { success: false, error: 'Email service not configured' };
 	}
-	try {
-		const resend = new Resend(env.RESEND_API_KEY);
-		const { error } =
-			emails.length === 1
-				? await resend.emails.send(emails[0], { idempotencyKey })
-				: await resend.batch.send(emails, { idempotencyKey });
-		if (error) {
-			console.error(`Email (${kind}) failed:`, error.name, error.message);
-			return { success: false, error: 'Email delivery failed' };
-		}
-		return { success: true };
-	} catch (error) {
-		console.error(
-			`Email (${kind}) failed:`,
-			error instanceof Error ? error.message : 'Unknown error',
-		);
-		return { success: false, error: 'Email delivery failed' };
+	let failed = false;
+	for (const [index, email] of emails.entries()) {
+		const claim = dedupe && { db: dedupe.db, key: `${dedupe.key}#${index}` };
+		if (!(await deliverOne(env, kind, email, claim))) failed = true;
 	}
+	return failed
+		? { success: false, error: 'Email delivery failed' }
+		: { success: true };
 }
 
 /** Guest confirmation + admin notification, once per booking. */
@@ -205,12 +268,10 @@ export async function sendBookingConfirmedEmails(
 			adminBookingNotification(booking, room, adminEmails, env.BETTER_AUTH_URL),
 		);
 	}
-	return sendBatch(
-		env,
-		`booking confirmed ${booking.confirmationId}`,
-		emails,
-		`booking-confirmed/${booking.id}`,
-	);
+	return deliver(env, `booking confirmed ${booking.confirmationId}`, emails, {
+		db,
+		key: `booking-confirmed/${booking.id}`,
+	});
 }
 
 /** Re-sends the guest confirmation (account / admin "resend" button). */
@@ -219,7 +280,7 @@ export function sendBookingConfirmationEmail(
 	booking: Booking,
 	room: RoomInfo,
 ): Promise<EmailResult> {
-	return sendBatch(env, `confirmation resend ${booking.confirmationId}`, [
+	return deliver(env, `confirmation resend ${booking.confirmationId}`, [
 		guestConfirmation(booking, room, env.BETTER_AUTH_URL),
 	]);
 }
@@ -285,7 +346,10 @@ async function sendBookingNotices(
 			}),
 		);
 	}
-	return sendBatch(env, notice.kind, emails, notice.idempotencyKey);
+	return deliver(env, notice.kind, emails, {
+		db,
+		key: notice.idempotencyKey,
+	});
 }
 
 /** Guest cancellation notice + admin notification (full booking details). */
@@ -449,11 +513,12 @@ export function sendRefundEmails(
 
 /** A delayed payment (bank debit) failed: the hold was released. */
 export function sendPaymentFailedEmail(
+	db: Database,
 	env: EmailEnv,
 	booking: Booking,
 	room: RoomInfo,
 ): Promise<EmailResult> {
-	return sendBatch(
+	return deliver(
 		env,
 		`payment failed ${booking.confirmationId}`,
 		[
@@ -474,11 +539,16 @@ export function sendPaymentFailedEmail(
 				},
 			),
 		],
-		`payment-failed/${booking.id}`,
+		{ db, key: `payment-failed/${booking.id}` },
 	);
 }
 
-/** An alert for all admins (sync problems, conflicts, automatic refunds). */
+/**
+ * An alert for all admins (sync problems, conflicts, automatic refunds).
+ * Throttled: the first alert for a given `idempotencyKey` (or subject) in an
+ * hour is sent, repeats in that hour are counted and skipped, and the next
+ * email for it says how many were suppressed.
+ */
 export async function sendAdminAlert(
 	db: Database,
 	env: EmailEnv,
@@ -493,26 +563,41 @@ export async function sendAdminAlert(
 ): Promise<EmailResult> {
 	const adminEmails = await getAdminEmails(db);
 	if (adminEmails.length === 0) return { success: true };
-	return sendBatch(
-		env,
-		`admin alert: ${alert.subject}`,
-		[
-			notification(EMAIL_FROM_ADMIN, adminEmails, alert.subject, {
-				preview: alert.subject,
-				heading: alert.heading,
-				paragraphs: alert.paragraphs,
-				details: alert.details,
-				button: alert.link
-					? {
-							label: alert.link.label,
-							href: `${env.BETTER_AUTH_URL}${alert.link.path}`,
-						}
-					: undefined,
-				tone: 'alert',
-			}),
-		],
-		alert.idempotencyKey,
+	const claim = await claimAlert(
+		db,
+		alert.idempotencyKey ?? alert.subject,
+		new Date(),
 	);
+	if (!claim.send) return { success: true };
+	const details = [
+		...(alert.details ?? []),
+		...(claim.suppressedBefore > 0
+			? [
+					{
+						label: 'Similar alerts suppressed in the previous hour',
+						value: String(claim.suppressedBefore),
+					},
+				]
+			: []),
+	];
+	const result = await deliver(env, `admin alert: ${alert.subject}`, [
+		notification(EMAIL_FROM_ADMIN, adminEmails, alert.subject, {
+			preview: alert.subject,
+			heading: alert.heading,
+			paragraphs: alert.paragraphs,
+			details: details.length > 0 ? details : undefined,
+			button: alert.link
+				? {
+						label: alert.link.label,
+						href: `${env.BETTER_AUTH_URL}${alert.link.path}`,
+					}
+				: undefined,
+			tone: 'alert',
+		}),
+	]);
+	// A failed send frees the slot so the next alert can try again.
+	if (!result.success) await releaseEmail(db, claim.key);
+	return result;
 }
 
 /** A contact form submission, for CONTACT_EMAIL (the admin's own inbox). */
@@ -544,7 +629,7 @@ export function sendContactNotification(
 			? [{ label: 'Booking', value: contact.bookingConfirmationId }]
 			: []),
 	];
-	return sendBatch(env, 'contact form', [
+	return deliver(env, 'contact form', [
 		{
 			...notification(
 				EMAIL_FROM_ADMIN,
@@ -578,14 +663,14 @@ export function sendContactNotification(
 // Called from Better Auth hooks (src/lib/auth/auth.ts). They throw on failure so
 // Better Auth reports the error to the user instead of claiming success.
 
-type AuthEmailEnv = Pick<EmailEnv, 'RESEND_API_KEY'>;
+type AuthEmailEnv = Pick<EmailEnv, 'EMAIL'>;
 
 async function sendAuthEmail(
 	env: AuthEmailEnv,
 	kind: string,
-	email: CreateEmailOptions,
+	email: OutgoingEmail,
 ): Promise<void> {
-	const result = await sendBatch(env, kind, [email]);
+	const result = await deliver(env, kind, [email]);
 	if (!result.success) {
 		throw new Error(result.error ?? 'Email delivery failed');
 	}
@@ -600,7 +685,7 @@ export function sendPasswordResetEmail(
 		from: EMAIL_FROM_AUTH,
 		to: [to],
 		subject: 'Password Reset',
-		react: React.createElement(PasswordReset, {
+		element: React.createElement(PasswordReset, {
 			url,
 			contactEmail: CONTACT_EMAIL,
 			expiresIn: formatLinkLifetime(PASSWORD_RESET_EXPIRES_IN),
@@ -617,7 +702,7 @@ export function sendMagicLinkEmail(
 		from: EMAIL_FROM_AUTH,
 		to: [to],
 		subject: 'Login to Irishette',
-		react: React.createElement(MagicLinkEmail, {
+		element: React.createElement(MagicLinkEmail, {
 			url,
 			contactEmail: CONTACT_EMAIL,
 			expiresIn: formatLinkLifetime(MAGIC_LINK_EXPIRES_IN),

@@ -16,7 +16,7 @@ Irishette is a room-booking site (rooms, availability, bookings, payments, admin
 | Payments | Stripe Checkout Sessions (`ui_mode: 'elements'`) + Payment Element (`src/lib/booking/checkout-service.ts`; refunds `refund-service.ts`, disputes `dispute-service.ts`; webhook handler `src/lib/stripe/stripe-webhook.ts`, mounted at `src/routes/api/stripe.$.ts`) |
 | Database | Cloudflare D1 (binding `DB`) via Drizzle ORM (SQLite dialect) |
 | Other bindings | Rate Limiting bindings `AUTH_RATE_LIMITER`, `API_RATE_LIMITER`, `CSP_REPORT_RATE_LIMITER` (`src/lib/security/rate-limit.ts`); cron triggers (see `cloudflare.config.ts`). No KV (the old `KV_ICAL_SYNC_LOG` is gone; sync history is in D1). |
-| Email | Resend + react-email templates in `src/components/email/`; every send (booking, admin alerts, Better Auth) goes through `src/lib/email/email-service.ts` |
+| Email | Cloudflare Email Service (Workers binding `EMAIL`, `env.EMAIL.send`) + react-email templates in `src/components/email/` (rendered to HTML and plain text in `email-service.ts`); every send (booking, admin alerts, Better Auth) goes through `src/lib/email/email-service.ts`. No idempotency key exists, so duplicates are blocked in D1 (`sent_emails`, `src/lib/email/email-dedupe.ts`; admin alerts are throttled to one per alert per hour). Sender domains are onboarded in the dashboard (Compute > Email Service > Email Sending); in `pnpm dev` the binding is remote, so it sends real email. |
 | Bot protection | Cloudflare Turnstile |
 | Env / secrets | **Varlock** (`.env.schema` contract, generated `varlock.d.ts`, local encryption). Cloudflare config via `cf` + `cloudflare.config.ts`; no Wrangler config, no Varlock Cloudflare/Vite integrations (see [Secrets and environment](#secrets-and-environment-varlock)) |
 | UI | Tailwind CSS v4, shadcn/ui (`base-vega` style, Stone) on **Base UI** (`@base-ui/react`; no Radix), `cn` (the `cn` package, re-exported from `@/utils/twMerge`), Base UI Toast (`@/components/ui/toast`) |
@@ -74,7 +74,7 @@ Notes:
 ### Tests
 
 - **Unit** (`test/unit/`): pure modules (date rules, pricing, iCal parse/generate, cancellation policy, validation, ids, booking store).
-- **Workers** (`test/workers/`): tRPC procedures through `createInnerTRPCContext` with a synthetic session (no Better Auth), the Stripe webhook, the iCal route and the cron handlers, inside workerd with a migrated local D1. Bindings are declared in `vitest.config.ts` with test-only values (it does not read `cloudflare.config.ts` or any `.env`). Outbound requests (Stripe, Resend, feed URLs) are mocked with msw (`test/workers/mocks.ts`); unmocked requests fail.
+- **Workers** (`test/workers/`): tRPC procedures through `createInnerTRPCContext` with a synthetic session (no Better Auth), the Stripe webhook, the iCal route and the cron handlers, inside workerd with a migrated local D1. Bindings are declared in `vitest.config.ts` with test-only values (it does not read `cloudflare.config.ts` or any `.env`). Outbound requests (Stripe, feed URLs) are mocked with msw and `env.EMAIL` is replaced by a recording stub (`mockEmail()`), both in `test/workers/mocks.ts`; unmocked requests and unmocked email sends fail.
 - Booking creation checks the 10-month window and the same-day cutoff against the clock: workers tests that book fixed future dates pin `Date` with `useClock(...)` (`test/workers/helpers.ts`) in their `describe` block.
 - When you add a tRPC procedure, add it to the access lists in `test/workers/trpc-authz.test.ts` (and `trpc-public-leaks.test.ts` if public).
 - **E2E** (`e2e/`): a few Playwright flows (hard reloads, auth redirects, calendar, optional Stripe booking with `E2E_STRIPE=1`).
@@ -136,7 +136,7 @@ db-copy/                 Local DB dumps (gitignored; never commit or edit)
 ```
 
 Conventions:
-- Site constants (domain, contact email/phone, Resend senders, `CHECK_IN_TIME`/`CHECK_OUT_TIME`, display helpers) live in `src/lib/site.ts`. Do not hardcode them elsewhere (the legal pages are the one exception). Email templates (`src/components/email/`, a Fallow zone that imports only `email`) get them as props from `email-service.ts`. The domain, senders and phone change at go-live.
+- Site constants (domain, contact email/phone, email senders, `CHECK_IN_TIME`/`CHECK_OUT_TIME`, display helpers) live in `src/lib/site.ts`. Do not hardcode them elsewhere (the legal pages are the one exception). Email templates (`src/components/email/`, a Fallow zone that imports only `email`) get them as props from `email-service.ts`. The domain, senders and phone change at go-live.
 - Server-only env access uses `import { env } from 'cloudflare:workers'` (see `src/lib/auth/auth.ts`). Do not use `process.env` for Worker secrets, and never import server-only modules into client code.
 - tRPC: use `publicProcedure` / `protectedProcedure` / `adminProcedure` from `src/integrations/trpc/init.ts` (admin checks are server-side, in `adminProcedure`); validate every input with Zod (schemas live in `src/lib/**/*-validation.ts`); register new routers in `src/integrations/trpc/router.ts`. Public procedures must never return feed URLs, internal booking ids or guest data. Guest procedures select explicit columns (`GUEST_BOOKING_FIELDS` in `bookings.ts`), never the full row; admin pages use `admin*` procedures (`bookings.adminGetBooking`, `rooms.adminList`/`adminGet`). Public room lookups return active rooms only. Let unexpected errors propagate (the handler's `onError` logs them once). Add `.use(rateLimit('API_RATE_LIMITER', '<router.proc>'))` to public or expensive procedures.
 - Server services take `ServiceDeps` (`src/lib/server/deps.ts`: `db`, `env`, `stripe`, `waitUntil`). The tRPC context satisfies it (one Drizzle and one Stripe client per request); webhook and cron handlers build one with `createServiceDeps`. Do not create extra Drizzle/Stripe clients in procedures.
@@ -226,7 +226,7 @@ How values reach the app:
 
 Modes: `cf build --mode` is rejected for TanStack Start. For a non-default mode use `varlock run --inject vars -- vite build --mode <m>` then `cf deploy --prebuilt --mode <m>`. Varlock's `APP_ENV` (when added) is independent of the cf/Vite mode.
 
-Variables: public `BETTER_AUTH_URL`, `STRIPE_PUBLISHABLE_KEY`, `VITE_TURNSTILE_PUBLIC_KEY`; sensitive `BETTER_AUTH_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_TRPC_WEBHOOK_SECRET`, `RESEND_API_KEY`, `TURNSTILE_SECRET_KEY`.
+Variables: public `BETTER_AUTH_URL`, `STRIPE_PUBLISHABLE_KEY`, `VITE_TURNSTILE_PUBLIC_KEY`; sensitive `BETTER_AUTH_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_TRPC_WEBHOOK_SECRET`, `TURNSTILE_SECRET_KEY`. Email needs no secret: it is the `EMAIL` binding.
 
 ## CLI tools
 
@@ -385,4 +385,4 @@ Rules of thumb (verify each, do not assume):
 - Do not edit generated files (`src/routeTree.gen.ts`, `varlock.d.ts`, `.cloudflare/types/**`, `drizzle/**`) by hand.
 - Do not remove `src/server.ts`; it is the Worker entry and cron handler.
 - Keep Stripe webhook signature verification and Turnstile verification intact when editing those flows; never log full payment payloads, card data, or session tokens.
-- Scheduled tasks (cron triggers in `cloudflare.config.ts`): `*/30` iCal sync, `5 8 * * *` expired pending bookings cleanup, `15 9 * * *` iCal log cleanup. Changing the schedule requires updating both `cloudflare.config.ts` and `src/lib/server/scheduled-tasks.ts`.
+- Scheduled tasks (cron triggers in `cloudflare.config.ts`): `*/30` iCal sync, `5 8 * * *` expired pending bookings cleanup, `15 9 * * *` iCal log and sent-email cleanup. Changing the schedule requires updating both `cloudflare.config.ts` and `src/lib/server/scheduled-tasks.ts`.

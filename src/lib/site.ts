@@ -18,10 +18,26 @@ export const CONTACT_PHONE = '(123) 456-7890';
 /** `tel:` link for CONTACT_PHONE (keep the two in sync). */
 export const CONTACT_PHONE_HREF = 'tel:+1234567890';
 
-// Resend senders (the sending domain must be verified in Resend).
-export const EMAIL_FROM_BOOKINGS = `${SITE_NAME} Dev <bookings@contact.cobaltweb.tech>`;
-export const EMAIL_FROM_ADMIN = `${SITE_NAME} <admin@contact.cobaltweb.tech>`;
-export const EMAIL_FROM_AUTH = `${SITE_NAME} <auth@contact.cobaltweb.tech>`;
+/** A sender in the named-address form the Email Service binding accepts. */
+export interface EmailSender {
+	name: string;
+	email: string;
+}
+
+// Email senders (the sending domain must be onboarded in Cloudflare Email
+// Service: Compute > Email Service > Email Sending).
+export const EMAIL_FROM_BOOKINGS: EmailSender = {
+	name: `${SITE_NAME} Dev`,
+	email: 'irishette-bookings@cobaltweb.dev',
+};
+export const EMAIL_FROM_ADMIN: EmailSender = {
+	name: SITE_NAME,
+	email: 'irishette-admin@cobaltweb.dev',
+};
+export const EMAIL_FROM_AUTH: EmailSender = {
+	name: SITE_NAME,
+	email: 'irishette-auth@cobaltweb.dev',
+};
 /**
  * Reply-to for emails guests may answer (contact replies, plan 02 Phase 4).
  * @expected-unused

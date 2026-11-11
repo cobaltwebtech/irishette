@@ -1,3 +1,4 @@
+import { env } from 'cloudflare:workers';
 import { HttpResponse, http } from 'msw';
 
 import { network } from './network';
@@ -10,55 +11,52 @@ interface SentEmail {
 	to: string[];
 	subject: string;
 	replyTo: string[];
-	from: string;
+	from: EmailMessageBuilder['from'];
 }
 
-type ResendBody = {
-	to: string | string[];
-	subject: string;
-	from: string;
-	reply_to?: string | string[];
-};
+type Address = string | EmailAddress;
 
-const asList = (value: string | string[] | undefined) =>
-	value === undefined ? [] : Array.isArray(value) ? value : [value];
+const asList = (value: Address | Address[] | undefined) =>
+	value === undefined
+		? []
+		: (Array.isArray(value) ? value : [value]).map((a) =>
+				typeof a === 'string' ? a : a.email,
+			);
 
 /**
- * Resend: accepts single and batch sends and records recipients and
- * subjects. Honors Idempotency-Key like Resend (a repeated key sends nothing).
+ * Cloudflare Email Service: replaces `env.EMAIL` with a stub that records
+ * recipients, subjects and senders (reset after each test in setup.ts).
+ * `failFirst` rejects that many sends first, like a provider error
+ * (nothing is recorded for a rejected send).
  */
-export function mockResend() {
+export function mockEmail({ failFirst = 0 }: { failFirst?: number } = {}) {
 	const sent: SentEmail[] = [];
-	const seenKeys = new Set<string>();
-	const record = (email: ResendBody) =>
-		sent.push({
-			to: asList(email.to),
-			subject: email.subject,
-			replyTo: asList(email.reply_to),
-			from: email.from,
-		});
-	const duplicate = (request: { headers: Headers }) => {
-		const key = request.headers.get('idempotency-key');
-		if (!key) return false;
-		if (seenKeys.has(key)) return true;
-		seenKeys.add(key);
-		return false;
-	};
-	network.use(
-		http.post('https://api.resend.com/emails', async ({ request }) => {
-			const body = (await request.json()) as ResendBody;
-			if (!duplicate(request)) record(body);
-			return HttpResponse.json({ id: `email_${sent.length}` });
-		}),
-		http.post('https://api.resend.com/emails/batch', async ({ request }) => {
-			const body = (await request.json()) as ResendBody[];
-			if (!duplicate(request)) body.forEach(record);
-			return HttpResponse.json({
-				data: body.map((_, i) => ({ id: `email_${sent.length}_${i}` })),
+	let failures = failFirst;
+	env.EMAIL = {
+		send: async (message: EmailMessageBuilder) => {
+			if (failures > 0) {
+				failures--;
+				throw Object.assign(new Error('Email service unavailable'), {
+					code: 'E_INTERNAL_SERVER_ERROR',
+				});
+			}
+			sent.push({
+				to: asList(message.to),
+				subject: message.subject,
+				replyTo: asList(message.replyTo),
+				from: message.from,
 			});
-		}),
-	);
+			return { messageId: `email_${sent.length}` };
+		},
+	} as SendEmail;
 	return sent;
+}
+
+/** The default `env.EMAIL` in tests: a send nobody mocked fails loudly. */
+export function resetEmail() {
+	env.EMAIL = {
+		send: () => Promise.reject(new Error('Unmocked email send')),
+	} as unknown as SendEmail;
 }
 
 /** Stripe: POST /v1/refunds succeeds and records the form body. */

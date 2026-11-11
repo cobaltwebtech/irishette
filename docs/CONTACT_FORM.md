@@ -71,6 +71,6 @@ deferred (`.agents/plans/deferred-email-messaging.md`).
   timeout (msw), the stored item, the email (to `CONTACT_EMAIL`, reply-to the
   guest), the email failing while the item is stored.
 - E2E (`e2e/contact.spec.ts`): the page and field errors. **Submitting sends a
-  real email through Resend in `pnpm dev`**, so that test runs only with
+  real email through Cloudflare Email Service in `pnpm dev`**, so that test runs only with
   `E2E_CONTACT=1`. Locally, use the Turnstile test keys (site key
   `1x00000000000000000000AA`).
