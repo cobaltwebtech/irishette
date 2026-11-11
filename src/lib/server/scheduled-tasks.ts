@@ -2,6 +2,7 @@ import { and, eq, lte, ne } from 'drizzle-orm';
 
 import { bookings, icalSyncChanges, icalSyncLog } from '@/db/schema-export';
 import { releaseExpiredHold } from '@/lib/booking/booking-service';
+import { purgeSentEmails } from '@/lib/email/email-dedupe';
 import { syncAllFeeds } from '@/lib/ical/ical-sync';
 
 import { createServiceDeps, type ServiceDeps } from './deps';
@@ -96,6 +97,16 @@ export async function scheduledIcalLogCleanup(
 	return { logs: logs.length, changes: changes.length, cutoff };
 }
 
+/** Deletes email dedupe rows older than SENT_EMAIL_RETENTION_DAYS. */
+export async function scheduledSentEmailCleanup(
+	deps: ServiceDeps,
+	now = new Date(),
+) {
+	const removed = await purgeSentEmails(deps.db, now);
+	console.log(`Sent-email cleanup: ${removed} row(s) removed`);
+	return { removed };
+}
+
 type Task = (deps: ServiceDeps) => Promise<unknown>;
 
 /** Cron expression → task. Unknown expressions do nothing. */
@@ -103,7 +114,11 @@ export const CRON_SCHEDULES: Readonly<Record<string, Task>> = {
 	// Keep ICAL_SYNC_INTERVAL_MINUTES (src/lib/ical/ical-feed-sources.ts) in step.
 	'*/30 * * * *': scheduledCalendarSync,
 	'5 8 * * *': (deps) => scheduledBookingCleanup(deps), // 08:05 UTC
-	'15 9 * * *': (deps) => scheduledIcalLogCleanup(deps), // 09:15 UTC
+	'15 9 * * *': async (deps) => {
+		// 09:15 UTC
+		await scheduledIcalLogCleanup(deps);
+		await scheduledSentEmailCleanup(deps);
+	},
 };
 
 /** Worker `scheduled` handler (src/server.ts). */

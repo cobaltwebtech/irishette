@@ -52,6 +52,7 @@
           "src/lib/booking/dispute-service.ts",
           "src/lib/booking/availability.ts",
           "src/lib/server/deps.ts",
+          "src/lib/email/email-dedupe.ts",
           "src/lib/email/email-service.ts",
           "src/lib/stripe/stripe.ts",
           "src/lib/stripe/stripe-webhook.ts",
