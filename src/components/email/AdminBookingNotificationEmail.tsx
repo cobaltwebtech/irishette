@@ -14,7 +14,9 @@ import {
 	Text,
 } from 'react-email';
 
-interface AdminBookingNotificationEmailProps {
+import { EmailLogo, type EmailBrandProps } from './EmailLogo';
+
+interface AdminBookingNotificationEmailProps extends EmailBrandProps {
 	confirmationId: string;
 	guestName: string;
 	guestEmail: string;
@@ -32,6 +34,8 @@ interface AdminBookingNotificationEmailProps {
 export const AdminBookingNotificationEmail: React.FC<
 	AdminBookingNotificationEmailProps
 > = ({
+	logoUrl,
+	siteUrl,
 	confirmationId,
 	guestName,
 	guestEmail,
@@ -72,6 +76,7 @@ export const AdminBookingNotificationEmail: React.FC<
 					<Container className="mx-auto my-[40px] max-w-[500px] rounded border border-solid border-blue-300 bg-blue-50 p-[20px]">
 						{/* Header */}
 						<Section className="my-[20px] text-center">
+							<EmailLogo logoUrl={logoUrl} siteUrl={siteUrl} size={72} />
 							<Heading as="h1" className="mb-2 text-2xl text-blue-900">
 								🏨 New Booking Alert
 							</Heading>

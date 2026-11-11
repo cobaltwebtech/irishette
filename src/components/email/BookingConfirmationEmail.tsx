@@ -7,8 +7,6 @@ import {
 	Head,
 	Heading,
 	Html,
-	Img,
-	Link,
 	Preview,
 	Row,
 	Section,
@@ -21,19 +19,18 @@ import {
 	type EmailBookingDetails,
 } from './BookingDetailsSection';
 import { EmailContactRow } from './EmailContactRow';
+import { EmailLogo, type EmailBrandProps } from './EmailLogo';
 
-interface BookingConfirmationEmailProps {
+interface BookingConfirmationEmailProps extends EmailBrandProps {
 	booking: EmailBookingDetails;
 	accountUrl: string;
-	/** Public site URL (src/lib/site.ts SITE_URL). */
-	siteUrl: string;
 	/** Contact address shown in the footer (src/lib/site.ts CONTACT_EMAIL). */
 	contactEmail: string;
 }
 
 export const BookingConfirmationEmail: React.FC<
 	BookingConfirmationEmailProps
-> = ({ booking, accountUrl, siteUrl, contactEmail }) => {
+> = ({ booking, accountUrl, logoUrl, siteUrl, contactEmail }) => {
 	const { confirmationId } = booking;
 	return (
 		<Html>
@@ -48,9 +45,7 @@ export const BookingConfirmationEmail: React.FC<
 						<Section className="my-[20px] px-[32px] py-[20px]">
 							<Row>
 								<Column align="center">
-									<Link href={siteUrl}>
-										<Img alt="Irishette Logo" height="150" src="#" />
-									</Link>
+									<EmailLogo logoUrl={logoUrl} siteUrl={siteUrl} />
 									<Heading as="h1" className="mb-2 text-4xl text-green-800">
 										Irishette Bed & Breakfast
 									</Heading>
@@ -136,12 +131,7 @@ export const BookingConfirmationEmail: React.FC<
 						<Section className="my-[24px] border-t border-stone-300 py-[24px] text-center">
 							<Row className="mt-[24px]">
 								<Column className="text-center">
-									<Img
-										alt="Irishette Logo"
-										width="80"
-										src="#"
-										className="mx-auto w-[80px]"
-									/>
+									<EmailLogo logoUrl={logoUrl} siteUrl={siteUrl} size={80} />
 								</Column>
 							</Row>
 							<Row className="my-[12px]">

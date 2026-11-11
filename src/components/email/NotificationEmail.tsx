@@ -13,7 +13,9 @@ import {
 	Text,
 } from 'react-email';
 
-export interface NotificationEmailProps {
+import { EmailLogo, type EmailBrandProps } from './EmailLogo';
+
+export interface NotificationEmailProps extends EmailBrandProps {
 	preview: string;
 	heading: string;
 	paragraphs: string[];
@@ -28,6 +30,8 @@ export interface NotificationEmailProps {
  * Callers pass plain strings; React escapes them.
  */
 export function NotificationEmail({
+	logoUrl,
+	siteUrl,
 	preview,
 	heading,
 	paragraphs,
@@ -49,6 +53,7 @@ export function NotificationEmail({
 						className={`mx-auto my-[40px] max-w-[500px] rounded border border-solid p-[20px] ${frame}`}
 					>
 						<Section className="my-[20px] text-center">
+							<EmailLogo logoUrl={logoUrl} siteUrl={siteUrl} size={72} />
 							<Heading as="h1" className="mb-2 text-2xl text-gray-900">
 								{heading}
 							</Heading>

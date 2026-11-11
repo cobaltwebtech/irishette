@@ -1,7 +1,7 @@
 import { Icon } from '@iconify/react';
 import { Link } from '@tanstack/react-router';
 
-import { CONTACT_PHONE, CONTACT_PHONE_HREF } from '@/lib/site';
+import { CONTACT_PHONE, CONTACT_PHONE_HREF, LOGO_PATH } from '@/lib/site';
 import { yearCT } from '@/utils/timezone';
 import { useNow } from '@/utils/use-now';
 
@@ -19,7 +19,7 @@ export default function Footer() {
 							className="inline-block transition-opacity hover:opacity-80"
 						>
 							<img
-								src="/icons/irishette-logo.png"
+								src={LOGO_PATH}
 								alt="Irishette logo"
 								width={384}
 								height={384}

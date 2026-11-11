@@ -18,12 +18,13 @@ import {
 	BookingDetailsSection,
 	type EmailBookingDetails,
 } from './BookingDetailsSection';
+import { EmailLogo, type EmailBrandProps } from './EmailLogo';
 
 // A booking update for the guest or the admins (cancellation, refund,
 // failed payment): a message, an optional highlighted section (e.g. the
 // refund details) and the full booking details.
 
-export interface BookingNoticeEmailProps {
+export interface BookingNoticeEmailProps extends EmailBrandProps {
 	preview: string;
 	heading: string;
 	paragraphs: string[];
@@ -40,6 +41,8 @@ export interface BookingNoticeEmailProps {
 }
 
 export function BookingNoticeEmail({
+	logoUrl,
+	siteUrl,
 	preview,
 	heading,
 	paragraphs,
@@ -63,6 +66,7 @@ export function BookingNoticeEmail({
 						className={`mx-auto my-[40px] max-w-[600px] rounded border border-solid p-[20px] ${frame}`}
 					>
 						<Section className="my-[20px] text-center">
+							<EmailLogo logoUrl={logoUrl} siteUrl={siteUrl} size={72} />
 							<Heading as="h1" className="mb-2 text-2xl text-stone-900">
 								{heading}
 							</Heading>

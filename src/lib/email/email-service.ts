@@ -5,6 +5,7 @@ import { AdminBookingNotificationEmail } from '@/components/email/AdminBookingNo
 import { BookingConfirmationEmail } from '@/components/email/BookingConfirmationEmail';
 import type { EmailBookingDetails } from '@/components/email/BookingDetailsSection';
 import { BookingNoticeEmail } from '@/components/email/BookingNoticeEmail';
+import type { EmailBrandProps } from '@/components/email/EmailLogo';
 import { MagicLinkEmail } from '@/components/email/MagicLinkEmail';
 import {
 	NotificationEmail,
@@ -30,6 +31,7 @@ import {
 	EMAIL_FROM_BOOKINGS,
 	type EmailSender,
 	formatTimeOfDay,
+	LOGO_PATH,
 	SITE_URL,
 } from '@/lib/site';
 import { formatMoney } from '@/utils/format';
@@ -96,6 +98,19 @@ export function emailBookingDetails(
 const REFUND_TIMING =
 	'Refunds go back to your original payment method. Please allow 5-10 business days for it to appear.';
 
+/**
+ * Logo URL and site link for every template. BETTER_AUTH_URL is the
+ * per-deploy base URL (baked in at build time, like every other email link),
+ * so the logo loads from whichever host sent the email. In `pnpm dev` that is
+ * localhost, which a real inbox cannot reach.
+ */
+function branding(baseUrl: string): EmailBrandProps {
+	return {
+		logoUrl: new URL(LOGO_PATH, baseUrl).toString(),
+		siteUrl: SITE_URL,
+	};
+}
+
 function guestConfirmation(
 	booking: Booking,
 	room: RoomInfo,
@@ -108,17 +123,21 @@ function guestConfirmation(
 		element: React.createElement(BookingConfirmationEmail, {
 			booking: emailBookingDetails(booking, room),
 			accountUrl: `${baseUrl}/account`,
-			siteUrl: SITE_URL,
+			...branding(baseUrl),
 			contactEmail: CONTACT_EMAIL,
 		}),
 	};
 }
 
 function bookingNotice(
+	baseUrl: string,
 	from: EmailSender,
 	to: string[],
 	subject: string,
-	props: Omit<React.ComponentProps<typeof BookingNoticeEmail>, 'contactEmail'>,
+	props: Omit<
+		React.ComponentProps<typeof BookingNoticeEmail>,
+		'contactEmail' | keyof EmailBrandProps
+	>,
 ): OutgoingEmail {
 	return {
 		from,
@@ -126,6 +145,7 @@ function bookingNotice(
 		subject,
 		element: React.createElement(BookingNoticeEmail, {
 			...props,
+			...branding(baseUrl),
 			contactEmail: CONTACT_EMAIL,
 		}),
 	};
@@ -154,21 +174,26 @@ function adminBookingNotification(
 			specialRequests: booking.specialRequests ?? undefined,
 			totalAmount: booking.totalAmount,
 			adminDashboardUrl: `${baseUrl}/admin/bookings/${booking.publicId}`,
+			...branding(baseUrl),
 		}),
 	};
 }
 
 function notification(
+	baseUrl: string,
 	from: EmailSender,
 	to: string[],
 	subject: string,
-	props: NotificationEmailProps,
+	props: Omit<NotificationEmailProps, keyof EmailBrandProps>,
 ): OutgoingEmail {
 	return {
 		from,
 		to,
 		subject,
-		element: React.createElement(NotificationEmail, props),
+		element: React.createElement(NotificationEmail, {
+			...props,
+			...branding(baseUrl),
+		}),
 	};
 }
 
@@ -320,30 +345,42 @@ async function sendBookingNotices(
 	const details = emailBookingDetails(booking, room);
 	const { subject: guestSubject, ...guest } = notice.guest;
 	const emails = [
-		bookingNotice(EMAIL_FROM_BOOKINGS, [booking.guestEmail], guestSubject, {
-			...guest,
-			highlight: notice.highlight,
-			booking: details,
-			button: {
-				label: 'View your bookings',
-				href: `${env.BETTER_AUTH_URL}/account`,
+		bookingNotice(
+			env.BETTER_AUTH_URL,
+			EMAIL_FROM_BOOKINGS,
+			[booking.guestEmail],
+			guestSubject,
+			{
+				...guest,
+				highlight: notice.highlight,
+				booking: details,
+				button: {
+					label: 'View your bookings',
+					href: `${env.BETTER_AUTH_URL}/account`,
+				},
 			},
-		}),
+		),
 	];
 	const adminEmails = await getAdminEmails(db);
 	if (adminEmails.length > 0) {
 		const { subject: adminSubject, ...admin } = notice.admin;
 		emails.push(
-			bookingNotice(EMAIL_FROM_ADMIN, adminEmails, adminSubject, {
-				...admin,
-				highlight: notice.highlight,
-				booking: details,
-				button: {
-					label: 'Open booking',
-					href: `${env.BETTER_AUTH_URL}/admin/bookings/${booking.publicId}`,
+			bookingNotice(
+				env.BETTER_AUTH_URL,
+				EMAIL_FROM_ADMIN,
+				adminEmails,
+				adminSubject,
+				{
+					...admin,
+					highlight: notice.highlight,
+					booking: details,
+					button: {
+						label: 'Open booking',
+						href: `${env.BETTER_AUTH_URL}/admin/bookings/${booking.publicId}`,
+					},
+					tone: 'alert',
 				},
-				tone: 'alert',
-			}),
+			),
 		);
 	}
 	return deliver(env, notice.kind, emails, {
@@ -523,6 +560,7 @@ export function sendPaymentFailedEmail(
 		`payment failed ${booking.confirmationId}`,
 		[
 			bookingNotice(
+				env.BETTER_AUTH_URL,
 				EMAIL_FROM_BOOKINGS,
 				[booking.guestEmail],
 				`Payment not completed - ${booking.confirmationId} | Irishette Bed & Breakfast`,
@@ -581,19 +619,25 @@ export async function sendAdminAlert(
 			: []),
 	];
 	const result = await deliver(env, `admin alert: ${alert.subject}`, [
-		notification(EMAIL_FROM_ADMIN, adminEmails, alert.subject, {
-			preview: alert.subject,
-			heading: alert.heading,
-			paragraphs: alert.paragraphs,
-			details: details.length > 0 ? details : undefined,
-			button: alert.link
-				? {
-						label: alert.link.label,
-						href: `${env.BETTER_AUTH_URL}${alert.link.path}`,
-					}
-				: undefined,
-			tone: 'alert',
-		}),
+		notification(
+			env.BETTER_AUTH_URL,
+			EMAIL_FROM_ADMIN,
+			adminEmails,
+			alert.subject,
+			{
+				preview: alert.subject,
+				heading: alert.heading,
+				paragraphs: alert.paragraphs,
+				details: details.length > 0 ? details : undefined,
+				button: alert.link
+					? {
+							label: alert.link.label,
+							href: `${env.BETTER_AUTH_URL}${alert.link.path}`,
+						}
+					: undefined,
+				tone: 'alert',
+			},
+		),
 	]);
 	// A failed send frees the slot so the next alert can try again.
 	if (!result.success) await releaseEmail(db, claim.key);
@@ -632,6 +676,7 @@ export function sendContactNotification(
 	return deliver(env, 'contact form', [
 		{
 			...notification(
+				env.BETTER_AUTH_URL,
 				EMAIL_FROM_ADMIN,
 				[CONTACT_EMAIL],
 				`Contact form: ${contact.subject}`,
@@ -663,7 +708,7 @@ export function sendContactNotification(
 // Called from Better Auth hooks (src/lib/auth/auth.ts). They throw on failure so
 // Better Auth reports the error to the user instead of claiming success.
 
-type AuthEmailEnv = Pick<EmailEnv, 'EMAIL'>;
+type AuthEmailEnv = EmailEnv;
 
 async function sendAuthEmail(
 	env: AuthEmailEnv,
@@ -687,6 +732,7 @@ export function sendPasswordResetEmail(
 		subject: 'Password Reset',
 		element: React.createElement(PasswordReset, {
 			url,
+			...branding(env.BETTER_AUTH_URL),
 			contactEmail: CONTACT_EMAIL,
 			expiresIn: formatLinkLifetime(PASSWORD_RESET_EXPIRES_IN),
 		}),
@@ -704,6 +750,7 @@ export function sendMagicLinkEmail(
 		subject: 'Login to Irishette',
 		element: React.createElement(MagicLinkEmail, {
 			url,
+			...branding(env.BETTER_AUTH_URL),
 			contactEmail: CONTACT_EMAIL,
 			expiresIn: formatLinkLifetime(MAGIC_LINK_EXPIRES_IN),
 		}),
@@ -718,16 +765,22 @@ export function sendVerificationEmail(
 	return sendAuthEmail(
 		env,
 		'email verification',
-		notification(EMAIL_FROM_AUTH, [to], 'Verify your email | Irishette', {
-			preview: 'Verify your email address',
-			heading: 'Verify your email',
-			paragraphs: [
-				'Click the button below to verify your email address for your Irishette account.',
-				`This link expires in ${formatLinkLifetime(EMAIL_VERIFICATION_EXPIRES_IN)}.`,
-				'If you did not request this, you can ignore this email.',
-			],
-			button: { label: 'Verify email', href: url },
-		}),
+		notification(
+			env.BETTER_AUTH_URL,
+			EMAIL_FROM_AUTH,
+			[to],
+			'Verify your email | Irishette',
+			{
+				preview: 'Verify your email address',
+				heading: 'Verify your email',
+				paragraphs: [
+					'Click the button below to verify your email address for your Irishette account.',
+					`This link expires in ${formatLinkLifetime(EMAIL_VERIFICATION_EXPIRES_IN)}.`,
+					'If you did not request this, you can ignore this email.',
+				],
+				button: { label: 'Verify email', href: url },
+			},
+		),
 	);
 }
 
@@ -742,6 +795,7 @@ export function sendChangeEmailConfirmation(
 		env,
 		'email change confirmation',
 		notification(
+			env.BETTER_AUTH_URL,
 			EMAIL_FROM_AUTH,
 			[to],
 			'Confirm your email change | Irishette',

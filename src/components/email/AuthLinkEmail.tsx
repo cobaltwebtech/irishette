@@ -16,9 +16,10 @@ import {
 } from 'react-email';
 
 import { EmailContactRow } from './EmailContactRow';
+import { EmailLogo, type EmailBrandProps } from './EmailLogo';
 
 /** Props every auth link email receives from src/lib/email/email-service.ts. */
-export interface AuthLinkEmailProps {
+export interface AuthLinkEmailProps extends EmailBrandProps {
 	url: string;
 	/** Contact address shown in the footer (src/lib/site.ts CONTACT_EMAIL). */
 	contactEmail: string;
@@ -41,6 +42,8 @@ const NAV_LINKS = ['The Property', 'About', 'Bookings'];
  */
 export function AuthLinkEmail({
 	url,
+	logoUrl,
+	siteUrl,
 	contactEmail,
 	expiresIn,
 	preview,
@@ -58,9 +61,7 @@ export function AuthLinkEmail({
 						<Section className="my-[20px] px-[32px] py-[20px]">
 							<Row>
 								<Column align="center">
-									<Link href="#">
-										<Img alt="Irishette Logo" height="150" src="#" />
-									</Link>
+									<EmailLogo logoUrl={logoUrl} siteUrl={siteUrl} />
 									<Heading as="h1" className="text-4xl">
 										Irishette Bed & Breakfast
 									</Heading>
@@ -101,12 +102,7 @@ export function AuthLinkEmail({
 						<Section className="my-[24px] py-[24px] text-center">
 							<Row className="mt-[24px]">
 								<Column className="text-center">
-									<Img
-										alt="logo goes here"
-										width="80"
-										src="#"
-										className="mx-auto w-[80px]"
-									/>
+									<EmailLogo logoUrl={logoUrl} siteUrl={siteUrl} size={80} />
 								</Column>
 							</Row>
 							<Row className="my-[12px]">

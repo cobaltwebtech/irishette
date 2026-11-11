@@ -12,6 +12,9 @@ export { PROPERTY_TIMEZONE } from '@/utils/timezone';
 export const SITE_NAME = 'Irishette';
 export const SITE_URL = 'https://www.irishette.com';
 
+/** The logo (public/icons), served from the deployed host. */
+export const LOGO_PATH = '/icons/irishette-logo.png';
+
 export const CONTACT_EMAIL = 'info@irishette.com';
 /** Placeholder until the client provides the real number. */
 export const CONTACT_PHONE = '(123) 456-7890';

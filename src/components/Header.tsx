@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { signOut } from '@/lib/auth/auth-client';
 import { clearSession, useSession } from '@/lib/auth/session';
+import { LOGO_PATH } from '@/lib/site';
 import { useBookingStore } from '@/stores';
 import { cn } from '@/utils/twMerge';
 
@@ -38,7 +39,7 @@ export default function Header() {
 						className="flex items-center transition-opacity hover:opacity-80"
 					>
 						<img
-							src="/icons/irishette-logo.png"
+							src={LOGO_PATH}
 							alt="Irishette logo"
 							width={384}
 							height={384}
