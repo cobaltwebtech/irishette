@@ -143,7 +143,7 @@ function AccountPage() {
 				<BookingSummaryList
 					className="mb-8"
 					title="Awaiting Payment"
-					description="Bookings whose payment has not completed. A bank payment that is processing keeps your dates until it completes; an unpaid hold is released when it expires."
+					description="Bookings whose payment has not completed. An unpaid hold is released when it expires."
 					rows={awaitingPayment}
 				/>
 				<BookingSummaryList

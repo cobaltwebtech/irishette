@@ -55,6 +55,9 @@ Auth.
 
 Booking payments use **Checkout Sessions** (`ui_mode: 'elements'`, Payment
 Element on our own page; plan 02 Phase 3 replaced the raw PaymentIntents). The
+card is only **authorized** at checkout (`capture_method: 'manual'`, card and
+Link only, no delayed bank payments) and captured after the booking is
+confirmed (plan 05). The
 endpoint (`/api/stripe/webhook`, `STRIPE_TRPC_WEBHOOK_SECRET`) receives the
 events below. Fulfilment is driven by the webhook; the return page
 (`/booking/confirmation/<publicId>?session_id=...`) only runs the same
@@ -68,10 +71,8 @@ stored Stripe ids (session, PaymentIntent, charge).
 
 | Event | Required | What the app does |
 |---|---|---|
-| `checkout.session.completed` | yes | `payment_status: 'paid'` (or `no_payment_required`): confirm the booking (`confirmBookingPayment`). `unpaid` (a delayed payment method): set `paymentStatus: 'processing'` and keep holding the dates past the hold expiry. |
-| `checkout.session.async_payment_succeeded` | yes | Confirm the booking (delayed payment methods). |
-| `checkout.session.async_payment_failed` | yes | Release the hold (cancel it, `cancellationReason: 'payment_failed'`) and email the guest. |
-| `checkout.session.expired` | yes | Release the hold if it is still pending and not processing. |
+| `checkout.session.completed` | yes | `confirmBookingPayment`: decides from the PaymentIntent status (never `payment_status`), claims the dates (`confirmed` / `authorized`), captures, then marks `paid`, records the payment and emails. If the booking can't be confirmed (dates taken, cancelled, paid with another session, mismatch) the authorization is cancelled (not charged, no refund) and a `payment_released` notification is added. A session of ours (`metadata.source: 'irishette'`) whose booking is gone, or any permanent `TRPCError`, also releases the authorization (200). Transient Stripe errors return 500 so Stripe retries. |
+| `checkout.session.expired` | yes | Release the hold if it is still pending (legacy `processing` holds are kept). |
 | `refund.created` | yes | Sync the refund status and amounts. For refunds made in the Stripe Dashboard: a full refund cancels the booking (`cancelledBy: 'system'`, frees the dates), a partial refund updates the amounts; email the guest and the admins with the full booking and refund details; create a `refund_issued` admin notification. Refunds the app makes (cancellations, `metadata.source: 'irishette'`) only sync the status. |
 | `refund.updated` | yes | Status changes (`succeeded`, `failed`, `requires_action`) and the trace reference (ARN). Dashboard refunds email again only when the status becomes `succeeded` or `failed`, or the reference appears. |
 | `refund.failed` | yes | Admin alert email and `refund_failed` notification, with Stripe's `failure_reason`. The guest is not emailed. |
@@ -89,15 +90,16 @@ the last one applied (`last_stripe_event_created` / `last_stripe_event_id` on
 
 **No longer needed:** `payment_intent.succeeded` (Checkout Sessions report
 the payment through `checkout.session.*`; the app creates no standalone
-PaymentIntents).
+PaymentIntents), and `checkout.session.async_payment_succeeded` /
+`checkout.session.async_payment_failed` (no delayed payment methods since plan
+05; they are acknowledged as unknown events). Remove them from existing
+Dashboard endpoint subscriptions.
 
 **Dashboard endpoint (sandbox, and live at go-live):** subscribe
 `/api/stripe/webhook` to exactly:
 
 ```text
 checkout.session.completed
-checkout.session.async_payment_succeeded
-checkout.session.async_payment_failed
 checkout.session.expired
 refund.created
 refund.updated
@@ -177,7 +179,7 @@ Run the listener in its own terminal and keep it running while you test.
 
 ```bash
 stripe listen --latest \
-  --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,checkout.session.expired,refund.created,refund.updated,refund.failed,charge.refunded,charge.dispute.created,charge.dispute.updated,charge.dispute.closed,charge.dispute.funds_withdrawn,charge.dispute.funds_reinstated,payment_intent.payment_failed \
+  --events checkout.session.completed,checkout.session.expired,refund.created,refund.updated,refund.failed,charge.refunded,charge.dispute.created,charge.dispute.updated,charge.dispute.closed,charge.dispute.funds_withdrawn,charge.dispute.funds_reinstated,payment_intent.payment_failed \
   --forward-to localhost:3000/api/stripe/webhook
 ```
 
@@ -230,12 +232,30 @@ fixtures needed:
 
 | Flow | How | Expected |
 |---|---|---|
-| Card payment | Book a room, pay with `4242 4242 4242 4242` (any future expiry, any CVC) | Confirmation page shows "Your Booking is Confirmed!"; `checkout.session.completed` reports `already_confirmed` |
+| Card payment | Book a room, pay with `4242 4242 4242 4242` (any future expiry, any CVC) | Confirmation page shows "Your Booking is Confirmed!"; `checkout.session.completed` reports `already_confirmed`; the PaymentIntent is captured (see "Manual capture check" below) |
 | 3-D Secure | `4000 0027 6000 3184` | Authenticate in the modal; same result |
 | Declined | `4000 0000 0000 0002` | The Payment Element shows the decline; the hold stays until it expires |
 | Dashboard refund | Refund a confirmed booking's payment in the Dashboard (full, then try partial on another) | Full: booking cancelled, dates free, guest + admin emails, `refund_issued` notification. Partial: `partially_refunded`, still confirmed |
 | Dispute | Pay with `4000 0000 0000 0259` | `charge.dispute.created` (and `funds_withdrawn`): a `payment_dispute` notification and the "Payment disputes" panel on the booking; guest cancel is blocked |
 | Expired session | Start checkout and wait for the hold to expire (35 min), or trigger `checkout.session.expired` for a real session | The hold is released |
+
+#### Manual capture check (not yet verified against real Stripe)
+
+The Workers tests assume what Stripe reports after an authorization; confirm
+it once in the sandbox before go-live. With `pnpm dev` and the listener running
+(add `--format json` to `stripe listen` to see full payloads, or retrieve the
+event afterwards with `stripe events retrieve evt_...`):
+
+1. Book a room and pay with `4242 4242 4242 4242`.
+2. Note `data.object.payment_status` of the `checkout.session.completed` event
+   (the tests' mock uses `unpaid` for an authorized, uncaptured session; the
+   app ignores this field and decides from the PaymentIntent).
+3. `stripe payment_intents retrieve pi_...` (the `payment_intent` of the
+   event's session; the dev server logs the `cs_...` id): `status` must be
+   `succeeded` and `capture_method` `manual`, with `amount_received` equal to
+   the booking total. The booking is `confirmed` / `paid`.
+4. Record the observed `payment_status` in this doc and in
+   `STRIPE_PAYMENT_INTEGRATION.md`.
 
 Guest emails go to the address on the booking through Cloudflare Email Service: use your own
 test address.
@@ -248,6 +268,6 @@ test address.
 | Listener shows `[400]`, log says signature verification failed | `.env.local` has a dashboard secret instead of the CLI secret, or `pnpm dev` was not restarted. |
 | Events forwarded but nothing happens to bookings | `stripe trigger` events have no `bookingId` metadata and match no booking; use a real checkout. |
 | A `stripe trigger` fixture fails with ``The `payment_method_types` parameter is no longer supported`` | Use the overrides under "Test". |
-| Listener shows `[500]` for a triggered event | The handler threw (database or Stripe API error); Stripe retries it. Events that match no booking are acknowledged with 200. Check the dev server log. |
+| Listener shows `[500]` for a triggered event | The handler threw (database or a transient Stripe API error, e.g. during capture); Stripe retries it. Events that match no booking are acknowledged with 200. Check the dev server log. |
 | `Connection refused` in the listener | `pnpm dev` is not running on port 3000. |
 | Events from the wrong account | Run `stripe login` again and pick the sandbox; check with `stripe config --list`. |

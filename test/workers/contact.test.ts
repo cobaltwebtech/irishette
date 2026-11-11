@@ -67,6 +67,7 @@ describe('submitContactForm', () => {
 				from: EMAIL_FROM_ADMIN,
 				replyTo: ['casey@example.test'],
 				subject: 'Contact form: Late arrival',
+				text: expect.any(String),
 			},
 		]);
 	});

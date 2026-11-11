@@ -19,7 +19,13 @@ import {
 import { syncRoomFeeds } from '@/lib/ical/ical-sync';
 import { createInboxItemInBackground } from '@/lib/inbox/inbox-service';
 import { inBackground, type ServiceDeps } from '@/lib/server/deps';
-import { stripeBookingMetadata, stripeId, toCents } from '@/lib/stripe/stripe';
+import {
+	isPermanentStripeError,
+	stripeBookingMetadata,
+	stripeId,
+	toCents,
+} from '@/lib/stripe/stripe';
+import { formatMoney } from '@/utils/format';
 
 import {
 	type Conflict,
@@ -93,10 +99,6 @@ async function expireSession(
 		return stripe.checkout.sessions.retrieve(sessionId);
 	}
 }
-
-const isPaid = (session: Stripe.Checkout.Session) =>
-	session.payment_status === 'paid' ||
-	session.payment_status === 'no_payment_required';
 
 // --- Session creation --------------------------------------------------------
 
@@ -176,7 +178,7 @@ export function checkoutLineItems(
 
 export type PrepareCheckoutResult =
 	| { status: 'open'; clientSecret: string }
-	/** Already paid (or a delayed payment is processing): show the booking. */
+	/** The guest already paid (settled now): show the booking. */
 	| { status: 'complete' };
 
 /**
@@ -238,7 +240,7 @@ export async function prepareCheckout(
 			booking.stripeSessionId,
 		);
 		if (existing.status === 'complete') {
-			await settleCompletedSession(deps, booking, existing, now);
+			await confirmBookingPayment(deps, booking.id, existing.id, now);
 			return { status: 'complete' };
 		}
 		const reusable =
@@ -251,7 +253,7 @@ export async function prepareCheckout(
 		if (existing.status === 'open') {
 			const after = await expireSession(stripe, existing.id);
 			if (after.status === 'complete') {
-				await settleCompletedSession(deps, booking, after, now);
+				await confirmBookingPayment(deps, booking.id, after.id, now);
 				return { status: 'complete' };
 			}
 		}
@@ -289,12 +291,19 @@ async function createSession(
 			client_reference_id: booking.id,
 			line_items: checkoutLineItems(booking, roomRow),
 			metadata,
+			// Authorize only: the card is charged (captured) after the booking
+			// is confirmed, and an authorization the app can't confirm is
+			// cancelled, never refunded (plan 05). Only methods that support a
+			// separate capture without charging up front: cards (Apple Pay and
+			// Google Pay included) and Link. No delayed bank payments. A filter
+			// on the methods enabled in the Dashboard, not a static list.
+			allowed_payment_method_types: ['card', 'link'],
 			payment_intent_data: {
+				capture_method: 'manual',
 				metadata,
 				description: `Irishette booking ${booking.confirmationId}`,
 			},
-			// No saved cards (plan 02 decision). Link stays available in the
-			// Payment Element when it is enabled in the Dashboard.
+			// No saved cards (plan 02 decision).
 			saved_payment_method_options: { payment_method_save: 'disabled' },
 			return_url: `${env.BETTER_AUTH_URL}/booking/confirmation/${booking.publicId}?session_id={CHECKOUT_SESSION_ID}`,
 			expires_at: seconds(expiresAt),
@@ -355,31 +364,19 @@ async function createSession(
 
 // --- Holds and their sessions ----------------------------------------------------
 
-/** A completed session the app has not acted on yet: confirm or mark processing. */
-async function settleCompletedSession(
-	deps: ServiceDeps,
-	booking: Booking,
-	session: Stripe.Checkout.Session,
-	now: Date,
-) {
-	if (isPaid(session)) {
-		await confirmBookingPayment(deps, booking.id, session.id, now);
-	} else {
-		await markProcessing(deps, booking, session, now);
-	}
-}
-
 /**
  * Makes sure a pending hold's Checkout Session can no longer be paid, before
- * the hold is released. Returns 'paid' if the guest paid (or a delayed
- * payment is processing) in the meantime: the hold is then confirmed or kept,
- * and must not be released.
+ * the hold is released. A session the guest completed in the meantime is
+ * settled by confirmBookingPayment (captured, or its authorization released).
+ * Returns 'paid' when the booking ended confirmed, or when its payment state
+ * is unknown (Stripe failed): the hold must then not be released.
  */
 export async function closeHoldSession(
 	deps: ServiceDeps,
 	hold: Pick<Booking, 'id' | 'stripeSessionId' | 'paymentStatus'>,
 	now = new Date(),
 ): Promise<'closed' | 'paid'> {
+	// Legacy: delayed bank payments are no longer offered (plan 05).
 	if (hold.paymentStatus === 'processing') return 'paid';
 	if (!hold.stripeSessionId) return 'closed';
 	let session: Stripe.Checkout.Session;
@@ -397,73 +394,41 @@ export async function closeHoldSession(
 			? await expireSession(deps.stripe, session.id)
 			: session;
 	if (after.status !== 'complete') return 'closed';
-	const booking = await loadBooking(deps.db, hold.id);
-	if (booking?.status === 'pending') {
-		await settleCompletedSession(deps, booking, after, now).catch(
-			(error: unknown) =>
-				console.error(
-					`Paid hold ${booking.confirmationId} could not be confirmed:`,
-					error instanceof Error ? error.message : 'Unknown error',
-				),
+	try {
+		const outcome = await confirmBookingPayment(deps, hold.id, after.id, now);
+		return isConfirmed(outcome) ? 'paid' : 'closed';
+	} catch (error) {
+		console.error(
+			`Paid hold ${hold.id} could not be settled:`,
+			error instanceof Error ? error.message : 'Unknown error',
 		);
+		return 'paid';
 	}
-	return 'paid';
-}
-
-/** checkout.session.completed with payment_status 'unpaid' (delayed method). */
-export async function markProcessing(
-	{ db }: ServiceDeps,
-	booking: Pick<Booking, 'id' | 'confirmationId'>,
-	session: Stripe.Checkout.Session,
-	now = new Date(),
-) {
-	await db
-		.update(bookings)
-		.set({
-			paymentStatus: 'processing',
-			stripeSessionId: session.id,
-			stripePaymentIntentId: stripeId(session.payment_intent),
-			updatedAt: now,
-		})
-		.where(
-			and(
-				eq(bookings.id, booking.id),
-				eq(bookings.status, 'pending'),
-				ne(bookings.paymentStatus, 'processing'),
-			),
-		);
-	console.log(
-		`Booking ${booking.confirmationId}: payment processing (session ${session.id})`,
-	);
 }
 
 /**
- * A delayed payment failed (checkout.session.async_payment_failed): release
- * the hold and tell the guest. Idempotent.
+ * Payment recovery: a pending hold whose session the guest completed, but
+ * no confirmation ran (the webhook kept failing and the guest closed the
+ * tab before the return page). Confirms and captures it. Leaves an open
+ * session alone (the guest may still be paying). True if it was settled.
  */
-export async function releaseFailedPayment(
+export async function settlePaidHold(
 	deps: ServiceDeps,
-	booking: Booking,
+	hold: Pick<Booking, 'id' | 'stripeSessionId'>,
 	now = new Date(),
-) {
-	const [released] = await deps.db
-		.update(bookings)
-		.set({
-			status: 'cancelled',
-			paymentStatus: 'pending',
-			cancelledAt: now,
-			updatedAt: now,
-			cancelledBy: 'system',
-			cancellationReason: 'payment_failed',
-			refundAmount: 0,
-		})
-		.where(and(eq(bookings.id, booking.id), eq(bookings.status, 'pending')))
-		.returning();
-	if (!released) return false;
-	const roomInfo = await roomName(deps.db, booking.roomId);
-	inBackground(deps, `payment failed ${booking.confirmationId}`, () =>
-		sendPaymentFailedEmail(deps.db, deps.env, released, roomInfo),
-	);
+): Promise<boolean> {
+	if (!hold.stripeSessionId) return false;
+	let session: Stripe.Checkout.Session;
+	try {
+		session = await deps.stripe.checkout.sessions.retrieve(
+			hold.stripeSessionId,
+		);
+	} catch (error) {
+		if (isMissing(error)) return false;
+		throw error;
+	}
+	if (session.status !== 'complete') return false;
+	await confirmBookingPayment(deps, hold.id, session.id, now);
 	return true;
 }
 
@@ -492,33 +457,45 @@ export async function releaseExpiredSessionHold(
 	return deleted[0]?.confirmationId ?? null;
 }
 
-// --- Confirmation ------------------------------------------------------------
+// --- Confirmation: authorize, claim the dates, capture (plan 05) ------------------
 
+/**
+ * - confirmed / already_confirmed: the booking is confirmed with this
+ *   session and the payment captured (or the capture is under way on a
+ *   retry).
+ * - released: the booking could not be confirmed (dates taken, booking
+ *   cancelled or paid with another session); the card authorization was
+ *   cancelled, nothing was charged.
+ * - payment_failed: the authorization could not be captured (expired or
+ *   cancelled); the booking was cancelled, nothing was charged.
+ */
 export type ConfirmationOutcome =
 	| { status: 'confirmed'; booking: Booking }
 	| { status: 'already_confirmed'; booking: Booking }
-	| { status: 'processing'; booking: Booking }
-	| { status: 'refunded_conflict'; booking: Booking };
+	| { status: 'released'; booking: Booking }
+	| { status: 'payment_failed'; booking: Booking };
+
+const isConfirmed = (outcome: ConfirmationOutcome) =>
+	outcome.status === 'confirmed' || outcome.status === 'already_confirmed';
 
 const notPaid = () =>
 	new TRPCError({ code: 'BAD_REQUEST', message: 'Payment has not completed' });
 
-function verifySession(session: Stripe.Checkout.Session, booking: Booking) {
+const cannotPay = () =>
+	new TRPCError({
+		code: 'BAD_REQUEST',
+		message: 'This booking can no longer be paid',
+	});
+
+/** Why a session can't pay for this booking, or null when it matches. */
+function sessionMismatch(session: Stripe.Checkout.Session, booking: Booking) {
 	const mismatch =
 		session.metadata?.bookingId !== booking.id ||
 		session.client_reference_id !== booking.id ||
 		session.amount_total !== toCents(booking.totalAmount) ||
 		session.currency !== 'usd' ||
 		session.mode !== 'payment';
-	if (mismatch) {
-		console.warn(
-			`Checkout Session ${session.id} does not match booking ${booking.confirmationId}`,
-		);
-		throw new TRPCError({
-			code: 'BAD_REQUEST',
-			message: 'This payment does not match the booking',
-		});
-	}
+	return mismatch ? 'The payment does not match the booking' : null;
 }
 
 /** The PaymentIntent of a session retrieved with `expand: ['payment_intent']`. */
@@ -527,28 +504,80 @@ function sessionIntent(session: Stripe.Checkout.Session) {
 	return pi && typeof pi === 'object' ? pi : null;
 }
 
+/**
+ * Where the money is, from the PaymentIntent (the source of truth; the
+ * session's payment_status is not used for manual capture).
+ */
+type IntentState = 'authorized' | 'captured' | 'canceled' | 'unpaid';
+
+function intentState(intent: Stripe.PaymentIntent | null): IntentState {
+	switch (intent?.status) {
+		case 'requires_capture':
+			return 'authorized';
+		case 'succeeded':
+			return 'captured';
+		case 'canceled':
+			return 'canceled';
+		default:
+			return 'unpaid';
+	}
+}
+
 function paymentMethodType(intent: Stripe.PaymentIntent | null) {
 	const pm = intent?.payment_method;
 	if (pm && typeof pm === 'object') return pm.type;
 	return intent?.payment_method_types?.[0] ?? 'card';
 }
 
+/** The payment row for this session exists (confirmation fully recorded). */
+async function hasPaymentRow(
+	db: Database,
+	bookingId: string,
+	sessionId: string,
+) {
+	const [row] = await db
+		.select({ id: paymentTransactions.id })
+		.from(paymentTransactions)
+		.where(
+			and(
+				eq(paymentTransactions.bookingId, bookingId),
+				eq(paymentTransactions.stripeCheckoutSessionId, sessionId),
+			),
+		);
+	return Boolean(row);
+}
+
+/** Confirmed with this session, captured and recorded: nothing left to do. */
+async function isFullyConfirmed(
+	db: Database,
+	booking: Booking,
+	sessionId: string,
+) {
+	return (
+		booking.status === 'confirmed' &&
+		booking.stripeSessionId === sessionId &&
+		booking.paymentStatus !== 'authorized' &&
+		(await hasPaymentRow(db, booking.id, sessionId))
+	);
+}
+
 /**
- * Confirms a booking after its Checkout Session was paid. Used by the webhook
- * (checkout.session.completed / async_payment_succeeded), the return page
- * (bookings.confirmCheckout) and the hold cleanup; idempotent across all.
+ * Settles a booking's completed Checkout Session. Called by the webhook
+ * (checkout.session.completed), the return page (bookings.confirmCheckout),
+ * prepareCheckout, the hold cleanup and the payment recovery cron;
+ * idempotent across all, and safe to re-run after a crash at any step.
  *
- * 1. Retrieves the session (with its PaymentIntent) and verifies it belongs
- *    to this booking (metadata, client_reference_id, amount, currency).
- *    An unpaid completed session (delayed method) marks the hold processing.
- * 2. Confirms with one guarded UPDATE that also checks, atomically, that no
- *    confirmed booking, earlier live hold, imported event or block took the
- *    dates meanwhile.
- * 3. If the dates were taken: refunds automatically, cancels the booking,
- *    tells the guest and the admins.
- * The same-day cutoff is not re-checked: a hold created in time stays
- * payable until it expires (plan 02, B3). Emails go out once, from whichever
- * caller changed the booking.
+ * The card is only authorized at checkout (capture_method 'manual'), so no
+ * money moves until the dates are ours:
+ * 1. Retrieve the session with its PaymentIntent; check it belongs to this
+ *    booking (metadata, client_reference_id, amount, currency).
+ * 2. Claim: one guarded UPDATE confirms the booking (payment 'authorized')
+ *    only if it is still pending and nothing took the dates meanwhile.
+ * 3. Capture the authorization (idempotency key per booking and intent).
+ * 4. Mark it paid, record the payment row and send the confirmation emails
+ *    (both idempotent, so a retry completes a confirmation cut short).
+ * If the booking can't be confirmed, the authorization is cancelled instead
+ * (releaseAuthorization): the guest is never charged without a booking.
  */
 export async function confirmBookingPayment(
 	deps: ServiceDeps,
@@ -556,39 +585,81 @@ export async function confirmBookingPayment(
 	sessionId: string,
 	now = new Date(),
 ): Promise<ConfirmationOutcome> {
-	const { db, stripe } = deps;
-	const booking = await loadBooking(db, bookingId);
+	const booking = await loadBooking(deps.db, bookingId);
 	if (!booking) {
 		throw new TRPCError({ code: 'NOT_FOUND', message: 'Booking not found' });
 	}
-
-	const settled = settledOutcome(booking, sessionId);
-	if (settled) return settled;
-
-	const session = await stripe.checkout.sessions.retrieve(sessionId, {
-		expand: ['payment_intent', 'payment_intent.payment_method'],
-	});
-	verifySession(session, booking);
-	if (session.status !== 'complete') throw notPaid();
-	if (!isPaid(session)) {
-		await markProcessing(deps, booking, session, now);
-		const current = (await loadBooking(db, booking.id)) ?? booking;
-		return { status: 'processing', booking: current };
+	// Fast path (return page refreshes): confirmed, captured and recorded.
+	if (await isFullyConfirmed(deps.db, booking, sessionId)) {
+		return { status: 'already_confirmed', booking };
 	}
 
-	const intentId = stripeId(session.payment_intent);
-	const customerId = stripeId(session.customer);
+	const { session, intent, state } = await completedSession(deps, sessionId);
+	const mismatch = sessionMismatch(session, booking);
+	if (mismatch) {
+		console.warn(
+			`Checkout Session ${session.id} does not match booking ${booking.confirmationId}`,
+		);
+		if (state !== 'authorized')
+			throw new TRPCError({ code: 'BAD_REQUEST', message: mismatch });
+		await releaseAuthorization(deps, session, intent, null, mismatch, now);
+		return { status: 'released', booking };
+	}
 
-	const [confirmed] = await db
+	const { current, claimed } = await claimDates(
+		deps,
+		booking,
+		session,
+		intent,
+		state,
+		now,
+	);
+	const ours =
+		current.status === 'confirmed' && current.stripeSessionId === session.id;
+	if (!ours) return settleUnconfirmable(deps, current, session, intent, now);
+	return captureAndRecord(deps, current, session, intent, claimed, now);
+}
+
+/** The completed session with its PaymentIntent, or BAD_REQUEST if unpaid. */
+async function completedSession(deps: ServiceDeps, sessionId: string) {
+	const session = await deps.stripe.checkout.sessions.retrieve(sessionId, {
+		expand: ['payment_intent', 'payment_intent.payment_method'],
+	});
+	const intent = sessionIntent(session);
+	const state = intentState(intent);
+	if (session.status !== 'complete' || !intent || state === 'unpaid') {
+		throw notPaid();
+	}
+	return { session, intent, state };
+}
+
+/**
+ * Step 2: confirms a pending booking with this session in one guarded
+ * UPDATE (still pending, dates still free). Returns the booking as it is
+ * afterwards and whether this call confirmed it. A captured intent only
+ * comes from a session created before manual capture: confirmed as paid.
+ */
+async function claimDates(
+	{ db }: ServiceDeps,
+	booking: Booking,
+	session: Stripe.Checkout.Session,
+	intent: Stripe.PaymentIntent,
+	state: IntentState,
+	now: Date,
+): Promise<{ current: Booking; claimed: boolean }> {
+	if (booking.status !== 'pending' || state === 'canceled') {
+		return { current: booking, claimed: false };
+	}
+	const [row] = await db
 		.update(bookings)
 		.set({
 			status: 'confirmed',
-			paymentStatus: 'paid',
+			paymentStatus: state === 'captured' ? 'paid' : 'authorized',
 			confirmedAt: now,
 			updatedAt: now,
 			stripeSessionId: session.id,
-			stripePaymentIntentId: intentId,
-			stripeCustomerId: customerId ?? booking.stripeCustomerId,
+			stripePaymentIntentId: intent.id,
+			stripeCustomerId: stripeId(session.customer) ?? booking.stripeCustomerId,
 		})
 		.where(
 			and(
@@ -598,68 +669,385 @@ export async function confirmBookingPayment(
 			),
 		)
 		.returning();
-
-	if (confirmed) {
-		await recordConfirmation(deps, confirmed, session, now);
-		return { status: 'confirmed', booking: confirmed };
-	}
-
-	// Nothing changed: another caller confirmed it, or the dates were taken.
-	const current = await loadBooking(db, booking.id);
-	if (current?.status !== 'pending') {
-		const outcome = current && settledOutcome(current, session.id);
-		if (outcome) return outcome;
-		throw cannotPay();
-	}
-	if (!intentId) throw notPaid();
-	return refundUnavailableBooking(deps, current, session, intentId, now);
+	if (row) return { current: row, claimed: true };
+	return {
+		current: (await loadBooking(db, booking.id)) ?? booking,
+		claimed: false,
+	};
 }
-
-const cannotPay = () =>
-	new TRPCError({
-		code: 'BAD_REQUEST',
-		message: 'This booking can no longer be paid',
-	});
 
 /**
- * The outcome for a booking that is no longer pending: confirmed with this
- * session, or cancelled after the automatic refund for it. Undefined while
- * it is still pending; BAD_REQUEST for any other state.
+ * Steps 3-4 for a booking confirmed with this session: capture (a retry
+ * finds it captured already), mark paid, record and email (idempotent).
  */
-function settledOutcome(
+async function captureAndRecord(
+	deps: ServiceDeps,
 	booking: Booking,
-	sessionId: string,
-): ConfirmationOutcome | undefined {
-	if (booking.status === 'pending') return undefined;
-	const sameSession = booking.stripeSessionId === sessionId;
-	if (booking.status === 'confirmed') {
-		if (sameSession) return { status: 'already_confirmed', booking };
-		throw new TRPCError({
-			code: 'BAD_REQUEST',
-			message: 'This booking was already paid with another payment',
-		});
+	session: Stripe.Checkout.Session,
+	intent: Stripe.PaymentIntent,
+	claimed: boolean,
+	now: Date,
+): Promise<ConfirmationOutcome> {
+	if (intent.status === 'canceled') {
+		return failAuthorizedBooking(
+			deps,
+			booking,
+			session,
+			intent,
+			'The card authorization expired or was cancelled before it was captured',
+			now,
+		);
 	}
-	if (booking.cancellationReason === 'dates_unavailable' && sameSession) {
-		return { status: 'refunded_conflict', booking };
+	if (intent.status === 'requires_capture') {
+		const capture = await capturePayment(deps, booking, intent);
+		if (capture.status !== 'succeeded') {
+			return failAuthorizedBooking(
+				deps,
+				booking,
+				session,
+				capture,
+				'The card authorization could not be captured',
+				now,
+			);
+		}
 	}
-	throw cannotPay();
+	const current = await markPaid(deps.db, booking, now);
+	await recordConfirmation(deps, current, session, intent, now);
+	return {
+		status: claimed ? 'confirmed' : 'already_confirmed',
+		booking: current,
+	};
 }
 
-/** After the guarded confirmation: the payment row and the emails. */
+/** 'authorized' -> 'paid' after the capture (no-op otherwise). */
+async function markPaid(db: Database, booking: Booking, now: Date) {
+	if (booking.paymentStatus !== 'authorized') return booking;
+	const [paid] = await db
+		.update(bookings)
+		.set({ paymentStatus: 'paid', updatedAt: now })
+		.where(
+			and(
+				eq(bookings.id, booking.id),
+				eq(bookings.paymentStatus, 'authorized'),
+			),
+		)
+		.returning();
+	return paid ?? (await loadBooking(db, booking.id)) ?? booking;
+}
+
+/**
+ * Captures an authorization. Transient Stripe errors throw (the webhook
+ * answers 500 and Stripe retries). A permanent refusal returns the
+ * PaymentIntent as it is now, so the caller can tell captured from lost.
+ */
+async function capturePayment(
+	{ stripe }: ServiceDeps,
+	booking: Booking,
+	intent: Stripe.PaymentIntent,
+): Promise<Stripe.PaymentIntent> {
+	try {
+		return await stripe.paymentIntents.capture(
+			intent.id,
+			{},
+			{ idempotencyKey: `capture/${booking.id}/${intent.id}` },
+		);
+	} catch (error) {
+		if (!isPermanentStripeError(error)) throw error;
+		console.error(
+			`Capture refused for booking ${booking.confirmationId}:`,
+			error instanceof Error ? error.message : 'Unknown error',
+		);
+		return stripe.paymentIntents.retrieve(intent.id);
+	}
+}
+
+/**
+ * Cancels an uncaptured PaymentIntent. True when it is cancelled (now or
+ * before), false if it was captured. Transient Stripe errors throw.
+ */
+async function cancelIntent(stripe: Stripe, intentId: string) {
+	try {
+		await stripe.paymentIntents.cancel(intentId, {
+			cancellation_reason: 'abandoned',
+		});
+		return true;
+	} catch (error) {
+		if (!isPermanentStripeError(error)) throw error;
+		const fresh = await stripe.paymentIntents.retrieve(intentId);
+		if (fresh.status === 'canceled') return true;
+		if (fresh.status === 'succeeded') return false;
+		throw error;
+	}
+}
+
+/** Booking fields for a payment_released item (all null without one). */
+function releasedBookingFields(booking: Booking | null) {
+	if (!booking) {
+		return {
+			confirmationId: null,
+			checkInDate: null,
+			checkOutDate: null,
+			bookingId: null,
+			userId: null,
+		};
+	}
+	return {
+		confirmationId: booking.confirmationId,
+		checkInDate: booking.checkInDate,
+		checkOutDate: booking.checkOutDate,
+		bookingId: booking.id,
+		userId: booking.userId,
+	};
+}
+
+/** Tells the admins an authorization ended without a charge (inbox). */
+async function notifyReleased(
+	deps: ServiceDeps,
+	session: Stripe.Checkout.Session,
+	intentId: string,
+	booking: Booking | null,
+	reason: string,
+	now: Date,
+) {
+	const { bookingId, userId, ...fields } = releasedBookingFields(booking);
+	const roomInfo = booking ? await roomName(deps.db, booking.roomId) : null;
+	const amount = (session.amount_total ?? 0) / 100;
+	createInboxItemInBackground(
+		deps,
+		{
+			kind: 'payment_released',
+			title: `Payment released${fields.confirmationId ? `: ${fields.confirmationId}` : ''}`,
+			summary: `A card authorization of ${formatMoney(amount)} ended without a charge. ${reason}.`,
+			details: {
+				...fields,
+				roomName: roomInfo?.name ?? null,
+				amount,
+				sessionId: session.id,
+				paymentIntentId: intentId,
+				reason,
+				livemode: session.livemode,
+			},
+			bookingId,
+			userId,
+			dedupeKey: `payment_released:${intentId}`,
+		},
+		{ now },
+	);
+}
+
+/**
+ * Cancels an uncaptured authorization so the guest is not charged, and
+ * tells the admins. Transient Stripe errors throw (retried by the caller).
+ * Returns false if the payment was already captured (nothing to release).
+ */
+async function releaseAuthorization(
+	deps: ServiceDeps,
+	session: Stripe.Checkout.Session,
+	intent: Stripe.PaymentIntent,
+	booking: Booking | null,
+	reason: string,
+	now: Date,
+): Promise<boolean> {
+	if (!(await cancelIntent(deps.stripe, intent.id))) {
+		console.error(
+			`PaymentIntent ${intent.id} was captured; it can't be released (${reason})`,
+		);
+		return false;
+	}
+	console.warn(`PaymentIntent ${intent.id} released, not charged: ${reason}`);
+	await notifyReleased(deps, session, intent.id, booking, reason, now);
+	return true;
+}
+
+/**
+ * This session can't confirm the booking: the dates were taken before the
+ * claim, the booking was cancelled, or it was confirmed with another
+ * session. An authorization is released (and a pending booking whose dates
+ * were taken is cancelled, telling the guest they were not charged).
+ */
+async function settleUnconfirmable(
+	deps: ServiceDeps,
+	booking: Booking,
+	session: Stripe.Checkout.Session,
+	intent: Stripe.PaymentIntent,
+	now: Date,
+): Promise<ConfirmationOutcome> {
+	const state = intentState(intent);
+	const ourSession = booking.stripeSessionId === session.id;
+	if (state === 'canceled') {
+		// Already released (a replay), or the authorization lapsed: nothing
+		// was charged. A pending hold simply expires.
+		if (ourSession && booking.status !== 'confirmed') {
+			return { status: 'released', booking };
+		}
+		throw cannotPay();
+	}
+	if (state === 'captured') {
+		// Only a session from before manual capture can be here.
+		console.error(
+			`Checkout Session ${session.id} was charged but booking ${booking.confirmationId} is ${booking.status}: refund it by hand`,
+		);
+		throw cannotPay();
+	}
+
+	if (booking.status !== 'pending') {
+		const reason =
+			booking.status === 'confirmed'
+				? 'The booking was already paid with another payment'
+				: 'The booking was cancelled before the payment completed';
+		await releaseAuthorization(deps, session, intent, booking, reason, now);
+		return { status: 'released', booking };
+	}
+
+	// Still pending: the claim failed because the dates were taken.
+	const released = await releaseAuthorization(
+		deps,
+		session,
+		intent,
+		booking,
+		'The dates were taken before the payment completed',
+		now,
+	);
+	if (!released) throw cannotPay();
+	const [cancelled] = await deps.db
+		.update(bookings)
+		.set({
+			status: 'cancelled',
+			cancelledAt: now,
+			updatedAt: now,
+			cancelledBy: 'system',
+			cancellationReason: 'dates_unavailable',
+			refundAmount: 0,
+			stripeSessionId: session.id,
+			stripePaymentIntentId: intent.id,
+		})
+		.where(and(eq(bookings.id, booking.id), eq(bookings.status, 'pending')))
+		.returning();
+	if (!cancelled) {
+		const current = (await loadBooking(deps.db, booking.id)) ?? booking;
+		return { status: 'released', booking: current };
+	}
+	const roomInfo = await roomName(deps.db, booking.roomId);
+	inBackground(deps, `dates taken ${booking.confirmationId}`, async () => {
+		await sendCancellationEmails(deps.db, deps.env, cancelled, roomInfo, {
+			refundAmount: 0,
+			cancelledBy: 'system',
+			guestMessage:
+				'We are sorry: the room was booked on another platform moments before your payment completed, so we could not confirm your stay. Your card was not charged: the authorization hold is released by your bank.',
+			adminMessage:
+				'A guest paid, but the dates were taken (another booking, an imported reservation or a block) before the payment was confirmed. The card authorization was cancelled: nothing was charged.',
+		});
+		await sendAdminAlert(deps.db, deps.env, {
+			subject: `Payment released: ${booking.confirmationId}`,
+			heading: 'Payment released: dates were no longer available',
+			paragraphs: [
+				'The guest was not charged. Check the calendar for double bookings on other platforms.',
+			],
+			details: [
+				{ label: 'Confirmation', value: booking.confirmationId },
+				{ label: 'Room', value: roomInfo.name },
+				{
+					label: 'Dates',
+					value: `${booking.checkInDate} to ${booking.checkOutDate}`,
+				},
+			],
+			link: {
+				label: 'Open booking',
+				path: `/admin/bookings/${booking.publicId}`,
+			},
+			idempotencyKey: `released-alert/${booking.id}`,
+		});
+	});
+	return { status: 'released', booking: cancelled };
+}
+
+/**
+ * The booking was confirmed with this session, but its authorization can't
+ * be captured (expired or cancelled). Cancels the booking (frees the dates),
+ * releases the authorization if it is still open, tells the guest they were
+ * not charged.
+ */
+async function failAuthorizedBooking(
+	deps: ServiceDeps,
+	booking: Booking,
+	session: Stripe.Checkout.Session,
+	intent: Stripe.PaymentIntent,
+	reason: string,
+	now: Date,
+): Promise<ConfirmationOutcome> {
+	if (intent.status === 'requires_capture') {
+		await releaseAuthorization(deps, session, intent, booking, reason, now);
+	}
+	const [cancelled] = await deps.db
+		.update(bookings)
+		.set({
+			status: 'cancelled',
+			paymentStatus: 'pending',
+			cancelledAt: now,
+			updatedAt: now,
+			cancelledBy: 'system',
+			cancellationReason: 'payment_failed',
+			refundAmount: 0,
+		})
+		.where(
+			and(
+				eq(bookings.id, booking.id),
+				eq(bookings.status, 'confirmed'),
+				eq(bookings.paymentStatus, 'authorized'),
+			),
+		)
+		.returning();
+	if (!cancelled) {
+		const current = (await loadBooking(deps.db, booking.id)) ?? booking;
+		return { status: 'payment_failed', booking: current };
+	}
+	console.error(`Booking ${booking.confirmationId} cancelled: ${reason}`);
+	if (intent.status !== 'requires_capture') {
+		// Nothing left to cancel in Stripe; still tell the admins.
+		await notifyReleased(deps, session, intent.id, booking, reason, now);
+	}
+	const roomInfo = await roomName(deps.db, booking.roomId);
+	inBackground(deps, `payment failed ${booking.confirmationId}`, () =>
+		sendPaymentFailedEmail(deps.db, deps.env, cancelled, roomInfo),
+	);
+	return { status: 'payment_failed', booking: cancelled };
+}
+
+/**
+ * Releases the authorization of a completed session whose booking can't be
+ * found or confirmed (the webhook's last resort): the guest is never charged
+ * without a booking. Does nothing if the session has no open authorization.
+ */
+export async function releaseSessionAuthorization(
+	deps: ServiceDeps,
+	sessionId: string,
+	reason: string,
+	booking: Booking | null = null,
+	now = new Date(),
+) {
+	const session = await deps.stripe.checkout.sessions.retrieve(sessionId, {
+		expand: ['payment_intent'],
+	});
+	const intent = sessionIntent(session);
+	if (!intent || intent.status !== 'requires_capture') return false;
+	return releaseAuthorization(deps, session, intent, booking, reason, now);
+}
+
+/** After the capture: the payment row and the emails (both idempotent). */
 async function recordConfirmation(
 	deps: ServiceDeps,
 	confirmed: Booking,
 	session: Stripe.Checkout.Session,
+	intent: Stripe.PaymentIntent,
 	now: Date,
 ) {
-	const intent = sessionIntent(session);
 	await deps.db
 		.insert(paymentTransactions)
 		.values({
 			bookingId: confirmed.id,
 			stripeCheckoutSessionId: session.id,
-			stripePaymentIntentId: stripeId(session.payment_intent),
-			stripeChargeId: stripeId(intent?.latest_charge),
+			stripePaymentIntentId: intent.id,
+			stripeChargeId: stripeId(intent.latest_charge),
 			stripeCustomerId: stripeId(session.customer),
 			amount: confirmed.totalAmount,
 			status: 'paid',
@@ -698,116 +1086,4 @@ export async function recordAppRefund(
 			updatedAt: now,
 		})
 		.onConflictDoNothing();
-}
-
-async function refundUnavailableBooking(
-	deps: ServiceDeps,
-	booking: Booking,
-	session: Stripe.Checkout.Session,
-	intentId: string,
-	now: Date,
-): Promise<ConfirmationOutcome> {
-	const { db, stripe } = deps;
-	const refund = await stripe.refunds.create(
-		{
-			payment_intent: intentId,
-			reason: 'requested_by_customer',
-			metadata: {
-				...stripeBookingMetadata(booking),
-				reason: 'dates_unavailable',
-			},
-		},
-		{ idempotencyKey: `refund-unavailable/${booking.id}` },
-	);
-	const [cancelled] = await db
-		.update(bookings)
-		.set({
-			status: 'cancelled',
-			paymentStatus: 'refunded',
-			cancelledAt: now,
-			updatedAt: now,
-			cancelledBy: 'system',
-			cancellationReason: 'dates_unavailable',
-			refundAmount: booking.totalAmount,
-			stripeSessionId: session.id,
-			stripePaymentIntentId: intentId,
-			stripeRefundId: refund.id,
-		})
-		.where(and(eq(bookings.id, booking.id), eq(bookings.status, 'pending')))
-		.returning();
-	if (!cancelled) {
-		const current = await loadBooking(db, booking.id);
-		return { status: 'refunded_conflict', booking: current ?? booking };
-	}
-	const intent = sessionIntent(session);
-	await db
-		.insert(paymentTransactions)
-		.values({
-			bookingId: booking.id,
-			stripeCheckoutSessionId: session.id,
-			stripePaymentIntentId: intentId,
-			stripeChargeId: stripeId(intent?.latest_charge),
-			amount: booking.totalAmount,
-			amountRefunded: booking.totalAmount,
-			status: 'refunded',
-			paymentMethod: paymentMethodType(intent),
-			createdAt: now,
-			updatedAt: now,
-		})
-		.onConflictDoNothing();
-	await recordAppRefund(db, refund, booking.id, now);
-
-	console.warn(
-		`Booking ${booking.confirmationId}: dates taken before confirmation, refunded automatically`,
-	);
-	const roomInfo = await roomName(db, booking.roomId);
-	createInboxItemInBackground(deps, {
-		kind: 'refund_auto',
-		title: `Automatic refund: ${booking.confirmationId}`,
-		summary: `${roomInfo.name}, ${booking.checkInDate} to ${booking.checkOutDate}: the dates were taken before the payment was confirmed, so it was refunded in full.`,
-		details: {
-			confirmationId: booking.confirmationId,
-			roomName: roomInfo.name,
-			checkInDate: booking.checkInDate,
-			checkOutDate: booking.checkOutDate,
-			amount: booking.totalAmount,
-			paymentIntentId: intentId,
-			refundId: refund.id,
-			livemode: session.livemode,
-		},
-		bookingId: booking.id,
-		userId: booking.userId,
-		dedupeKey: `refund_auto:${booking.id}`,
-	});
-	inBackground(deps, `auto-refund ${booking.confirmationId}`, async () => {
-		await sendCancellationEmails(db, deps.env, cancelled, roomInfo, {
-			refundAmount: booking.totalAmount,
-			cancelledBy: 'system',
-			guestMessage:
-				'We are sorry: the room was booked on another platform moments before your payment completed, so we could not confirm your stay. Your payment has been refunded in full.',
-			adminMessage:
-				'A guest paid, but the dates were taken (another booking, an imported reservation or a block) before the payment was confirmed. The payment was refunded in full automatically.',
-		});
-		await sendAdminAlert(db, deps.env, {
-			subject: `Automatic refund: ${booking.confirmationId}`,
-			heading: 'Payment refunded: dates were no longer available',
-			paragraphs: [
-				'Check the calendar for double bookings on other platforms.',
-			],
-			details: [
-				{ label: 'Confirmation', value: booking.confirmationId },
-				{ label: 'Room', value: roomInfo.name },
-				{
-					label: 'Dates',
-					value: `${booking.checkInDate} to ${booking.checkOutDate}`,
-				},
-			],
-			link: {
-				label: 'Open booking',
-				path: `/admin/bookings/${booking.publicId}`,
-			},
-			idempotencyKey: `auto-refund-alert/${booking.id}`,
-		});
-	});
-	return { status: 'refunded_conflict', booking: cancelled };
 }

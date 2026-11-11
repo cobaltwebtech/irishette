@@ -12,6 +12,7 @@ export type InboxSource = (typeof inboxSources)[number];
 export const inboxKinds = [
 	'contact_form',
 	'refund_auto',
+	'payment_released',
 	'refund_failed',
 	'refund_issued',
 	'payment_dispute',
@@ -33,6 +34,7 @@ export const INBOX_SOURCE_LABELS: Record<InboxSource, string> = {
 export const INBOX_KIND_LABELS: Record<InboxKind, string> = {
 	contact_form: 'Contact form',
 	refund_auto: 'Automatic refund',
+	payment_released: 'Payment released',
 	refund_failed: 'Refund failed',
 	refund_issued: 'Refund in Stripe',
 	payment_dispute: 'Payment dispute',
@@ -44,6 +46,7 @@ export const INBOX_KIND_LABELS: Record<InboxKind, string> = {
 export const INBOX_KIND_SOURCE: Record<InboxKind, InboxSource> = {
 	contact_form: 'guest',
 	refund_auto: 'system',
+	payment_released: 'system',
 	refund_failed: 'stripe',
 	refund_issued: 'stripe',
 	payment_dispute: 'stripe',
@@ -76,6 +79,25 @@ interface RefundAutoDetails {
 	amount: number;
 	paymentIntentId: string;
 	refundId: string;
+	livemode: boolean;
+}
+
+/**
+ * A card authorization the app cancelled instead of capturing: the guest paid
+ * but the booking could not be confirmed, so nothing was charged (plan 05).
+ */
+interface PaymentReleasedDetails {
+	/** Null when the booking no longer exists. */
+	confirmationId: string | null;
+	roomName: string | null;
+	checkInDate: string | null;
+	checkOutDate: string | null;
+	/** Dollars. */
+	amount: number;
+	sessionId: string;
+	paymentIntentId: string;
+	/** Why it could not be confirmed, in plain words. */
+	reason: string;
 	livemode: boolean;
 }
 
@@ -156,6 +178,7 @@ interface IcalConflictDetails {
 export interface InboxDetailsByKind {
 	contact_form: ContactFormDetails;
 	refund_auto: RefundAutoDetails;
+	payment_released: PaymentReleasedDetails;
 	refund_failed: RefundFailedDetails;
 	refund_issued: RefundIssuedDetails;
 	payment_dispute: PaymentDisputeDetails;

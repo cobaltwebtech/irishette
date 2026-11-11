@@ -1,7 +1,14 @@
-import { and, eq, lte, ne } from 'drizzle-orm';
+import { and, eq, gte, isNotNull, lte, ne, or } from 'drizzle-orm';
 
 import { bookings, icalSyncChanges, icalSyncLog } from '@/db/schema-export';
-import { releaseExpiredHold } from '@/lib/booking/booking-service';
+import {
+	releaseExpiredHold,
+	retryCancellationRefund,
+} from '@/lib/booking/booking-service';
+import {
+	confirmBookingPayment,
+	settlePaidHold,
+} from '@/lib/booking/checkout-service';
 import { purgeSentEmails } from '@/lib/email/email-dedupe';
 import { syncAllFeeds } from '@/lib/ical/ical-sync';
 
@@ -27,11 +34,105 @@ export async function scheduledCalendarSync(deps: ServiceDeps) {
 	return results;
 }
 
+/** A payment step left unfinished this long is retried by the recovery. */
+export const PAYMENT_RECOVERY_AFTER_MINUTES = 15;
+
+/**
+ * Finishes payment work a stopped Worker left half done (plan 05), every
+ * 30 minutes:
+ * - confirmed bookings still 'authorized': capture (or release) the card
+ *   authorization, well before it lapses (5 to 7 days);
+ * - cancelled bookings still 'refund_pending': create (or find and record)
+ *   the cancellation refund;
+ * - pending holds whose session the guest completed but nothing confirmed
+ *   (webhook failing, tab closed before the return page): confirm and
+ *   capture, before anyone else can take the dates. Holds expired for more
+ *   than a day are left to the daily cleanup.
+ * Each booking is isolated: a failure is logged and retried next run.
+ */
+export async function scheduledPaymentRecovery(
+	deps: ServiceDeps,
+	now = new Date(),
+) {
+	const cutoff = new Date(
+		now.getTime() - PAYMENT_RECOVERY_AFTER_MINUTES * 60_000,
+	);
+	const stuck = await deps.db
+		.select({
+			id: bookings.id,
+			confirmationId: bookings.confirmationId,
+			status: bookings.status,
+			stripeSessionId: bookings.stripeSessionId,
+		})
+		.from(bookings)
+		.where(
+			and(
+				lte(bookings.updatedAt, cutoff),
+				or(
+					and(
+						eq(bookings.status, 'confirmed'),
+						eq(bookings.paymentStatus, 'authorized'),
+						isNotNull(bookings.stripeSessionId),
+					),
+					and(
+						eq(bookings.status, 'cancelled'),
+						eq(bookings.paymentStatus, 'refund_pending'),
+					),
+					and(
+						eq(bookings.status, 'pending'),
+						ne(bookings.paymentStatus, 'processing'),
+						isNotNull(bookings.stripeSessionId),
+						gte(bookings.expiresAt, new Date(now.getTime() - 86_400_000)),
+					),
+				),
+			),
+		);
+
+	let settled = 0;
+	let failed = 0;
+	for (const booking of stuck) {
+		try {
+			if (await recoverBooking(deps, booking, now)) settled++;
+		} catch (error) {
+			failed++;
+			console.error(
+				`Payment recovery for ${booking.confirmationId} failed (retried next run):`,
+				error instanceof Error ? error.message : 'Unknown error',
+			);
+		}
+	}
+	if (settled + failed > 0) {
+		console.log(
+			`Payment recovery: ${settled} settled, ${failed} failed of ${stuck.length} checked`,
+		);
+	}
+	return { settled, failed };
+}
+
+/** One booking of scheduledPaymentRecovery. True if it was settled. */
+async function recoverBooking(
+	deps: ServiceDeps,
+	booking: Pick<
+		typeof bookings.$inferSelect,
+		'id' | 'status' | 'stripeSessionId'
+	>,
+	now: Date,
+) {
+	if (booking.status === 'pending') {
+		return settlePaidHold(deps, booking, now);
+	}
+	if (booking.status === 'confirmed' && booking.stripeSessionId) {
+		await confirmBookingPayment(deps, booking.id, booking.stripeSessionId, now);
+		return true;
+	}
+	await retryCancellationRefund(deps, booking.id, now);
+	return true;
+}
+
 /**
  * Releases pending holds that expired: their Checkout Session is expired
- * first so it can't be paid. A hold whose session was paid (confirmation
- * never ran) is confirmed instead; holds with a delayed payment processing
- * are kept until the webhook settles them.
+ * first so it can't be paid. A hold whose session was completed in the
+ * meantime is settled instead (captured or its authorization released).
  */
 export async function scheduledBookingCleanup(
 	deps: ServiceDeps,
@@ -109,16 +210,34 @@ export async function scheduledSentEmailCleanup(
 
 type Task = (deps: ServiceDeps) => Promise<unknown>;
 
+/**
+ * Runs every task even if one fails, then throws the first error (so it
+ * still shows in Workers observability).
+ */
+async function runAll(deps: ServiceDeps, tasks: Task[]) {
+	const errors: unknown[] = [];
+	for (const task of tasks) {
+		try {
+			await task(deps);
+		} catch (error) {
+			errors.push(error);
+		}
+	}
+	if (errors.length > 0) throw errors[0];
+}
+
 /** Cron expression → task. Unknown expressions do nothing. */
 export const CRON_SCHEDULES: Readonly<Record<string, Task>> = {
 	// Keep ICAL_SYNC_INTERVAL_MINUTES (src/lib/ical/ical-feed-sources.ts) in step.
-	'*/30 * * * *': scheduledCalendarSync,
+	'*/30 * * * *': (deps) =>
+		runAll(deps, [(d) => scheduledPaymentRecovery(d), scheduledCalendarSync]),
 	'5 8 * * *': (deps) => scheduledBookingCleanup(deps), // 08:05 UTC
-	'15 9 * * *': async (deps) => {
-		// 09:15 UTC
-		await scheduledIcalLogCleanup(deps);
-		await scheduledSentEmailCleanup(deps);
-	},
+	// 09:15 UTC
+	'15 9 * * *': (deps) =>
+		runAll(deps, [
+			(d) => scheduledIcalLogCleanup(d),
+			(d) => scheduledSentEmailCleanup(d),
+		]),
 };
 
 /** Worker `scheduled` handler (src/server.ts). */

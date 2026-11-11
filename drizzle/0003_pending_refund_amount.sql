@@ -1,0 +1,1 @@
+ALTER TABLE `bookings` ADD `pending_refund_amount` real;

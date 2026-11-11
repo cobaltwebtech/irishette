@@ -2,13 +2,16 @@
 
 Booking payments use a **Stripe Checkout Session** with `ui_mode: 'elements'`:
 the Payment Element is rendered on our own payment step and confirmed with
-`checkout.confirm()`. The charge is captured immediately. A booking is
-confirmed only after the server retrieves the session from Stripe, checks it
-belongs to the booking and re-checks availability. Fulfilment is driven by the
-webhook; the return page runs the same idempotent confirmation as a fast path.
+`checkout.confirm()`. **The card is only authorized at checkout**
+(`capture_method: 'manual'`): it is captured after the server retrieves the
+session from Stripe, checks it belongs to the booking and claims the dates. A
+payment that can't confirm a booking has its authorization cancelled, so the
+guest is never charged without a booking and there is no automatic refund
+(plan 05). Fulfilment is driven by the webhook; the return page runs the same
+idempotent confirmation as a fast path.
 
 Webhook endpoint setup (Dashboard and Stripe CLI) is in `STRIPE_WEBHOOKS.md`.
-The hold cleanup cron is in `CRON_JOBS_SETUP.md`.
+The hold cleanup and payment recovery crons are in `CRON_JOBS_SETUP.md`.
 
 **Sandbox only.** Development and pre-production use Stripe sandbox (test mode)
 keys and endpoints. Never use live-mode keys or run live-mode or destructive
@@ -33,12 +36,13 @@ webhook and cron handlers build one with `createServiceDeps()`.
 
 | File | What |
 |---|---|
-| `src/lib/booking/checkout-service.ts` | Session creation (`prepareCheckout`), confirmation (`confirmBookingPayment`), automatic refund on conflict, hold/session helpers (`closeHoldSession`, `markProcessing`, `releaseFailedPayment`, `releaseExpiredSessionHold`) |
-| `src/lib/booking/booking-service.ts` | Pricing, holds (`createHold`, `refreshHold`, the priority rule), cancellations |
+| `src/lib/booking/checkout-service.ts` | Session creation (`prepareCheckout`), confirmation and capture (`confirmBookingPayment`), releasing authorizations (`releaseAuthorization`, `settleUnconfirmable`, `failAuthorizedBooking`, `releaseSessionAuthorization`), hold/session helpers (`closeHoldSession`, `releaseExpiredSessionHold`) |
+| `src/lib/booking/booking-service.ts` | Pricing, holds (`createHold`, `refreshHold`, the priority rule), cancellations (`refundCancellation`, `retryCancellationRefund`) |
+| `src/lib/server/scheduled-tasks.ts` | Hold cleanup, payment recovery (`scheduledPaymentRecovery`) |
 | `src/lib/booking/refund-service.ts` | Refund webhooks (`refund.*`, `charge.refunded`) |
 | `src/lib/booking/dispute-service.ts` | Dispute webhooks (`charge.dispute.*`), `hasOpenDispute` |
 | `src/lib/stripe/stripe-webhook.ts` | Signature check and `dispatch` |
-| `src/lib/stripe/stripe.ts` | Client, `stripeBookingMetadata`, `toCents`, `stripeId` |
+| `src/lib/stripe/stripe.ts` | Client, `stripeBookingMetadata`, `toCents`, `stripeId`, `isPermanentStripeError` |
 
 ## Payment flow
 
@@ -46,9 +50,9 @@ webhook and cron handlers build one with `createServiceDeps()`.
 |---|---|---|
 | 1. Hold | Booking form | `bookings.createBooking` -> `createHold()` |
 | 2. Prepare | `PaymentStep` mounts | `bookings.refreshBooking` -> `refreshHold()`, then `bookings.createCheckoutSession` -> `prepareCheckout()` |
-| 3. Pay | `checkout.confirm({ redirect: 'if_required' })` | Stripe charges the card (or starts a delayed payment) |
+| 3. Pay | `checkout.confirm({ redirect: 'if_required' })` | Stripe authorizes the card (nothing is charged yet) |
 | 4. Return | Navigate to `/booking/confirmation/<publicId>?session_id=cs_...` (redirect methods come back to the same URL from Stripe) | The page calls `bookings.confirmCheckout` -> `confirmBookingPayment()` |
-| 5. Fulfil | (guest may close the tab) | `checkout.session.completed` / `async_payment_succeeded` webhook -> `confirmBookingPayment()` |
+| 5. Fulfil | (guest may close the tab) | `checkout.session.completed` webhook -> `confirmBookingPayment()` (claim the dates, capture) |
 
 All payment procedures are `protectedProcedure` and load the booking with
 `findAccessibleBooking()`, so a guest can act only on their own booking
@@ -60,16 +64,17 @@ All payment procedures are `protectedProcedure` and load the booking with
   past.
 - Releases the guest's earlier holds for the same room (`releaseOwnHolds()`):
   expires each hold's open Checkout Session and deletes the hold. A hold whose
-  session was paid (or whose delayed payment is processing) is kept and
-  confirmed.
+  session was paid is settled by `confirmBookingPayment()` (captured and kept,
+  or its authorization released).
 - **Priority rule (first hold wins while it is live):** other guests' expired
   holds on the same dates are released first (`releaseExpiredHolds()`): their
   session is expired so it can't be paid. If Stripe reports the session was
-  completed after all, that booking is confirmed (or marked processing) and
-  the new hold is refused with `CONFLICT`. Nobody pays and then gets refunded.
+  completed after all, that booking is confirmed and captured, and the new
+  hold is refused with `CONFLICT`. Nobody pays and then gets refunded.
 - Checks availability (`checkAvailability()` in `src/lib/booking/availability.ts`): a
-  confirmed booking, a live hold, or a hold with `paymentStatus: 'processing'`
-  (even past its expiry) blocks the dates.
+  confirmed booking (including one still `authorized`), a live hold, or a
+  legacy hold with `paymentStatus: 'processing'` (even past its expiry) blocks
+  the dates.
 - Prices the stay on the server (`quoteStay()`). Prices sent by the client are
   accepted by `createBookingSchema` but ignored.
 - Inserts a `bookings` row with `status = 'pending'`,
@@ -81,15 +86,16 @@ throws `CONFLICT`.
 
 ### 2. Checkout Session (`prepareCheckout`)
 
-- Rejects bookings that are not `pending` or whose hold expired. A hold whose
-  delayed payment is processing returns `{ status: 'complete' }`.
+- Rejects bookings that are not `pending` or whose hold expired. A legacy hold
+  with `paymentStatus: 'processing'` returns `{ status: 'complete' }`.
 - Syncs the room's iCal import feeds (`syncRoomFeeds()`, trigger `checkout`;
   best effort), then re-checks availability excluding this booking. Taken
   dates throw `CONFLICT`.
 - **Reuses** the hold's open session while its amount equals the booking total,
   its `expires_at` equals the hold expiry and at least 10 minutes are left.
-  A session that was already paid confirms the booking and returns
-  `{ status: 'complete' }` (the client goes to the confirmation page).
+  A session that was already completed is settled by `confirmBookingPayment()`
+  and returns `{ status: 'complete' }` (the client goes to the confirmation
+  page).
 - Otherwise **expires** the old session and creates a new one, extending the
   hold to `now + HOLD_MINUTES` in the same guarded write
   (`stripeSessionId` must still be the old value; a concurrent request's
@@ -103,6 +109,8 @@ throws `CONFLICT`.
 | `line_items` | `price_data` from **our** pricing (`checkoutLineItems()`): "Room, N nights", "Service fee", "State hotel occupancy tax", "City hotel occupancy tax" (zero lines left out). The taxes are on the room price plus the service fee; the two tax lines are the amounts stored on the booking (`stateTaxAmount`, `cityTaxAmount`; see `TAX_REPORTING.md`). No `automatic_tax`. |
 | `client_reference_id` | Booking `id` |
 | `metadata`, `payment_intent_data.metadata` | `stripeBookingMetadata()`: `bookingId`, `bookingPublicId`, `confirmationId`, `source: 'irishette'`. No personal data. |
+| `payment_intent_data.capture_method` | `manual` (authorize only; captured after confirmation) |
+| `allowed_payment_method_types` | `['card', 'link']`: methods that support a separate capture without an upfront charge (cards include Apple Pay and Google Pay). A filter on the methods enabled in the Dashboard. No delayed bank payments. |
 | `payment_intent_data.description` | `Irishette booking <confirmationId>` |
 | `saved_payment_method_options.payment_method_save` | `disabled` (no saved cards) |
 | `return_url` | `<BETTER_AUTH_URL>/booking/confirmation/<publicId>?session_id={CHECKOUT_SESSION_ID}` |
@@ -110,7 +118,7 @@ throws `CONFLICT`.
 | `integration_identifier` | `irishette_booking_qzmvtrkd` |
 | Idempotency key | `checkout/<bookingId>/<expiresAt>/<amountCents>` |
 
-No `payment_method_types` (dynamic payment methods). After creation the
+No `payment_method_types`. After creation the
 server asserts `amount_total === toCents(totalAmount)`; a mismatch expires the
 session and fails. The session id is stored on `bookings.stripeSessionId`.
 
@@ -137,70 +145,106 @@ secret and `elementsOptions.appearance` (the site colours and font).
 ### 4. Confirmation (`confirmBookingPayment`)
 
 Shared by `bookings.confirmCheckout` (return page), the webhook, the hold
-cleanup cron and the priority rule; idempotent across all:
+cleanup cron, the payment recovery cron and the priority rule; idempotent
+across all and safe to re-run after a crash at any step. **It decides from the
+PaymentIntent status, never from the session's `payment_status`.**
 
-1. Returns early if the booking is already `confirmed` with the same session
-   (`already_confirmed`), or cancelled with reason `dates_unavailable` for this
-   session (`refunded_conflict`). Any other non-pending state is `BAD_REQUEST`.
+1. Fast path: the booking is `confirmed` with this session, no longer
+   `authorized`, and its `payment_transactions` row exists ->
+   `already_confirmed` without calling Stripe (return-page refreshes).
 2. Retrieves the session from Stripe with `expand: ['payment_intent',
-   'payment_intent.payment_method']` (payloads are not trusted) and checks
-   `metadata.bookingId`, `client_reference_id`, `amount_total`, `currency` and
-   `mode`. Any mismatch is `BAD_REQUEST`. A session that is not `complete` is
-   `BAD_REQUEST`; a complete but `unpaid` session (a delayed payment method)
-   sets `paymentStatus: 'processing'` and returns `processing`.
-3. Confirms with one guarded `UPDATE`: `status = 'pending'` plus
-   `noOverlapForBookingRow(now)` (no other confirmed booking, earlier live or
-   processing hold, imported event or admin block overlaps). On success it
-   sets `confirmed` / `paid`, stores the session, PaymentIntent and customer
-   ids, inserts a `payment_transactions` row (session, PaymentIntent, **charge
-   id** from `latest_charge`, payment method type) and sends the confirmation
-   emails in the background.
-4. If nothing was updated, it reloads the row: another caller confirmed it
-   (`already_confirmed`), or the dates were taken (automatic refund below).
+   'payment_intent.payment_method']` (payloads are not trusted). A session
+   that is not `complete`, or a PaymentIntent that is not `requires_capture`,
+   `succeeded` or `canceled`, is `BAD_REQUEST` ("Payment has not completed").
+   It checks `metadata.bookingId`, `client_reference_id`, `amount_total`,
+   `currency` and `mode`; a mismatch releases the authorization (`released`).
+3. **Claim**: one guarded `UPDATE` (`status = 'pending'` plus
+   `noOverlapForBookingRow(now)`: no other confirmed booking, earlier live or
+   legacy processing hold, imported event or admin block overlaps) sets
+   `confirmed` / `authorized` and stores the session, PaymentIntent and
+   customer ids.
+4. **Capture**: `paymentIntents.capture`, idempotency key
+   `capture/<bookingId>/<intentId>` (a retry finds it captured). Transient
+   Stripe errors (API, connection, rate limit) throw: the webhook answers 500
+   and Stripe retries.
+5. **Record**: `paymentStatus: 'paid'`, a `payment_transactions` row
+   (session, PaymentIntent, **charge id** from `latest_charge`, payment method
+   type; `onConflictDoNothing`) and the confirmation emails in the background
+   (deduped in `sent_emails`). This runs again on every retry, so a
+   confirmation cut short after the capture still gets its row and emails.
+
+Outcomes: `confirmed` (this call claimed the dates), `already_confirmed`,
+`released`, `payment_failed` (below).
 
 The same-day cutoff is **not** re-checked: a hold created in time stays payable
 until it expires (plan 02, B3).
 
-### Automatic refund on conflict (`refundUnavailableBooking`)
+### Releasing an authorization (no charge, no refund)
 
-When the guest paid but the dates were taken before confirmation:
+When the session can't confirm its booking, the authorization is cancelled
+(`paymentIntents.cancel`, `cancellation_reason: 'abandoned'`;
+`releaseAuthorization`). Nothing was charged, so there is nothing to refund.
+Each release adds a `payment_released` inbox item (dedupe
+`payment_released:<intentId>`, see `ADMIN_INBOX.md`) and returns `released`.
 
-- Full refund of the session's PaymentIntent, metadata
-  `stripeBookingMetadata()` + `reason: 'dates_unavailable'`, idempotency key
-  `refund-unavailable/<bookingId>`; recorded in `payment_refunds` (source
-  `app`).
-- Booking set to `cancelled` / `refunded`, `cancelledBy: 'system'`,
-  `cancellationReason: 'dates_unavailable'`.
-- Cancellation emails to guest and admins, an admin alert and a `refund_auto`
-  inbox item.
-- `bookings.confirmCheckout` returns `refunded_conflict`; the confirmation page
-  shows the cancelled booking with a toast. The webhook acknowledges with 200.
+| Case | What else happens |
+|---|---|
+| Dates taken before the claim (iCal import, block, earlier hold) | `settleUnconfirmable`: booking `cancelled`, `cancelledBy: 'system'`, `cancellationReason: 'dates_unavailable'`, `refundAmount: 0`, `paymentStatus` stays `pending`; cancellation emails to guest ("not charged") and admins, plus an admin alert (`released-alert/<bookingId>`) |
+| Booking cancelled, or already paid with another session | Release only |
+| Session does not match the booking | Release only |
+| Booking deleted (webhook, session with `metadata.source: 'irishette'`) | `releaseSessionAuthorization` from the webhook |
+| Any other permanent `TRPCError` in the webhook | `releaseSessionAuthorization` from the webhook |
 
-### Delayed payment methods
+A release that hits a transient Stripe error throws (500, Stripe retries).
 
-A completed but unpaid session (`checkout.session.completed` with
-`payment_status: 'unpaid'`) marks the hold `paymentStatus: 'processing'`. It
-keeps its dates past `expiresAt` (`holdsDatesCondition`), and the cleanup cron
-and `checkout.session.expired` skip it. Then:
+**Capture refused for good / authorization lapsed** (PaymentIntent `canceled`,
+or Stripe refuses the capture): `failAuthorizedBooking` cancels the booking as
+`payment_failed` (`paymentStatus: 'pending'`, refund 0, dates freed),
+releases the authorization if it is still open, emails the guest "Payment not
+completed" (not charged) and adds a `payment_released` inbox item. The outcome
+is `payment_failed`. Uncaptured PaymentIntents are cancelled by Stripe 7 days
+after creation; the recovery cron captures long before that.
 
-- `checkout.session.async_payment_succeeded` confirms it;
-- `checkout.session.async_payment_failed` cancels it
-  (`cancellationReason: 'payment_failed'`) and emails the guest.
+The confirmation page shows a toast for `released` / `payment_failed`, and a
+"not confirmed, your card was not charged" banner for a cancelled booking
+whose `paymentStatus` is still `pending`.
+
+`processing` stays in the payment status enum, and its read-side guards
+(availability, hold release, cancel) stay for legacy rows; nothing sets it any
+more.
 
 ### Expired holds (cron)
 
 `scheduledBookingCleanup()` (`5 8 * * *`, `src/lib/server/scheduled-tasks.ts`)
-releases pending holds past `expiresAt` that are not processing
-(`releaseExpiredHold()` → `closeHoldSession()`):
+releases pending holds past `expiresAt` (legacy `processing` holds are
+skipped) (`releaseExpiredHold()` → `closeHoldSession()`):
 
 | Session state | Action |
 |---|---|
 | No session | Delete the hold |
 | `open` | Expire the session, delete the hold |
 | `expired` / unknown to Stripe | Delete the hold |
-| `complete` (paid) | `confirmBookingPayment()` (kept if that fails) |
-| `complete` (unpaid) | Mark processing, keep |
+| `complete` | `confirmBookingPayment()`: kept if confirmed (or if that fails); otherwise the authorization was released and the hold is deleted |
 | Stripe unreachable | Keep, retry next run |
+
+### Payment recovery (cron)
+
+`scheduledPaymentRecovery()` runs in the `*/30` trigger, before the iCal sync.
+It retries payment work a stopped Worker left half done, for bookings not
+updated for `PAYMENT_RECOVERY_AFTER_MINUTES` (15):
+
+- `confirmed` + `authorized`: `confirmBookingPayment()` again (capture, or
+  release / `payment_failed`);
+- `cancelled` + `refund_pending`: `retryCancellationRefund()` (below);
+- `pending` holds with a session (live, or expired less than a day ago):
+  `settlePaidHold()` retrieves the session and, if the guest completed it
+  but nothing confirmed it (webhook failing, tab closed before the return
+  page), runs `confirmBookingPayment()`. An open session is left alone.
+  So a paid booking is confirmed and captured within about 45 minutes even
+  if the webhook and the return page both fail; older ones are settled by
+  the daily hold cleanup.
+
+Each booking is isolated: a failure is logged and retried on the next run.
 
 ## Cancellations and refunds
 
@@ -216,14 +260,19 @@ releases pending holds past `expiresAt` that are not processing
   policy the booking was made under (`quoteBookingCancellation()`): the tier
   percent of the booking total, capped at what is still paid after earlier
   (e.g. Dashboard) refunds. **The cancellation is saved first** (guarded
-  update to `cancelled`, `paymentStatus: 'refund_pending'`, the applied tier),
-  **then** the refund is created (`stripeBookingMetadata()` +
-  `reason: 'cancellation'`, idempotency key
+  update to `cancelled`, `paymentStatus: 'refund_pending'`, the applied tier
+  and `pendingRefundAmount`), **then** the refund is created
+  (`stripeBookingMetadata()` + `reason: 'cancellation'`, idempotency key
   `refund-cancel/<bookingId>/<amountCents>`, recorded in `payment_refunds` as
   source `app`, so the refund webhooks send no second email), then the result
-  is stored (`refunded` / `partially_refunded`). A Stripe failure leaves the
-  booking cancelled with `refund_failed` and alerts the admins (email +
-  `refund_failed` notification). A refund amount that differs from the one the
+  is stored (`refunded` / `partially_refunded`, `pendingRefundAmount` cleared).
+  Only a **permanent** Stripe refusal leaves the booking with `refund_failed`
+  and alerts the admins (email + `refund_failed` notification). A transient
+  Stripe error, or a database error after the refund exists, leaves
+  `refund_pending`: the payment recovery cron calls `retryCancellationRefund()`,
+  which first lists the PaymentIntent's refunds for an existing cancellation
+  refund (Stripe idempotency keys last 24 hours) and creates one with the saved
+  `pendingRefundAmount` only if none exists. A refund amount that differs from the
   dialog showed (`expectedRefundAmount`) is `CONFLICT` before anything
   changes. See `BOOKING_ARCHITECTURE.md` for the windows (4:00 PM CT,
   wall-clock cutoffs).
@@ -236,8 +285,9 @@ releases pending holds past `expiresAt` that are not processing
 
 ## Refunds made in the Stripe Dashboard
 
-`handleRefundEvent()` (`src/lib/booking/refund-service.ts`) upserts every refund into
-`payment_refunds` and compares the stored status:
+`handleRefundEvent()` (`src/lib/booking/refund-service.ts`) compares the stored
+`payment_refunds` status, runs the effects below, and upserts the refund
+**last**, so an effect that fails (500) is redone on Stripe's retry:
 
 - **App refunds** (`metadata.source === 'irishette'`): status sync only. A
   failure sets `paymentStatus: 'refund_failed'` and alerts the admins.
@@ -302,8 +352,10 @@ body. The handled events (`dispatch()`) and the Dashboard list are in
 Responses and retries:
 
 - 200 when handled or ignored. `TRPCError`s other than `INTERNAL_SERVER_ERROR`
-  from confirmation (verification failures) are logged and acknowledged.
-- 500 for other errors (database, Stripe API), so Stripe retries.
+  from confirmation (permanent failures) are logged, the session's
+  authorization is released, and the event is acknowledged.
+- 500 for other errors (database, transient Stripe API errors during capture
+  or release), so Stripe retries.
 - Idempotency comes from guarded updates, unique ids
   (`payment_transactions.stripe_payment_intent_id`,
   `payment_refunds.stripe_refund_id`, `payment_disputes.stripe_dispute_id`,
@@ -327,10 +379,10 @@ requests, price breakdown); cancellation, refund and payment-failed emails use
 | Function | Trigger | Recipients | Dedupe key (`sent_emails`, one claim per message: `<key>#<index>`) |
 |---|---|---|---|
 | `sendBookingConfirmedEmails` | Booking confirmed | Guest + admins | `booking-confirmed/<bookingId>` |
-| `sendCancellationEmails` | Cancellation or automatic refund | Guest + admins | `booking-cancelled/<bookingId>` |
+| `sendCancellationEmails` | Cancellation, or dates taken before the claim (authorization released, not charged) | Guest + admins | `booking-cancelled/<bookingId>` |
 | `sendRefundEmails` | Dashboard refund (new, succeeded, trace reference) | Guest + admins | `refund/<refundId>/<status>[/ref]` |
-| `sendPaymentFailedEmail` | `checkout.session.async_payment_failed` | Guest | `payment-failed/<bookingId>` |
-| `sendAdminAlert` | Automatic refund / refund failed | Admins | Throttled: one per alert per hour, keyed `alert:<key or subject>@<hour>` (`auto-refund-alert/<bookingId>` / `refund-failed/<refundId>`) |
+| `sendPaymentFailedEmail` | Authorization could not be captured (`failAuthorizedBooking`; says the guest was not charged) | Guest | `payment-failed/<bookingId>` |
+| `sendAdminAlert` | Payment released (dates taken) / refund failed | Admins | Throttled: one per alert per hour, keyed `alert:<key or subject>@<hour>` (`released-alert/<bookingId>` / `refund-failed/<refundId>`) |
 | `sendBookingConfirmationEmail` | `bookings.resendConfirmationEmail` | Guest | None (intentional resend) |
 
 Guest copy says refunds take 5-10 business days (Stripe).
@@ -350,12 +402,13 @@ Declared in `.env.schema`, bound in `cloudflare.config.ts`.
 
 | File | Covers |
 |---|---|
-| `test/workers/checkout.test.ts` | Session parameters (line items = total, metadata, no saved cards, no `payment_method_types`, `expires_at` = hold expiry, idempotency key), reuse, expire-and-recreate, already-paid session; `confirmCheckout` verification; confirmation ids and transaction; processing holds keep their dates; automatic refund (tRPC and webhook, once); one confirmation email across return page + webhook + repeat; the priority rule |
-| `test/workers/stripe-webhook.test.ts` | Signatures (400, nothing echoed), 404 for other paths; `checkout.session.completed` (confirm once, unpaid → processing, unknown session, no addresses in logs); async success/failure; `checkout.session.expired`; `charge.refunded`; Dashboard full/partial refunds (cancel, emails, inbox, replays, trace reference); app refunds; `refund.failed`; disputes (store, link, inbox, no email, replay, out of order, closed, unlinked, fallback link, guest/admin cancel guards) |
-| `test/workers/bookings.test.ts` | Holds, pricing, cancellation refunds by policy and their metadata, cancelling a hold expires its session, processing holds can't be cancelled |
-| `test/workers/scheduled.test.ts` | Expired hold cleanup: paid session confirmed, open session expired, processing kept |
+| `test/workers/checkout.test.ts` | Session parameters (line items = total, metadata, no saved cards, `capture_method: 'manual'`, `allowed_payment_method_types` card + link, no `payment_method_types`, `expires_at` = hold expiry, idempotency key), reuse, expire-and-recreate, already-paid session; `confirmCheckout` verification; claim then capture then record; dates taken -> authorization released (no refund, tRPC and webhook, once); return page + webhook + repeat capture once and send one confirmation; transient capture error retried; lapsed authorization -> `payment_failed`; a confirmation cut short after the capture completed by the retry; the priority rule |
+| `test/workers/stripe-webhook.test.ts` | Signatures (400, nothing echoed), 404 for other paths; `checkout.session.completed` (confirm once, decided from the PaymentIntent not `payment_status`, unknown session, no addresses in logs); releases (booking cancelled while paying, deleted hold, second payment for a paid booking); `async_payment_*` acknowledged and ignored; `checkout.session.expired`; `charge.refunded`; Dashboard full/partial refunds (cancel, emails, inbox, replays, replay after a failure redoes the work, trace reference); app refunds; `refund.failed`; disputes (store, link, inbox, no email, replay, out of order, closed, unlinked, fallback link, guest/admin cancel guards) |
+| `test/workers/payment-recovery.test.ts` | Recovery cron: captures a booking left `authorized` (after the grace period only); stuck `refund_pending` created once by the cron, an existing refund found and recorded (not created again), a permanent refusal is `refund_failed` and not retried |
+| `test/workers/bookings.test.ts` | Holds, pricing, cancellation refunds by policy and their metadata, cancelling a hold expires its session, legacy processing holds can't be cancelled |
+| `test/workers/scheduled.test.ts` | Expired hold cleanup: paid session confirmed, open session expired, legacy processing kept |
 | `test/unit/stripe-metadata.test.ts` | `stripeBookingMetadata` keys and no personal data; `checkoutLineItems` totals |
-| `test/workers/mocks.ts` | msw: `mockStripeCheckout` (stateful sessions: create / retrieve with expand / expire, `complete()`), `mockStripeCharges`, `mockStripeRefunds`; `mockEmail` (stub for the `EMAIL` binding) |
+| `test/workers/mocks.ts` | msw: `mockStripeCheckout` (stateful sessions: create / retrieve with expand / expire, `complete()` leaves the PaymentIntent `requires_capture`; PaymentIntent capture / cancel with `failCapture('transient' \| 'permanent')`), `mockStripeCharges`, `mockStripeRefunds`, `mockStripeRefundsStateful`, `mockStripeRefundsFailing`; `mockEmail` (stub for the `EMAIL` binding) |
 | `e2e/booking.spec.ts` | Full booking with test card `4242 4242 4242 4242` against the sandbox (`E2E_STRIPE=1`) |
 
 The Workers tests use fake keys from `vitest.config.ts` (webhook secret

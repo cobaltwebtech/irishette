@@ -611,7 +611,7 @@ export function sendPaymentFailedEmail(
 					heading: 'Your payment did not go through',
 					paragraphs: [
 						`Hi ${booking.guestName},`,
-						'Your bank reported that the payment for this booking failed, so we could not confirm your stay and the dates were released. You have not been charged.',
+						'The payment for this booking could not be completed, so we could not confirm your stay and the dates were released. You have not been charged: any authorization hold on your card is released by your bank.',
 						'You are welcome to book again with another payment method.',
 					],
 					booking: emailBookingDetails(booking, room),

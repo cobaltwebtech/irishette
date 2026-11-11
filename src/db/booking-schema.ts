@@ -101,6 +101,10 @@ export const bookings = sqliteTable(
 		// guest_request, admin, dates_unavailable, payment_failed, ...
 		cancellationReason: text('cancellation_reason'),
 		refundAmount: real('refund_amount'), // dollars refunded (0 if none)
+		// Dollars of a cancellation refund not yet created in Stripe (set with
+		// refund_pending, cleared when the refund exists or failed). The
+		// payment recovery cron retries it with this exact amount.
+		pendingRefundAmount: real('pending_refund_amount'),
 		// The cancellation tier applied when the booking was cancelled.
 		cancellationRefundPercent: integer('cancellation_refund_percent'),
 		cancellationCutoffAt: integer('cancellation_cutoff_at', {

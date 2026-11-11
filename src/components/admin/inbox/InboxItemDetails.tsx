@@ -171,6 +171,43 @@ function RefundAutoView({
 	);
 }
 
+function PaymentReleasedView({
+	details: d,
+}: {
+	details: InboxDetailsByKind['payment_released'];
+}) {
+	return (
+		<div className="space-y-4">
+			<DetailList
+				rows={[
+					d.confirmationId
+						? { label: 'Confirmation', value: d.confirmationId }
+						: { label: 'Booking', value: 'Not found' },
+					d.roomName ? { label: 'Room', value: d.roomName } : null,
+					d.checkInDate && d.checkOutDate
+						? {
+								label: 'Dates',
+								value: `${d.checkInDate} to ${d.checkOutDate}`,
+							}
+						: null,
+					{ label: 'Authorized', value: currency(d.amount) },
+					{ label: 'Reason', value: d.reason },
+					{ label: 'Checkout Session', value: d.sessionId },
+				]}
+			/>
+			<p className="text-sm text-muted-foreground">
+				The card was authorized but never charged: the authorization was
+				cancelled, so the guest's bank releases the hold. No refund is needed.
+			</p>
+			<Actions>
+				<ExternalLink href={stripePaymentUrl(d.paymentIntentId, d.livemode)}>
+					Open payment in Stripe
+				</ExternalLink>
+			</Actions>
+		</div>
+	);
+}
+
 function RefundFailedView({
 	details: d,
 }: {
@@ -364,6 +401,7 @@ function ConflictView({
 const VIEWS: KindViews = {
 	contact_form: ContactFormView,
 	refund_auto: RefundAutoView,
+	payment_released: PaymentReleasedView,
 	refund_failed: RefundFailedView,
 	refund_issued: RefundIssuedView,
 	payment_dispute: PaymentDisputeView,

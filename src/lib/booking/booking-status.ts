@@ -12,7 +12,10 @@ export const bookingStatusSchema = z.enum(bookingStatuses);
  * Payment status of a booking (and of its payment_transactions row).
  * - pending: not paid yet (a hold; a failed payment leaves it pending until
  *   the hold expires)
- * - processing: a delayed payment method (bank debit) is pending
+ * - processing: legacy (delayed bank payments are no longer offered); kept so
+ *   old rows still read and keep their dates
+ * - authorized: confirmed and the card is authorized; the capture is
+ *   pending (plan 05). Never shown to guests as paid.
  * - paid, partially_refunded, refunded
  * - refund_pending: cancelled, refund being created
  * - refund_failed: the refund failed (the booking stays cancelled; admins
@@ -21,6 +24,7 @@ export const bookingStatusSchema = z.enum(bookingStatuses);
 export const paymentStatuses = [
 	'pending',
 	'processing',
+	'authorized',
 	'paid',
 	'partially_refunded',
 	'refunded',

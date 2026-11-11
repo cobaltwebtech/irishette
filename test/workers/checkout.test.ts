@@ -26,11 +26,12 @@ import {
 import { mockEmail, mockStripeCheckout, mockStripeRefunds } from './mocks';
 import { ADMIN, OTHER_GUEST } from './seed';
 
-// Checkout Sessions (plan 02, 3.1-3.3): one session per hold, built from our
-// pricing and linked to the booking; confirmation ties the session to the
-// booking, re-checks availability atomically, refunds automatically if the
-// dates were taken meanwhile, and is idempotent across the return page and
-// the webhook.
+// Checkout Sessions (plan 02, 3.1-3.3; plan 05): one session per hold, built
+// from our pricing and linked to the booking. The card is only authorized at
+// checkout; confirmation ties the session to the booking, claims the dates
+// atomically, then captures. If the booking can't be confirmed the
+// authorization is cancelled (never a refund). Idempotent across the return
+// page, the webhook and the recovery cron.
 
 const guest = () => caller('user');
 const stripe = createStripe('sk_test_x');
@@ -60,10 +61,9 @@ async function row(id: string) {
 	return r;
 }
 
-/** A pending booking with an open session, paid ('paid') or processing. */
+/** A pending booking whose session the guest paid: the card is authorized. */
 async function paidBooking(
 	checkout: ReturnType<typeof mockStripeCheckout>,
-	paymentStatus: 'paid' | 'unpaid' = 'paid',
 	overrides: Parameters<typeof insertBooking>[0] = {},
 ) {
 	const booking = await pendingBooking(overrides);
@@ -71,14 +71,21 @@ async function paidBooking(
 		id: `cs_test_${booking.publicId}`,
 		amount_total: Math.round(booking.totalAmount * 100),
 		client_reference_id: booking.id,
-		metadata: { bookingId: booking.id },
+		metadata: { bookingId: booking.id, source: 'irishette' },
 	});
 	await db()
 		.update(bookings)
 		.set({ stripeSessionId: session.id })
 		.where(eq(bookings.id, booking.id));
-	checkout.complete(session.id, paymentStatus);
+	checkout.complete(session.id);
 	return { booking, session };
+}
+
+async function paymentRows(bookingId: string) {
+	return db()
+		.select()
+		.from(paymentTransactions)
+		.where(eq(paymentTransactions.bookingId, bookingId));
 }
 
 async function webhook(type: string, object: object, id = `evt_${Date.now()}`) {
@@ -137,11 +144,16 @@ describe('createCheckoutSession', () => {
 		expect(body.get('payment_intent_data[description]')).toBe(
 			`Irishette booking ${booking.confirmationId}`,
 		);
-		// No saved cards; dynamic payment methods.
+		// No saved cards. Authorize only (capture after confirmation), and
+		// only methods that can be captured later without an upfront charge.
 		expect(body.get('saved_payment_method_options[payment_method_save]')).toBe(
 			'disabled',
 		);
 		expect(body.has('payment_intent_data[setup_future_usage]')).toBe(false);
+		expect(body.get('payment_intent_data[capture_method]')).toBe('manual');
+		expect(body.getAll('allowed_payment_method_types[0]')).toEqual(['card']);
+		expect(body.getAll('allowed_payment_method_types[1]')).toEqual(['link']);
+		expect(body.has('allowed_payment_method_types[2]')).toBe(false);
 		expect(
 			[...body.keys()].some((k) => k.startsWith('payment_method_types')),
 		).toBe(false);
@@ -208,6 +220,7 @@ describe('createCheckoutSession', () => {
 		expect(result.status).toBe('complete');
 		expect((await row(booking.id)).status).toBe('confirmed');
 		expect(checkout.created).toHaveLength(0);
+		expect(checkout.captures).toHaveLength(1);
 		await settle();
 	});
 
@@ -247,26 +260,29 @@ describe('confirmCheckout verification', () => {
 		['amount', { amount_total: 1 }],
 		['currency', { currency: 'eur' }],
 	] as const)(
-		'rejects a session with a mismatched %s',
+		'releases (never captures) a session with a mismatched %s',
 		async (label, patch) => {
 			const checkout = mockStripeCheckout();
 			mockEmail();
 			const { booking, session } = await paidBooking(checkout);
 			Object.assign(checkout.sessions.get(session.id) ?? {}, patch);
-			const error = await trpcError(
-				guest().bookings.confirmCheckout({
-					publicId: booking.publicId,
-					sessionId: session.id,
-				}),
-			);
-			expect(error.code, label).toBe('BAD_REQUEST');
+			const result = await guest().bookings.confirmCheckout({
+				publicId: booking.publicId,
+				sessionId: session.id,
+			});
+			expect(result.status, label).toBe('released');
+			expect(checkout.captures).toHaveLength(0);
+			expect(checkout.cancels.map((c) => c.intent)).toEqual([
+				`pi_${session.id}`,
+			]);
 			expect((await row(booking.id)).status).toBe('pending');
+			await settle();
 		},
 	);
 });
 
 describe('confirmation', () => {
-	it('confirms, stores the payment ids and records the transaction', async () => {
+	it('claims the dates, then captures, then records the transaction', async () => {
 		const checkout = mockStripeCheckout();
 		const sent = mockEmail();
 		const { booking, session } = await paidBooking(checkout);
@@ -275,6 +291,12 @@ describe('confirmation', () => {
 			sessionId: session.id,
 		});
 		expect(result.status).toBe('confirmed');
+		expect(checkout.captures).toEqual([
+			{
+				intent: `pi_${session.id}`,
+				idempotencyKey: `capture/${booking.id}/pi_${session.id}`,
+			},
+		]);
 		const after = await row(booking.id);
 		expect(after).toMatchObject({
 			status: 'confirmed',
@@ -282,10 +304,7 @@ describe('confirmation', () => {
 			stripeSessionId: session.id,
 			stripePaymentIntentId: `pi_${session.id}`,
 		});
-		const [tx] = await db()
-			.select()
-			.from(paymentTransactions)
-			.where(eq(paymentTransactions.bookingId, booking.id));
+		const [tx] = await paymentRows(booking.id);
 		expect(tx).toMatchObject({
 			stripeCheckoutSessionId: session.id,
 			stripePaymentIntentId: `pi_${session.id}`,
@@ -299,39 +318,8 @@ describe('confirmation', () => {
 		).toHaveLength(2); // guest confirmation + admin notification
 	});
 
-	it('a completed but unpaid session (delayed method) keeps the dates as processing', async () => {
-		const checkout = mockStripeCheckout();
-		const { booking, session } = await paidBooking(checkout, 'unpaid', {
-			// The hold expires while the bank payment is pending.
-			expiresAt: new Date(Date.now() - 60_000),
-		});
-		const result = await guest().bookings.confirmCheckout({
-			publicId: booking.publicId,
-			sessionId: session.id,
-		});
-		expect(result.status).toBe('processing');
-		expect((await row(booking.id)).paymentStatus).toBe('processing');
-
-		// Another guest can't hold the dates while the payment is processing.
-		const error = await trpcError(
-			caller('other').bookings.createBooking(
-				bookingInput({
-					checkInDate: booking.checkInDate,
-					checkOutDate: booking.checkOutDate,
-				}),
-			),
-		);
-		expect(error.code).toBe('CONFLICT');
-
-		// The cleanup cron and checkout.session.expired skip it.
-		expect(
-			(await webhook('checkout.session.expired', { id: session.id })).status,
-		).toBe(200);
-		expect(await row(booking.id)).toBeDefined();
-	});
-
 	it(
-		'refunds automatically when the dates were taken meanwhile',
+		'releases the authorization (no refund, no charge) when the dates were taken meanwhile',
 		{ timeout: 20_000 },
 		async () => {
 			const checkout = mockStripeCheckout();
@@ -350,33 +338,43 @@ describe('confirmation', () => {
 				publicId: booking.publicId,
 				sessionId: session.id,
 			});
-			expect(result.status).toBe('refunded_conflict');
-			expect(refunds).toHaveLength(1);
-			expect(refunds[0].body.get('payment_intent')).toBe(`pi_${session.id}`);
-			expect(refunds[0].body.get('metadata[bookingId]')).toBe(booking.id);
-			expect(refunds[0].body.get('metadata[source]')).toBe('irishette');
+			expect(result.status).toBe('released');
+			expect(checkout.captures).toHaveLength(0);
+			expect(refunds).toHaveLength(0);
+			expect(checkout.cancels).toEqual([
+				{ intent: `pi_${session.id}`, reason: 'abandoned' },
+			]);
+			expect(checkout.sessions.get(session.id)?.intent_status).toBe('canceled');
 			const after = await row(booking.id);
-			expect(after.status).toBe('cancelled');
-			expect(after.paymentStatus).toBe('refunded');
-			const [refundRow] = await db()
-				.select()
-				.from(paymentRefunds)
-				.where(eq(paymentRefunds.bookingId, booking.id));
-			expect(refundRow.source).toBe('app');
+			expect(after).toMatchObject({
+				status: 'cancelled',
+				paymentStatus: 'pending',
+				cancellationReason: 'dates_unavailable',
+				refundAmount: 0,
+			});
+			expect(await paymentRows(booking.id)).toHaveLength(0);
+			expect(
+				await db()
+					.select()
+					.from(paymentRefunds)
+					.where(eq(paymentRefunds.bookingId, booking.id)),
+			).toHaveLength(0);
 			await settle();
 			expect(sent.some((e) => e.to.includes(ADMIN.email))).toBe(true);
-			expect(sent.some((e) => e.to.includes(booking.guestEmail))).toBe(true);
-			const [item] = (await inboxItemsOfKind('refund_auto')).filter(
+			const guestMail = sent.filter((e) => e.to.includes(booking.guestEmail));
+			expect(guestMail).toHaveLength(1);
+			expect(guestMail[0].text).toContain('not charged');
+			const [item] = (await inboxItemsOfKind('payment_released')).filter(
 				(i) => i.bookingId === booking.id,
 			);
 			expect(item).toMatchObject({
 				source: 'system',
-				dedupeKey: `refund_auto:${booking.id}`,
+				dedupeKey: `payment_released:pi_${session.id}`,
 			});
 		},
 	);
 
-	it('the webhook path refunds too, once, and returns 200', async () => {
+	it('the webhook path releases too, once, and returns 200', async () => {
 		const checkout = mockStripeCheckout();
 		const refunds = mockStripeRefunds();
 		mockEmail();
@@ -394,14 +392,16 @@ describe('confirmation', () => {
 		expect(
 			(await webhook('checkout.session.completed', object, 'evt_t1')).status,
 		).toBe(200);
-		expect(refunds).toHaveLength(1);
+		expect(checkout.cancels).toHaveLength(1);
+		expect(refunds).toHaveLength(0);
 		expect((await row(booking.id)).cancellationReason).toBe(
 			'dates_unavailable',
 		);
+		await settle();
 	});
 
 	it(
-		'return page, webhook and a repeated confirm send one confirmation',
+		'return page, webhook and a repeated confirm capture once and send one confirmation',
 		{ timeout: 30_000 },
 		async () => {
 			const checkout = mockStripeCheckout();
@@ -415,6 +415,7 @@ describe('confirmation', () => {
 			expect(again.status).toBe('already_confirmed');
 
 			await settle();
+			expect(checkout.captures).toHaveLength(1);
 			expect((await row(booking.id)).status).toBe('confirmed');
 			expect(
 				sent.filter((e) => e.to.includes(booking.guestEmail)),
@@ -422,6 +423,90 @@ describe('confirmation', () => {
 			expect(sent.filter((e) => e.to.includes(ADMIN.email))).toHaveLength(1);
 		},
 	);
+
+	it('a capture Stripe could not take is retried; nothing is charged meanwhile', async () => {
+		const checkout = mockStripeCheckout();
+		const sent = mockEmail();
+		const { booking, session } = await paidBooking(checkout);
+		checkout.failCapture('transient');
+		const object = checkout.object(session.id);
+		expect((await webhook('checkout.session.completed', object)).status).toBe(
+			500,
+		);
+		// The dates are claimed, the card only authorized.
+		expect(await row(booking.id)).toMatchObject({
+			status: 'confirmed',
+			paymentStatus: 'authorized',
+		});
+		expect(await paymentRows(booking.id)).toHaveLength(0);
+		await settle();
+		expect(sent).toHaveLength(0);
+
+		// Stripe retries the event.
+		checkout.failCapture(null);
+		expect((await webhook('checkout.session.completed', object)).status).toBe(
+			200,
+		);
+		expect(checkout.captures).toHaveLength(1);
+		expect((await row(booking.id)).paymentStatus).toBe('paid');
+		expect(await paymentRows(booking.id)).toHaveLength(1);
+		await settle();
+		expect(sent.filter((e) => e.to.includes(booking.guestEmail))).toHaveLength(
+			1,
+		);
+	});
+
+	it('an authorization that can no longer be captured cancels the booking, uncharged', async () => {
+		const checkout = mockStripeCheckout();
+		const sent = mockEmail();
+		const { booking, session } = await paidBooking(checkout);
+		checkout.failCapture('permanent');
+		const result = await guest().bookings.confirmCheckout({
+			publicId: booking.publicId,
+			sessionId: session.id,
+		});
+		expect(result.status).toBe('payment_failed');
+		expect(checkout.captures).toHaveLength(0);
+		expect(checkout.cancels).toHaveLength(1);
+		expect(await row(booking.id)).toMatchObject({
+			status: 'cancelled',
+			paymentStatus: 'pending',
+			cancellationReason: 'payment_failed',
+		});
+		await settle();
+		const guestMail = sent.filter((e) => e.to.includes(booking.guestEmail));
+		expect(guestMail).toHaveLength(1);
+		expect(guestMail[0].subject).toContain('Payment not completed');
+	});
+
+	it('a confirmation cut short after the capture is completed by the retry', async () => {
+		const checkout = mockStripeCheckout();
+		const sent = mockEmail();
+		const { booking, session } = await paidBooking(checkout);
+		// The Worker stopped right after the capture: confirmed, captured,
+		// but still marked authorized, with no payment row and no email.
+		checkout.complete(session.id, 'succeeded');
+		await db()
+			.update(bookings)
+			.set({
+				status: 'confirmed',
+				paymentStatus: 'authorized',
+				stripePaymentIntentId: `pi_${session.id}`,
+			})
+			.where(eq(bookings.id, booking.id));
+
+		expect(
+			(await webhook('checkout.session.completed', checkout.object(session.id)))
+				.status,
+		).toBe(200);
+		expect(checkout.captures).toHaveLength(0); // already captured
+		expect((await row(booking.id)).paymentStatus).toBe('paid');
+		expect(await paymentRows(booking.id)).toHaveLength(1);
+		await settle();
+		expect(sent.filter((e) => e.to.includes(booking.guestEmail))).toHaveLength(
+			1,
+		);
+	});
 });
 
 describe('first hold wins while it is live', () => {
@@ -451,7 +536,7 @@ describe('first hold wins while it is live', () => {
 	it('confirms an expired hold that was paid after all and refuses the new hold', async () => {
 		const checkout = mockStripeCheckout();
 		mockEmail();
-		const { booking: old } = await paidBooking(checkout, 'paid', {
+		const { booking: old } = await paidBooking(checkout, {
 			userId: OTHER_GUEST.id,
 			expiresAt: new Date(Date.now() - 60_000),
 		});

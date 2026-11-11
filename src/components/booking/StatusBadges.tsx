@@ -18,6 +18,7 @@ const BOOKING_VARIANTS: Record<BookingStatus, Variant> = {
 const PAYMENT_VARIANTS: Record<PaymentStatus, Variant> = {
 	pending: 'outline',
 	processing: 'secondary',
+	authorized: 'secondary',
 	paid: 'default',
 	partially_refunded: 'secondary',
 	refunded: 'secondary',

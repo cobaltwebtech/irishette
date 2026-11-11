@@ -251,9 +251,10 @@ export const bookingsRouter = createTRPCRouter({
 	/**
 	 * Fast path after checkout.confirm() or the return page
 	 * (?session_id=...): the same idempotent confirmation the webhook runs.
-	 * Returns 'confirmed' / 'already_confirmed', 'processing' (a delayed
-	 * payment method) or 'refunded_conflict' (the dates were taken meanwhile
-	 * and the payment was refunded in full).
+	 * Returns 'confirmed' / 'already_confirmed', 'released' (the booking
+	 * could not be confirmed, e.g. the dates were taken meanwhile; the card
+	 * authorization was cancelled, nothing charged) or 'payment_failed' (the
+	 * authorization could not be captured; nothing charged).
 	 */
 	confirmCheckout: protectedProcedure
 		.input(confirmCheckoutSchema)

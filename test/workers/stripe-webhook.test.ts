@@ -190,20 +190,24 @@ describe('checkout.session.completed', () => {
 		},
 	);
 
-	it('an unpaid completed session (delayed method) marks the hold processing', async () => {
+	it('decides from the PaymentIntent, not the session payment_status', async () => {
 		const checkout = mockStripeCheckout();
+		mockEmail();
 		const { booking, session } = await pendingBookingWithSession(checkout);
-		checkout.complete(session.id, 'unpaid');
+		checkout.complete(session.id); // authorized; payment_status 'unpaid'
+		expect(checkout.object(session.id).payment_status).toBe('unpaid');
 		await send(
 			event('checkout.session.completed', checkout.object(session.id)),
 		);
+		expect(checkout.captures).toHaveLength(1);
 		expect(await bookingStatus(booking.id)).toEqual({
-			status: 'pending',
-			paymentStatus: 'processing',
+			status: 'confirmed',
+			paymentStatus: 'paid',
 		});
+		await settle();
 	});
 
-	it('acknowledges a session with no matching booking', async () => {
+	it("acknowledges and leaves alone a session that isn't ours", async () => {
 		const checkout = mockStripeCheckout();
 		const session = checkout.add({ id: 'cs_test_unknown' });
 		checkout.complete(session.id);
@@ -211,6 +215,7 @@ describe('checkout.session.completed', () => {
 			event('checkout.session.completed', checkout.object(session.id)),
 		);
 		expect(response.status).toBe(200);
+		expect(checkout.cancels).toHaveLength(0);
 	});
 
 	it(
@@ -243,46 +248,103 @@ describe('checkout.session.completed', () => {
 	);
 });
 
-describe('delayed payments', () => {
-	it('async_payment_succeeded confirms a processing hold', async () => {
+// Plan 05: the guest is never charged without a booking. Every case the
+// webhook used to acknowledge with only a log line now cancels the card
+// authorization (nothing captured, no refund) and tells the admins.
+describe('payments that cannot confirm a booking are released', () => {
+	const released = async (bookingId: string | null) =>
+		(await inboxItemsOfKind('payment_released')).filter(
+			(i) => i.bookingId === bookingId,
+		);
+
+	it('a booking cancelled while the guest was paying', async () => {
+		const checkout = mockStripeCheckout();
+		const { booking, session } = await pendingBookingWithSession(checkout);
+		await db()
+			.update(bookings)
+			.set({ status: 'cancelled', cancelledBy: 'guest' })
+			.where(eq(bookings.id, booking.id));
+		checkout.complete(session.id);
+		const response = await send(
+			event('checkout.session.completed', checkout.object(session.id)),
+		);
+		expect(response.status).toBe(200);
+		expect(checkout.captures).toHaveLength(0);
+		expect(checkout.cancels.map((c) => c.intent)).toEqual([`pi_${session.id}`]);
+		expect((await bookingStatus(booking.id)).status).toBe('cancelled');
+		await settle();
+		expect(await released(booking.id)).toHaveLength(1);
+	});
+
+	it('a hold that was deleted (session created by this app)', async () => {
+		const checkout = mockStripeCheckout();
+		const { booking, session } = await pendingBookingWithSession(checkout);
+		await db().delete(bookings).where(eq(bookings.id, booking.id));
+		checkout.complete(session.id);
+		const response = await send(
+			event('checkout.session.completed', checkout.object(session.id)),
+		);
+		expect(response.status).toBe(200);
+		expect(checkout.captures).toHaveLength(0);
+		expect(checkout.cancels).toHaveLength(1);
+		await settle();
+		const [item] = (await inboxItemsOfKind('payment_released')).filter(
+			(i) => i.dedupeKey === `payment_released:pi_${session.id}`,
+		);
+		expect(item.details).toMatchObject({
+			confirmationId: null,
+			reason: 'The booking no longer exists',
+		});
+	});
+
+	it('a second payment for a booking already paid with another session', async () => {
 		const checkout = mockStripeCheckout();
 		mockEmail();
-		const { booking, session } = await pendingBookingWithSession(checkout, {
-			paymentStatus: 'processing',
-			expiresAt: new Date(Date.now() - 60_000),
-		});
-		checkout.complete(session.id, 'paid');
+		const { booking, session } = await pendingBookingWithSession(checkout);
+		checkout.complete(session.id);
 		await send(
-			event(
-				'checkout.session.async_payment_succeeded',
-				checkout.object(session.id),
-			),
+			event('checkout.session.completed', checkout.object(session.id)),
 		);
-		await settle();
 		expect(await bookingStatus(booking.id)).toEqual({
 			status: 'confirmed',
 			paymentStatus: 'paid',
 		});
+
+		// The same guest paid an older session of the same booking too.
+		const second = checkout.add({
+			id: `cs_test_second${booking.publicId}`,
+			amount_total: Math.round(booking.totalAmount * 100),
+			client_reference_id: booking.id,
+			metadata: { bookingId: booking.id, source: 'irishette' },
+		});
+		checkout.complete(second.id);
+		const response = await send(
+			event('checkout.session.completed', checkout.object(second.id)),
+		);
+		expect(response.status).toBe(200);
+		expect(checkout.captures.map((c) => c.intent)).toEqual([
+			`pi_${session.id}`,
+		]);
+		expect(checkout.cancels.map((c) => c.intent)).toEqual([`pi_${second.id}`]);
+		await settle();
+		expect(await released(booking.id)).toHaveLength(1);
 	});
 
-	it('async_payment_failed releases the hold and emails the guest', async () => {
+	it('delayed-payment events are acknowledged and ignored', async () => {
 		const checkout = mockStripeCheckout();
-		const sent = mockEmail();
-		const { booking, session } = await pendingBookingWithSession(checkout, {
-			paymentStatus: 'processing',
+		const { booking, session } = await pendingBookingWithSession(checkout);
+		for (const type of [
+			'checkout.session.async_payment_succeeded',
+			'checkout.session.async_payment_failed',
+		]) {
+			expect(
+				(await send(event(type, checkout.object(session.id)))).status,
+			).toBe(200);
+		}
+		expect(await bookingStatus(booking.id)).toEqual({
+			status: 'pending',
+			paymentStatus: 'pending',
 		});
-		checkout.complete(session.id, 'unpaid');
-		await send(
-			event(
-				'checkout.session.async_payment_failed',
-				checkout.object(session.id),
-			),
-		);
-		await settle();
-		expect((await bookingStatus(booking.id)).status).toBe('cancelled');
-		const guestMail = sent.filter((e) => e.to.includes(booking.guestEmail));
-		expect(guestMail).toHaveLength(1);
-		expect(guestMail[0].subject).toContain('Payment not completed');
 	});
 });
 
@@ -357,6 +419,52 @@ function refundObject(
 }
 
 describe('refunds made in the Stripe Dashboard', () => {
+	it(
+		'a replay after a failure redoes the work (the status is stored last)',
+		{ timeout: 30_000 },
+		async () => {
+			mockEmail();
+			const booking = await paidBooking('pi_dash_replay');
+			const charges = mockStripeCharges({
+				id: 'ch_pi_dash_replay',
+				amount: 25000,
+				amount_refunded: 25000,
+				payment_intent: 'pi_dash_replay',
+			});
+			const refund = event(
+				'refund.created',
+				refundObject({
+					id: 're_dash_replay',
+					payment_intent: 'pi_dash_replay',
+				}),
+			);
+
+			// Stripe can't be reached while handling the event: 500, retried.
+			charges.setUnavailable(true);
+			expect((await send(refund)).status).toBe(500);
+			expect((await bookingStatus(booking.id)).status).toBe('confirmed');
+			const stored = await db()
+				.select()
+				.from(paymentRefunds)
+				.where(eq(paymentRefunds.stripeRefundId, 're_dash_replay'));
+			expect(stored).toHaveLength(0);
+
+			// Stripe's retry finds nothing done and does it all.
+			charges.setUnavailable(false);
+			expect((await send(refund)).status).toBe(200);
+			await settle();
+			expect(await bookingStatus(booking.id)).toEqual({
+				status: 'cancelled',
+				paymentStatus: 'refunded',
+			});
+			expect(
+				(await inboxItemsOfKind('refund_issued')).filter(
+					(i) => i.bookingId === booking.id,
+				),
+			).toHaveLength(1);
+		},
+	);
+
 	it(
 		'a full refund cancels the booking, emails guest and admins, and adds an inbox item',
 		{ timeout: 20_000 },

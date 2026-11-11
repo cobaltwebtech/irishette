@@ -58,9 +58,9 @@ export default defineConfig({
 		},
 		// Keep in sync with CRON_SCHEDULES handling in src/lib/server/scheduled-tasks.ts.
 		triggers: [
-			triggers.scheduled({ schedule: '*/30 * * * *' }), // iCal import sync
+			triggers.scheduled({ schedule: '*/30 * * * *' }), // payment recovery + iCal import sync
 			triggers.scheduled({ schedule: '5 8 * * *' }), // expired pending bookings cleanup (08:05 UTC)
-			triggers.scheduled({ schedule: '15 9 * * *' }), // iCal sync log cleanup (09:15 UTC)
+			triggers.scheduled({ schedule: '15 9 * * *' }), // iCal sync log + sent-email cleanup (09:15 UTC)
 		],
 		env: {
 			DB: bindings.d1({

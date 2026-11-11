@@ -10,11 +10,13 @@ in `cloudflare.config.ts` and the keys of `CRON_SCHEDULES` differ.
 
 | Cron (UTC) | Task | What it does |
 |---|---|---|
-| `*/30 * * * *` | `scheduledCalendarSync` | Imports all active iCal feeds in parallel (`Promise.allSettled`). See `ICAL_SYNC_README.md`. |
-| `5 8 * * *` | `scheduledBookingCleanup` | Deletes expired pending holds. An open Checkout Session is expired first; a hold whose session was paid is confirmed instead (or kept if that fails); holds with a delayed payment `processing` are skipped; if Stripe can't be reached the hold is kept until the next run. |
+| `*/30 * * * *` | `scheduledPaymentRecovery`, then `scheduledCalendarSync` | **Payment recovery** (plan 05): bookings not updated for `PAYMENT_RECOVERY_AFTER_MINUTES` (15) that are `confirmed` + `authorized` go through `confirmBookingPayment` again (capture, or release the authorization), `cancelled` + `refund_pending` go through `retryCancellationRefund` (finds an existing cancellation refund first, else creates it with `pending_refund_amount`), and `pending` holds with a Checkout Session (expired less than a day ago, or still live) go through `settlePaidHold`: a session the guest completed with no confirmation (webhook failing, tab closed) is confirmed and captured; an open session is left alone. Each booking is isolated; a failure is retried next run. Then imports all active iCal feeds in parallel (`Promise.allSettled`). See `STRIPE_PAYMENT_INTEGRATION.md` and `ICAL_SYNC_README.md`. |
+| `5 8 * * *` | `scheduledBookingCleanup` | Deletes expired pending holds. An open Checkout Session is expired first; a hold whose session was completed is settled by `confirmBookingPayment` instead (kept if it ends confirmed or that fails; deleted if the authorization was released); legacy holds with `paymentStatus: 'processing'` are skipped; if Stripe can't be reached the hold is kept until the next run. |
 | `15 9 * * *` | `scheduledIcalLogCleanup`, then `scheduledSentEmailCleanup` | Deletes iCal sync history (`ical_sync_log`, `ical_sync_changes`) older than 30 days, and email dedupe rows (`sent_emails`) older than 7 days. |
 
-Errors are logged with the cron string and rethrown, so failures show in
+The `*/30` and `15 9` tasks run through `runAll`: every task runs even if an
+earlier one fails, then the first error is rethrown. Errors are logged with
+the cron string and rethrown, so failures show in
 Workers observability (`pnpm tail`, or the dashboard). Feed errors are also
 stored on the feed (`ical_feeds.last_error`) and in the sync log.
 
@@ -36,4 +38,5 @@ With `pnpm dev` running, call the scheduled handler through the local
 scheduled endpoint (see the `workers-development` skill and
 `TESTING_CRON_JOBS_LOCALLY.md`), or run the tests, which call the handler with
 `createScheduledController({ cron })` (`test/workers/scheduled.test.ts`,
-`test/workers/ical-sync.test.ts`).
+`test/workers/ical-sync.test.ts`). `test/workers/payment-recovery.test.ts`
+calls `scheduledPaymentRecovery` directly.

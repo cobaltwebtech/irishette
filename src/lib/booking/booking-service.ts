@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { and, eq, getTableColumns, gt, lt, lte, ne } from 'drizzle-orm';
 import { customAlphabet } from 'nanoid';
+import type Stripe from 'stripe';
 
 import type { Database } from '@/db/drizzle-init';
 import {
@@ -17,7 +18,11 @@ import {
 import { createInboxItemInBackground } from '@/lib/inbox/inbox-service';
 import { inBackground, type ServiceDeps } from '@/lib/server/deps';
 import { formatTimeOfDay, SAME_DAY_CUTOFF_TIME } from '@/lib/site';
-import { stripeBookingMetadata, toCents } from '@/lib/stripe/stripe';
+import {
+	isPermanentStripeError,
+	stripeBookingMetadata,
+	toCents,
+} from '@/lib/stripe/stripe';
 import {
 	BOOKING_WINDOW_MONTHS,
 	daysBetween,
@@ -307,6 +312,38 @@ async function releaseExpiredHolds(
 	}
 }
 
+/**
+ * Before an admin block (plan 05): an expired hold overlapping it may have
+ * been paid after all, with no confirmation yet (webhook failing, tab
+ * closed). Settles those first, so a paid one is confirmed and the block is
+ * then refused instead of taking dates the guest paid for. Unpaid expired
+ * holds are left for the cleanup. Block dates are inclusive.
+ */
+export async function settleExpiredHoldsBeforeBlock(
+	deps: ServiceDeps,
+	block: { roomId: string; startDate: IsoDate; endDate: IsoDate },
+	now = new Date(),
+) {
+	const expired = await deps.db
+		.select({
+			id: bookings.id,
+			stripeSessionId: bookings.stripeSessionId,
+			paymentStatus: bookings.paymentStatus,
+		})
+		.from(bookings)
+		.where(
+			and(
+				eq(bookings.roomId, block.roomId),
+				eq(bookings.status, 'pending'),
+				lte(bookings.expiresAt, now),
+				ne(bookings.paymentStatus, 'processing'),
+				lte(bookings.checkInDate, block.endDate),
+				gt(bookings.checkOutDate, block.startDate),
+			),
+		);
+	for (const hold of expired) await closeHoldSession(deps, hold, now);
+}
+
 /** Releases an expired hold (cron cleanup). False if it was paid meanwhile. */
 export async function releaseExpiredHold(
 	deps: ServiceDeps,
@@ -557,6 +594,16 @@ async function cancelConfirmed(
 	now: Date,
 ): Promise<CancelResult> {
 	const { db } = deps;
+	if (booking.paymentStatus === 'authorized') {
+		// Confirmed, card authorized, capture still under way (plan 05): there
+		// is nothing to refund yet. The webhook or the recovery cron finishes
+		// the capture within minutes.
+		throw new TRPCError({
+			code: 'CONFLICT',
+			message:
+				'The payment for this booking is still being completed. Please try again in a few minutes.',
+		});
+	}
 	await assertDisputeAllows(db, booking, options);
 	const amounts = await refundFor(db, booking, options, now);
 	const { refundAmount, refundPercent } = amounts;
@@ -579,6 +626,8 @@ async function cancelConfirmed(
 			cancellationReason: options.reason ?? `${options.by}_request`,
 			cancellationRefundPercent: refundPercent,
 			cancellationCutoffAt: amounts.cutoffAt,
+			// Saved with the cancellation so a retry refunds exactly this.
+			pendingRefundAmount: refundAmount > 0 ? refundAmount : null,
 		})
 		.where(and(eq(bookings.id, booking.id), eq(bookings.status, 'confirmed')))
 		.returning();
@@ -632,28 +681,72 @@ async function assertDisputeAllows(
 	}
 }
 
-/** Step 2-3 of cancelConfirmed: the Stripe refund and its result. */
+type RefundAmounts = {
+	paid: number;
+	alreadyRefunded: number;
+	refundAmount: number;
+};
+
+/**
+ * Step 2-3 of cancelConfirmed (and the recovery cron's retry): create the
+ * Stripe refund, then record it.
+ * - Stripe refuses the refund for good: refund_failed + an admin alert.
+ * - A transient Stripe error, or a database error after the refund exists:
+ *   the booking stays refund_pending and the payment recovery cron retries
+ *   (it looks for the existing refund first, so it never refunds twice).
+ */
 async function refundCancellation(
 	deps: ServiceDeps,
 	booking: Booking,
-	amounts: { paid: number; alreadyRefunded: number; refundAmount: number },
+	amounts: RefundAmounts,
 	now: Date,
+	{ retry = false }: { retry?: boolean } = {},
 ): Promise<{ booking: Booking; refundFailed: boolean }> {
 	const { db, stripe } = deps;
 	const cents = toCents(amounts.refundAmount);
+	let refund: Stripe.Refund;
 	try {
-		const refund = await stripe.refunds.create(
-			{
-				payment_intent: booking.stripePaymentIntentId ?? '',
-				amount: cents,
-				reason: 'requested_by_customer',
-				metadata: {
-					...stripeBookingMetadata(booking),
-					reason: 'cancellation',
+		const existing = retry ? await findCancellationRefund(deps, booking) : null;
+		refund =
+			existing ??
+			(await stripe.refunds.create(
+				{
+					payment_intent: booking.stripePaymentIntentId ?? '',
+					amount: cents,
+					reason: 'requested_by_customer',
+					metadata: {
+						...stripeBookingMetadata(booking),
+						reason: 'cancellation',
+					},
 				},
-			},
-			{ idempotencyKey: `refund-cancel/${booking.id}/${cents}` },
+				{ idempotencyKey: `refund-cancel/${booking.id}/${cents}` },
+			));
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Unknown error';
+		if (!isPermanentStripeError(error)) {
+			console.error(
+				`Cancellation refund for booking ${booking.confirmationId} not created yet (retried by the recovery cron): ${message}`,
+			);
+			return { booking, refundFailed: false };
+		}
+		console.error(
+			`Cancellation refund failed for booking ${booking.confirmationId}: ${message}`,
 		);
+		const [updated] = await db
+			.update(bookings)
+			.set({
+				paymentStatus: 'refund_failed',
+				pendingRefundAmount: null,
+				updatedAt: now,
+			})
+			.where(eq(bookings.id, booking.id))
+			.returning();
+		alertCancellationRefundFailed(deps, booking, amounts.refundAmount, message);
+		return { booking: updated ?? booking, refundFailed: true };
+	}
+
+	// The refund exists. Recording it must not report a failed refund.
+	try {
 		await recordAppRefund(db, refund, booking.id, now);
 		const totalRefunded = roundCents(
 			amounts.alreadyRefunded + amounts.refundAmount,
@@ -665,10 +758,16 @@ async function refundCancellation(
 			.set({
 				paymentStatus,
 				refundAmount: totalRefunded,
+				pendingRefundAmount: null,
 				stripeRefundId: refund.id,
 				updatedAt: now,
 			})
-			.where(eq(bookings.id, booking.id))
+			.where(
+				and(
+					eq(bookings.id, booking.id),
+					eq(bookings.paymentStatus, 'refund_pending'),
+				),
+			)
 			.returning();
 		await db
 			.update(paymentTransactions)
@@ -680,18 +779,69 @@ async function refundCancellation(
 			.where(eq(paymentTransactions.bookingId, booking.id));
 		return { booking: updated ?? booking, refundFailed: false };
 	} catch (error) {
-		const message = error instanceof Error ? error.message : 'Unknown error';
 		console.error(
-			`Cancellation refund failed for booking ${booking.confirmationId}: ${message}`,
+			`Refund ${refund.id} created for booking ${booking.confirmationId}, but recording it failed (retried by the recovery cron):`,
+			error instanceof Error ? error.message : 'Unknown error',
 		);
-		const [updated] = await db
-			.update(bookings)
-			.set({ paymentStatus: 'refund_failed', updatedAt: now })
-			.where(eq(bookings.id, booking.id))
-			.returning();
-		alertCancellationRefundFailed(deps, booking, amounts.refundAmount, message);
-		return { booking: updated ?? booking, refundFailed: true };
+		return { booking, refundFailed: false };
 	}
+}
+
+/**
+ * The cancellation refund already created for this booking, if any (a
+ * retry after a crash: Stripe idempotency keys only last 24 hours).
+ */
+async function findCancellationRefund(deps: ServiceDeps, booking: Booking) {
+	if (!booking.stripePaymentIntentId) return null;
+	const list = await deps.stripe.refunds.list({
+		payment_intent: booking.stripePaymentIntentId,
+		limit: 100,
+	});
+	return (
+		list.data.find(
+			(r) =>
+				r.metadata?.bookingId === booking.id &&
+				r.metadata?.reason === 'cancellation' &&
+				r.status !== 'failed' &&
+				r.status !== 'canceled',
+		) ?? null
+	);
+}
+
+/**
+ * Payment recovery (cron): a cancelled booking still refund_pending, e.g.
+ * the Worker stopped between the cancellation and the refund. Retries the
+ * refund with the amount saved at cancellation. Returns true when the
+ * refund now exists or failed for good (nothing left to retry).
+ */
+export async function retryCancellationRefund(
+	deps: ServiceDeps,
+	bookingId: string,
+	now = new Date(),
+) {
+	const [booking] = await deps.db
+		.select()
+		.from(bookings)
+		.where(eq(bookings.id, bookingId));
+	if (
+		booking?.status !== 'cancelled' ||
+		booking.paymentStatus !== 'refund_pending' ||
+		!booking.pendingRefundAmount
+	) {
+		return false;
+	}
+	const outcome = await refundCancellation(
+		deps,
+		booking,
+		{
+			paid: booking.totalAmount,
+			alreadyRefunded: booking.refundAmount ?? 0,
+			refundAmount: booking.pendingRefundAmount,
+		},
+		now,
+		{ retry: true },
+	);
+	return outcome.booking.paymentStatus !== 'refund_pending';
 }
 
 function alertCancellationRefundFailed(

@@ -10,9 +10,8 @@ import { bookings } from '@/db/schema-export';
 import {
 	confirmBookingPayment,
 	loadBooking,
-	markProcessing,
 	releaseExpiredSessionHold,
-	releaseFailedPayment,
+	releaseSessionAuthorization,
 } from '@/lib/booking/checkout-service';
 import { handleDisputeEvent } from '@/lib/booking/dispute-service';
 import {
@@ -20,6 +19,7 @@ import {
 	handleRefundEvent,
 } from '@/lib/booking/refund-service';
 import { createServiceDeps, type ServiceDeps } from '@/lib/server/deps';
+import { STRIPE_METADATA_SOURCE } from '@/lib/stripe/stripe';
 
 // Stripe webhook for the booking flow: POST /api/stripe/webhook.
 // (Better Auth's Stripe plugin has its own endpoint under /api/auth.)
@@ -81,10 +81,7 @@ export async function handleStripeWebhook(
 async function dispatch(deps: ServiceDeps, event: Stripe.Event) {
 	switch (event.type) {
 		case 'checkout.session.completed':
-		case 'checkout.session.async_payment_succeeded':
-			return onSessionPaidOrCompleted(deps, event.data.object);
-		case 'checkout.session.async_payment_failed':
-			return onSessionPaymentFailed(deps, event.data.object);
+			return onSessionCompleted(deps, event.data.object);
 		case 'checkout.session.expired': {
 			const released = await releaseExpiredSessionHold(
 				deps,
@@ -139,24 +136,30 @@ async function findSessionBooking(
 }
 
 /**
- * checkout.session.completed / async_payment_succeeded: confirm when paid;
- * a completed but unpaid session (delayed payment method) marks the hold
- * processing. confirmBookingPayment re-reads the session from Stripe.
+ * checkout.session.completed: the guest paid, so the card is authorized
+ * (manual capture, plan 05). confirmBookingPayment claims the dates and
+ * captures, or releases the authorization. Whatever happens, the guest is
+ * never charged without a booking: a session of ours whose booking is gone
+ * or can't be confirmed has its authorization cancelled here.
  */
-async function onSessionPaidOrCompleted(
+async function onSessionCompleted(
 	deps: ServiceDeps,
 	session: Stripe.Checkout.Session,
 ) {
 	if (session.mode !== 'payment') return;
 	const booking = await findSessionBooking(deps, session);
 	if (!booking) {
-		console.log(
-			`Checkout Session ${session.id}: no booking (not ours), ignored`,
+		if (session.metadata?.source !== STRIPE_METADATA_SOURCE) {
+			console.log(
+				`Checkout Session ${session.id}: no booking (not ours), ignored`,
+			);
+			return;
+		}
+		await releaseSessionAuthorization(
+			deps,
+			session.id,
+			'The booking no longer exists',
 		);
-		return;
-	}
-	if (session.payment_status === 'unpaid') {
-		await markProcessing(deps, booking, session);
 		return;
 	}
 	try {
@@ -165,27 +168,19 @@ async function onSessionPaidOrCompleted(
 			`Checkout Session ${session.id}: booking ${booking.confirmationId} ${outcome.status}`,
 		);
 	} catch (error) {
-		// Verification failures are permanent: acknowledge, don't retry.
+		// Permanent: release any authorization left, acknowledge, don't retry.
 		if (error instanceof TRPCError && error.code !== 'INTERNAL_SERVER_ERROR') {
 			console.warn(
-				`Checkout Session ${session.id}: booking ${booking.confirmationId} not confirmed (${error.code})`,
+				`Checkout Session ${session.id}: booking ${booking.confirmationId} not confirmed (${error.code}: ${error.message})`,
+			);
+			await releaseSessionAuthorization(
+				deps,
+				session.id,
+				error.message,
+				booking,
 			);
 			return;
 		}
 		throw error;
-	}
-}
-
-/** A delayed payment failed: release the hold and email the guest. */
-async function onSessionPaymentFailed(
-	deps: ServiceDeps,
-	session: Stripe.Checkout.Session,
-) {
-	const booking = await findSessionBooking(deps, session);
-	if (!booking || booking.stripeSessionId !== session.id) return;
-	if (await releaseFailedPayment(deps, booking)) {
-		console.log(
-			`Checkout Session ${session.id}: payment failed, booking ${booking.confirmationId} released`,
-		);
 	}
 }

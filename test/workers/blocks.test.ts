@@ -1,16 +1,22 @@
+import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vite-plus/test';
+
+import { bookings } from '@/db/schema-export';
 
 import {
 	bookingInput,
 	caller,
 	causeField,
+	db,
 	insertBlock,
 	insertBooking,
 	insertExternalEvent,
 	insertFeed,
+	settle,
 	trpcError,
 	useClock,
 } from './helpers';
+import { mockEmail, mockStripeCheckout } from './mocks';
 import { ROSE } from './seed';
 
 // Admin blocks: inclusive start/end. A block conflicts with a booking if
@@ -94,6 +100,42 @@ describe('creating a block over existing stays', () => {
 		await expect(
 			admin().rooms.createBlockedPeriod(blockInput('2030-07-20', '2030-07-21')),
 		).resolves.toBeTruthy();
+	});
+
+	it('confirms an expired hold that was paid after all, then rejects the block', async () => {
+		const checkout = mockStripeCheckout();
+		mockEmail();
+		const hold = await insertBooking({
+			checkInDate: '2030-08-20',
+			checkOutDate: '2030-08-22',
+			status: 'pending',
+			paymentStatus: 'pending',
+			expiresAt: new Date(Date.now() - 60 * 1000),
+		});
+		// The guest paid, but no confirmation ran (webhook down, tab closed).
+		const session = checkout.add({
+			id: `cs_test_blk${hold.publicId}`,
+			amount_total: Math.round(hold.totalAmount * 100),
+			client_reference_id: hold.id,
+			metadata: { bookingId: hold.id, source: 'irishette' },
+		});
+		checkout.complete(session.id);
+		await db()
+			.update(bookings)
+			.set({ stripeSessionId: session.id })
+			.where(eq(bookings.id, hold.id));
+
+		const error = await trpcError(
+			admin().rooms.createBlockedPeriod(blockInput('2030-08-21', '2030-08-21')),
+		);
+		expect(error.code).toBe('CONFLICT');
+		expect(checkout.captures).toHaveLength(1);
+		const [row] = await db()
+			.select()
+			.from(bookings)
+			.where(eq(bookings.id, hold.id));
+		expect(row).toMatchObject({ status: 'confirmed', paymentStatus: 'paid' });
+		await settle();
 	});
 
 	it('rejects a block over an imported external event', async () => {

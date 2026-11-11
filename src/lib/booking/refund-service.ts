@@ -52,7 +52,19 @@ async function findRefundBooking(deps: ServiceDeps, refund: Stripe.Refund) {
 const cardReference = (refund: Stripe.Refund) =>
 	refund.destination_details?.card?.reference ?? null;
 
-/** Upserts the refund; returns the stored row as it was before (if any). */
+/** The stored refund (status, reference) as it was before this event. */
+async function storedRefund(deps: ServiceDeps, refundId: string) {
+	const [row] = await deps.db
+		.select({
+			status: paymentRefunds.status,
+			reference: paymentRefunds.reference,
+		})
+		.from(paymentRefunds)
+		.where(eq(paymentRefunds.stripeRefundId, refundId));
+	return row;
+}
+
+/** Stores the refund as Stripe reports it now. */
 async function upsertRefund(
 	deps: ServiceDeps,
 	refund: Stripe.Refund,
@@ -60,13 +72,6 @@ async function upsertRefund(
 	source: 'app' | 'dashboard',
 	now: Date,
 ) {
-	const [previous] = await deps.db
-		.select({
-			status: paymentRefunds.status,
-			reference: paymentRefunds.reference,
-		})
-		.from(paymentRefunds)
-		.where(eq(paymentRefunds.stripeRefundId, refund.id));
 	const values = {
 		stripeRefundId: refund.id,
 		bookingId: booking?.id ?? null,
@@ -98,12 +103,16 @@ async function upsertRefund(
 				updatedAt: now,
 			},
 		});
-	return previous;
 }
 
-type PreviousRefund = Awaited<ReturnType<typeof upsertRefund>>;
+type PreviousRefund = Awaited<ReturnType<typeof storedRefund>>;
 
-/** refund.created / refund.updated / refund.failed. */
+/**
+ * refund.created / refund.updated / refund.failed. The effects (booking
+ * update, notifications) run first and the refund's new status is stored
+ * last: if an effect fails, the webhook answers 500 and Stripe's retry still
+ * sees the old status, so it redoes the work instead of skipping it.
+ */
 export async function handleRefundEvent(
 	deps: ServiceDeps,
 	refund: Stripe.Refund,
@@ -113,7 +122,7 @@ export async function handleRefundEvent(
 	const booking = await findRefundBooking(deps, refund);
 	const source =
 		refund.metadata?.source === STRIPE_METADATA_SOURCE ? 'app' : 'dashboard';
-	const previous = await upsertRefund(deps, refund, booking, source, now);
+	const previous = await storedRefund(deps, refund.id);
 	const status = refund.status ?? 'pending';
 	const statusChanged = previous?.status !== status;
 
@@ -121,21 +130,18 @@ export async function handleRefundEvent(
 		if (statusChanged) {
 			await onRefundFailed(deps, refund, booking, source, livemode, now);
 		}
-		return;
-	}
-	if (source === 'app') {
+	} else if (source === 'app') {
 		if (statusChanged) {
 			console.log(
 				`Refund ${refund.id} (app${booking ? `, ${booking.confirmationId}` : ''}): ${status}`,
 			);
 		}
-		return;
+	} else if (booking) {
+		await onDashboardRefund(deps, refund, booking, previous, livemode, now);
+	} else {
+		console.log(`Refund ${refund.id}: no booking (not ours), stored only`);
 	}
-	if (!booking) {
-		console.log(`Refund ${refund.id}: no booking (not ours), ignored`);
-		return;
-	}
-	await onDashboardRefund(deps, refund, booking, previous, livemode, now);
+	await upsertRefund(deps, refund, booking, source, now);
 }
 
 async function onRefundFailed(

@@ -12,6 +12,8 @@ interface SentEmail {
 	subject: string;
 	replyTo: string[];
 	from: EmailMessageBuilder['from'];
+	/** The plain-text body. */
+	text: string;
 }
 
 type Address = string | EmailAddress;
@@ -45,6 +47,7 @@ export function mockEmail({ failFirst = 0 }: { failFirst?: number } = {}) {
 				subject: message.subject,
 				replyTo: asList(message.replyTo),
 				from: message.from,
+				text: typeof message.text === 'string' ? message.text : '',
 			});
 			return { messageId: `email_${sent.length}` };
 		},
@@ -169,9 +172,18 @@ export interface FakeSession {
 	client_secret: string;
 	expires_at: number;
 	payment_intent: string | null;
+	/** Status of the session's PaymentIntent (manual capture, plan 05). */
+	intent_status:
+		| 'requires_payment_method'
+		| 'requires_capture'
+		| 'succeeded'
+		| 'canceled';
 	customer: string | null;
 	livemode: boolean;
 }
+
+/** How a fake capture fails: Stripe 500 (transient) or 400 (permanent). */
+export type CaptureFailure = 'transient' | 'permanent' | null;
 
 interface CreatedSession {
 	body: URLSearchParams;
@@ -179,11 +191,12 @@ interface CreatedSession {
 	session: FakeSession;
 }
 
-const stripeError = (message: string, status = 400) =>
-	HttpResponse.json(
-		{ error: { type: 'invalid_request_error', message } },
-		{ status },
-	);
+const stripeError = (
+	message: string,
+	status = 400,
+	type = 'invalid_request_error',
+	code?: string,
+) => HttpResponse.json({ error: { type, message, code } }, { status });
 
 /** `expand[0]=a&expand[1]=b` (stripe-node) or `expand[]=a` query values. */
 function expandParams(url: string) {
@@ -214,18 +227,40 @@ function lineItemsTotal(body: URLSearchParams) {
 }
 
 /**
- * A stateful fake of Checkout Sessions (create / retrieve / expire), plus
- * customers.create. `complete(id, paymentStatus)` simulates the guest
- * paying; `add(session)` seeds an existing session. Retrieve expands
- * `payment_intent` (with its latest charge and a card payment method) when
- * asked, like Stripe.
+ * A stateful fake of Checkout Sessions (create / retrieve / expire), their
+ * PaymentIntents (capture / cancel, manual capture) and customers.create.
+ * `complete(id)` simulates the guest paying (the card is authorized);
+ * `add(session)` seeds an existing session. Retrieve expands
+ * `payment_intent` (with its status, latest charge and a card payment
+ * method) when asked, like Stripe. `failCapture` makes captures fail.
  */
 export function mockStripeCheckout() {
 	const sessions = new Map<string, FakeSession>();
 	const created: CreatedSession[] = [];
 	const expired: string[] = [];
+	const captures: Array<{ intent: string; idempotencyKey: string | null }> = [];
+	const cancels: Array<{ intent: string; reason: string | null }> = [];
+	const state: { failCapture: CaptureFailure } = { failCapture: null };
 	let counter = 0;
 	const seen = new Map<string, FakeSession>();
+	const capturedKeys = new Map<string, string>();
+
+	const byIntent = (intent: string) =>
+		[...sessions.values()].find((s) => s.payment_intent === intent);
+	const intentJson = (s: FakeSession) => ({
+		id: s.payment_intent,
+		object: 'payment_intent',
+		status: s.intent_status,
+		amount: s.amount_total,
+		amount_capturable:
+			s.intent_status === 'requires_capture' ? s.amount_total : 0,
+		amount_received: s.intent_status === 'succeeded' ? s.amount_total : 0,
+		capture_method: 'manual',
+		latest_charge: `ch_${s.payment_intent}`,
+		payment_method: 'pm_1',
+		payment_method_types: ['card'],
+		metadata: s.metadata,
+	});
 
 	const toJson = (s: FakeSession, expand: string[]) => ({
 		object: 'checkout.session',
@@ -234,14 +269,10 @@ export function mockStripeCheckout() {
 		payment_intent:
 			s.payment_intent && expand.includes('payment_intent')
 				? {
-						id: s.payment_intent,
-						object: 'payment_intent',
-						latest_charge: `ch_${s.payment_intent}`,
+						...intentJson(s),
 						payment_method: expand.includes('payment_intent.payment_method')
 							? { id: 'pm_1', object: 'payment_method', type: 'card' }
 							: 'pm_1',
-						payment_method_types: ['card'],
-						metadata: s.metadata,
 					}
 				: s.payment_intent,
 	});
@@ -271,6 +302,7 @@ export function mockStripeCheckout() {
 					client_secret: `${id}_secret_fake`,
 					expires_at: Number(body.get('expires_at')),
 					payment_intent: null,
+					intent_status: 'requires_payment_method',
 					customer: body.get('customer'),
 					livemode: false,
 				};
@@ -303,12 +335,74 @@ export function mockStripeCheckout() {
 				return HttpResponse.json(toJson(s, []));
 			},
 		),
+		http.post(
+			'https://api.stripe.com/v1/payment_intents/:id/capture',
+			({ params, request }) => {
+				const intent = String(params.id);
+				const s = byIntent(intent);
+				if (!s) return stripeError('No such payment_intent', 404);
+				const idempotencyKey = request.headers.get('idempotency-key');
+				if (idempotencyKey && capturedKeys.get(idempotencyKey) === intent) {
+					return HttpResponse.json(intentJson(s));
+				}
+				if (state.failCapture === 'transient') {
+					return stripeError('Stripe is unavailable', 500, 'api_error');
+				}
+				if (
+					state.failCapture === 'permanent' ||
+					s.intent_status !== 'requires_capture'
+				) {
+					return stripeError(
+						`This PaymentIntent could not be captured because it has a status of ${s.intent_status}.`,
+						400,
+						'invalid_request_error',
+						'payment_intent_unexpected_state',
+					);
+				}
+				s.intent_status = 'succeeded';
+				s.payment_status = 'paid';
+				captures.push({ intent, idempotencyKey });
+				if (idempotencyKey) capturedKeys.set(idempotencyKey, intent);
+				return HttpResponse.json(intentJson(s));
+			},
+		),
+		http.get('https://api.stripe.com/v1/payment_intents/:id', ({ params }) => {
+			const s = byIntent(String(params.id));
+			if (!s) return stripeError('No such payment_intent', 404);
+			return HttpResponse.json(intentJson(s));
+		}),
+		http.post(
+			'https://api.stripe.com/v1/payment_intents/:id/cancel',
+			async ({ params, request }) => {
+				const intent = String(params.id);
+				const s = byIntent(intent);
+				if (!s) return stripeError('No such payment_intent', 404);
+				if (s.intent_status !== 'requires_capture') {
+					return stripeError(
+						`You cannot cancel this PaymentIntent because it has a status of ${s.intent_status}.`,
+						400,
+						'invalid_request_error',
+						'payment_intent_unexpected_state',
+					);
+				}
+				const body = new URLSearchParams(await request.text());
+				s.intent_status = 'canceled';
+				cancels.push({ intent, reason: body.get('cancellation_reason') });
+				return HttpResponse.json(intentJson(s));
+			},
+		),
 	);
 
 	return {
 		sessions,
 		created,
 		expired,
+		captures,
+		cancels,
+		/** Make captures fail until reset with null. */
+		failCapture(mode: CaptureFailure) {
+			state.failCapture = mode;
+		},
 		add(session: Partial<FakeSession> & { id: string }) {
 			const full: FakeSession = {
 				status: 'open',
@@ -321,6 +415,7 @@ export function mockStripeCheckout() {
 				client_secret: `${session.id}_secret_fake`,
 				expires_at: Math.floor(Date.now() / 1000) + 1800,
 				payment_intent: null,
+				intent_status: 'requires_payment_method',
 				customer: null,
 				livemode: false,
 				...session,
@@ -328,15 +423,20 @@ export function mockStripeCheckout() {
 			sessions.set(full.id, full);
 			return full;
 		},
-		/** The guest paid (or a delayed payment started: 'unpaid'). */
+		/**
+		 * The guest paid: the card is authorized ('requires_capture'). The
+		 * session reports 'unpaid' on purpose: the app must decide from the
+		 * PaymentIntent status, not from payment_status (plan 05).
+		 */
 		complete(
 			id: string,
-			paymentStatus: FakeSession['payment_status'] = 'paid',
+			intentStatus: FakeSession['intent_status'] = 'requires_capture',
 		) {
 			const s = sessions.get(id);
 			if (!s) throw new Error(`No fake session ${id}`);
 			s.status = 'complete';
-			s.payment_status = paymentStatus;
+			s.intent_status = intentStatus;
+			s.payment_status = intentStatus === 'succeeded' ? 'paid' : 'unpaid';
 			s.payment_intent = `pi_${id}`;
 			return s;
 		},
@@ -363,8 +463,12 @@ export interface FakeCharge {
 /** Stripe: GET /v1/charges/:id (expands payment_intent when asked). */
 export function mockStripeCharges(...charges: FakeCharge[]) {
 	const byId = new Map(charges.map((c) => [c.id, c]));
+	const state = { unavailable: false };
 	network.use(
 		http.get('https://api.stripe.com/v1/charges/:id', ({ params, request }) => {
+			if (state.unavailable) {
+				return stripeError('Stripe is unavailable', 500, 'api_error');
+			}
 			const c = byId.get(String(params.id));
 			if (!c) return stripeError('No such charge', 404);
 			const expand = expandParams(request.url);
@@ -394,6 +498,64 @@ export function mockStripeCharges(...charges: FakeCharge[]) {
 		set(id: string, patch: Partial<FakeCharge>) {
 			const c = byId.get(id);
 			if (c) Object.assign(c, patch);
+		},
+		/** Answer 500 (a transient Stripe outage) until set back to false. */
+		setUnavailable(value: boolean) {
+			state.unavailable = value;
+		},
+	};
+}
+
+/**
+ * Stripe refunds with state: POST /v1/refunds (fails with a 500 while
+ * `unavailable` is set) and GET /v1/refunds?payment_intent= (lists created
+ * and `existing` refunds), for the payment recovery retries.
+ */
+export function mockStripeRefundsStateful() {
+	const created: Array<{
+		body: URLSearchParams;
+		idempotencyKey: string | null;
+	}> = [];
+	const listed: Array<Record<string, unknown>> = [];
+	const state = { unavailable: false };
+	network.use(
+		http.post('https://api.stripe.com/v1/refunds', async ({ request }) => {
+			if (state.unavailable) {
+				return stripeError('Stripe is unavailable', 500, 'api_error');
+			}
+			const body = new URLSearchParams(await request.text());
+			created.push({
+				body,
+				idempotencyKey: request.headers.get('idempotency-key'),
+			});
+			const refund = {
+				id: `re_stateful_${created.length}`,
+				object: 'refund',
+				status: 'succeeded',
+				payment_intent: body.get('payment_intent'),
+				amount: Number(body.get('amount') ?? 0),
+				currency: 'usd',
+				created: Math.floor(Date.now() / 1000),
+				metadata: formRecord(body, 'metadata'),
+			};
+			listed.push(refund);
+			return HttpResponse.json(refund);
+		}),
+		http.get('https://api.stripe.com/v1/refunds', ({ request }) => {
+			const intent = new URL(request.url).searchParams.get('payment_intent');
+			return HttpResponse.json({
+				object: 'list',
+				has_more: false,
+				data: listed.filter((r) => r.payment_intent === intent),
+			});
+		}),
+	);
+	return {
+		created,
+		/** Refunds Stripe already has (e.g. created before a crash). */
+		existing: listed,
+		setUnavailable(value: boolean) {
+			state.unavailable = value;
 		},
 	};
 }

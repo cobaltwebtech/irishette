@@ -39,6 +39,18 @@ export function stripeBookingMetadata(booking: {
 	};
 }
 
+/**
+ * Stripe refused the request for good (invalid request, card error), as
+ * opposed to a transient API, rate-limit or network error worth retrying.
+ */
+export function isPermanentStripeError(error: unknown) {
+	if (typeof error !== 'object' || error === null || !('type' in error)) {
+		return false;
+	}
+	const { type } = error as { type: unknown };
+	return type === 'StripeInvalidRequestError' || type === 'StripeCardError';
+}
+
 /** Dollars to Stripe's minor units (USD cents). */
 export const toCents = (amount: number) => Math.round(amount * 100);
 

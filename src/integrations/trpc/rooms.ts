@@ -16,7 +16,10 @@ import type { z } from 'zod';
 import type { Database } from '@/db/drizzle-init';
 import { room, roomBlockedPeriods, roomPricingRules } from '@/db/schema-export';
 import { blockIsFree, findBlockConflicts } from '@/lib/booking/availability';
-import { quoteStay } from '@/lib/booking/booking-service';
+import {
+	quoteStay,
+	settleExpiredHoldsBeforeBlock,
+} from '@/lib/booking/booking-service';
 import {
 	adminGetRoomsSchema,
 	calculatePricingSchema,
@@ -493,6 +496,7 @@ export const roomsRouter = createTRPCRouter({
 		.input(createBlockedPeriodSchema)
 		.mutation(async ({ ctx, input }) => {
 			await requireRoom(ctx.db, input.roomId);
+			await settleExpiredHoldsBeforeBlock(ctx, input);
 			await assertBlockAllowed(
 				ctx.db,
 				input.roomId,
@@ -539,6 +543,11 @@ export const roomsRouter = createTRPCRouter({
 				});
 			}
 			if (startDate !== existing.startDate || endDate !== existing.endDate) {
+				await settleExpiredHoldsBeforeBlock(ctx, {
+					roomId: existing.roomId,
+					startDate,
+					endDate,
+				});
 				await assertBlockAllowed(
 					ctx.db,
 					existing.roomId,

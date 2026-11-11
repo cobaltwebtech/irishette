@@ -88,11 +88,19 @@ function BookingNotFound() {
 	);
 }
 
-type BannerKind = 'confirmed' | 'processing' | 'unpaid' | 'cancelled';
+type BannerKind =
+	| 'confirmed'
+	| 'processing'
+	| 'unpaid'
+	| 'cancelled'
+	| 'cancelledUncharged';
 
 function bannerKind(status: string, paymentStatus: string): BannerKind {
 	if (status === 'confirmed') return 'confirmed';
-	if (status === 'cancelled') return 'cancelled';
+	if (status === 'cancelled') {
+		// Never captured (dates taken or payment failed): nothing to refund.
+		return paymentStatus === 'pending' ? 'cancelledUncharged' : 'cancelled';
+	}
 	return paymentStatus === 'processing' ? 'processing' : 'unpaid';
 }
 
@@ -124,6 +132,12 @@ const BANNERS: Record<
 		text: 'Any refund goes back to your original payment method within 5-10 business days.',
 		tone: 'text-destructive',
 	},
+	cancelledUncharged: {
+		icon: 'tabler:circle-x',
+		title: 'This Booking was Not Confirmed',
+		text: 'Your card was not charged. If your bank shows a pending authorization, it is released automatically within a few days.',
+		tone: 'text-destructive',
+	},
 };
 
 function BookingConfirmation() {
@@ -141,11 +155,18 @@ function BookingConfirmation() {
 	const { mutate: confirmCheckout, isPending: confirming } = useMutation(
 		trpc.bookings.confirmCheckout.mutationOptions({
 			onSuccess: (result) => {
-				if (result.status === 'refunded_conflict') {
+				if (result.status === 'released') {
 					toast.add({
 						type: 'error',
 						title:
-							'Sorry, these dates were booked elsewhere moments before your payment completed. Your payment has been refunded in full.',
+							'Sorry, we could not confirm this booking: the dates were booked elsewhere moments before your payment completed. Your card was not charged.',
+						timeout: 10_000,
+					});
+				} else if (result.status === 'payment_failed') {
+					toast.add({
+						type: 'error',
+						title:
+							'Sorry, your payment could not be completed, so the booking was not confirmed. Your card was not charged.',
 						timeout: 10_000,
 					});
 				}
