@@ -16,16 +16,17 @@ import type { RouterOutputs } from '@/integrations/trpc/types';
 import { useSession } from '@/lib/auth/session';
 import { bookingSteps, useBookingStore } from '@/stores';
 import { isPricingComplete } from '@/utils/booking-utils';
+import { canonicalLink, seo } from '@/utils/seo';
 
 type BookingPricing = RouterOutputs['bookings']['calculateBooking'];
 
 export const Route = createFileRoute('/booking/')({
 	head: () => ({
-		meta: [
-			{
-				title: 'Book Your Stay | Irishette.com',
-			},
-		],
+		meta: seo({
+			title: 'Book Your Stay | Irishette.com',
+			path: '/booking',
+		}),
+		links: [canonicalLink('/booking')],
 	}),
 	// Unknown steps are dropped; a valid one is clamped to the furthest step
 	// the draft allows (below).

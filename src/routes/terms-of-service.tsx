@@ -1,14 +1,17 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 
 import { Card, CardContent } from '@/components/ui/card';
+import { canonicalLink, seo } from '@/utils/seo';
 
 export const Route = createFileRoute('/terms-of-service')({
 	head: () => ({
-		meta: [
-			{
-				title: 'Terms of Service | Irishette.com',
-			},
-		],
+		meta: seo({
+			title: 'Terms of Service | Irishette.com',
+			description:
+				'The terms that apply when you book and stay at Irishette Bed & Breakfast in Dublin, Texas.',
+			path: '/terms-of-service',
+		}),
+		links: [canonicalLink('/terms-of-service')],
 	}),
 	component: TermsOfServicePage,
 });
@@ -23,7 +26,7 @@ function TermsOfServicePage() {
 						Terms of Service
 					</h1>
 					<p className="text-lg text-muted-foreground">
-						Last Updated: October 16, 2025
+						Last Updated: November 13, 2026
 					</p>
 				</div>
 			</section>
@@ -163,10 +166,11 @@ function TermsOfServicePage() {
 								</p>
 								<ul className="list-disc space-y-2 pl-6 text-muted-foreground">
 									<li>Respecting quiet hours</li>
-									<li>No smoking in designated non-smoking areas</li>
+									<li>No smoking anywhere on the property</li>
 									<li>Maximum occupancy limits</li>
-									<li>Pet policies (if applicable)</li>
+									<li>No pets are allowed on the property</li>
 									<li>Proper use of facilities and amenities</li>
+									<li>Free on-site parking is provided for guests</li>
 								</ul>
 								<h3 className="mt-6 mb-3 text-xl font-semibold">7.2 Conduct</h3>
 								<p className="leading-relaxed text-muted-foreground">
@@ -372,7 +376,7 @@ function TermsOfServicePage() {
 									contact us at:
 								</p>
 								<p className="text-muted-foreground">
-									<strong>Email:</strong> info@irishette.com
+									<strong>Email:</strong> bookings@irishette.com
 								</p>
 								<p className="text-muted-foreground">
 									<strong>Address:</strong> [Your Physical Address]

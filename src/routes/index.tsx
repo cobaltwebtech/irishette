@@ -3,6 +3,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { Image } from '@unpic/react';
 
 import { HeroSlider } from '@/components/HeroSlider';
+import { HomeMap } from '@/components/HomeMap';
 import { Button, buttonVariants } from '@/components/ui/button';
 
 import '@/styles/custom-swiper.css';
@@ -14,9 +15,14 @@ import {
 	CardHeader,
 	CardTitle,
 } from '@/components/ui/card';
+import { absoluteUrl, canonicalLink } from '@/utils/seo';
 import { cn } from '@/utils/twMerge';
 
 export const Route = createFileRoute('/')({
+	head: () => ({
+		meta: [{ property: 'og:url', content: absoluteUrl('/') }],
+		links: [canonicalLink('/')],
+	}),
 	component: HomePage,
 });
 
@@ -88,7 +94,7 @@ function HomePage() {
 							className={cn(buttonVariants({ size: 'lg' }), 'text-background')}
 						>
 							<Icon icon="tabler:luggage" className="size-6" />
-							View Bookings
+							View Your Bookings
 						</Link>
 					</div>
 				</div>
@@ -381,9 +387,9 @@ function HomePage() {
 						State University. Ideal for visiting family, attending events, or
 						exploring the Cross Timbers region.
 					</p>
-					<p className="my-4 bg-destructive">
-						Can add a map image and directions here later on.
-					</p>
+					<figure className="mx-auto mt-10 max-w-2xl">
+						<HomeMap className="h-auto w-full" />
+					</figure>
 				</div>
 			</section>
 		</div>

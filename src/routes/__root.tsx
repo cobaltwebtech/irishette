@@ -22,7 +22,7 @@ import { ScrollRestoration } from '@/components/scroll-restoration';
 import { Toaster } from '@/components/ui/toast';
 import type { TRPCRouter } from '@/integrations/trpc/router';
 import { type AppSession, sessionQueryOptions } from '@/lib/auth/session';
-import { seo } from '@/utils/seo';
+import { DEFAULT_SHARE_IMAGE, seo } from '@/utils/seo';
 
 import appCss from '@/styles/styles.css?url';
 
@@ -65,6 +65,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 			...seo({
 				title: 'Irishette | Victorian Charm in Dublin, Texas',
 				description: `Experience the timeless elegance of Irishette, a charming Victorian bed and breakfast in the heart of Dublin, Texas. Enjoy cozy rooms, modern amenities, and warm hospitality for an unforgettable stay.`,
+				image: DEFAULT_SHARE_IMAGE,
 			}),
 		],
 		links: [

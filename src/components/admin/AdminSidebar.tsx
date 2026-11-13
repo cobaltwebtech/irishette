@@ -128,6 +128,17 @@ export function AdminSidebar({
 				},
 			],
 		},
+		{
+			title: 'Settings',
+			url: '/admin/settings',
+			icon: 'tabler:settings',
+			items: [
+				{
+					title: 'Account & Notifications',
+					url: '/admin/settings',
+				},
+			],
+		},
 	];
 
 	return (

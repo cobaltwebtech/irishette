@@ -11,8 +11,16 @@ import {
 	CardTitle,
 } from '@/components/ui/card';
 import type { RouterOutputs } from '@/integrations/trpc/types';
+import { storedArrivalLabel } from '@/lib/booking/arrival-windows';
 import type { BookingStatus } from '@/lib/booking/booking-status';
-import { CHECK_IN_TIME_LABEL, CHECK_OUT_TIME_LABEL } from '@/lib/site';
+import {
+	CHECK_IN_TIME_LABEL,
+	CHECK_OUT_TIME_LABEL,
+	CONTACT_PHONE,
+	CONTACT_PHONE_HREF,
+	HOUSE_RULES,
+	PARKING_NOTE,
+} from '@/lib/site';
 import { formatStayDate } from '@/utils/timezone';
 
 // Presentational cards shared by the guest booking page, the booking
@@ -29,6 +37,7 @@ type StayFields = Pick<
 	| 'checkOutDate'
 	| 'numberOfNights'
 	| 'numberOfGuests'
+	| 'estimatedArrival'
 >;
 
 type PaymentFields = Pick<
@@ -128,6 +137,10 @@ export function BookingStayCard({
 						Before {CHECK_OUT_TIME_LABEL}
 					</p>
 				</DetailField>
+				<DetailField
+					label="Estimated Arrival"
+					value={storedArrivalLabel(booking.estimatedArrival) ?? 'Not provided'}
+				/>
 				<DetailField
 					label="Duration"
 					value={plural(booking.numberOfNights, 'night')}
@@ -299,8 +312,20 @@ export function ImportantInfoCard({ className }: { className: string }) {
 						</Link>
 						.
 					</li>
-					<li className="bg-red-200 text-lg font-bold">
-						DO WE NEED ADDITIONAL INSTRUCTIONS FOR THE CUSTOMER?
+					<li>
+						We will meet you in person to hand over your key and will contact
+						you with arrival instructions before your stay. If your plans
+						change, call us at{' '}
+						<a
+							href={CONTACT_PHONE_HREF}
+							className="text-accent hover:underline"
+						>
+							{CONTACT_PHONE}
+						</a>
+						.
+					</li>
+					<li>
+						{PARKING_NOTE}. {HOUSE_RULES.join('. ')}.
 					</li>
 				</ul>
 			</CardContent>

@@ -29,6 +29,20 @@
       "when": 1794417475432,
       "tag": "0003_pending_refund_amount",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1794579288009,
+      "tag": "0004_booking_estimated_arrival",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1794581270929,
+      "tag": "0005_admin_notification_preferences",
+      "breakpoints": true
     }
   ]
 }

@@ -2,15 +2,18 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 
 import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { canonicalLink, seo } from '@/utils/seo';
 import { cn } from '@/utils/twMerge';
 
 export const Route = createFileRoute('/privacy-policy')({
 	head: () => ({
-		meta: [
-			{
-				title: 'Privacy Policy | Irishette.com',
-			},
-		],
+		meta: seo({
+			title: 'Privacy Policy | Irishette.com',
+			description:
+				'How Irishette collects, uses and protects your personal information when you book or contact us.',
+			path: '/privacy-policy',
+		}),
+		links: [canonicalLink('/privacy-policy')],
 	}),
 	component: PrivacyPolicyPage,
 });
@@ -360,7 +363,7 @@ function PrivacyPolicyPage() {
 									Contact Us
 								</Link>
 								<p className="text-muted-foreground">
-									<strong>Email:</strong> info@irishette.com
+									<strong>Email:</strong> bookings@irishette.com
 								</p>
 								<p className="text-muted-foreground">
 									<strong>Address:</strong> [Your Physical Address]

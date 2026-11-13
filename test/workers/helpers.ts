@@ -21,6 +21,7 @@ import {
 	createInnerTRPCContext,
 } from '@/integrations/trpc/inner-context';
 import { trpcRouter } from '@/integrations/trpc/router';
+import type { ArrivalWindow } from '@/lib/booking/arrival-windows';
 import { checkInAt, checkOutAt } from '@/lib/booking/stay-times';
 import type { InboxKind } from '@/lib/inbox/inbox';
 import { newId, newPublicId } from '@/utils/ids';
@@ -272,6 +273,7 @@ export function bookingInput(
 		checkInDate: string;
 		checkOutDate: string;
 		guestCount: number;
+		estimatedArrival: ArrivalWindow;
 		basePrice: number;
 		totalAmount: number;
 	}> = {},
@@ -284,6 +286,7 @@ export function bookingInput(
 		guestName: 'Fixture Guest',
 		guestEmail: GUEST.email,
 		guestPhone: '5555550100',
+		estimatedArrival: '17:00' as ArrivalWindow,
 		basePrice: 200,
 		serviceFee: 24,
 		taxAmount: 26,

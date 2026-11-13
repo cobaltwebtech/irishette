@@ -22,13 +22,25 @@ webhook (`/api/auth/stripe/webhook`) is disabled (see
 |---|---|---|
 | Local dev | `http://localhost:3000` (via `stripe listen`, below) | Sandbox |
 | Current deployment (pre-production) | `https://irishette.cobaltdev.workers.dev` | Sandbox |
-| Production | `https://<PRODUCTION_HOST>` (TODO: custom domain not chosen yet) | Live |
+| Production | `https://www.irishette.com` | Live |
 
-Full dashboard URL, for example `https://<PRODUCTION_HOST>/api/stripe/webhook`.
+Production webhook URL: `https://www.irishette.com/api/stripe/webhook`.
 
-When the production domain is set, also update `BETTER_AUTH_URL`, set
-`workersDev: false` in `cloudflare.config.ts`, and create the endpoints in
-**live** mode with that host. The live endpoint gets its own signing secret.
+**Point the live endpoint at `www` directly.** The Worker is served only on
+`www.irishette.com`, and Stripe does not follow redirects, so an endpoint on the
+apex (`irishette.com`) that relies on the apex-to-www redirect fails every
+delivery (a `301` counts as a failed delivery).
+
+Production builds set `APP_ENV=production` (`pnpm build:prod`, `pnpm run
+deploy`): that binds the production D1 database, serves the Worker on
+`www.irishette.com`, turns `workers.dev` off and bakes in `BETTER_AUTH_URL` and
+the live publishable key from `.env.production` (see `docs/GO_LIVE.md`). Create
+the endpoint in **live** mode; it gets its own signing secret
+(`STRIPE_TRPC_WEBHOOK_SECRET` on the Worker).
+
+After the first production deploy the `irishette.cobaltdev.workers.dev`
+pre-production host stops serving this Worker (`workersDev` is off), so its
+sandbox webhook endpoint can be deleted.
 
 ## Dashboard endpoint settings
 
@@ -95,7 +107,7 @@ PaymentIntents), and `checkout.session.async_payment_succeeded` /
 05; they are acknowledged as unknown events). Remove them from existing
 Dashboard endpoint subscriptions.
 
-**Dashboard endpoint (sandbox, and live at go-live):** subscribe
+**Dashboard endpoint (sandbox, and live at go-live, URL above):** subscribe
 `/api/stripe/webhook` to exactly:
 
 ```text

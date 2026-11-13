@@ -1,6 +1,6 @@
 # Cancellation and Refund Policy
 
-**Last Updated:** October 16, 2025
+**Last Updated:** November 13, 2026
 
 ## Overview
 
@@ -8,15 +8,17 @@ At irishette.com, we understand that plans can change. This Cancellation and Ref
 
 ## Cancellation Timeframes and Penalties
 
-### Cancellation More Than 72 Hours Before Check-In
+The refund windows are the active policy saved in the admin dashboard (the built-in default applies until one is saved). The page renders them from the saved policy. Windows count back from check-in at 4:00 PM CT, and the refund is a percentage of the total paid, including taxes and fees.
+
+### Cancellation At Least 7 Days Before Check-In
 - **Penalty:** None
 - **Refund:** 100% of the booking amount
 
-### Cancellation Between 72-24 Hours Before Check-In
-- **Penalty:** 50% of the booking amount
-- **Refund:** 50% of the booking amount
+### Cancellation 3 Days to Less Than 7 Days Before Check-In
+- **Penalty:** 25% of the booking amount
+- **Refund:** 75% of the booking amount
 
-### Cancellation Within 24 Hours of Check-In
+### Cancellation Less Than 3 Days Before Check-In
 - **Penalty:** 100% of the booking amount
 - **Refund:** No refund will be issued
 
@@ -24,7 +26,7 @@ At irishette.com, we understand that plans can change. This Cancellation and Ref
 
 Cancellations must be made through one of the following methods:
 
-1. **Online:** Visit our [Manage Bookings page](https://irishette.com/manage-bookings) and follow the cancellation instructions
+1. **Online:** Visit our [View Your Bookings page](https://www.irishette.com/account) and follow the cancellation instructions
 2. **Telephone:** Call us at **254-454-5558**
 
 Cancellations are effective based on the date and time we receive your cancellation request, not when you decide to cancel. We recommend canceling as early as possible to avoid penalties.
@@ -35,34 +37,33 @@ Cancellations are effective based on the date and time we receive your cancellat
 All refunds will be processed to the original payment method used at the time of booking. We do not issue refunds via cash or check under any circumstances.
 
 ### Processing Time
-Once your cancellation is confirmed and a refund is approved, please allow **3-5 business days** for the refund to appear on your card account. The exact timing may vary depending on your financial institution's processing schedule.
+Once your cancellation is confirmed and a refund is approved, please allow **5-10 business days** for the refund to appear on your card account. The exact timing may vary depending on your financial institution's processing schedule.
 
 ## No-Show Policy
 
-Failure to arrive on your scheduled check-in date without prior cancellation will be treated as a cancellation within 24 hours of check-in, resulting in forfeiture of your entire booking amount with no refund issued.
+Failure to arrive on your scheduled check-in date without prior cancellation will be treated as a cancellation after check-in (4:00 PM CT), resulting in forfeiture of your entire booking amount with no refund issued.
+
+You are welcome to arrive earlier than 4:00 PM CT. The estimated arrival time you choose when booking only helps us plan to meet you; it does not change your check-in time, the cancellation windows or any refund.
 
 ## Early Departure
 
 If you check out or leave the property before your scheduled checkout date, no refund will be given for the remaining days left on your booking. The full booking amount remains due regardless of early departure.
 
-## Deposits and Payment
+## Payment
 
-### Deposit Application
-If a deposit was collected at the time of booking, that amount will be applied to your booking total as a credit. Any remaining balance will be due at checkout.
-
-### Deposit Refunds
-Deposits are subject to the same cancellation timeframes and penalties outlined above. If you cancel your reservation, the deposit will be refunded according to the applicable penalty tier.
+The full booking amount, including taxes and fees, is due upfront when you book. We do not take deposits, and no balance is collected at check-in or checkout. Any refund is a percentage of the total you paid, according to the cancellation windows above.
 
 ## Violations and Property Damage
 
-If you violate our [Terms of Service](https://irishette.com/terms) or cause damage to the property and are required to vacate the premises before your scheduled checkout date, **no refund will be issued** for any portion of your stay.
+If you violate our [Terms of Service](https://www.irishette.com/terms-of-service) or cause damage to the property and are required to vacate the premises before your scheduled checkout date, **no refund will be issued** for any portion of your stay.
 
 This includes but is not limited to:
 - Violations of property rules and regulations
 - Disruptive or illegal behavior
 - Damage to property or furnishings
 - Unauthorized guests or occupancy violations
-- Smoking in non-smoking areas
+- Smoking anywhere on the property
+- Bringing pets onto the property
 - Any other breach of our Terms of Service
 
 You will remain responsible for the full booking amount plus any additional charges for damages or cleaning fees.
@@ -96,8 +97,8 @@ If you have questions about this Cancellation and Refund Policy or need assistan
 
 **irishette.com**  
 Phone: **254-454-5558**  
-Email: [Your Contact Email]  
-Manage Bookings: [https://irishette.com/manage-bookings](https://irishette.com/manage-bookings)
+Email: bookings@irishette.com  
+View Your Bookings: [https://www.irishette.com/account](https://www.irishette.com/account)
 
 ---
 

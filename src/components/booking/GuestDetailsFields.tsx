@@ -8,7 +8,13 @@ import type {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+	NativeSelect,
+	NativeSelectOption,
+} from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
+import { ARRIVAL_WINDOW_OPTIONS } from '@/lib/booking/arrival-windows';
+import { CHECK_IN_TIME_LABEL } from '@/lib/site';
 
 const REQUESTS_MAX = 1000;
 
@@ -71,6 +77,12 @@ export function GuestDetailsFields({
 					/>
 				</div>
 			</div>
+
+			<ArrivalField
+				value={form.estimatedArrival}
+				onChange={(value) => onChange('estimatedArrival', value)}
+				error={errors.estimatedArrival}
+			/>
 
 			<SpecialRequestsField
 				value={form.specialRequests}
@@ -169,6 +181,48 @@ function GuestCountField({
 				</Button>
 			</div>
 			<FieldError message={error} />
+		</div>
+	);
+}
+
+function ArrivalField({
+	value,
+	onChange,
+	error,
+}: {
+	value: string;
+	onChange: (value: string) => void;
+	error?: string;
+}) {
+	const id = useId();
+	const helpId = useId();
+	return (
+		<div className="space-y-2">
+			<Label htmlFor={id}>Estimated Arrival Time *</Label>
+			<NativeSelect
+				id={id}
+				value={value}
+				onChange={(e) => onChange(e.target.value)}
+				aria-invalid={!!error}
+				aria-describedby={helpId}
+				className="w-full sm:w-72"
+			>
+				<NativeSelectOption value="" disabled>
+					Select an arrival time
+				</NativeSelectOption>
+				{ARRIVAL_WINDOW_OPTIONS.map((option) => (
+					<NativeSelectOption key={option.value} value={option.value}>
+						{option.label}
+					</NativeSelectOption>
+				))}
+			</NativeSelect>
+			<FieldError message={error} />
+			<p id={helpId} className="text-xs text-muted-foreground">
+				We meet every guest in person to hand over the key, so please tell us
+				roughly when you will arrive (Central Time). You are welcome to arrive
+				before check-in at {CHECK_IN_TIME_LABEL}. We will contact you with
+				arrival instructions before your stay.
+			</p>
 		</div>
 	);
 }

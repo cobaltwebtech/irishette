@@ -16,6 +16,7 @@ import {
 	RoomGallerySection,
 } from '@/components/rooms/RoomSections';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { canonicalLink, seo, shareImage } from '@/utils/seo';
 
 export const Route = createFileRoute('/rooms/texas-room')({
 	loader: ({ context }) =>
@@ -23,11 +24,14 @@ export const Route = createFileRoute('/rooms/texas-room')({
 			context.trpc.rooms.get.queryOptions({ slug: 'texas-room' }),
 		),
 	head: () => ({
-		meta: [
-			{
-				title: 'Texas Room | Irishette.com',
-			},
-		],
+		meta: seo({
+			title: 'Texas Room | Irishette.com',
+			description:
+				'The Texas Room at Irishette in Dublin, Texas: a private-entrance suite with a king bed, kitchenette, electric fireplace and an antique clawfoot tub.',
+			image: shareImage('texas-room', '9cbf035c-cdb9-49b2-8b27-b9f48b8f1cac'),
+			path: '/rooms/texas-room',
+		}),
+		links: [canonicalLink('/rooms/texas-room')],
 	}),
 	component: TexasRoomPage,
 });
@@ -162,13 +166,12 @@ function TexasSpecialFeatures() {
 				<Card className="border-accent/20 bg-accent/10">
 					<CardHeader>
 						<CardTitle className="text-center text-2xl">
-							Texas Room Special Features (need to update these images)
+							Texas Room Special Features
 						</CardTitle>
 					</CardHeader>
 					<CardContent>
 						<div className="grid gap-6 md:grid-cols-2">
 							<div className="space-y-2">
-								4
 								<Image
 									src="https://res.cloudinary.com/cobalt/image/upload/irishette/texas-room/b495460e-218d-4e2b-8b5b-3e87df2a4b43.avif"
 									alt="Texas Room Clawfoot Tub"

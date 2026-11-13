@@ -1,3 +1,10 @@
 # https://www.robotstxt.org/robotstxt.html
+# Keep in sync with the signed-in routes in src/routes (_authed, auth, api).
 User-agent: *
-Disallow:
+Disallow: /admin
+Disallow: /account
+Disallow: /auth
+Disallow: /api
+Disallow: /booking/confirmation
+
+Sitemap: https://www.irishette.com/sitemap.xml

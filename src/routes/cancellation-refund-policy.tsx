@@ -1,19 +1,75 @@
+import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 
 import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useTRPC } from '@/integrations/trpc/react';
+import { describeTiers } from '@/lib/booking/cancellation-policy';
+import { CHECK_IN_TIME_LABEL } from '@/lib/site';
+import { canonicalLink, seo } from '@/utils/seo';
 import { cn } from '@/utils/twMerge';
 
 export const Route = createFileRoute('/cancellation-refund-policy')({
 	head: () => ({
-		meta: [
-			{
-				title: 'Cancellation & Refund Policy | Irishette.com',
-			},
-		],
+		meta: seo({
+			title: 'Cancellation & Refund Policy | Irishette.com',
+			description:
+				"Irishette's cancellation windows and refund amounts for reservations, and how to cancel a booking.",
+			path: '/cancellation-refund-policy',
+		}),
+		links: [canonicalLink('/cancellation-refund-policy')],
 	}),
+	// The refund windows come from the active policy (the admin dashboard), so
+	// this page always matches what a cancellation actually refunds.
+	loader: ({ context }) =>
+		context.queryClient.ensureQueryData(
+			context.trpc.policies.getCancellationPolicy.queryOptions(),
+		),
 	component: CancellationRefundPolicyPage,
 });
+
+function tierStyle(refundPercent: number) {
+	if (refundPercent >= 100) return 'border-green-200 bg-green-50';
+	return refundPercent > 0
+		? 'border-yellow-200 bg-yellow-50'
+		: 'border-red-200 bg-red-50';
+}
+
+/** The active policy's refund windows, most notice first. */
+function RefundTiers() {
+	const trpc = useTRPC();
+	const { data: policy } = useSuspenseQuery(
+		trpc.policies.getCancellationPolicy.queryOptions(),
+	);
+	return (
+		<div className="space-y-6">
+			{describeTiers(policy.tiers).map((tier) => (
+				<div
+					key={tier.label}
+					className={cn('rounded-lg border p-4', tierStyle(tier.refundPercent))}
+				>
+					<h3 className="mb-2 text-xl font-semibold">
+						Cancellation: {tier.label}
+					</h3>
+					<ul className="space-y-1 text-muted-foreground">
+						<li>
+							<strong>Penalty:</strong>{' '}
+							{tier.refundPercent >= 100
+								? 'None'
+								: `${100 - tier.refundPercent}% of the booking amount`}
+						</li>
+						<li>
+							<strong>Refund:</strong>{' '}
+							{tier.refundPercent === 0
+								? 'No refund will be issued'
+								: `${tier.refundPercent}% of the booking amount`}
+						</li>
+					</ul>
+				</div>
+			))}
+		</div>
+	);
+}
 
 function CancellationRefundPolicyPage() {
 	return (
@@ -25,7 +81,7 @@ function CancellationRefundPolicyPage() {
 						Cancellation and Refund Policy
 					</h1>
 					<p className="text-lg text-muted-foreground">
-						Last Updated: October 16, 2025
+						Last Updated: November 13, 2026
 					</p>
 				</div>
 			</section>
@@ -53,49 +109,13 @@ function CancellationRefundPolicyPage() {
 									Cancellation Timeframes and Penalties
 								</h2>
 
-								<div className="space-y-6">
-									<div className="rounded-lg border border-green-200 bg-green-50 p-4">
-										<h3 className="mb-2 text-xl font-semibold">
-											Cancellation More Than 72 Hours Before Check-In
-										</h3>
-										<ul className="space-y-1 text-muted-foreground">
-											<li>
-												<strong>Penalty:</strong> None
-											</li>
-											<li>
-												<strong>Refund:</strong> 100% of the booking amount
-											</li>
-										</ul>
-									</div>
-
-									<div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
-										<h3 className="mb-2 text-xl font-semibold">
-											Cancellation Between 72-24 Hours Before Check-In
-										</h3>
-										<ul className="space-y-1 text-muted-foreground">
-											<li>
-												<strong>Penalty:</strong> 50% of the booking amount
-											</li>
-											<li>
-												<strong>Refund:</strong> 50% of the booking amount
-											</li>
-										</ul>
-									</div>
-
-									<div className="rounded-lg border border-red-200 bg-red-50 p-4">
-										<h3 className="mb-2 text-xl font-semibold">
-											Cancellation Within 24 Hours of Check-In
-										</h3>
-										<ul className="space-y-1 text-muted-foreground">
-											<li>
-												<strong>Penalty:</strong> 100% of the booking amount
-											</li>
-											<li>
-												<strong>Refund:</strong> No refund will be issued
-											</li>
-										</ul>
-									</div>
-								</div>
+								<RefundTiers />
+								<p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+									Refund windows are counted back from check-in at{' '}
+									{CHECK_IN_TIME_LABEL} on your arrival date. The booking amount
+									is the total you paid, including taxes and fees. Online
+									cancellation closes at check-in.
+								</p>
 							</section>
 
 							{/* How to Cancel */}
@@ -111,7 +131,7 @@ function CancellationRefundPolicyPage() {
 									<li>
 										<strong>Online:</strong> Visit our{' '}
 										<Link to="/account" className="text-accent underline">
-											Manage Bookings page
+											View Your Bookings page
 										</Link>{' '}
 										and follow the cancellation instructions
 									</li>
@@ -146,9 +166,10 @@ function CancellationRefundPolicyPage() {
 								</h3>
 								<p className="leading-relaxed text-muted-foreground">
 									Once your cancellation is confirmed and a refund is approved,
-									please allow <strong>3-5 business days</strong> for the refund
-									to appear on your card account. The exact timing may vary
-									depending on your financial institution's processing schedule.
+									please allow <strong>5-10 business days</strong> for the
+									refund to appear on your card account. The exact timing may
+									vary depending on your financial institution's processing
+									schedule.
 								</p>
 							</section>
 
@@ -157,9 +178,15 @@ function CancellationRefundPolicyPage() {
 								<h2 className="mb-4 text-2xl font-bold">No-Show Policy</h2>
 								<p className="leading-relaxed text-muted-foreground">
 									Failure to arrive on your scheduled check-in date without
-									prior cancellation will be treated as a cancellation within 24
-									hours of check-in, resulting in forfeiture of your entire
-									booking amount with no refund issued.
+									prior cancellation will be treated as a cancellation after
+									check-in ({CHECK_IN_TIME_LABEL}), resulting in forfeiture of
+									your entire booking amount with no refund issued.
+								</p>
+								<p className="mt-3 leading-relaxed text-muted-foreground">
+									You are welcome to arrive earlier than {CHECK_IN_TIME_LABEL}.
+									The estimated arrival time you choose when booking only helps
+									us plan to meet you; it does not change your check-in time,
+									the cancellation windows or any refund.
 								</p>
 							</section>
 
@@ -174,29 +201,15 @@ function CancellationRefundPolicyPage() {
 								</p>
 							</section>
 
-							{/* Deposits and Payment */}
+							{/* Payment */}
 							<section className="mb-8">
-								<h2 className="mb-4 text-2xl font-bold">
-									Deposits and Payment
-								</h2>
-
-								<h3 className="mt-6 mb-3 text-xl font-semibold">
-									Deposit Application
-								</h3>
+								<h2 className="mb-4 text-2xl font-bold">Payment</h2>
 								<p className="leading-relaxed text-muted-foreground">
-									If a deposit was collected at the time of booking, that amount
-									will be applied to your booking total as a credit. Any
-									remaining balance will be due at checkout.
-								</p>
-
-								<h3 className="mt-6 mb-3 text-xl font-semibold">
-									Deposit Refunds
-								</h3>
-								<p className="leading-relaxed text-muted-foreground">
-									Deposits are subject to the same cancellation timeframes and
-									penalties outlined above. If you cancel your reservation, the
-									deposit will be refunded according to the applicable penalty
-									tier.
+									The full booking amount, including taxes and fees, is due
+									upfront when you book. We do not take deposits, and no balance
+									is collected at check-in or checkout. Any refund is a
+									percentage of the total you paid, according to the
+									cancellation windows above.
 								</p>
 							</section>
 
@@ -226,7 +239,8 @@ function CancellationRefundPolicyPage() {
 									<li>Disruptive or illegal behavior</li>
 									<li>Damage to property or furnishings</li>
 									<li>Unauthorized guests or occupancy violations</li>
-									<li>Smoking in non-smoking areas</li>
+									<li>Smoking anywhere on the property</li>
+									<li>Bringing pets onto the property</li>
 									<li>Any other breach of our Terms of Service</li>
 								</ul>
 								<p className="mt-3 leading-relaxed text-muted-foreground">
@@ -311,14 +325,14 @@ function CancellationRefundPolicyPage() {
 										<strong>Phone:</strong> 254-454-5558
 									</p>
 									<p className="text-muted-foreground">
-										<strong>Email:</strong> info@irishette.com
+										<strong>Email:</strong> bookings@irishette.com
 									</p>
 									<Link
 										to="/account"
 										data-slot="button"
 										className={cn(buttonVariants(), 'mt-4')}
 									>
-										Manage Bookings
+										View Your Bookings
 									</Link>
 								</div>
 							</section>

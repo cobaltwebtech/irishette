@@ -59,6 +59,7 @@ describe('email logo', () => {
 		await sendBookingConfirmedEmails(db(), env, booking, room);
 		await sendPaymentFailedEmail(db(), env, booking, room);
 		await sendAdminAlert(db(), env, {
+			category: 'payment_problem',
 			subject: 'Logo alert',
 			heading: 'Alert',
 			paragraphs: ['Hello'],

@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 import { useTRPC } from '@/integrations/trpc/react';
 import { refreshSession, useSession } from '@/lib/auth/session';
+import { arrivalWindowSchema } from '@/lib/booking/arrival-windows';
 import { guestDetailsSchema } from '@/lib/booking/payment-validation';
 import { useBookingStore } from '@/stores';
 import {
@@ -19,6 +20,8 @@ export interface GuestDetailsForm {
 	guestEmail: string;
 	guestPhone: string;
 	numberOfGuests: number;
+	/** Arrival window start ("HH:MM"); empty until the guest picks one. */
+	estimatedArrival: string;
 	specialRequests: string;
 }
 
@@ -43,6 +46,7 @@ export function validateGuestDetails(
 		guestPhone: form.guestPhone,
 		guestCount: form.numberOfGuests,
 		specialRequests: form.specialRequests || undefined,
+		estimatedArrival: form.estimatedArrival || undefined,
 	});
 	const errors: GuestDetailsErrors = {};
 	if (result.success) return errors;
@@ -75,6 +79,10 @@ function holdInput(state: BookingState) {
 		console.error('Invalid total amount:', pricing.totalAmount);
 		return { error: 'Invalid booking total. Please refresh and try again.' };
 	}
+	const arrival = arrivalWindowSchema.safeParse(guestInfo.estimatedArrival);
+	if (!arrival.success) {
+		return { error: 'Please select your estimated arrival time.' };
+	}
 	return {
 		input: {
 			roomId,
@@ -85,6 +93,7 @@ function holdInput(state: BookingState) {
 			guestEmail: guestInfo.email,
 			guestPhone: guestInfo.phone,
 			specialRequests: guestInfo.specialRequests || '',
+			estimatedArrival: arrival.data,
 			basePrice: pricing.basePrice,
 			serviceFee: pricing.fees || 0,
 			taxAmount: pricing.taxes || 0,
@@ -219,6 +228,7 @@ export function useBookingDetailsSubmit() {
 			email: form.guestEmail,
 			phone: form.guestPhone,
 			specialRequests: form.specialRequests || undefined,
+			estimatedArrival: form.estimatedArrival,
 		});
 		if (form.numberOfGuests !== booking.guestCount) {
 			booking.actions.setGuestCount(form.numberOfGuests);

@@ -140,9 +140,9 @@ describe('cancellation windows and refunds', () => {
 			refundAmount: 250,
 			cancellationRefundPercent: 100,
 		});
-		// 100% tier: until 4:00 PM CT three days before check-in.
+		// 100% tier: until 4:00 PM CT seven days before check-in.
 		expect(after.cancellationCutoffAt?.toISOString()).toBe(
-			new Date(after.checkInAt.getTime() - 72 * 3_600_000).toISOString(),
+			new Date(after.checkInAt.getTime() - 168 * 3_600_000).toISOString(),
 		);
 	});
 

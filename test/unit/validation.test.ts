@@ -91,6 +91,7 @@ const booking = {
 	guestName: 'Ada Guest',
 	guestEmail: 'ada@example.test',
 	guestPhone: '5555550100',
+	estimatedArrival: '17:00',
 	basePrice: 200,
 	totalAmount: 250,
 };
@@ -115,6 +116,21 @@ describe('createBookingSchema', () => {
 				checkOutDate: '2030-07-03',
 			}).success,
 		).toBe(false);
+	});
+
+	it('requires an estimated arrival from the offered windows', () => {
+		const { estimatedArrival: _omitted, ...withoutArrival } = booking;
+		expect(createBookingSchema.safeParse(withoutArrival).success).toBe(false);
+		for (const estimatedArrival of ['', '12:00', '17:30', '24:00', 'noon']) {
+			expect(
+				createBookingSchema.safeParse({ ...booking, estimatedArrival }).success,
+			).toBe(false);
+		}
+		for (const estimatedArrival of ['13:00', '16:00', '23:00']) {
+			expect(
+				createBookingSchema.safeParse({ ...booking, estimatedArrival }).success,
+			).toBe(true);
+		}
 	});
 });
 

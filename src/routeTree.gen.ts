@@ -33,6 +33,7 @@ import { Route as ApiStripeSplatRouteImport } from './routes/api/stripe.$'
 import { Route as ApiTrpcSplatRouteImport } from './routes/api/trpc.$'
 import { Route as AuthedAdminAdminIndexRouteImport } from './routes/_authed/_admin/admin/index'
 import { Route as AuthedAdminAdminCancellationPolicyRouteImport } from './routes/_authed/_admin/admin/cancellation-policy'
+import { Route as AuthedAdminAdminSettingsRouteImport } from './routes/_authed/_admin/admin/settings'
 import { Route as AuthedAccountBookingPublicIdRouteImport } from './routes/_authed/account/booking.$publicId'
 import { Route as AuthedBookingConfirmationPublicIdRouteImport } from './routes/_authed/booking/confirmation.$publicId'
 import { Route as AuthedAdminAdminBookingsPublicIdRouteImport } from './routes/_authed/_admin/admin/bookings/$publicId'
@@ -167,6 +168,12 @@ const AuthedAdminAdminCancellationPolicyRoute =
     path: '/admin/cancellation-policy',
     getParentRoute: () => AuthedAdminRoute,
   } as any)
+const AuthedAdminAdminSettingsRoute =
+  AuthedAdminAdminSettingsRouteImport.update({
+    id: '/admin/settings',
+    path: '/admin/settings',
+    getParentRoute: () => AuthedAdminRoute,
+  } as any)
 const AuthedAccountBookingPublicIdRoute =
   AuthedAccountBookingPublicIdRouteImport.update({
     id: '/account/booking/$publicId',
@@ -262,6 +269,7 @@ export interface FileRoutesByFullPath {
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/account/': typeof AuthedAccountIndexRoute
   '/admin/cancellation-policy': typeof AuthedAdminAdminCancellationPolicyRoute
+  '/admin/settings': typeof AuthedAdminAdminSettingsRoute
   '/account/booking/$publicId': typeof AuthedAccountBookingPublicIdRoute
   '/booking/confirmation/$publicId': typeof AuthedBookingConfirmationPublicIdRoute
   '/admin/': typeof AuthedAdminAdminIndexRoute
@@ -298,6 +306,7 @@ export interface FileRoutesByTo {
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/account': typeof AuthedAccountIndexRoute
   '/admin/cancellation-policy': typeof AuthedAdminAdminCancellationPolicyRoute
+  '/admin/settings': typeof AuthedAdminAdminSettingsRoute
   '/account/booking/$publicId': typeof AuthedAccountBookingPublicIdRoute
   '/booking/confirmation/$publicId': typeof AuthedBookingConfirmationPublicIdRoute
   '/admin': typeof AuthedAdminAdminIndexRoute
@@ -337,6 +346,7 @@ export interface FileRoutesById {
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/_authed/account/': typeof AuthedAccountIndexRoute
   '/_authed/_admin/admin/cancellation-policy': typeof AuthedAdminAdminCancellationPolicyRoute
+  '/_authed/_admin/admin/settings': typeof AuthedAdminAdminSettingsRoute
   '/_authed/account/booking/$publicId': typeof AuthedAccountBookingPublicIdRoute
   '/_authed/booking/confirmation/$publicId': typeof AuthedBookingConfirmationPublicIdRoute
   '/_authed/_admin/admin/': typeof AuthedAdminAdminIndexRoute
@@ -375,6 +385,7 @@ export interface FileRouteTypes {
     | '/api/trpc/$'
     | '/account/'
     | '/admin/cancellation-policy'
+    | '/admin/settings'
     | '/account/booking/$publicId'
     | '/booking/confirmation/$publicId'
     | '/admin/'
@@ -411,6 +422,7 @@ export interface FileRouteTypes {
     | '/api/trpc/$'
     | '/account'
     | '/admin/cancellation-policy'
+    | '/admin/settings'
     | '/account/booking/$publicId'
     | '/booking/confirmation/$publicId'
     | '/admin'
@@ -449,6 +461,7 @@ export interface FileRouteTypes {
     | '/api/trpc/$'
     | '/_authed/account/'
     | '/_authed/_admin/admin/cancellation-policy'
+    | '/_authed/_admin/admin/settings'
     | '/_authed/account/booking/$publicId'
     | '/_authed/booking/confirmation/$publicId'
     | '/_authed/_admin/admin/'
@@ -656,6 +669,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAdminAdminCancellationPolicyRouteImport
       parentRoute: typeof AuthedAdminRoute
     }
+    '/_authed/_admin/admin/settings': {
+      id: '/_authed/_admin/admin/settings'
+      path: '/admin/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AuthedAdminAdminSettingsRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
     '/_authed/account/booking/$publicId': {
       id: '/_authed/account/booking/$publicId'
       path: '/account/booking/$publicId'
@@ -745,6 +765,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthedAdminRouteChildren {
   AuthedAdminAdminCancellationPolicyRoute: typeof AuthedAdminAdminCancellationPolicyRoute
+  AuthedAdminAdminSettingsRoute: typeof AuthedAdminAdminSettingsRoute
   AuthedAdminAdminIndexRoute: typeof AuthedAdminAdminIndexRoute
   AuthedAdminAdminBookingsPublicIdRoute: typeof AuthedAdminAdminBookingsPublicIdRoute
   AuthedAdminAdminBookingsCurrentBookingsRoute: typeof AuthedAdminAdminBookingsCurrentBookingsRoute
@@ -761,6 +782,7 @@ interface AuthedAdminRouteChildren {
 const AuthedAdminRouteChildren: AuthedAdminRouteChildren = {
   AuthedAdminAdminCancellationPolicyRoute:
     AuthedAdminAdminCancellationPolicyRoute,
+  AuthedAdminAdminSettingsRoute: AuthedAdminAdminSettingsRoute,
   AuthedAdminAdminIndexRoute: AuthedAdminAdminIndexRoute,
   AuthedAdminAdminBookingsPublicIdRoute: AuthedAdminAdminBookingsPublicIdRoute,
   AuthedAdminAdminBookingsCurrentBookingsRoute:

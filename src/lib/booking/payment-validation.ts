@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { phoneNumberSchema } from '@/lib/auth/user-validation';
+import { arrivalWindowSchema } from '@/lib/booking/arrival-windows';
 import { isoDateSchema } from '@/utils/date-range';
 import { publicIdSchema } from '@/utils/ids';
 
@@ -22,6 +23,7 @@ const createBookingBaseSchema = z.object({
 	guestEmail: z.email(),
 	guestPhone: phoneNumberSchema,
 	specialRequests: z.string().max(1000).optional(),
+	estimatedArrival: arrivalWindowSchema,
 
 	basePrice: z.number().nonnegative().optional(),
 	serviceFee: z.number().nonnegative().optional(),
@@ -36,6 +38,7 @@ export const guestDetailsSchema = createBookingBaseSchema.pick({
 	guestPhone: true,
 	guestCount: true,
 	specialRequests: true,
+	estimatedArrival: true,
 });
 
 export const createBookingSchema = createBookingBaseSchema.refine(

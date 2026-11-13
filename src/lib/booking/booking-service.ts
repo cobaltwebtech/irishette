@@ -216,6 +216,7 @@ export async function createHold(
 		guestEmail: input.guestEmail,
 		guestPhone: input.guestPhone,
 		specialRequests: input.specialRequests,
+		estimatedArrival: input.estimatedArrival,
 		baseAmount: price.baseAmount,
 		feesAmount: price.feesAmount,
 		taxAmount: price.taxAmount,
@@ -872,6 +873,7 @@ function alertCancellationRefundFailed(
 		`cancellation refund failed ${booking.confirmationId}`,
 		() =>
 			sendAdminAlert(deps.db, deps.env, {
+				category: 'payment_problem',
 				subject: `Refund failed: ${booking.confirmationId}`,
 				heading: 'A cancellation refund failed',
 				paragraphs: [

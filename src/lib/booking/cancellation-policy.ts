@@ -31,13 +31,17 @@ export interface CancellationPolicy {
 	tiers: CancellationTier[];
 }
 
-/** The policy in docs/cancellation-refund-policy.md (Oct 16, 2025). */
+/**
+ * The policy in docs/cancellation-refund-policy.md (Nov 13, 2026): full
+ * refund 7 days or more before check-in, 75% from 3 days, nothing after.
+ * Used until an admin saves a policy (e.g. in a fresh production database).
+ */
 export const DEFAULT_CANCELLATION_POLICY: CancellationPolicy = {
 	id: null,
 	name: 'Standard policy',
 	tiers: [
-		{ minHoursBefore: 72, refundPercent: 100 },
-		{ minHoursBefore: 24, refundPercent: 50 },
+		{ minHoursBefore: 168, refundPercent: 100 },
+		{ minHoursBefore: 72, refundPercent: 75 },
 		{ minHoursBefore: 0, refundPercent: 0 },
 	],
 };
@@ -93,6 +97,43 @@ export type CancellationPolicyInput = z.infer<
 /** Tiers from the most notice to the least. */
 export function sortTiers(tiers: CancellationTier[]): CancellationTier[] {
 	return [...tiers].sort((a, b) => b.minHoursBefore - a.minHoursBefore);
+}
+
+/** "168" -> "7 days", "36" -> "36 hours" (whole days when they divide). */
+function formatNotice(hours: number): string {
+	const unit = hours % 24 === 0 ? 'day' : 'hour';
+	const count = unit === 'day' ? hours / 24 : hours;
+	return `${count} ${unit}${count === 1 ? '' : 's'}`;
+}
+
+/** A tier worded as a window before check-in, e.g. for the policy page. */
+export interface TierWindow {
+	/** "At least 7 days before check-in" */
+	label: string;
+	refundPercent: number;
+}
+
+/**
+ * Each tier as a window (most notice first), written so that a cancellation
+ * exactly at a cutoff falls in the higher-refund window, like the quote.
+ */
+export function describeTiers(tiers: CancellationTier[]): TierWindow[] {
+	const sorted = sortTiers(tiers);
+	return sorted.map((tier, i) => {
+		const longer = i > 0 ? sorted[i - 1].minHoursBefore : null;
+		let label: string;
+		if (longer === null) {
+			label =
+				tier.minHoursBefore === 0
+					? 'Any time before check-in'
+					: `At least ${formatNotice(tier.minHoursBefore)} before check-in`;
+		} else if (tier.minHoursBefore === 0) {
+			label = `Less than ${formatNotice(longer)} before check-in`;
+		} else {
+			label = `${formatNotice(tier.minHoursBefore)} to less than ${formatNotice(longer)} before check-in`;
+		}
+		return { label, refundPercent: tier.refundPercent };
+	});
 }
 
 /** A tier with its cutoff instant: it applies while `now <= until`. */

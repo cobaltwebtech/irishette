@@ -35,6 +35,8 @@ export interface GuestInfo {
 	email: string;
 	phone: string;
 	specialRequests?: string;
+	/** Arrival window start ("HH:MM"), see src/lib/booking/arrival-windows.ts. */
+	estimatedArrival?: string;
 }
 
 export interface BookingState {
@@ -290,6 +292,7 @@ export const bookingActions = {
 			bookingActions.canProceedToDetails() &&
 			state.guestInfo?.name &&
 			state.guestInfo?.email &&
+			state.guestInfo?.estimatedArrival &&
 			state.pricing
 		);
 	},

@@ -93,6 +93,13 @@ export function AdminUser({
 								<Icon icon="tabler:layout-dashboard" />
 								Admin Dashboard
 							</DropdownMenuItem>
+							<DropdownMenuItem
+								nativeButton={false}
+								render={<Link to="/admin/settings" />}
+							>
+								<Icon icon="tabler:settings" />
+								Account Settings
+							</DropdownMenuItem>
 						</DropdownMenuGroup>
 						<DropdownMenuSeparator />
 					</DropdownMenuContent>

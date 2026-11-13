@@ -367,6 +367,7 @@ function alertRefundFailed(
 	});
 	inBackground(deps, `refund failed ${refund.id}`, () =>
 		sendAdminAlert(deps.db, deps.env, {
+			category: 'payment_problem',
 			subject: `Refund failed${booking ? `: ${booking.confirmationId}` : ''}`,
 			heading: 'A refund failed',
 			paragraphs: [

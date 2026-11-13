@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Public pages only (see robots.txt for what is excluded). Static on purpose:
+     the rooms are fixed routes. Add a <url> here when you add a public route. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+	<url><loc>https://www.irishette.com/</loc></url>
+	<url><loc>https://www.irishette.com/rooms/rose-room</loc></url>
+	<url><loc>https://www.irishette.com/rooms/texas-room</loc></url>
+	<url><loc>https://www.irishette.com/booking</loc></url>
+	<url><loc>https://www.irishette.com/contact</loc></url>
+	<url><loc>https://www.irishette.com/cancellation-refund-policy</loc></url>
+	<url><loc>https://www.irishette.com/privacy-policy</loc></url>
+	<url><loc>https://www.irishette.com/terms-of-service</loc></url>
+</urlset>

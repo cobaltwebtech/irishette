@@ -43,6 +43,7 @@ test.describe('booking with a test card', () => {
 
 		await page.getByLabel('Full Name *').fill('E2E Guest');
 		await page.getByLabel('Phone Number *').fill('5555550100');
+		await page.getByLabel('Estimated Arrival Time *').selectOption('17:00');
 		await page.getByRole('button', { name: 'Continue to Payment' }).click();
 
 		// Stripe Payment Element (iframe).

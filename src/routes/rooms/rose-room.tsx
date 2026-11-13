@@ -14,6 +14,7 @@ import {
 	RoomDetailsSection,
 	RoomGallerySection,
 } from '@/components/rooms/RoomSections';
+import { canonicalLink, seo, shareImage } from '@/utils/seo';
 
 export const Route = createFileRoute('/rooms/rose-room')({
 	loader: ({ context }) =>
@@ -21,11 +22,14 @@ export const Route = createFileRoute('/rooms/rose-room')({
 			context.trpc.rooms.get.queryOptions({ slug: 'rose-room' }),
 		),
 	head: () => ({
-		meta: [
-			{
-				title: 'Rose Room | Irishette.com',
-			},
-		],
+		meta: seo({
+			title: 'Rose Room | Irishette.com',
+			description:
+				'The Rose Room at Irishette in Dublin, Texas: a private-entrance suite with a queen bed, kitchenette, walk-in shower and a private deck.',
+			image: shareImage('rose-room', '7ec19df2-0b06-4d10-8777-3558acb41689'),
+			path: '/rooms/rose-room',
+		}),
+		links: [canonicalLink('/rooms/rose-room')],
 	}),
 	component: RoseRoomPage,
 });

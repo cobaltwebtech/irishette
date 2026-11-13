@@ -72,6 +72,10 @@ export const bookings = sqliteTable(
 
 		// Admin and customer service
 		specialRequests: text('special_requests'),
+		// Estimated arrival window the guest picked at booking: its start as
+		// "HH:MM" property time (src/lib/booking/arrival-windows.ts). Only for
+		// the hosts; null on bookings made before the question existed.
+		estimatedArrival: text('estimated_arrival'),
 		internalNotes: text('internal_notes'), // Admin-only notes
 
 		// Stripe integration

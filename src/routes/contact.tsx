@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { AuthError } from '@/components/auth/AuthCard';
 import { TurnstileField, useTurnstile } from '@/components/auth/TurnstileField';
+import { CancellationHighlights } from '@/components/booking/CancellationHighlights';
 import { Button } from '@/components/ui/button';
 import {
 	Card,
@@ -27,6 +28,7 @@ import {
 	CONTACT_PHONE,
 	CONTACT_PHONE_HREF,
 } from '@/lib/site';
+import { canonicalLink, seo } from '@/utils/seo';
 
 export const Route = createFileRoute('/contact')({
 	// ?booking=ABC123 prefills the confirmation ID ("Contact support" links).
@@ -34,17 +36,18 @@ export const Route = createFileRoute('/contact')({
 		booking: z.string().trim().max(20).optional().catch(undefined),
 	}),
 	head: () => ({
-		meta: [
-			{
-				title: 'Contact Us | Irishette.com',
-			},
-			{
-				name: 'description',
-				content:
-					"Get in touch with Irishette Bed & Breakfast. We're here to help with your booking questions and travel planning.",
-			},
-		],
+		meta: seo({
+			title: 'Contact Us | Irishette.com',
+			description:
+				"Get in touch with Irishette Bed & Breakfast. We're here to help with your booking questions and travel planning.",
+			path: '/contact',
+		}),
+		links: [canonicalLink('/contact')],
 	}),
+	loader: ({ context }) =>
+		context.queryClient.ensureQueryData(
+			context.trpc.policies.getCancellationPolicy.queryOptions(),
+		),
 	component: ContactPage,
 });
 
@@ -152,7 +155,7 @@ function ContactPage() {
 													Located in historic Dublin, Texas
 												</p>
 												<address className="text-accent not-italic">
-													123 Historic Street
+													506 W Mesquite St
 													<br />
 													Dublin, TX 76446
 												</address>
@@ -207,9 +210,8 @@ function ContactPage() {
 									<h3 className="mb-3 text-lg font-semibold text-accent">
 										Cancellation Policy
 									</h3>
+									<CancellationHighlights className="mb-3 space-y-1 text-muted-foreground" />
 									<p className="text-muted-foreground">
-										UPDATE CANCELLATION POLICY.
-										<br />
 										Contact us for special circumstances.
 									</p>
 								</div>
