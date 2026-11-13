@@ -26,9 +26,30 @@ interface AdminBookingNotificationEmailProps extends EmailBrandProps {
 	checkOutDate: string;
 	numberOfNights: number;
 	numberOfGuests: number;
+	/** Estimated arrival window, e.g. "5:00 PM - 6:00 PM"; null on older bookings. */
+	estimatedArrival?: string | null;
 	specialRequests?: string;
 	totalAmount: number;
 	adminDashboardUrl: string;
+}
+
+/** The guest's arrival window: the hosts meet every guest in person. */
+function EstimatedArrivalRow({
+	estimatedArrival,
+}: {
+	estimatedArrival?: string | null;
+}) {
+	if (!estimatedArrival) return null;
+	return (
+		<Row className="mb-3">
+			<Column>
+				<Text className="mb-1 text-xs font-semibold text-blue-700">
+					ESTIMATED ARRIVAL
+				</Text>
+				<Text className="text-sm text-blue-900">{estimatedArrival}</Text>
+			</Column>
+		</Row>
+	);
 }
 
 export const AdminBookingNotificationEmail: React.FC<
@@ -45,6 +66,7 @@ export const AdminBookingNotificationEmail: React.FC<
 	checkOutDate,
 	numberOfNights,
 	numberOfGuests,
+	estimatedArrival,
 	specialRequests,
 	totalAmount,
 	adminDashboardUrl,
@@ -160,6 +182,8 @@ export const AdminBookingNotificationEmail: React.FC<
 									</Text>
 								</Column>
 							</Row>
+
+							<EstimatedArrivalRow estimatedArrival={estimatedArrival} />
 
 							{/* Special Requests */}
 							{specialRequests && (

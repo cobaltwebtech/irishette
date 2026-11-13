@@ -21,20 +21,26 @@ import {
 	MAGIC_LINK_EXPIRES_IN,
 	PASSWORD_RESET_EXPIRES_IN,
 } from '@/lib/auth/auth-constants';
+import { storedArrivalLabel } from '@/lib/booking/arrival-windows';
 import { claimAlert, claimEmail, releaseEmail } from '@/lib/email/email-dedupe';
+import type { NotificationCategory } from '@/lib/email/notification-categories';
 import { getAdminEmails } from '@/lib/server/admin-query';
 import {
 	CHECK_IN_TIME,
 	CHECK_OUT_TIME,
 	CONTACT_EMAIL,
+	CONTACT_PHONE,
 	CONTACT_PHONE_E164,
 	EMAIL_FROM_ADMIN,
 	EMAIL_FROM_AUTH,
 	EMAIL_FROM_BOOKINGS,
+	EMAIL_REPLY_TO,
 	type EmailSender,
 	formatAddress,
 	formatTimeOfDay,
+	HOUSE_RULES,
 	LOGO_PATH,
+	PARKING_NOTE,
 	PROPERTY_ADDRESS,
 	type PropertyAddress,
 	SITE_NAME,
@@ -151,6 +157,13 @@ export function reservationMarkup(
 	};
 }
 
+/**
+ * Guests answer booking emails (the confirmation says "reply to this email"),
+ * but the sending subdomain has no inbox: replies go to CONTACT_EMAIL.
+ */
+const replyToFor = (from: EmailSender) =>
+	from === EMAIL_FROM_BOOKINGS ? EMAIL_REPLY_TO : undefined;
+
 function guestConfirmation(
 	booking: Booking,
 	room: RoomInfo,
@@ -158,6 +171,7 @@ function guestConfirmation(
 ): OutgoingEmail {
 	return {
 		from: EMAIL_FROM_BOOKINGS,
+		replyTo: EMAIL_REPLY_TO,
 		to: [booking.guestEmail],
 		subject: `Booking Confirmed - ${booking.confirmationId} | Irishette Bed & Breakfast`,
 		element: React.createElement(BookingConfirmationEmail, {
@@ -165,6 +179,10 @@ function guestConfirmation(
 			accountUrl: `${baseUrl}/account`,
 			reservation: reservationMarkup(booking, room, baseUrl),
 			propertyAddress: formatAddress(PROPERTY_ADDRESS),
+			estimatedArrival: storedArrivalLabel(booking.estimatedArrival),
+			propertyNotes: [PARKING_NOTE, ...HOUSE_RULES],
+			contactPhone: CONTACT_PHONE,
+			policyUrl: `${baseUrl}/cancellation-refund-policy`,
 			...branding(baseUrl),
 			contactEmail: CONTACT_EMAIL,
 		}),
@@ -183,6 +201,7 @@ function bookingNotice(
 ): OutgoingEmail {
 	return {
 		from,
+		replyTo: replyToFor(from),
 		to,
 		subject,
 		element: React.createElement(BookingNoticeEmail, {
@@ -213,6 +232,7 @@ function adminBookingNotification(
 			checkOutDate: booking.checkOutDate,
 			numberOfNights: booking.numberOfNights,
 			numberOfGuests: booking.numberOfGuests,
+			estimatedArrival: storedArrivalLabel(booking.estimatedArrival),
 			specialRequests: booking.specialRequests ?? undefined,
 			totalAmount: booking.totalAmount,
 			adminDashboardUrl: `${baseUrl}/admin/bookings/${booking.publicId}`,
@@ -230,6 +250,7 @@ function notification(
 ): OutgoingEmail {
 	return {
 		from,
+		replyTo: replyToFor(from),
 		to,
 		subject,
 		element: React.createElement(NotificationEmail, {
@@ -328,7 +349,7 @@ export async function sendBookingConfirmedEmails(
 	booking: Booking,
 	room: RoomInfo,
 ): Promise<EmailResult> {
-	const adminEmails = await getAdminEmails(db);
+	const adminEmails = await getAdminEmails(db, 'new_booking');
 	const emails = [guestConfirmation(booking, room, env.BETTER_AUTH_URL)];
 	if (adminEmails.length > 0) {
 		emails.push(
@@ -378,6 +399,8 @@ async function sendBookingNotices(
 	room: RoomInfo,
 	notice: {
 		kind: string;
+		/** Which admins get their copy (the guest always gets theirs). */
+		category: NotificationCategory;
 		idempotencyKey: string;
 		highlight: React.ComponentProps<typeof BookingNoticeEmail>['highlight'];
 		guest: NoticeContent;
@@ -403,7 +426,7 @@ async function sendBookingNotices(
 			},
 		),
 	];
-	const adminEmails = await getAdminEmails(db);
+	const adminEmails = await getAdminEmails(db, notice.category);
 	if (adminEmails.length > 0) {
 		const { subject: adminSubject, ...admin } = notice.admin;
 		emails.push(
@@ -441,6 +464,7 @@ export function sendCancellationEmails(
 ): Promise<EmailResult> {
 	return sendBookingNotices(db, env, booking, room, {
 		kind: `booking cancelled ${booking.confirmationId}`,
+		category: 'booking_cancelled',
 		idempotencyKey: `booking-cancelled/${booking.id}`,
 		highlight: {
 			title: 'Cancellation',
@@ -561,6 +585,7 @@ export function sendRefundEmails(
 	const status = REFUND_STATUSES[refund.status] ?? refund.status;
 	return sendBookingNotices(db, env, booking, room, {
 		kind: `refund ${refund.status} ${booking.confirmationId}`,
+		category: 'refund_issued',
 		idempotencyKey: `refund/${refund.refundId}/${refund.status}${refund.reference ? '/ref' : ''}`,
 		highlight: { title: 'Refund details', rows },
 		guest: {
@@ -624,7 +649,8 @@ export function sendPaymentFailedEmail(
 }
 
 /**
- * An alert for all admins (sync problems, conflicts, automatic refunds).
+ * An alert for the admins who get email for `alert.category` (sync problems,
+ * conflicts, failed refunds, released payments).
  * Throttled: the first alert for a given `idempotencyKey` (or subject) in an
  * hour is sent, repeats in that hour are counted and skipped, and the next
  * email for it says how many were suppressed.
@@ -633,6 +659,10 @@ export async function sendAdminAlert(
 	db: Database,
 	env: EmailEnv,
 	alert: {
+		category: Extract<
+			NotificationCategory,
+			'payment_problem' | 'calendar_sync'
+		>;
 		subject: string;
 		heading: string;
 		paragraphs: string[];
@@ -641,7 +671,7 @@ export async function sendAdminAlert(
 		idempotencyKey?: string;
 	},
 ): Promise<EmailResult> {
-	const adminEmails = await getAdminEmails(db);
+	const adminEmails = await getAdminEmails(db, alert.category);
 	if (adminEmails.length === 0) return { success: true };
 	const claim = await claimAlert(
 		db,

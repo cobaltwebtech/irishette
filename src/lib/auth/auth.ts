@@ -32,6 +32,9 @@ export const AUTH_RATE_LIMIT_RULES = {
 	'/request-password-reset': { window: 300, max: 3 },
 	'/reset-password': { window: 300, max: 5 },
 	'/send-verification-email': { window: 300, max: 3 },
+	// Signed-in account changes (/account, /admin/settings).
+	'/change-password': { window: 300, max: 5 },
+	'/change-email': { window: 300, max: 3 },
 } as const;
 
 // Built once per isolate: Better Auth 1.7 validates its schema on creation and

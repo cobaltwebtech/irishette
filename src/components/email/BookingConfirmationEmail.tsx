@@ -7,6 +7,7 @@ import {
 	Head,
 	Heading,
 	Html,
+	Link,
 	Preview,
 	Row,
 	Section,
@@ -32,6 +33,14 @@ interface BookingConfirmationEmailProps extends EmailBrandProps {
 	contactEmail: string;
 	/** Street address (src/lib/site.ts PROPERTY_ADDRESS). */
 	propertyAddress: string;
+	/** Estimated arrival window the guest chose, e.g. "5:00 PM - 6:00 PM". */
+	estimatedArrival?: string | null;
+	/** Parking and house rules (src/lib/site.ts), e.g. "No pets". */
+	propertyNotes: readonly string[];
+	/** Property phone for arrival questions (src/lib/site.ts). */
+	contactPhone: string;
+	/** The Cancellation & Refund Policy page. */
+	policyUrl: string;
 	/** Reservation card markup for Gmail/Outlook; omitted when not available. */
 	reservation?: ReservationMarkupData;
 }
@@ -45,6 +54,10 @@ export const BookingConfirmationEmail: React.FC<
 	siteUrl,
 	contactEmail,
 	propertyAddress,
+	estimatedArrival,
+	propertyNotes,
+	contactPhone,
+	policyUrl,
 	reservation,
 }) => {
 	const { confirmationId } = booking;
@@ -116,6 +129,28 @@ export const BookingConfirmationEmail: React.FC<
 									</Text>
 									<Text className="mb-2 text-sm text-blue-800">
 										<strong>Address:</strong> {propertyAddress}
+									</Text>
+									{estimatedArrival ? (
+										<Text className="mb-2 text-sm text-blue-800">
+											<strong>Estimated arrival:</strong> {estimatedArrival}
+										</Text>
+									) : null}
+									<Text className="mb-2 text-sm text-blue-800">
+										<strong>Arrival:</strong> We will meet you in person to hand
+										over your key, and we will contact you with arrival
+										instructions before your stay. You are welcome to arrive
+										before check-in. If your plans change, call us at{' '}
+										{contactPhone}.
+									</Text>
+									<Text className="mb-2 text-sm text-blue-800">
+										<strong>Good to know:</strong> {propertyNotes.join('. ')}.
+									</Text>
+									<Text className="mb-2 text-sm text-blue-800">
+										<strong>Cancellations:</strong> Please review our{' '}
+										<Link href={policyUrl} className="text-blue-900 underline">
+											Cancellation &amp; Refund Policy
+										</Link>
+										. You can cancel online from your account until check-in.
 									</Text>
 									<Text className="text-sm text-blue-800">
 										<strong>Contact:</strong> Please reply to this email if you

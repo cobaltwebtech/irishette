@@ -1,6 +1,6 @@
 # Terms of Service
 
-**Last Updated:** October 16, 2025
+**Last Updated:** November 13, 2026
 
 ## 1. Agreement to Terms
 
@@ -60,10 +60,11 @@ All cancellations and refunds are subject to our Cancellation and Refund Policy,
 Guests must comply with all posted property rules and regulations during their stay, including:
 
 - Respecting quiet hours
-- No smoking in designated non-smoking areas
+- No smoking anywhere on the property
 - Maximum occupancy limits
-- Pet policies (if applicable)
+- No pets are allowed on the property
 - Proper use of facilities and amenities
+- Free on-site parking is provided for guests
 
 ### 7.2 Conduct
 

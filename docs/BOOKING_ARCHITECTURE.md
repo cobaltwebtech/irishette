@@ -63,7 +63,7 @@ dates).
 | Step | Component | What it does |
 |---|---|---|
 | `auth` | `src/components/booking/AuthenticationStep.tsx` | Magic link sign-in (`authClient.signIn.magicLink`, callback `/booking`) with a Turnstile token in `x-captcha-response`. Signed-in users move to `details` automatically. |
-| `details` | `src/components/booking/BookingDetailsStep.tsx` (fields in `GuestDetailsFields.tsx`, submit in `use-booking-details-submit.ts`) | Name, email, phone, guests (1 to `maxGuests`), special requests, validated with the server's `guestDetailsSchema` (`validateGuestDetails`). `useBookingDetailsSubmit` updates the user's name/phone if changed, re-prices with `calculateBooking`, then calls `createBooking` and stores `bookingId` + `publicId`. |
+| `details` | `src/components/booking/BookingDetailsStep.tsx` (fields in `GuestDetailsFields.tsx`, submit in `use-booking-details-submit.ts`) | Name, email, phone, guests (1 to `maxGuests`), **estimated arrival** (required, see below), special requests, validated with the server's `guestDetailsSchema` (`validateGuestDetails`). `useBookingDetailsSubmit` updates the user's name/phone if changed, re-prices with `calculateBooking`, then calls `createBooking` and stores `bookingId` + `publicId`. |
 | `payment` | `src/components/booking/PaymentStep.tsx` | On mount: `refreshBooking` (extends an expired hold if possible), then `createCheckoutSession`. Renders `CheckoutElementsProvider` + `<PaymentElement>` with the session's line items and total; requires the policies checkbox and `checkout.canConfirm`; `checkout.confirm({ redirect: 'if_required' })`, then navigates to the confirmation page with `?session_id=`. |
 
 The store's steps are `auth`, `details` and `payment` (drafts saved with the
@@ -368,17 +368,34 @@ charts with `useTodayCT()`.
 
 The iCal export stays all-day (date-only) events.
 
+### Estimated arrival
+
+The hosts meet every guest in person to hand over the key, so the details step
+asks for an **estimated arrival** (required): hourly windows from 1:00 PM
+("1:00 PM - 2:00 PM" and so on) up to 10:00 PM - 11:00 PM, then "After 11:00 PM".
+The windows are `ARRIVAL_WINDOW_STARTS` in `src/lib/site.ts`; the pure helpers
+(Zod enum, labels) are in `src/lib/booking/arrival-windows.ts`. The window's
+start (`"13:00"`) is stored in `bookings.estimated_arrival` (nullable: older
+bookings have none). It is informational only: guests may arrive before
+check-in, and it never affects check-in, the no-show rule, cancellation
+windows or refunds. It is shown on the guest and admin booking pages, in the
+guest confirmation email (with the arrival instructions note, parking, house
+rules and a link to the policy page) and in the admin booking notification.
+
 ### Cancellations and refunds
 
 Policy data and the quote are pure (`src/lib/booking/cancellation-policy.ts`):
 
 - A policy is a name and tiers `{ minHoursBefore, refundPercent }`.
-  `DEFAULT_CANCELLATION_POLICY`: 72 h+ 100%, 24 h+ 50%, less 0%. There is no
+  `DEFAULT_CANCELLATION_POLICY`: 168 h (7 days)+ 100%, 72 h (3 days)+ 75%,
+  less 0%. It applies until an admin saves a policy (a fresh production
+  database has none, so the default is the live policy at launch). There is no
   per-policy check-in time or time zone any more: windows always count back
   from check-in at **4:00 PM CT**.
 - **Cutoffs are wall-clock:** a tier's cutoff is `minHoursBefore` hours before
   4:00 PM CT on the check-in date, whole days counted as calendar days
-  (`localCutoff`): "72 hours" is 4:00 PM CT three days before, also across a
+  (`localCutoff`): "72 hours" is 4:00 PM CT three days before, "168 hours"
+  seven days before, also across a
   DST change (that day has 71 or 73 elapsed hours); 36 h is 4:00 AM CT a day
   and a half before. Each local cutoff becomes a UTC instant with the Chicago
   offset for that date.

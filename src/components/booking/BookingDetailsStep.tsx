@@ -2,6 +2,7 @@ import { Icon } from '@iconify/react';
 import { useEffect, useState } from 'react';
 
 import { GuestDetailsFields } from '@/components/booking/GuestDetailsFields';
+import { PropertyNotes } from '@/components/booking/PropertyNotes';
 import {
 	type GuestDetailsErrors,
 	type GuestDetailsForm,
@@ -27,6 +28,7 @@ export function BookingDetailsStep() {
 		guestEmail: session?.user?.email || booking.guestInfo?.email || '',
 		guestPhone: session?.user.phoneNumber || booking.guestInfo?.phone || '',
 		numberOfGuests: Math.min(booking.guestCount || 1, maxGuests),
+		estimatedArrival: booking.guestInfo?.estimatedArrival || '',
 		specialRequests: booking.guestInfo?.specialRequests || '',
 	}));
 	const [errors, setErrors] = useState<GuestDetailsErrors>({});
@@ -78,6 +80,8 @@ export function BookingDetailsStep() {
 				/>
 
 				<DetailsSummary guests={form.numberOfGuests} />
+
+				<PropertyNotes className="rounded-md border p-3" />
 
 				{booking.error && (
 					<div className="rounded-md border border-destructive/20 bg-destructive/10 p-3">

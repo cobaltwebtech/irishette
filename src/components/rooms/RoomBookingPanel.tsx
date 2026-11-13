@@ -3,6 +3,7 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 
+import { PropertyNotes } from '@/components/booking/PropertyNotes';
 import RoomAvailabilityCalendar from '@/components/RoomAvailabilityCalendar';
 import BookingInfo from '@/components/RoomBookingInfo';
 import { buttonVariants } from '@/components/ui/button';
@@ -166,12 +167,7 @@ export function RoomBookingPanel({
 						/>
 						View {otherRoom.name}
 					</Link>
-					<p>
-						<span className="bg-red-300 font-bold">
-							DO WE NEED ANYTHING ABOUT PETS OR OTHER NOT ALLOWED ITEMS
-							(ALCOHOL, MUSIC, ETC)?
-						</span>
-					</p>
+					<PropertyNotes />
 				</div>
 			</div>
 		</section>

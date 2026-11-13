@@ -34,6 +34,7 @@ describe('booking store', () => {
 			name: 'Ada',
 			email: 'ada@example.test',
 			phone: '5555550100',
+			estimatedArrival: '17:00',
 		});
 		bookingActions.setPricing({
 			basePrice: 100,
@@ -45,6 +46,14 @@ describe('booking store', () => {
 			currency: 'usd',
 		});
 		expect(bookingActions.canProceedToPayment()).toBe(true);
+
+		// The estimated arrival time is required to go on to payment.
+		bookingActions.setGuestInfo({
+			name: 'Ada',
+			email: 'ada@example.test',
+			phone: '5555550100',
+		});
+		expect(bookingActions.canProceedToPayment()).toBe(false);
 	});
 
 	it('furthestAllowedStep clamps ?step= jumps', async () => {
@@ -58,6 +67,7 @@ describe('booking store', () => {
 			name: 'Ada',
 			email: 'ada@example.test',
 			phone: '5555550100',
+			estimatedArrival: '17:00',
 		});
 		bookingActions.setPricing({
 			basePrice: 100,

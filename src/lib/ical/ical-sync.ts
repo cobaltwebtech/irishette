@@ -492,6 +492,7 @@ async function alertFeedProblem(
 		dedupeKey: `ical_sync_failed:${feed.id}:${todayIn()}`,
 	});
 	await sendAdminAlert(deps.db, deps.env, {
+		category: 'calendar_sync',
 		subject: `Calendar sync problem: ${r.name} (${feed.source})`,
 		heading: 'A calendar feed stopped syncing',
 		paragraphs: [
@@ -550,6 +551,7 @@ async function alertConflicts(
 		{ resurfaceAfterSeconds: 24 * 60 * 60 },
 	);
 	await sendAdminAlert(deps.db, deps.env, {
+		category: 'calendar_sync',
 		subject: `Double booking: ${r.name} (${feed.source})`,
 		heading: 'An imported reservation overlaps a booking',
 		paragraphs: [

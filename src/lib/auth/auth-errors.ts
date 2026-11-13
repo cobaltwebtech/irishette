@@ -22,6 +22,10 @@ const MESSAGES: Record<string, string> = {
 		'An account with this email already exists. Log in instead, or use a magic link.',
 	PASSWORD_TOO_SHORT: 'Password must be at least 8 characters.',
 	PASSWORD_TOO_LONG: 'Password is too long.',
+	// Signed-in password change.
+	INVALID_PASSWORD: 'Your current password is incorrect.',
+	CREDENTIAL_ACCOUNT_NOT_FOUND:
+		'This account has no password yet. Set one instead.',
 	INVALID_EMAIL: 'Please enter a valid email address.',
 	// Links from emails (magic link, verification, password reset).
 	INVALID_TOKEN: 'This link is invalid or has already been used.',

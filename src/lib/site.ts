@@ -70,20 +70,20 @@ export interface EmailSender {
 // Email senders (the sending domain must be onboarded in Cloudflare Email
 // Service: Compute > Email Service > Email Sending).
 export const EMAIL_FROM_BOOKINGS: EmailSender = {
-	name: `${SITE_NAME} Dev`,
-	email: 'irishette-bookings@cobaltweb.dev',
+	name: `${SITE_NAME}`,
+	email: 'bookings@notify.irishette.com',
 };
 export const EMAIL_FROM_ADMIN: EmailSender = {
 	name: SITE_NAME,
-	email: 'irishette-admin@cobaltweb.dev',
+	email: 'admin@notify.irishette.com',
 };
 export const EMAIL_FROM_AUTH: EmailSender = {
 	name: SITE_NAME,
-	email: 'irishette-auth@cobaltweb.dev',
+	email: 'auth@notify.irishette.com',
 };
 /**
- * Reply-to for emails guests may answer (contact replies, plan 02 Phase 4).
- * @expected-unused
+ * Reply-to for guest-facing booking emails: the sending subdomain has no
+ * inbox, so replies go to the contact address.
  */
 export const EMAIL_REPLY_TO = CONTACT_EMAIL;
 
@@ -93,6 +93,31 @@ export const CHECK_IN_TIME = '16:00';
 export const CHECK_OUT_TIME = '11:00';
 /** Same-day check-in is allowed only before this time (plan 02, 3.9). */
 export const SAME_DAY_CUTOFF_TIME = '09:00';
+
+/**
+ * Estimated arrival windows guests pick at booking ("HH:MM", property time).
+ * Each entry starts an hourly window (13:00 = 1:00-2:00 PM); the last one
+ * means "after" that time. Guests may arrive before CHECK_IN_TIME: the answer
+ * is only for the hosts, who meet every guest in person to hand over the key.
+ * It never changes check-in, cancellation windows or refunds.
+ */
+export const ARRIVAL_WINDOW_STARTS = [
+	'13:00',
+	'14:00',
+	'15:00',
+	'16:00',
+	'17:00',
+	'18:00',
+	'19:00',
+	'20:00',
+	'21:00',
+	'22:00',
+	'23:00',
+] as const;
+
+/** House rules and amenities shown before and after booking. */
+export const HOUSE_RULES = ['No pets', 'No smoking'] as const;
+export const PARKING_NOTE = 'Free on-site parking';
 
 /** Short label for the property time zone. */
 const PROPERTY_TIMEZONE_LABEL = 'CT';

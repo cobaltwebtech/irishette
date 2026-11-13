@@ -37,6 +37,7 @@ async function storedBooking() {
 }
 
 const alert = {
+	category: 'calendar_sync' as const,
 	subject: 'Calendar sync problem: Rose Room (airbnb)',
 	heading: 'A calendar feed stopped syncing',
 	paragraphs: ['Check the feed.'],

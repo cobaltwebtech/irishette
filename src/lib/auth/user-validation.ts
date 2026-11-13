@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { notificationCategories } from '@/lib/email/notification-categories';
+
 /** Minimum number of digits in a phone number (formatting characters aside). */
 const PHONE_MIN_DIGITS = 10;
 
@@ -23,4 +25,12 @@ export const phoneNumberSchema = z
 export const updateProfileSchema = z.object({
 	name: z.string().trim().min(1, 'Name is required').max(100).optional(),
 	phoneNumber: phoneNumberSchema.nullable().optional(),
+});
+
+/**
+ * `users.adminUpdateNotificationPreferences`: email on (true) or off (false)
+ * per category. Categories left out keep their current setting.
+ */
+export const updateNotificationPreferencesSchema = z.object({
+	preferences: z.partialRecord(z.enum(notificationCategories), z.boolean()),
 });

@@ -80,7 +80,7 @@ Every email states the real link lifetime (`expiresIn` prop on
 
 `src/lib/auth/auth-client.ts` creates `authClient` with `magicLinkClient` and
 `adminClient`, no `baseURL` (current origin) and
-`credentials: 'include'`. It also exports `signOut` and `changeEmail`. Its
+`credentials: 'include'`. It also exports `signOut`, `changeEmail` and `changePassword`. Its
 calls return `{ data, error }` and do not throw on an API error, so **every
 call must check `error`** (the forms map it with `authErrorMessage` from
 `src/lib/auth/auth-errors.ts`, which never shows raw server messages; 429 gets a
@@ -280,6 +280,8 @@ Observability Query Builder with `message = "rate-limited"`.
    | `/request-password-reset` | 3 per 5 min |
    | `/reset-password` | 5 per 5 min |
    | `/send-verification-email` | 3 per 5 min |
+   | `/change-password` | 5 per 5 min |
+   | `/change-email` | 3 per 5 min |
    | anything else under `/api/auth` | Better Auth default, 100 per 10 s |
 
    The auth route logs Better Auth's 429s with `limiter: 'better-auth'`.
@@ -330,6 +332,7 @@ payment including Link, auth and admin): switch the header name to
 | Sign-out | `signOut()`, then `clearSession(queryClient, router)`, then navigate |
 | Profile change (name, phone) | `refreshSession(queryClient, router)` |
 | Email change | Nothing until the user confirms by email |
+| Password change (`/admin/settings`) | `refreshSession(queryClient, router)` (signing out other devices gives this one a new session cookie) |
 
 ## Profile editing
 
@@ -356,6 +359,49 @@ block the booking, which keeps the details typed in the form. The booking's
 
 Admins read users through `users.adminListGuests` and
 `users.adminGetGuestDetails` (`adminProcedure`, by `publicId`).
+
+## Admin account settings (`/admin/settings`)
+
+`src/routes/_authed/_admin/admin/settings.tsx` (sidebar **Settings**, and
+**Account Settings** in the user menu), cards in
+`src/components/admin/settings/`. The loader reads
+`users.adminGetAccountSettings` (profile from D1, `hasPassword`, email
+notification settings).
+
+- Profile: name and phone through `users.updateProfile`, then
+  `refreshSession`.
+- Email: `changeEmail({ newEmail, callbackURL: '/admin/settings' })`, the same
+  Better Auth flow as guests (approve from the current address, then verify
+  the new one). Admin notification emails follow the new address once it
+  changes (`getAdminEmails` reads `user.email`).
+- Password: an admin with a password changes it with Better Auth's client
+  `changePassword({ currentPassword, newPassword, revokeOtherSessions })`
+  (`changePasswordSchema`; "Sign out of all other devices" is on by default),
+  then `refreshSession`. A magic-link-only admin has no `credential` account
+  password: Better Auth's `setPassword` is server-only, so the page calls tRPC
+  `users.adminSetPassword`, which runs `auth.api.setPassword` with the request
+  headers. Errors map through `authErrorMessage` (`INVALID_PASSWORD`,
+  `CREDENTIAL_ACCOUNT_NOT_FOUND`).
+- Email notifications: one switch per category
+  (`src/lib/email/notification-categories.ts`), saved at once with
+  `users.adminUpdateNotificationPreferences` into `notification_preferences`
+  (one row per admin and category; no row = on). Every admin email picks its
+  recipients with `getAdminEmails(db, category)`
+  (`src/lib/server/admin-query.ts`):
+
+  | Category | Emails |
+  |---|---|
+  | `new_booking` | Admin copy of a confirmed booking (`sendBookingConfirmedEmails`) |
+  | `booking_cancelled` | Admin copy of a cancellation (`sendCancellationEmails`) |
+  | `refund_issued` | Admin copy of a refund made in the Stripe Dashboard (`sendRefundEmails`) |
+  | `payment_problem` | `sendAdminAlert`: refund failed, payment released (dates taken) |
+  | `calendar_sync` | `sendAdminAlert`: iCal feed stopped syncing, double booking |
+
+  Guests always get their own copy. Contact form messages go to
+  `CONTACT_EMAIL`, not to admins, and are not affected. Inbox items
+  (`/admin/inbox`) are created whatever the email settings. To add a category,
+  add it to `notificationCategories` (with a label) and pass it from the
+  sender; no migration is needed (`category` is plain text).
 
 ## Rules
 

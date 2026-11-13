@@ -123,7 +123,7 @@ export default function Header() {
 											icon="material-symbols:bed-outline-rounded"
 											className="size-5"
 										/>
-										<span className="hidden sm:inline">View Bookings</span>
+										<span className="hidden sm:inline">View Your Bookings</span>
 									</Link>
 								)}
 								<Button className="hidden lg:flex" onClick={handleLogout}>
@@ -153,7 +153,7 @@ export default function Header() {
 									className={cn(buttonVariants({ variant: 'accent' }))}
 								>
 									<Icon icon="tabler:luggage" className="size-5" />
-									View Bookings
+									View Your Bookings
 								</Link>
 							</>
 						)}

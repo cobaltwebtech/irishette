@@ -23,6 +23,32 @@ const passwordField = z
 
 export const passwordSchema = z.object({ password: passwordField });
 
+/**
+ * Signed-in password change (/admin/settings): the current password, a new
+ * one that follows the rules, typed twice. Better Auth's changePassword
+ * checks the current password.
+ */
+export const changePasswordSchema = z
+	.object({
+		currentPassword: z.string().min(1, 'Enter your current password'),
+		newPassword: passwordField,
+		confirmPassword: z.string(),
+	})
+	.refine((data) => data.newPassword === data.confirmPassword, {
+		message: 'Passwords do not match',
+		path: ['confirmPassword'],
+	})
+	.refine((data) => data.newPassword !== data.currentPassword, {
+		message: 'The new password must differ from the current one',
+		path: ['newPassword'],
+	});
+
+/**
+ * tRPC `users.adminSetPassword`: a first password for an account that signs
+ * in by magic link only (Better Auth's server-only setPassword).
+ */
+export const setPasswordSchema = z.object({ newPassword: passwordField });
+
 export const emailSchema = z.object({ email: emailField });
 
 /** Email + password sign-in: any non-empty password (rules apply at sign-up). */

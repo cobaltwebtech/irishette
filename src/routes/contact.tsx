@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { AuthError } from '@/components/auth/AuthCard';
 import { TurnstileField, useTurnstile } from '@/components/auth/TurnstileField';
+import { CancellationHighlights } from '@/components/booking/CancellationHighlights';
 import { Button } from '@/components/ui/button';
 import {
 	Card,
@@ -45,6 +46,10 @@ export const Route = createFileRoute('/contact')({
 			},
 		],
 	}),
+	loader: ({ context }) =>
+		context.queryClient.ensureQueryData(
+			context.trpc.policies.getCancellationPolicy.queryOptions(),
+		),
 	component: ContactPage,
 });
 
@@ -152,7 +157,7 @@ function ContactPage() {
 													Located in historic Dublin, Texas
 												</p>
 												<address className="text-accent not-italic">
-													123 Historic Street
+													506 W Mesquite St
 													<br />
 													Dublin, TX 76446
 												</address>
@@ -207,9 +212,8 @@ function ContactPage() {
 									<h3 className="mb-3 text-lg font-semibold text-accent">
 										Cancellation Policy
 									</h3>
+									<CancellationHighlights className="mb-3 space-y-1 text-muted-foreground" />
 									<p className="text-muted-foreground">
-										UPDATE CANCELLATION POLICY.
-										<br />
 										Contact us for special circumstances.
 									</p>
 								</div>

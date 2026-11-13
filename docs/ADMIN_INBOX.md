@@ -3,7 +3,9 @@
 An internal list of things the admins should look at: Stripe events, system
 problems and contact form messages. Shown in the admin dashboard under
 **Notifications** (`/admin/inbox`), with an unread badge in the sidebar. The
-admin alert emails still go out; the inbox is the record in the dashboard.
+admin alert emails still go out (to the admins who have that email category
+on in `/admin/settings`, see `SECURE_AUTH_IMPLEMENTATION.md`); the inbox is
+the record in the dashboard, whatever the email settings.
 
 Plan 02 Phase 4 (2026-11-08). Guest messaging (replying from the dashboard,
 inbound email) is deferred: `.agents/plans/deferred-email-messaging.md`.

@@ -3,14 +3,15 @@ import { afterEach, describe, expect, it } from 'vite-plus/test';
 import {
 	cancellationPolicyInputSchema,
 	DEFAULT_CANCELLATION_POLICY,
+	describeTiers,
 	quoteCancellation,
 	refundCutoffs,
 } from '@/lib/booking/cancellation-policy';
 import { zonedTimeToUtc } from '@/utils/timezone';
 
 // Windows count back from check-in at 4:00 PM CT on the local clock
-// (plan 02, 3.5 / 3.9). Check-in Jun 10, 2030 at 16:00 CDT = 21:00Z; the 72 h
-// cutoff is Jun 7 16:00 CDT and the 24 h cutoff Jun 9 16:00 CDT.
+// (plan 02, 3.5 / 3.9). Check-in Jun 10, 2030 at 16:00 CDT = 21:00Z; the 168 h
+// (7 day) cutoff is Jun 3 16:00 CDT and the 72 h cutoff Jun 7 16:00 CDT.
 const CHECK_IN = '2030-06-10';
 const at = (iso: string) => new Date(iso);
 const second = 1000;
@@ -47,33 +48,33 @@ describe('zonedTimeToUtc', () => {
 });
 
 describe('quoteCancellation (default policy)', () => {
+	const cutoff168 = at('2030-06-03T21:00:00Z');
 	const cutoff72 = at('2030-06-07T21:00:00Z');
-	const cutoff24 = at('2030-06-09T21:00:00Z');
 	const checkIn = at('2030-06-10T21:00:00Z');
 
 	it.each([
-		['well before', new Date(cutoff72.getTime() - 86_400_000), 100, 500],
+		['well before', new Date(cutoff168.getTime() - 86_400_000), 100, 500],
 		[
-			'1 s before the 72 h cutoff',
-			new Date(cutoff72.getTime() - second),
+			'1 s before the 7 day cutoff',
+			new Date(cutoff168.getTime() - second),
 			100,
 			500,
 		],
-		['exactly at the 72 h cutoff (higher refund)', cutoff72, 100, 500],
+		['exactly at the 7 day cutoff (higher refund)', cutoff168, 100, 500],
 		[
-			'1 s after the 72 h cutoff',
-			new Date(cutoff72.getTime() + second),
-			50,
-			250,
+			'1 s after the 7 day cutoff',
+			new Date(cutoff168.getTime() + second),
+			75,
+			375,
 		],
 		[
-			'1 s before the 24 h cutoff',
-			new Date(cutoff24.getTime() - second),
-			50,
-			250,
+			'1 s before the 3 day cutoff',
+			new Date(cutoff72.getTime() - second),
+			75,
+			375,
 		],
-		['exactly at the 24 h cutoff', cutoff24, 50, 250],
-		['1 s after the 24 h cutoff', new Date(cutoff24.getTime() + second), 0, 0],
+		['exactly at the 3 day cutoff (higher refund)', cutoff72, 75, 375],
+		['1 s after the 3 day cutoff', new Date(cutoff72.getTime() + second), 0, 0],
 		['1 s before check-in', new Date(checkIn.getTime() - second), 0, 0],
 	] as const)('%s → %s%% ($%s)', (_label, now, percent, amount) => {
 		const q = quote(now);
@@ -98,16 +99,16 @@ describe('quoteCancellation (default policy)', () => {
 				c.until.toISOString(),
 			]),
 		).toEqual([
-			[100, '2030-06-07T21:00:00.000Z'],
-			[50, '2030-06-09T21:00:00.000Z'],
+			[100, '2030-06-03T21:00:00.000Z'],
+			[75, '2030-06-07T21:00:00.000Z'],
 			[0, '2030-06-10T21:00:00.000Z'],
 		]);
 	});
 
 	it('rounds the refund to cents', () => {
 		expect(
-			quote(at('2030-06-08T12:00:00Z'), { amountPaid: 333.33 }).refundAmount,
-		).toBe(166.67);
+			quote(at('2030-06-05T12:00:00Z'), { amountPaid: 333.35 }).refundAmount,
+		).toBe(250.01);
 	});
 
 	it('refunds nothing for an unpaid hold', () => {
@@ -121,10 +122,10 @@ describe('quoteCancellation (default policy)', () => {
 		expect(
 			quote(at('2030-06-01T00:00:00Z'), { alreadyRefunded: 400 }).refundAmount,
 		).toBe(100);
-		// 50% of the original 500 = 250, still under the 400 left.
+		// 75% of the original 500 = 375, still under the 400 left.
 		expect(
-			quote(at('2030-06-08T12:00:00Z'), { alreadyRefunded: 100 }).refundAmount,
-		).toBe(250);
+			quote(at('2030-06-05T12:00:00Z'), { alreadyRefunded: 100 }).refundAmount,
+		).toBe(375);
 		// Fully refunded: nothing left.
 		expect(
 			quote(at('2030-06-01T00:00:00Z'), { alreadyRefunded: 500 }).refundAmount,
@@ -134,7 +135,7 @@ describe('quoteCancellation (default policy)', () => {
 
 describe('cutoffs across DST (America/Chicago wall clock)', () => {
 	it('check-in on the second Sunday of March: 72 h cutoff stays 4:00 PM local (71 elapsed hours)', () => {
-		const [c72, , checkIn] = refundCutoffs(
+		const [, c72, checkIn] = refundCutoffs(
 			DEFAULT_CANCELLATION_POLICY,
 			'2030-03-10',
 		);
@@ -146,7 +147,7 @@ describe('cutoffs across DST (America/Chicago wall clock)', () => {
 	});
 
 	it('check-in on the first Sunday of November: 72 h cutoff stays 4:00 PM local (73 elapsed hours)', () => {
-		const [c72, , checkIn] = refundCutoffs(
+		const [, c72, checkIn] = refundCutoffs(
 			DEFAULT_CANCELLATION_POLICY,
 			'2030-11-03',
 		);
@@ -226,5 +227,36 @@ describe('cancellationPolicyInputSchema', () => {
 			cancellationPolicyInputSchema.safeParse({ ...valid, ...overrides })
 				.success,
 		).toBe(false);
+	});
+});
+
+describe('describeTiers', () => {
+	it('words the default policy as windows before check-in', () => {
+		expect(describeTiers(DEFAULT_CANCELLATION_POLICY.tiers)).toEqual([
+			{ label: 'At least 7 days before check-in', refundPercent: 100 },
+			{
+				label: '3 days to less than 7 days before check-in',
+				refundPercent: 75,
+			},
+			{ label: 'Less than 3 days before check-in', refundPercent: 0 },
+		]);
+	});
+
+	it('uses hours when a tier is not a whole number of days', () => {
+		expect(
+			describeTiers([
+				{ minHoursBefore: 0, refundPercent: 0 },
+				{ minHoursBefore: 36, refundPercent: 50 },
+			]).map((t) => t.label),
+		).toEqual([
+			'At least 36 hours before check-in',
+			'Less than 36 hours before check-in',
+		]);
+	});
+
+	it('handles a single 0-hour tier', () => {
+		expect(describeTiers([{ minHoursBefore: 0, refundPercent: 0 }])).toEqual([
+			{ label: 'Any time before check-in', refundPercent: 0 },
+		]);
 	});
 });

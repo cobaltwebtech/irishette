@@ -124,6 +124,7 @@ const GUEST_BOOKING_FIELDS = [
 	'guestEmail',
 	'guestPhone',
 	'specialRequests',
+	'estimatedArrival',
 	'createdAt',
 	'cancelledAt',
 ] as const satisfies readonly (keyof Booking)[];

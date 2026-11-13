@@ -3,6 +3,7 @@ export * from './auth-schema';
 export * from './booking-schema';
 export * from './email-schema';
 export * from './inbox-schema';
+export * from './notification-schema';
 export * from './policy-schema';
 export * from './room-schema';
 
@@ -11,6 +12,7 @@ import * as authSchema from './auth-schema';
 import * as bookingSchema from './booking-schema';
 import * as emailSchema from './email-schema';
 import * as inboxSchema from './inbox-schema';
+import * as notificationSchema from './notification-schema';
 import * as policySchema from './policy-schema';
 import * as roomSchema from './room-schema';
 
@@ -20,6 +22,7 @@ export const schemas = {
 	booking: bookingSchema,
 	email: emailSchema,
 	inbox: inboxSchema,
+	notification: notificationSchema,
 	policy: policySchema,
 	room: roomSchema,
 };
@@ -34,6 +37,8 @@ export const allTables = {
 	...emailSchema,
 	// Admin notification inbox
 	...inboxSchema,
+	// Admin email notification preferences
+	...notificationSchema,
 	// Policy tables
 	...policySchema,
 	// Room tables

@@ -938,6 +938,7 @@ async function settleUnconfirmable(
 				'A guest paid, but the dates were taken (another booking, an imported reservation or a block) before the payment was confirmed. The card authorization was cancelled: nothing was charged.',
 		});
 		await sendAdminAlert(deps.db, deps.env, {
+			category: 'payment_problem',
 			subject: `Payment released: ${booking.confirmationId}`,
 			heading: 'Payment released: dates were no longer available',
 			paragraphs: [

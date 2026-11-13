@@ -25,6 +25,13 @@ import type {
 	BookingStatus,
 	PaymentStatus,
 } from '@/lib/booking/booking-status';
+import {
+	CONTACT_PHONE,
+	CONTACT_PHONE_HREF,
+	formatAddress,
+	PARKING_NOTE,
+	PROPERTY_ADDRESS,
+} from '@/lib/site';
 import { bookingActions } from '@/stores';
 import { formatStayDate } from '@/utils/timezone';
 import { cn } from '@/utils/twMerge';
@@ -224,12 +231,37 @@ function BookingConfirmation() {
 						emptyText="No special requests provided"
 					/>
 					<ImportantInfoCard className="lg:col-span-3" />
-					{/* Right Column - Address and Directions */}
 					<Card className="lg:col-span-3">
 						<CardHeader>
-							<CardTitle>Our Address and Directions</CardTitle>
+							<CardTitle>Our Address and Arrival</CardTitle>
 						</CardHeader>
-						<CardContent>ADD ADDRESS AND DIRECTIONS HERE</CardContent>
+						<CardContent className="space-y-3 text-sm">
+							<p className="text-base font-semibold">
+								{formatAddress(PROPERTY_ADDRESS)}
+							</p>
+							<a
+								href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(formatAddress(PROPERTY_ADDRESS))}`}
+								target="_blank"
+								rel="noreferrer"
+								className="inline-block text-accent hover:underline"
+							>
+								Open in Maps
+							</a>
+							<p className="text-muted-foreground">
+								We will meet you in person to hand over your key. We will
+								contact you with arrival instructions before your stay.
+							</p>
+							<p className="text-muted-foreground">
+								{PARKING_NOTE}. Questions on the day? Call us at{' '}
+								<a
+									href={CONTACT_PHONE_HREF}
+									className="text-accent hover:underline"
+								>
+									{CONTACT_PHONE}
+								</a>
+								.
+							</p>
+						</CardContent>
 					</Card>
 				</div>
 				{/* Action Buttons */}

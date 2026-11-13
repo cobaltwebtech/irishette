@@ -362,7 +362,7 @@ describe('cancellation', () => {
 		).resolves.toMatchObject({ success: true });
 	});
 
-	it('refunds in full more than 72 hours ahead, and emails guest and admins', async () => {
+	it('refunds in full 7 or more days ahead, and emails guest and admins', async () => {
 		const refunds = mockStripeRefunds();
 		const sent = mockEmail();
 		const booking = await insertBooking({
@@ -390,12 +390,12 @@ describe('cancellation', () => {
 		expect(sent.some((e) => e.to.includes(ADMIN.email))).toBe(true);
 	});
 
-	it('refunds 50% between 24 and 72 hours ahead', async () => {
+	it('refunds 75% from 3 days to less than 7 days ahead', async () => {
 		const refunds = mockStripeRefunds();
 		mockEmail();
 		const booking = await insertBooking({
-			checkInDate: inDays(2),
-			checkOutDate: inDays(4),
+			checkInDate: inDays(5),
+			checkOutDate: inDays(7),
 			stripePaymentIntentId: 'pi_cancel_3',
 		});
 		const quote = await guest().bookings.getCancellationQuote({
@@ -403,15 +403,33 @@ describe('cancellation', () => {
 		});
 		expect(quote).toMatchObject({
 			canCancel: true,
-			refundPercent: 50,
-			refundAmount: 125,
+			refundPercent: 75,
+			refundAmount: 187.5,
 		});
 		await guest().bookings.cancelBooking({ publicId: booking.publicId });
 		await settle();
-		expect(refunds[0].body.get('amount')).toBe('12500');
+		expect(refunds[0].body.get('amount')).toBe('18750');
 		expect((await bookingRow(booking.id)).paymentStatus).toBe(
 			'partially_refunded',
 		);
+	});
+
+	it('refunds nothing less than 3 days ahead', async () => {
+		mockStripeRefunds();
+		mockEmail();
+		const booking = await insertBooking({
+			checkInDate: inDays(2),
+			checkOutDate: inDays(4),
+			stripePaymentIntentId: 'pi_cancel_3b',
+		});
+		const quote = await guest().bookings.getCancellationQuote({
+			publicId: booking.publicId,
+		});
+		expect(quote).toMatchObject({
+			canCancel: true,
+			refundPercent: 0,
+			refundAmount: 0,
+		});
 	});
 
 	it('guests cannot cancel after check-in time; admins can, with a full refund', async () => {
