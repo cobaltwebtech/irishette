@@ -28,6 +28,7 @@ import {
 	CONTACT_PHONE,
 	CONTACT_PHONE_HREF,
 } from '@/lib/site';
+import { canonicalLink, seo } from '@/utils/seo';
 
 export const Route = createFileRoute('/contact')({
 	// ?booking=ABC123 prefills the confirmation ID ("Contact support" links).
@@ -35,16 +36,13 @@ export const Route = createFileRoute('/contact')({
 		booking: z.string().trim().max(20).optional().catch(undefined),
 	}),
 	head: () => ({
-		meta: [
-			{
-				title: 'Contact Us | Irishette.com',
-			},
-			{
-				name: 'description',
-				content:
-					"Get in touch with Irishette Bed & Breakfast. We're here to help with your booking questions and travel planning.",
-			},
-		],
+		meta: seo({
+			title: 'Contact Us | Irishette.com',
+			description:
+				"Get in touch with Irishette Bed & Breakfast. We're here to help with your booking questions and travel planning.",
+			path: '/contact',
+		}),
+		links: [canonicalLink('/contact')],
 	}),
 	loader: ({ context }) =>
 		context.queryClient.ensureQueryData(

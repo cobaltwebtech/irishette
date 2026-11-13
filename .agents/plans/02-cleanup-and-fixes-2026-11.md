@@ -114,7 +114,7 @@ Read `AGENTS.md` first. All its rules apply (secrets, `--local`, no remote/deplo
 - **Times in the UI:** the 11:00 AM check-out is hardcoded text in the booking pages, the confirmation page, `contact.tsx` and `BookingConfirmationEmail`.
 - **Hardcoded domains** (to move into `src/lib/site.ts`):
   - `email-service.ts` senders (`*@contact.cobaltweb.tech`, with "Irishette Dev" on bookings)
-  - `info@irishette.com` in the contact page, the auth and booking emails, and the legal pages
+  - `info@irishette.com` in the contact page, the auth and booking emails, and the legal pages (resolved: the real address is `bookings@irishette.com`)
   - `https://irishette.com` in `BookingConfirmationEmail`, the `ical-sync.ts` user agent and `RoomDetails.tsx`
   - the workers.dev URL in `docs/STRIPE_WEBHOOKS.md`
 - **Contact:** `src/routes/contact.tsx` only `console.log`s.
@@ -801,13 +801,15 @@ Known leftovers: a stray "4" and an "(need to update these images)" note in the 
     - the senders (`EMAIL_FROM_*`; drop "Dev" from the bookings sender name)
     - `EMAIL_REPLY_TO`, `CONTACT_EMAIL`
     - `CONTACT_PHONE`, once the client provides the real number
-  - Verify the sending domain in Resend.
-  - `BETTER_AUTH_URL` (a `@public` value baked in at build time) and the Better Auth trusted origins.
-  - Stripe live webhook endpoint URLs, the Turnstile allowed hostnames, `docs/STRIPE_WEBHOOKS.md` hosts.
+  - Onboard the sending domain (`notify.irishette.com`) in Cloudflare Email Service (Compute > Email Service > Email Sending) and add the SPF/DKIM records it shows. Email goes through the `EMAIL` binding; there is no API key.
+  - `BETTER_AUTH_URL` (a `@public` value baked in at build time): exactly `https://www.irishette.com`, no trailing slash, set in `.env.production` and built with `APP_ENV=production` (`pnpm build:prod` / `pnpm run deploy`). It is also the Better Auth trusted origin.
+  - Stripe live webhook endpoint (`https://www.irishette.com/api/stripe/webhook`, `www` directly: Stripe does not follow redirects), the Turnstile allowed hostnames, `docs/STRIPE_WEBHOOKS.md` hosts.
   - Legal pages (hardcoded):
     - `irishette.com` references
-    - the `/manage-bookings` link, which does not exist; the route is `/account`
+    - the contact email is `bookings@irishette.com` (same as `CONTACT_EMAIL`)
+    - the `/manage-bookings` link in `docs/cancellation-refund-policy.md` pointed at a route that does not exist; the route is `/account`
     - the placeholder phone `(123) 456-7890` (update once the client provides it)
+  - The full go-live steps live in `docs/GO_LIVE.md`.
   - Re-run `grep -rn "cobaltweb\|workers.dev\|irishette.com" src docs` and check each hit.
 - A CMS for legal pages (later).
 - Guest email messaging (stored contact messages, dashboard replies, inbound guest replies, message history in `/account`): **deferred**, see `.agents/plans/deferred-email-messaging.md`.

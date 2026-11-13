@@ -15,9 +15,14 @@ import {
 	CardHeader,
 	CardTitle,
 } from '@/components/ui/card';
+import { absoluteUrl, canonicalLink } from '@/utils/seo';
 import { cn } from '@/utils/twMerge';
 
 export const Route = createFileRoute('/')({
+	head: () => ({
+		meta: [{ property: 'og:url', content: absoluteUrl('/') }],
+		links: [canonicalLink('/')],
+	}),
 	component: HomePage,
 });
 

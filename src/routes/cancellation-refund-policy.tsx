@@ -6,15 +6,18 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useTRPC } from '@/integrations/trpc/react';
 import { describeTiers } from '@/lib/booking/cancellation-policy';
 import { CHECK_IN_TIME_LABEL } from '@/lib/site';
+import { canonicalLink, seo } from '@/utils/seo';
 import { cn } from '@/utils/twMerge';
 
 export const Route = createFileRoute('/cancellation-refund-policy')({
 	head: () => ({
-		meta: [
-			{
-				title: 'Cancellation & Refund Policy | Irishette.com',
-			},
-		],
+		meta: seo({
+			title: 'Cancellation & Refund Policy | Irishette.com',
+			description:
+				"Irishette's cancellation windows and refund amounts for reservations, and how to cancel a booking.",
+			path: '/cancellation-refund-policy',
+		}),
+		links: [canonicalLink('/cancellation-refund-policy')],
 	}),
 	// The refund windows come from the active policy (the admin dashboard), so
 	// this page always matches what a cancellation actually refunds.
@@ -322,7 +325,7 @@ function CancellationRefundPolicyPage() {
 										<strong>Phone:</strong> 254-454-5558
 									</p>
 									<p className="text-muted-foreground">
-										<strong>Email:</strong> info@irishette.com
+										<strong>Email:</strong> bookings@irishette.com
 									</p>
 									<Link
 										to="/account"

@@ -26,7 +26,7 @@ The refund windows are the active policy saved in the admin dashboard (the built
 
 Cancellations must be made through one of the following methods:
 
-1. **Online:** Visit our [View Your Bookings page](https://irishette.com/manage-bookings) and follow the cancellation instructions
+1. **Online:** Visit our [View Your Bookings page](https://www.irishette.com/account) and follow the cancellation instructions
 2. **Telephone:** Call us at **254-454-5558**
 
 Cancellations are effective based on the date and time we receive your cancellation request, not when you decide to cancel. We recommend canceling as early as possible to avoid penalties.
@@ -55,7 +55,7 @@ The full booking amount, including taxes and fees, is due upfront when you book.
 
 ## Violations and Property Damage
 
-If you violate our [Terms of Service](https://irishette.com/terms) or cause damage to the property and are required to vacate the premises before your scheduled checkout date, **no refund will be issued** for any portion of your stay.
+If you violate our [Terms of Service](https://www.irishette.com/terms-of-service) or cause damage to the property and are required to vacate the premises before your scheduled checkout date, **no refund will be issued** for any portion of your stay.
 
 This includes but is not limited to:
 - Violations of property rules and regulations
@@ -97,8 +97,8 @@ If you have questions about this Cancellation and Refund Policy or need assistan
 
 **irishette.com**  
 Phone: **254-454-5558**  
-Email: [Your Contact Email]  
-View Your Bookings: [https://irishette.com/manage-bookings](https://irishette.com/manage-bookings)
+Email: bookings@irishette.com  
+View Your Bookings: [https://www.irishette.com/account](https://www.irishette.com/account)
 
 ---
 

@@ -1,14 +1,17 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 
 import { Card, CardContent } from '@/components/ui/card';
+import { canonicalLink, seo } from '@/utils/seo';
 
 export const Route = createFileRoute('/terms-of-service')({
 	head: () => ({
-		meta: [
-			{
-				title: 'Terms of Service | Irishette.com',
-			},
-		],
+		meta: seo({
+			title: 'Terms of Service | Irishette.com',
+			description:
+				'The terms that apply when you book and stay at Irishette Bed & Breakfast in Dublin, Texas.',
+			path: '/terms-of-service',
+		}),
+		links: [canonicalLink('/terms-of-service')],
 	}),
 	component: TermsOfServicePage,
 });
@@ -373,7 +376,7 @@ function TermsOfServicePage() {
 									contact us at:
 								</p>
 								<p className="text-muted-foreground">
-									<strong>Email:</strong> info@irishette.com
+									<strong>Email:</strong> bookings@irishette.com
 								</p>
 								<p className="text-muted-foreground">
 									<strong>Address:</strong> [Your Physical Address]

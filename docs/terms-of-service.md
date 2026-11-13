@@ -155,7 +155,7 @@ Our failure to enforce any right or provision of these Terms shall not constitut
 If you have any questions about these Terms of Service, please contact us at:
 
 **irishette.com**  
-Email: [Your Contact Email]  
+Email: bookings@irishette.com  
 Address: [Your Physical Address]  
 Phone: [Your Phone Number]
 

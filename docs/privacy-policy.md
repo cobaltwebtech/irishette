@@ -115,7 +115,7 @@ Your information may be transferred to and processed in countries other than you
 If you have any questions, concerns, or requests regarding this Privacy Policy or our data practices, please contact us at:
 
 **irishette.com**  
-Email: [Your Contact Email]  
+Email: bookings@irishette.com  
 Address: [Your Physical Address]
 
 ---

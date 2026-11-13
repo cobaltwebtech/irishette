@@ -33,10 +33,11 @@ Always run project tools through `pnpm` (`vp`, drizzle-kit, tsc, `cf`, Varlock a
 ```bash
 pnpm install                 # install deps
 pnpm dev                     # varlock run --inject vars -> cf dev (Vite on :3000, local D1). Asks the user for Touch ID/password to decrypt secrets.
-pnpm build                   # varlock run --inject vars -> cf build (output in .cloudflare/output/)
+pnpm build                   # varlock run --inject vars -> cf build (dev values; output in .cloudflare/output/)
+pnpm build:prod              # same with APP_ENV=production: production D1/domain, values from .env.production (nothing is uploaded)
 pnpm preview                 # varlock run --inject vars -> vp preview
-pnpm run deploy              # varlock run --inject vars -> cf deploy  (ASK THE USER FIRST). Must be `pnpm run deploy`: bare `pnpm deploy` is a pnpm built-in.
-pnpm deploy:dry              # same, with --dry-run
+pnpm run deploy              # APP_ENV=production varlock run --inject vars -> cf deploy  (ASK THE USER FIRST). Always production. Must be `pnpm run deploy`: bare `pnpm deploy` is a pnpm built-in.
+pnpm deploy:dry              # same as deploy, with --dry-run (builds, uploads nothing)
 pnpm clean                   # removes dist, .tanstack, src/routeTree.gen.ts
 pnpm types                   # cf workers types: regenerate Worker `Env` types in .cloudflare/types/ from cloudflare.config.ts
 pnpm tail                    # wrangler tail irishette (the one allowed Wrangler use besides `secret put`; streams live logs)
@@ -48,7 +49,7 @@ pnpm db:migrate:local        # apply ./drizzle to the LOCAL D1 (scripts/d1-local
 pnpm db:seed:local           # seed local D1 with synthetic data (scripts/seed-local.sql)
 pnpm db:make-admin:local <email>  # promote an existing local user to admin
 pnpm db:reset:local          # wipe local D1, re-migrate, re-seed
-pnpm db:migrate:remote       # cf d1 migrations apply on the REMOTE database (ASK THE USER FIRST)
+pnpm db:migrate:remote       # cf d1 migrations apply on the REMOTE PRODUCTION database `irishette-prod` (ASK THE USER FIRST)
 
 pnpm env:check               # varlock load --agent: validate schema + resolve values (sensitive values redacted)
 pnpm env:scan                # varlock scan: fail if sensitive values appear in plaintext in tracked/unignored files
@@ -173,6 +174,7 @@ Conventions:
 ### Docs worth reading before changing an area
 
 `docs/` has one current note per area. Check the matching one first:
+- Going to production (runbook, Stripe live mode, secrets, Cloudflare setup): `GO_LIVE.md`
 - Booking: `BOOKING_ARCHITECTURE.md`
 - Admin notifications (inbox), contact form: `ADMIN_INBOX.md`, `CONTACT_FORM.md`
 - Email reservation card markup (Gmail/Outlook), go-live checklist: `EMAIL_RESERVATION_MARKUP.md`
@@ -198,7 +200,7 @@ Update the matching doc when you change an area; verify against the source when 
 - Never run `drizzle-kit migrate` or `push` against D1 (see `drizzle.config.ts`); drizzle-kit is for `generate`, `check` and `studio` only.
 - Better Auth tables live in `src/db/auth-schema.ts`; keep them in sync with Better Auth plugin changes.
 - Local D1 state lives in `.cloudflare/state/` (gitignored), shared by `pnpm dev` and `scripts/d1-local.mjs`. Inspect local data with `pnpm db:studio` or the Local Explorer (see `workers-development` skill).
-- `cloudflare.config.ts` binds the D1 database `irishette-dev-1`. Treat any remote command as touching real data.
+- `cloudflare.config.ts` binds the dev D1 database `irishette-dev-1` normally and the production database `irishette-prod` when `APP_ENV=production` (the `D1` table at the top of the file; `db:migrate:remote` and `docs/GO_LIVE.md` use the production id). Treat any remote command as touching real data.
 
 ## Secrets and environment (Varlock)
 
@@ -225,9 +227,11 @@ How values reach the app:
 - `VITE_TURNSTILE_PUBLIC_KEY` is a build-time Vite value (read as `import.meta.env.VITE_TURNSTILE_PUBLIC_KEY`, marked `@public`). Do not add `VITE_` to a secret.
 - Server-only code reads bindings with `import { env } from 'cloudflare:workers'`.
 
-Modes: `cf build --mode` is rejected for TanStack Start. For a non-default mode use `varlock run --inject vars -- vite build --mode <m>` then `cf deploy --prebuilt --mode <m>`. Varlock's `APP_ENV` (when added) is independent of the cf/Vite mode.
+Development vs production: `APP_ENV` (declared in `.env.schema`, `development` by default, `@currentEnv=$APP_ENV`) is the one switch. Only `pnpm build:prod`, `pnpm run deploy` and `pnpm deploy:dry` set it to `production`. That makes Varlock also load `.env.production` (gitignored, loaded after `.env.local`; holds `BETTER_AUTH_URL`, `STRIPE_PUBLISHABLE_KEY`, `VITE_TURNSTILE_PUBLIC_KEY`), and makes `cloudflare.config.ts` bind the production D1 database, serve `www.irishette.com` (`domains`) and set `workersDev: false`. The config throws if a production build would bake in a dev value (wrong `BETTER_AUTH_URL`, non-live Stripe key, missing or dummy Turnstile key). Never read `.env.production`; ask the user to add values.
 
-Variables: public `BETTER_AUTH_URL`, `STRIPE_PUBLISHABLE_KEY`, `VITE_TURNSTILE_PUBLIC_KEY`; sensitive `BETTER_AUTH_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_TRPC_WEBHOOK_SECRET`, `TURNSTILE_SECRET_KEY`. Email needs no secret: it is the `EMAIL` binding.
+Modes: `cf build --mode` is rejected for TanStack Start, so the cf/Vite mode is not used for any of this (it stays `development` for `cf dev` and `production` for builds). For a non-default mode use `varlock run --inject vars -- vite build --mode <m>` then `cf deploy --prebuilt --mode <m>`.
+
+Variables: public `APP_ENV` (build target), `BETTER_AUTH_URL`, `STRIPE_PUBLISHABLE_KEY`, `VITE_TURNSTILE_PUBLIC_KEY`; sensitive `BETTER_AUTH_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_TRPC_WEBHOOK_SECRET`, `TURNSTILE_SECRET_KEY`. Email needs no secret: it is the `EMAIL` binding.
 
 ## CLI tools
 
