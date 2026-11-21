@@ -140,13 +140,6 @@ function BookingDetailPage() {
 						{booking.guestPhone && (
 							<DetailField label="Phone" value={booking.guestPhone} />
 						)}
-						{booking.specialRequests && (
-							<DetailField label="Special Requests">
-								<p className="rounded-md bg-muted p-3 text-sm">
-									{booking.specialRequests}
-								</p>
-							</DetailField>
-						)}
 					</BookingGuestCard>
 					<SpecialRequestsCard
 						className="lg:col-span-2"

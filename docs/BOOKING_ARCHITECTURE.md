@@ -558,7 +558,7 @@ pure rules in `modification-rules.ts`, inputs in `modification-validation.ts`.
   difference is `CONFLICT` with the new one.
 - **Increase:** the difference is authorized first on the saved card
   (`savedCard`: the newest payment row's `stripe_payment_method_id`, `card`
-  only; a PaymentIntent with `off_session`, `confirm`, `capture_method:
+  or `link`; a PaymentIntent with `off_session`, `confirm`, `capture_method:
   'manual'`, key `modify/<modificationId>`). A decline or a card that needs
   the guest returns `card_required` with nothing changed; the page then
   calls `adminCreateModificationCheckout` (a card-only Checkout Session for

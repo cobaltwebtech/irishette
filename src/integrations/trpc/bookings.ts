@@ -638,7 +638,9 @@ export const bookingsRouter = createTRPCRouter({
 				differenceCents: plan.differenceCents,
 				/** Cancellation tier applied to dropped nights (null: none). */
 				refundPercent: plan.refundPercent,
-				savedCard: card ? { brand: card.brand, last4: card.last4 } : null,
+				savedCard: card
+					? { type: card.type, brand: card.brand, last4: card.last4 }
+					: null,
 				hasOpenDispute: await hasOpenDispute(ctx.db, booking.id),
 			};
 		}),

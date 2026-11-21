@@ -374,9 +374,11 @@ the admin booking lists show an "Open dispute" badge.
   records the consent (`bookings.card_consent_at`, `card_consent_by`:
   `guest` for checkout, `admin` when an admin books by phone and ticks the
   verbal-consent box). `payment_transactions` stores `stripe_payment_method_id`,
-  `card_brand` and `card_last4` from the expanded payment method. Only a
-  saved `card` is charged off-session (a `link` method is not; the admin
-  enters a fresh card instead). `saved_payment_method_options.payment_method_save`
+  `card_brand` and `card_last4` from the expanded payment method. A saved
+  `card` or `link` method is charged off-session (Link has no brand or last
+  4; the admin summary says "the guest's Link account on file"); any other
+  type, or a decline, falls back to the admin entering a fresh card.
+  `saved_payment_method_options.payment_method_save`
   stays `disabled` (no picker). Refunds go back to the card used. Typing a
   guest's card into the admin form is not a Stripe MOTO flow: confirm with
   Stripe support before go-live.

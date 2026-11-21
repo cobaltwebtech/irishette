@@ -586,6 +586,8 @@ export interface ModificationEmailInfo {
 	releasedEarly: boolean;
 	/** Cancellation tier applied to dropped nights (null: none). */
 	refundPercent: number | null;
+	/** The refund for a lower price could not be created (admins fix it). */
+	refundFailed: boolean;
 }
 
 /** What a change did with the money, for the guest. */
@@ -595,7 +597,11 @@ function guestMoneyText(info: ModificationEmailInfo): string {
 		return 'No refund is given for the unused nights (see our cancellation policy, Early Departure).';
 	}
 	if (difference > 0) {
-		return `The difference of ${currency(difference)} was charged to your card on file.`;
+		return `The difference of ${currency(difference)} was charged to your card.`;
+	}
+	if (difference < 0 && info.refundFailed) {
+		// Don't alarm the guest: the admins were alerted and will refund by hand.
+		return `Your refund of ${currency(-difference)} is being processed by our team and will go back to the card you paid with. If you have questions, call us at ${CONTACT_PHONE}.`;
 	}
 	if (info.refundPercent !== null) {
 		// Dropped nights: tax back in full, the tier's share of room and fee.
@@ -614,6 +620,9 @@ function adminMoneyText(info: ModificationEmailInfo): string {
 	const difference = info.differenceCents / 100;
 	if (info.releasedEarly) return 'Released early: no money moved.';
 	if (difference === 0) return 'No money moved.';
+	if (difference < 0 && info.refundFailed) {
+		return `The refund of ${currency(-difference)} FAILED: see the admin alert and refund it in Stripe.`;
+	}
 	return `${difference > 0 ? 'Charged' : 'Refunded'} ${currency(Math.abs(difference))}.`;
 }
 
@@ -641,10 +650,15 @@ export function sendBookingModifiedEmails(
 				{ label: 'Before', value: before },
 				{ label: 'Previous total', value: currency(info.previousTotal) },
 				{ label: 'New total', value: currency(booking.totalAmount) },
-				{
-					label: difference < 0 ? 'Refund' : 'Charged',
-					value: currency(Math.abs(difference)),
-				},
+				// Nothing moved (or an early release): no money row.
+				...(difference === 0 || info.releasedEarly
+					? []
+					: [
+							{
+								label: difference < 0 ? 'Refund' : 'Charged',
+								value: currency(Math.abs(difference)),
+							},
+						]),
 			],
 		},
 		guest: {

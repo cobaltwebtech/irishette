@@ -23,6 +23,13 @@ interface PaymentsAndChangesCardProps {
 	modifications: AdminBooking['bookingModifications'];
 }
 
+/** "visa ending 4242", "Link" or the raw method type. */
+function paymentMethodLabel(p: AdminBooking['paymentTransactions'][number]) {
+	if (p.cardBrand && p.cardLast4) return `${p.cardBrand} ending ${p.cardLast4}`;
+	if (p.paymentMethod === 'link') return 'Link';
+	return p.paymentMethod ?? 'card';
+}
+
 const stay = (checkIn: string, checkOut: string) =>
 	`${formatStayDate(checkIn)} to ${formatStayDate(checkOut)}`;
 
@@ -50,9 +57,7 @@ export function PaymentsAndChangesCard({
 						<div key={p.id} className="rounded-md border p-3 text-sm">
 							<p className="font-semibold">{formatMoney(p.amount)}</p>
 							<p className="text-muted-foreground">
-								{p.cardBrand && p.cardLast4
-									? `${p.cardBrand} ending ${p.cardLast4}`
-									: (p.paymentMethod ?? 'card')}
+								{paymentMethodLabel(p)}
 								{' · '}
 								{formatDateTimeCT(p.createdAt)}
 							</p>

@@ -153,7 +153,11 @@ describe('increase charged to the saved card', () => {
 			checkOutDate: addDays(booking.checkOutDate, 1),
 		});
 		expect(quote.kind).toBe('extend');
-		expect(quote.savedCard).toEqual({ brand: 'visa', last4: '4242' });
+		expect(quote.savedCard).toEqual({
+			type: 'card',
+			brand: 'visa',
+			last4: '4242',
+		});
 		expect(quote.differenceCents).toBeGreaterThan(0);
 		expect(result).toMatchObject({
 			status: 'applied',
@@ -252,6 +256,32 @@ describe('increase charged to the saved card', () => {
 		expect(intents.captures).toHaveLength(0);
 		expect((await row(booking.id)).checkOutDate).toBe(booking.checkOutDate);
 		expect(await changes(booking.id)).toHaveLength(0);
+	});
+
+	it('charges a saved Link method off-session', async () => {
+		const intents = mockStripeIntents();
+		mockEmail();
+		const booking = await paidBooking();
+		await db()
+			.update(paymentTransactions)
+			.set({
+				paymentMethod: 'link',
+				stripePaymentMethodId: 'pm_link',
+				cardBrand: null,
+				cardLast4: null,
+			})
+			.where(eq(paymentTransactions.bookingId, booking.id));
+		const { quote, result } = await change(booking, {
+			checkInDate: booking.checkInDate,
+			checkOutDate: addDays(booking.checkOutDate, 1),
+		});
+		expect(quote.savedCard).toEqual({ type: 'link', brand: null, last4: null });
+		expect(result).toMatchObject({ status: 'applied' });
+		const [{ body }] = intents.created;
+		expect(body.get('payment_method')).toBe('pm_link');
+		expect(body.get('customer')).toBe('cus_guest');
+		expect(body.get('off_session')).toBe('true');
+		expect(intents.captures).toHaveLength(1);
 	});
 
 	it('refuses a stale price with CONFLICT and the new difference', async () => {
@@ -392,7 +422,7 @@ describe('decrease refunded', () => {
 
 	it('refunds the difference on the payment, without counting it as a cancellation refund', async () => {
 		const refunds = mockStripeRefunds();
-		mockEmail();
+		const sent = mockEmail();
 		// Paid more than today's price for two nights: moving refunds the rest.
 		const booking = await paidBooking(pricedAt(175));
 		const { quote, result } = await change(booking, {
@@ -415,6 +445,13 @@ describe('decrease refunded', () => {
 		expect(mod.status).toBe('applied');
 		expect(mod.stripeRefundId).toMatch(/^re_\d+$/);
 		await settle();
+		const guest = sent.find(
+			(e) =>
+				e.subject.startsWith('Reservation Changed') &&
+				e.to.includes(booking.guestEmail),
+		);
+		expect(guest?.text).toContain('Refund');
+		expect(guest?.text).not.toContain('Charged');
 	});
 
 	it('a refund Stripe could not create is retried by the recovery cron', async () => {
@@ -525,7 +562,7 @@ describe('rules and early release', () => {
 	});
 
 	it('releases the room early without moving money', async () => {
-		mockEmail();
+		const sent = mockEmail();
 		const booking = await paidBooking({
 			checkInDate: '2033-04-30',
 			checkOutDate: '2033-05-04',
@@ -556,6 +593,11 @@ describe('rules and early release', () => {
 		);
 		expect(past.code).toBe('BAD_REQUEST');
 		await settle();
+		const notices = sent.filter((e) =>
+			e.subject.startsWith('Reservation Changed'),
+		);
+		expect(notices).toHaveLength(2);
+		for (const email of notices) expect(email.text).not.toContain('Charged');
 	});
 
 	it('non-admins cannot change reservations', async () => {

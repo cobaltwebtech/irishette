@@ -257,7 +257,18 @@ async function moneyForChange(
 	};
 }
 
-/** The card a change can be charged to off-session, if there is one. */
+/**
+ * Saved method types a change can charge off-session: a card (Apple Pay
+ * and Google Pay included) or a Link method, both saved at checkout with
+ * setup_future_usage off_session.
+ */
+type SavedMethodType = 'card' | 'link';
+
+function isSavedMethodType(type: string | null): type is SavedMethodType {
+	return type === 'card' || type === 'link';
+}
+
+/** The card or Link method a change can be charged to off-session, if any. */
 export async function savedCard(deps: ServiceDeps, booking: Booking) {
 	const [row] = await deps.db
 		.select({
@@ -277,11 +288,11 @@ export async function savedCard(deps: ServiceDeps, booking: Booking) {
 		.limit(1);
 	const customer = booking.stripeCustomerId;
 	if (row?.paymentMethodId && customer) {
-		// Only a card is charged off-session (a Link method is not, plan 06).
-		return row.paymentMethod === 'card'
+		return isSavedMethodType(row.paymentMethod)
 			? {
 					paymentMethodId: row.paymentMethodId,
 					customer,
+					type: row.paymentMethod,
 					brand: row.brand,
 					last4: row.last4,
 				}
@@ -293,10 +304,16 @@ export async function savedCard(deps: ServiceDeps, booking: Booking) {
 		{ expand: ['payment_method'] },
 	);
 	const pm = intent.payment_method;
-	if (!pm || typeof pm !== 'object' || pm.type !== 'card') return null;
+	if (!pm || typeof pm !== 'object' || !isSavedMethodType(pm.type)) {
+		return null;
+	}
+	// A method used without being attached to the customer (a payment made
+	// before methods were kept on file) can't be charged again: Stripe refuses.
+	if (stripeId(pm.customer) !== customer) return null;
 	return {
 		paymentMethodId: pm.id,
 		customer,
+		type: pm.type,
 		brand: pm.card?.brand ?? null,
 		last4: pm.card?.last4 ?? null,
 	};
@@ -462,6 +479,20 @@ async function authorizeOffSession(
 				declined: `The card on file was declined (${error instanceof Error ? error.message : 'card error'}). Enter a card instead.`,
 			};
 		}
+		if (
+			typeof error === 'object' &&
+			error !== null &&
+			'type' in error &&
+			(error as { type: string }).type === 'StripeInvalidRequestError' &&
+			'param' in error &&
+			(error as { param: string }).param === 'payment_method'
+		) {
+			// The saved card can't be reused (detached or never attached).
+			return {
+				declined:
+					'The card on file can no longer be charged. Enter a card instead.',
+			};
+		}
 		throw error;
 	}
 }
@@ -616,14 +647,18 @@ async function finishModificationPayment(
 	const { db, stripe } = deps;
 	let intent: Stripe.PaymentIntent;
 	try {
+		// Expanded so the payment row records the real method type (link or
+		// card) and card details, not the intent's first allowed type.
 		intent = await stripe.paymentIntents.capture(
 			intentId,
-			{},
+			{ expand: ['payment_method'] },
 			{ idempotencyKey: `capture-modify/${modificationId}` },
 		);
 	} catch (error) {
 		if (!isPermanentStripeError(error)) throw error;
-		intent = await stripe.paymentIntents.retrieve(intentId);
+		intent = await stripe.paymentIntents.retrieve(intentId, {
+			expand: ['payment_method'],
+		});
 	}
 	if (intent.status !== 'succeeded') {
 		await setModificationStatus(db, modificationId, 'payment_failed', now);
@@ -831,6 +866,7 @@ async function notifyModification(
 			differenceCents: mod.differenceCents,
 			releasedEarly: mod.kind === 'release_early',
 			refundPercent: mod.refundPercent,
+			refundFailed: mod.status === 'refund_failed',
 		}),
 	);
 }

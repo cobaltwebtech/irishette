@@ -23,6 +23,10 @@ import {
 	AdminStayPicker,
 	PriceBreakdown,
 } from '@/components/admin/booking/AdminStayPicker';
+import {
+	type ModificationQuote,
+	PaymentSummaryCard,
+} from '@/components/admin/booking/PaymentSummaryCard';
 import { stayFromRange } from '@/components/booking/AvailabilityCalendar';
 import { errorMessage } from '@/components/booking/checkout-elements';
 import { buttonVariants } from '@/components/ui/button';
@@ -110,7 +114,7 @@ function ModifyReservationPage() {
 				// Stacked, full width: the two-month calendar needs the room.
 				<div className="space-y-6">
 					<ChangeStayCard data={data} stayBegun={stayBegun} />
-					<ReleaseEarlyCard booking={booking} stayBegun={stayBegun} />
+					{stayBegun && <ReleaseEarlyCard booking={booking} />}
 				</div>
 			)}
 		</AdminLayout>
@@ -269,24 +273,14 @@ function ExtendSelect({
 	);
 }
 
-type Quote = RouterOutputs['bookings']['adminQuoteModification'];
+type Quote = ModificationQuote;
 
-/** What happens to the money, in one line. */
-function differenceLine(q: Quote) {
-	const diff = q.differenceCents / 100;
-	if (q.refundPercent !== null) {
-		// Fewer nights: the dropped nights fall under the cancellation policy.
-		const kept = (q.differenceCents - q.priceDifferenceCents) / 100;
-		return `Refund ${formatMoney(-diff)} (${q.refundPercent}% of the ${formatMoney(-q.priceDifferenceCents / 100)} difference under the cancellation policy; ${formatMoney(kept)} kept, new booking total ${formatMoney(q.newTotal)})`;
-	}
-	if (diff < 0) {
-		return `Refund ${formatMoney(-diff)} to the card the guest paid with`;
-	}
-	if (diff === 0) return 'No price difference';
-	const card = q.savedCard
-		? `the ${q.savedCard.brand ?? 'card'} ending ${q.savedCard.last4 ?? '????'}`
-		: 'a card the guest reads out';
-	return `Charge ${formatMoney(diff)} to ${card}`;
+/** The confirm button says what it will do to the money. */
+function confirmLabel(q: Quote) {
+	const amount = formatMoney(Math.abs(q.differenceCents) / 100);
+	if (q.differenceCents < 0) return `Confirm change and refund ${amount}`;
+	if (q.differenceCents > 0) return `Confirm change and charge ${amount}`;
+	return 'Confirm change';
 }
 
 /** After a change: refresh the booking queries and go back to it. */
@@ -379,10 +373,19 @@ function ModificationReview({
 	return (
 		<div className="space-y-4">
 			<div className="grid gap-4 sm:grid-cols-2">
-				<PriceBreakdown quote={q.current} title="Now" />
-				<PriceBreakdown quote={q.next} title="After the change" />
+				<PriceBreakdown
+					quote={q.current}
+					title="Current reservation"
+					tone="current"
+				/>
+				<PriceBreakdown
+					quote={q.next}
+					title="After the change"
+					tone="after"
+					compareTo={q.current}
+				/>
 			</div>
-			<p className="text-lg font-semibold">{differenceLine(q)}</p>
+			<PaymentSummaryCard quote={q} />
 			{needsDisputeConfirm && (
 				<div className="rounded-md border border-destructive p-3">
 					<AdminCheckbox
@@ -408,7 +411,7 @@ function ModificationReview({
 				onClick={() => void apply(q)}
 			>
 				<Icon icon="tabler:check" className="size-5" />
-				Confirm change
+				{confirmLabel(q)}
 			</Button>
 		</div>
 	);
@@ -465,13 +468,8 @@ function FreshCardStep({
 	);
 }
 
-function ReleaseEarlyCard({
-	booking,
-	stayBegun,
-}: {
-	booking: AdminBooking['booking'];
-	stayBegun: boolean;
-}) {
+/** Only rendered while a stay is under way. */
+function ReleaseEarlyCard({ booking }: { booking: AdminBooking['booking'] }) {
 	const trpc = useTRPC();
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
@@ -520,12 +518,7 @@ function ReleaseEarlyCard({
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="space-y-4">
-				{!stayBegun ? (
-					<p className="text-sm text-muted-foreground">
-						Available once the stay has begun (check-in time). Before then,
-						shorten the stay above: the difference is refunded.
-					</p>
-				) : options.length === 0 ? (
+				{options.length === 0 ? (
 					<p className="text-sm text-muted-foreground">
 						There is no earlier check-out date to release from.
 					</p>
