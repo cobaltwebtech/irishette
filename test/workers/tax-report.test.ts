@@ -111,7 +111,7 @@ describe('reports.adminTaxReport', () => {
 			room: 60000,
 			fees: 7200,
 			receipts: 67200,
-			untaxedFees: 2400,
+			untaxedReceipts: 2400,
 			taxable: 64800,
 			stateTax: 3888,
 			cityTax: 4536,

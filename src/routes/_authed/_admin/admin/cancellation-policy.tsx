@@ -129,13 +129,16 @@ function CancellationPolicyPage() {
 						</CardTitle>
 						<CardDescription>
 							Guests who cancel at least the given hours before check-in get
-							that share of the booking total (including taxes and fees) back.
-							Windows count back from check-in at {CHECK_IN_TIME_LABEL} on the
-							check-in date, on the local clock: whole days are calendar days
-							(72 hours = {CHECK_IN_TIME_LABEL} three days before, also across
-							daylight saving changes), and at exactly a cutoff the higher
-							refund applies. Saving creates a new version for future bookings;
-							existing bookings keep the policy they booked under. Keep the{' '}
+							that share of the room price and service fee back, plus all the
+							hotel occupancy tax (Texas does not tax a kept amount below the
+							full room rate). With no refund, the full amount is kept and taxed
+							only within 30 days of check-in. Windows count back from check-in
+							at {CHECK_IN_TIME_LABEL} on the check-in date, on the local clock:
+							whole days are calendar days (72 hours = {CHECK_IN_TIME_LABEL}{' '}
+							three days before, also across daylight saving changes), and at
+							exactly a cutoff the higher refund applies. Saving creates a new
+							version for future bookings; existing bookings keep the policy
+							they booked under. Keep the{' '}
 							<Link to="/cancellation-refund-policy" className="underline">
 								public policy page
 							</Link>{' '}

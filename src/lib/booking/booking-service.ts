@@ -56,6 +56,12 @@ import {
 	earliestCheckInDate,
 	isLateSameDay,
 } from './stay-times';
+import {
+	bookingSplit,
+	policyRefundCents,
+	refundSplitTaxFirst,
+	taxDueOnKept,
+} from './tax-split';
 
 export type { Booking } from './checkout-service';
 
@@ -524,16 +530,54 @@ export async function quoteBookingCancellation(
 	});
 	// A late same-day booking (plan 06) is non-refundable under the policy;
 	// an admin's explicit full refund still works (refundFor 'full').
-	const noRefund = booking.lateSameDay
-		? { refundPercent: 0, refundAmount: 0, tier: null }
-		: {};
+	if (booking.lateSameDay) {
+		return {
+			policy,
+			amountPaid: paid,
+			alreadyRefunded,
+			...quote,
+			refundPercent: 0,
+			refundAmount: 0,
+			tier: null,
+		};
+	}
 	return {
 		policy,
 		amountPaid: paid,
 		alreadyRefunded,
 		...quote,
-		...noRefund,
+		refundAmount: policyRefundAmount(
+			booking,
+			quote,
+			paid,
+			alreadyRefunded,
+			now,
+		),
 	};
+}
+
+/**
+ * The policy refund with the hotel tax rule (plan 06, tax-split.ts): the
+ * tier's percentage of the room price and fee plus all the tax, unless
+ * nothing is refunded within 30 days of check-in (then the full rate is kept
+ * and taxed). Bookings without a tax snapshot keep the plain percentage.
+ */
+function policyRefundAmount(
+	booking: Booking,
+	quote: { refundPercent: number; refundAmount: number; checkInAt: Date },
+	paid: number,
+	alreadyRefunded: number,
+	now: Date,
+) {
+	const split = bookingSplit(booking);
+	if (!split || paid === 0) return quote.refundAmount;
+	const cents = policyRefundCents(
+		split,
+		quote.refundPercent,
+		taxDueOnKept(quote.refundPercent, quote.checkInAt, now),
+	);
+	const remaining = Math.max(0, roundCents(paid - alreadyRefunded));
+	return Math.min(remaining, cents / 100);
 }
 
 export interface CancelResult {
@@ -832,6 +876,8 @@ async function refundCancellation(
 				reason: 'cancellation',
 				refundKey: `refund-cancel/${booking.id}/${cents}`,
 				retry,
+				// Tax first, then room and fee (tax-split.ts).
+				split: cancellationSplit(booking, cents),
 			},
 			now,
 		);
@@ -860,6 +906,12 @@ async function refundCancellation(
 		);
 	}
 	return recordCancellationRefund(db, booking, amounts, refund, now);
+}
+
+/** The room / fee / tax of a cancellation refund (null: no snapshot). */
+function cancellationSplit(booking: Booking, cents: number) {
+	const split = bookingSplit(booking);
+	return split ? refundSplitTaxFirst(split, cents) : null;
 }
 
 /** Stripe refused the refund for good: refund_failed and an admin alert. */

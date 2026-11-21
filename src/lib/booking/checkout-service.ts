@@ -34,6 +34,7 @@ import {
 	noOverlapForBookingRow,
 } from './availability';
 import { roundCents } from './pricing';
+import { bookingSplit, splitColumns } from './tax-split';
 
 // Booking payments with Stripe Checkout Sessions (ui_mode 'elements': the
 // Payment Element on our own page). One open session per hold, expiring with
@@ -1093,6 +1094,8 @@ async function recordConfirmation(
 			amount: confirmed.totalAmount,
 			status: 'paid',
 			...paymentMethodFields(intent),
+			// The booking's room / fee / tax, for the tax report (plan 06).
+			...splitColumns(bookingSplit(confirmed)),
 			createdAt: now,
 			updatedAt: now,
 		})

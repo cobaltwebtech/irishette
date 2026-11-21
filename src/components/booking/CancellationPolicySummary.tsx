@@ -50,8 +50,9 @@ export function CancellationPolicySummary({
 				</li>
 			</ul>
 			<p className="mt-1 text-xs text-muted-foreground">
-				Windows count back from check-in at {CHECK_IN_TIME_LABEL}. Refunds are a
-				percent of the total paid, including taxes and fees.{' '}
+				Windows count back from check-in at {CHECK_IN_TIME_LABEL}. A partial
+				refund is a percent of the room price and service fee, plus all the
+				taxes.{' '}
 				<Link
 					to="/cancellation-refund-policy"
 					target="_blank"

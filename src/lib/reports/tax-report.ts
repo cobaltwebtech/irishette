@@ -3,6 +3,7 @@
 // report money is in INTEGER CENTS; inputs come from D1 in dollars.
 // See docs/TAX_REPORTING.md.
 
+import type { TaxSplit } from '@/lib/booking/tax-split';
 import { addDays, addMonths, type IsoDate } from '@/utils/date-range';
 import { dateInZone } from '@/utils/timezone';
 
@@ -32,6 +33,12 @@ export interface TaxReportEntry {
 	id: string;
 	at: Date;
 	amount: number;
+	/**
+	 * Its room / fee / taxable / tax as stored when it was made (plan 06).
+	 * Absent or null (older rows, Dashboard refunds): split in the booking's
+	 * proportions.
+	 */
+	split?: TaxSplit | null;
 	/** Null: a refund that matches no booking. */
 	booking: TaxReportBooking | null;
 }
@@ -73,8 +80,12 @@ export interface TaxReportAmounts {
 	receipts: number;
 	/** Exemptions are not tracked: always 0. */
 	exempt: number;
-	/** Service fees of bookings made before the fee was taxed. */
-	untaxedFees: number;
+	/**
+	 * Receipts that carry no tax: money kept from cancelled nights below the
+	 * full room rate (Texas: not taxable) and the service fees of bookings
+	 * made before the fee was taxed.
+	 */
+	untaxedReceipts: number;
 	taxable: number;
 	stateTax: number;
 	cityTax: number;
@@ -180,6 +191,15 @@ const bookingFields = (b: TaxReportBooking) => ({
 	checkOutDate: b.checkOutDate,
 });
 
+/** A stored split as unsigned cents. */
+const splitParts = (s: TaxSplit) => ({
+	room: toCents(s.room),
+	fees: toCents(s.fees),
+	taxable: toCents(s.taxable),
+	stateTax: toCents(s.stateTax),
+	cityTax: toCents(s.cityTax),
+});
+
 /** The row's money parts (unsigned cents); all zero without a booking. */
 function rowParts(amount: number, mix: Mix | null) {
 	if (!mix) return { room: 0, fees: 0, taxable: 0, stateTax: 0, cityTax: 0 };
@@ -198,7 +218,10 @@ function toRow(
 	const signed = (cents: number) => (type === 'payment' ? cents : -cents) + 0;
 	const amount = toCents(entry.amount);
 	const mix = entry.booking ? bookingMix(entry.booking) : null;
-	const parts = rowParts(amount, mix);
+	const parts =
+		entry.split && entry.booking
+			? splitParts(entry.split)
+			: rowParts(amount, mix);
 	return {
 		id: entry.id,
 		type,
@@ -211,7 +234,7 @@ function toRow(
 		stateTax: signed(parts.stateTax),
 		cityTax: signed(parts.cityTax),
 		total: signed(amount),
-		estimated: mix?.estimated ?? false,
+		estimated: entry.split ? false : (mix?.estimated ?? false),
 		linked: entry.booking !== null,
 	};
 }
@@ -222,7 +245,7 @@ const emptyAmounts = (): TaxReportAmounts => ({
 	fees: 0,
 	receipts: 0,
 	exempt: 0,
-	untaxedFees: 0,
+	untaxedReceipts: 0,
 	taxable: 0,
 	stateTax: 0,
 	cityTax: 0,
@@ -234,7 +257,7 @@ function addRow(a: TaxReportAmounts, row: TaxReportRow) {
 	a.room += row.room;
 	a.fees += row.fees;
 	a.receipts += row.room + row.fees;
-	a.untaxedFees += row.room + row.fees - row.taxable;
+	a.untaxedReceipts += row.room + row.fees - row.taxable;
 	a.taxable += row.taxable;
 	a.stateTax += row.stateTax;
 	a.cityTax += row.cityTax;
@@ -432,8 +455,9 @@ export const TAX_REPORT_LINES: ReadonlyArray<{
 	},
 	{ key: 'exempt', label: 'Exempt receipts' },
 	{
-		key: 'untaxedFees',
-		label: 'Service fees not taxed (bookings before the fee was taxed)',
+		key: 'untaxedReceipts',
+		label:
+			'Receipts not taxed (amounts kept from cancelled nights below the room rate; fees of early bookings)',
 		optional: true,
 	},
 	{ key: 'taxable', label: 'Taxable receipts', strong: true },

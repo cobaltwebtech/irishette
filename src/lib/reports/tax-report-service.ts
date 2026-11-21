@@ -7,6 +7,7 @@ import {
 	paymentTransactions,
 	room,
 } from '@/db/schema-export';
+import type { TaxSplit } from '@/lib/booking/tax-split';
 import { addDays } from '@/utils/date-range';
 import { zonedTimeToUtc } from '@/utils/timezone';
 
@@ -45,6 +46,27 @@ function linkedBooking(
 	return row.publicId === null ? null : (row as TaxReportBooking);
 }
 
+/** A row's stored tax split, or null when any part is missing. */
+function storedSplit(split: {
+	room: number | null;
+	fees: number | null;
+	taxable: number | null;
+	stateTax: number | null;
+	cityTax: number | null;
+}): TaxSplit | null {
+	const { room, fees, taxable, stateTax, cityTax } = split;
+	if (
+		room === null ||
+		fees === null ||
+		taxable === null ||
+		stateTax === null ||
+		cityTax === null
+	) {
+		return null;
+	}
+	return { room, fees, taxable, stateTax, cityTax };
+}
+
 /**
  * Payments and succeeded refunds from `from` 00:00 CT up to (not including)
  * the day after `to` 00:00 CT, with the summary and monthly totals.
@@ -62,6 +84,13 @@ export async function getTaxReport(
 				id: paymentTransactions.id,
 				at: paymentTransactions.createdAt,
 				amount: paymentTransactions.amount,
+				split: {
+					room: paymentTransactions.roomAmount,
+					fees: paymentTransactions.feesAmount,
+					taxable: paymentTransactions.taxableAmount,
+					stateTax: paymentTransactions.stateTaxAmount,
+					cityTax: paymentTransactions.cityTaxAmount,
+				},
 				...bookingColumns,
 			})
 			.from(paymentTransactions)
@@ -78,6 +107,13 @@ export async function getTaxReport(
 				id: paymentRefunds.id,
 				at: paymentRefunds.stripeCreatedAt,
 				amount: paymentRefunds.amount,
+				split: {
+					room: paymentRefunds.roomAmount,
+					fees: paymentRefunds.feesAmount,
+					taxable: paymentRefunds.taxableAmount,
+					stateTax: paymentRefunds.stateTaxAmount,
+					cityTax: paymentRefunds.cityTaxAmount,
+				},
 				...bookingColumns,
 			})
 			.from(paymentRefunds)
@@ -94,17 +130,19 @@ export async function getTaxReport(
 
 	return aggregateTaxReport(
 		{ from, to },
-		payments.map(({ id, at, amount, ...booking }) => ({
+		payments.map(({ id, at, amount, split, ...booking }) => ({
 			id,
 			at,
 			amount,
+			split: storedSplit(split),
 			booking,
 		})),
-		refunds.map(({ id, at, amount, ...booking }) => ({
+		refunds.map(({ id, at, amount, split, ...booking }) => ({
 			id,
 			// The range filter excludes rows with no Stripe date.
 			at: at ?? start,
 			amount,
+			split: storedSplit(split),
 			booking: linkedBooking(booking),
 		})),
 	);

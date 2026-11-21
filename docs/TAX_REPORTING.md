@@ -65,7 +65,7 @@ integer cents.
 | Service fees | Service fee part |
 | **Total hotel receipts (excl. tax)** | Room revenue + service fees |
 | Exempt receipts | Always $0.00: exemptions are not tracked |
-| Service fees not taxed | Only shown when not zero: fees of bookings made before the fee was taxed |
+| Receipts not taxed | Only shown when not zero: money kept from cancelled nights below the full room rate (not taxable in Texas) and fees of bookings made before the fee was taxed |
 | **Taxable receipts** | Total hotel receipts - exempt - fees not taxed |
 | State hotel occupancy tax | |
 | City hotel occupancy tax | |
@@ -75,13 +75,52 @@ The "By month" table (net of refunds) appears for quarter, year and custom
 periods. The detail table lists every payment and refund with its booking
 (linked to the admin booking page), guest, room and stay dates.
 
-## Refund allocation
+## Cancelled nights: when tax stays due (plan 06)
 
-A refund is split across room, service fee, state tax and city tax **in the
-booking's own proportions** (`refund * component / booking total`). The fee
-and tax parts are rounded to cents and the room part takes the remaining
-cents, so the parts always add up to the refund and a rounding cent never
-becomes tax. A full refund cancels the payment exactly.
+Texas rule (Comptroller quick reference for hotels, "Room Cancellation Fee",
+Tex. Tax Code §156.051(a)): tax is due on money kept for a cancelled room
+**only when the full room rate is kept and the cancellation is within 30
+days of the stay**. Keeping a percentage of the rate is not taxable. The
+site has no separate cancellation or change fee; the money it keeps under
+the cancellation windows is treated this way:
+
+| Situation | Refund | Kept | Tax on what is kept |
+|---|---|---|---|
+| Partial-refund window (e.g. 75%) | Tier % of room + fee, **plus all the tax** | The rest of room + fee | None |
+| No refund, within 30 days of check-in (incl. late same-day) | Nothing | Everything | Stays due |
+| No refund, more than 30 days out (only with a custom tier) | The tax only | Room + fee | None |
+| Full refund | Everything | Nothing | None |
+
+This applies to cancellations (`quoteBookingCancellation` ->
+`policyRefundAmount`) and to changes that drop nights for less money
+(`amountsAfterPolicyRefund`). Helpers: `src/lib/booking/tax-split.ts`
+(`taxDueOnKept`, `policyRefundCents`, `refundSplitTaxFirst`). An admin's
+explicit "full" refund returns everything; "none" keeps everything (as
+taxed). Bookings without a tax snapshot keep the plain percentage.
+
+## How each row is split
+
+Every payment and app refund stores its room, fee, taxable receipts and
+state / city tax when it is made (`payment_transactions` and
+`payment_refunds`: `room_amount`, `fees_amount`, `taxable_amount`,
+`state_tax_amount`, `city_tax_amount`; migration 0009):
+
+- the checkout payment: the booking's snapshot;
+- a change's extra charge: new minus old snapshot;
+- a refund (cancellation or cheaper change): the tax first, then room and
+  fee in proportion (`refundSplitTaxFirst`); once the tax is fully refunded
+  its taxable receipts are too, so whatever is kept is untaxed. A refund
+  spread over several payments divides the split by amount.
+
+The report uses the stored split when there is one. Rows without one
+(older rows, refunds made in the Stripe Dashboard, a change finished by the
+recovery cron) are split **in the booking's own proportions**
+(`amount * component / booking total`): fee and tax parts rounded, the room
+part takes the remaining cents.
+
+Money kept untaxed shows on the **Receipts not taxed** line (room + fees -
+taxable receipts), together with the service fees of bookings made before
+the fee was taxed.
 
 Refunds that match no booking (for example a Dashboard refund of an unlinked
 payment) are listed as "No booking" and reported on their own line, **not**
@@ -89,29 +128,25 @@ included in any total.
 
 ## Reservation changes (admin, plan 06)
 
-A change updates the booking's tax snapshot (`taxable_amount`, rates,
-`state_tax_amount`, `city_tax_amount`, `tax_amount`) to what the guest now
-owes, and the money moves as ordinary report rows:
+A change updates the booking's tax snapshot to what the guest now owes, and
+the money moves as ordinary report rows:
 
-- **Extra charge** (longer or dearer stay): a second `payment_transactions`
-  row on the day it was captured: a positive row that adds its tax.
-- **Refund** (cheaper stay): a `payment_refunds` row (source `app`), counted
-  on the day Stripe made it once `succeeded`: a negative row that **reduces
-  the liability** in that period.
-- **Fewer nights for less money**: the dropped nights are cancelled under the
-  booking's cancellation policy, so only the tier's percentage of the
-  difference is refunded. The part kept stays in the booking's room, fee and
-  tax amounts in proportion, exactly like a partly refunded cancellation,
-  so its tax stays reported. Confirm with your CPA whether amounts kept for
-  cancelled nights are taxable; today the report treats them like
-  cancellation amounts kept (taxed in proportion).
-- **Release early** moves no money and changes no amounts.
+- **Extra charge** (longer or dearer stay): a second payment row on the day
+  it was captured, adding its tax.
+- **Refund** (cheaper stay): a refund row on the day Stripe made it (once
+  `succeeded`), which **reduces the liability** in that period.
+- **Fewer nights for less money**: the dropped nights are cancelled under
+  the booking's policy and the rule above: the tax on them comes back in
+  full with the tier's share of their room and fee; what is kept stays in
+  the booking's room and fee, untaxed. With no refund within 30 days, the
+  full rate and its tax are kept.
+- **Release early** moves no money and changes no amounts (the full rate of
+  the unused nights is kept within the stay: taxable).
 
-Every payment and refund of a booking is split in the booking's current
-proportions, so a booking's net rows always add up to its current snapshot
-(within a cent): the tax still owed for the stay. Tests:
-`test/workers/modifications.test.ts` ("cancellation windows on fewer nights,
-and tax liability", "the tax report counts both payments").
+A booking's net rows add up to its current snapshot: the tax still owed for
+the stay. Tests: `test/workers/modifications.test.ts` ("cancellation windows
+on fewer nights, and tax liability", "cancellations under the hotel tax
+rule", "the tax report counts both payments"), `test/unit/tax-split.test.ts`.
 
 ## Estimated rows
 

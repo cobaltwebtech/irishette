@@ -17,6 +17,18 @@ import { user } from './auth-schema';
 import { cancellationPolicies } from './policy-schema';
 import { room } from './room-schema';
 
+// What part of a payment or app refund is room, service fee, taxable
+// receipts and state / city hotel tax (dollars; src/lib/booking/tax-split.ts).
+// Null on rows made before it was stored and on Dashboard refunds: the tax
+// report then splits them in the booking's proportions.
+const taxSplitColumns = () => ({
+	roomAmount: real('room_amount'),
+	feesAmount: real('fees_amount'),
+	taxableAmount: real('taxable_amount'),
+	stateTaxAmount: real('state_tax_amount'),
+	cityTaxAmount: real('city_tax_amount'),
+});
+
 // Main booking/reservation table
 export const bookings = sqliteTable(
 	'bookings',
@@ -190,6 +202,7 @@ export const paymentTransactions = sqliteTable(
 		stripePaymentMethodId: text('stripe_payment_method_id'),
 		cardBrand: text('card_brand'),
 		cardLast4: text('card_last4'),
+		...taxSplitColumns(),
 
 		createdAt: integer('created_at', { mode: 'timestamp' })
 			.$defaultFn(() => new Date())
@@ -273,6 +286,7 @@ export const paymentRefunds = sqliteTable(
 		failureReason: text('failure_reason'),
 		// Card network trace reference (ARN), once Stripe has it.
 		reference: text('reference'),
+		...taxSplitColumns(),
 		stripeCreatedAt: integer('stripe_created_at', { mode: 'timestamp' }),
 		createdAt: integer('created_at', { mode: 'timestamp' })
 			.$defaultFn(() => new Date())

@@ -56,13 +56,17 @@ function RefundTiers() {
 							<strong>Penalty:</strong>{' '}
 							{tier.refundPercent >= 100
 								? 'None'
-								: `${100 - tier.refundPercent}% of the booking amount`}
+								: tier.refundPercent === 0
+									? 'The full booking amount, taxes included'
+									: `${100 - tier.refundPercent}% of the room price and service fee (no tax on it)`}
 						</li>
 						<li>
 							<strong>Refund:</strong>{' '}
 							{tier.refundPercent === 0
 								? 'No refund will be issued'
-								: `${tier.refundPercent}% of the booking amount`}
+								: tier.refundPercent >= 100
+									? 'The full booking amount, taxes included'
+									: `${tier.refundPercent}% of the room price and service fee, plus all hotel occupancy taxes`}
 						</li>
 					</ul>
 				</div>
@@ -112,9 +116,13 @@ function CancellationRefundPolicyPage() {
 								<RefundTiers />
 								<p className="mt-4 text-sm leading-relaxed text-muted-foreground">
 									Refund windows are counted back from check-in at{' '}
-									{CHECK_IN_TIME_LABEL} on your arrival date. The booking amount
-									is the total you paid, including taxes and fees. Online
-									cancellation closes at check-in.
+									{CHECK_IN_TIME_LABEL} on your arrival date. A partial refund
+									is a percentage of the room price and service fee, and the
+									hotel occupancy taxes on the cancelled stay are refunded in
+									full: the amount we keep is not a full room rate, so Texas
+									does not tax it. When no refund applies within 30 days of
+									check-in, the full booking amount is kept, taxes included.
+									Online cancellation closes at check-in.
 								</p>
 							</section>
 
@@ -223,8 +231,7 @@ function CancellationRefundPolicyPage() {
 								<p className="leading-relaxed text-muted-foreground">
 									The full booking amount, including taxes and fees, is due
 									upfront when you book. We do not take deposits, and no balance
-									is collected at check-in or checkout. Any refund is a
-									percentage of the total you paid, according to the
+									is collected at check-in or checkout. Any refund follows the
 									cancellation windows above.
 								</p>
 							</section>

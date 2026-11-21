@@ -2,11 +2,12 @@ import { desc, eq } from 'drizzle-orm';
 import type Stripe from 'stripe';
 
 import type { Database } from '@/db/drizzle-init';
-import { paymentTransactions } from '@/db/schema-export';
+import { paymentRefunds, paymentTransactions } from '@/db/schema-export';
 import type { ServiceDeps } from '@/lib/server/deps';
 import { stripeBookingMetadata, toCents } from '@/lib/stripe/stripe';
 
 import { type Booking, recordAppRefund } from './checkout-service';
+import { divideSplit, splitColumns, type TaxSplit } from './tax-split';
 
 // A booking's payments (plan 06): the checkout payment plus one per extra
 // charge for an approved change, each a payment_transactions row. Refunds
@@ -62,6 +63,11 @@ export interface RefundRequest {
 	 */
 	refundKey: string;
 	metadata?: Record<string, string>;
+	/**
+	 * Room / fee / tax of the whole refund (tax-split.ts), stored on the
+	 * refund rows (divided by amount when several are made).
+	 */
+	split?: TaxSplit | null;
 	/**
 	 * A retry (recovery cron): read each payment's refunds from Stripe first,
 	 * count the ones this request already made and use Stripe's refunded
@@ -140,7 +146,28 @@ export async function refundAcrossPayments(
 		await recordAppRefund(db, refund, booking.id, now);
 		await saveRefunded(db, payment, now);
 	}
+	if (request.split && refunds.length > 0) {
+		await saveRefundSplits(db, refunds, request.split);
+	}
 	return { refunds, uncoveredCents: Math.max(0, remaining) };
+}
+
+/** Stores each refund's share of the request's tax split. */
+async function saveRefundSplits(
+	db: Database,
+	refunds: Stripe.Refund[],
+	split: TaxSplit,
+) {
+	const parts = divideSplit(
+		split,
+		refunds.map((r) => r.amount),
+	);
+	for (const [index, refund] of refunds.entries()) {
+		await db
+			.update(paymentRefunds)
+			.set(splitColumns(parts[index] ?? null))
+			.where(eq(paymentRefunds.stripeRefundId, refund.id));
+	}
 }
 
 async function saveRefunded(db: Database, payment: Payment, now: Date) {

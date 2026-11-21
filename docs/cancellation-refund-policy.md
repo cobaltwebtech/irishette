@@ -8,18 +8,18 @@ At irishette.com, we understand that plans can change. This Cancellation and Ref
 
 ## Cancellation Timeframes and Penalties
 
-The refund windows are the active policy saved in the admin dashboard (the built-in default applies until one is saved). The page renders them from the saved policy. Windows count back from check-in at 4:00 PM CT, and the refund is a percentage of the total paid, including taxes and fees.
+The refund windows are the active policy saved in the admin dashboard (the built-in default applies until one is saved). The page renders them from the saved policy. Windows count back from check-in at 4:00 PM CT. A partial refund is a percentage of the room price and service fee, and the hotel occupancy taxes on the cancelled stay are refunded in full: the amount kept is not a full room rate, so Texas does not tax it. When no refund applies within 30 days of check-in, the full booking amount is kept, taxes included.
 
 ### Cancellation At Least 7 Days Before Check-In
 - **Penalty:** None
 - **Refund:** 100% of the booking amount
 
 ### Cancellation 3 Days to Less Than 7 Days Before Check-In
-- **Penalty:** 25% of the booking amount
-- **Refund:** 75% of the booking amount
+- **Penalty:** 25% of the room price and service fee (no tax on it)
+- **Refund:** 75% of the room price and service fee, plus all hotel occupancy taxes
 
 ### Cancellation Less Than 3 Days Before Check-In
-- **Penalty:** 100% of the booking amount
+- **Penalty:** The full booking amount, taxes included
 - **Refund:** No refund will be issued
 
 ## How to Cancel Your Reservation
@@ -55,7 +55,7 @@ If you check out or leave the property before your scheduled checkout date, no r
 
 ## Payment
 
-The full booking amount, including taxes and fees, is due upfront when you book. We do not take deposits, and no balance is collected at check-in or checkout. Any refund is a percentage of the total you paid, according to the cancellation windows above.
+The full booking amount, including taxes and fees, is due upfront when you book. We do not take deposits, and no balance is collected at check-in or checkout. Any refund follows the cancellation windows above.
 
 ## Violations and Property Damage
 

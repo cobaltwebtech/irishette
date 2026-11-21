@@ -407,6 +407,13 @@ Policy data and the quote are pure (`src/lib/booking/cancellation-policy.ts`):
   paid (`total - refundAmount`, e.g. after a partial refund in Stripe). The
   quote returns every tier's cutoff (`refundCutoffs`); the UI formats them in
   CT (`formatInstantCT`, "Tue, Jun 7, 2030, 4:00 PM CT").
+- **Hotel tax rule (plan 06):** `quoteBookingCancellation` replaces that
+  amount for bookings with a tax snapshot (`policyRefundAmount`): the tier
+  percent of the room price and fee **plus all the tax**, unless nothing is
+  refunded within 30 days of check-in (the full rate is kept and taxed).
+  Texas does not tax a kept amount below the full room rate
+  (`docs/TAX_REPORTING.md`, "Cancelled nights"). The refund row stores its
+  room / fee / tax split (tax first).
 
 Storage (`src/lib/booking/cancellation-policy-store.ts`, tables in
 `src/db/policy-schema.ts`): `saveCancellationPolicy` adds a new active
@@ -533,8 +540,11 @@ pure rules in `modification-rules.ts`, inputs in `modification-validation.ts`.
   nights the dropped nights are cancelled under the booking's policy
   (`moneyForChange`, `amountsAfterPolicyRefund`): only the current tier's
   `refundPercent` of the price difference is refunded (0 for late same-day
-  bookings), and the rest stays in the booking's amounts component by
-  component, so the total is the old total minus the refund. The change row
+  bookings), plus all the tax on the dropped nights unless nothing is
+  refunded within 30 days of check-in (Texas: a kept percentage is not
+  taxable; `tax-split.ts`, `docs/TAX_REPORTING.md`). The kept room and fee
+  stay in the booking's amounts, untaxed, so the total is the old total
+  minus the refund. The change row
   stores `refund_percent` (migration 0008); the quote returns
   `priceDifferenceCents`, `differenceCents` (what moves), `refundPercent`
   and `newTotal`. Once it has

@@ -588,6 +588,35 @@ export interface ModificationEmailInfo {
 	refundPercent: number | null;
 }
 
+/** What a change did with the money, for the guest. */
+function guestMoneyText(info: ModificationEmailInfo): string {
+	const difference = info.differenceCents / 100;
+	if (info.releasedEarly) {
+		return 'No refund is given for the unused nights (see our cancellation policy, Early Departure).';
+	}
+	if (difference > 0) {
+		return `The difference of ${currency(difference)} was charged to your card on file.`;
+	}
+	if (info.refundPercent !== null) {
+		// Dropped nights: tax back in full, the tier's share of room and fee.
+		return difference < 0
+			? `The removed nights fall under our cancellation policy: all the hotel tax on them and ${info.refundPercent}% of their room price and service fee are refunded, so ${currency(-difference)} is going back to the card you paid with. ${REFUND_TIMING}`
+			: 'The removed nights fall under our cancellation policy, and no refund is due for them at this point.';
+	}
+	if (difference < 0) {
+		return `The difference of ${currency(-difference)} is being refunded to the card you paid with. ${REFUND_TIMING}`;
+	}
+	return 'The price did not change, so nothing was charged or refunded.';
+}
+
+/** What a change did with the money, for the admins. */
+function adminMoneyText(info: ModificationEmailInfo): string {
+	const difference = info.differenceCents / 100;
+	if (info.releasedEarly) return 'Released early: no money moved.';
+	if (difference === 0) return 'No money moved.';
+	return `${difference > 0 ? 'Charged' : 'Refunded'} ${currency(Math.abs(difference))}.`;
+}
+
 /**
  * An admin changed the reservation (plan 06): the guest and the admins get
  * the before/after and what was charged or refunded (key
@@ -602,17 +631,6 @@ export function sendBookingModifiedEmails(
 ): Promise<EmailResult> {
 	const difference = info.differenceCents / 100;
 	const before = `${info.previous.roomName}, ${formatStayDate(info.previous.checkIn)} to ${formatStayDate(info.previous.checkOut)}`;
-	const money = info.releasedEarly
-		? 'No refund is given for the unused nights (see our cancellation policy, Early Departure).'
-		: difference > 0
-			? `The difference of ${currency(difference)} was charged to your card on file.`
-			: info.refundPercent !== null
-				? difference < 0
-					? `The removed nights fall under our cancellation policy: ${info.refundPercent}% of the price difference is refunded, so ${currency(-difference)} is going back to the card you paid with. ${REFUND_TIMING}`
-					: 'The removed nights fall under our cancellation policy, and no refund is due for them at this point.'
-				: difference < 0
-					? `The difference of ${currency(-difference)} is being refunded to the card you paid with. ${REFUND_TIMING}`
-					: 'The price did not change, so nothing was charged or refunded.';
 	return sendBookingNotices(db, env, booking, room, {
 		kind: `booking modified ${booking.confirmationId}`,
 		category: 'booking_modified',
@@ -636,7 +654,7 @@ export function sendBookingModifiedEmails(
 			paragraphs: [
 				`Hi ${booking.guestName},`,
 				`As you asked by phone, we changed your reservation ${booking.confirmationId}. The details below are your updated stay.`,
-				money,
+				guestMoneyText(info),
 				`Reservations are changed by phone only. For anything else, call us at ${CONTACT_PHONE}.`,
 			],
 		},
@@ -646,11 +664,7 @@ export function sendBookingModifiedEmails(
 			heading: `Reservation changed: ${info.label.toLowerCase()}`,
 			paragraphs: [
 				`Before: ${before}, ${currency(info.previousTotal)}.`,
-				info.releasedEarly
-					? 'Released early: no money moved.'
-					: difference === 0
-						? 'No price difference.'
-						: `${difference > 0 ? 'Charged' : 'Refunded'} ${currency(Math.abs(difference))}.`,
+				adminMoneyText(info),
 			],
 		},
 	});

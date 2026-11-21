@@ -59,9 +59,16 @@ import {
 	modificationKind,
 	releaseEarlyError,
 	amountsAfterPolicyRefund,
-	type StayAmounts,
 } from './modification-rules';
 import { checkInAt, checkOutAt } from './stay-times';
+import {
+	type StayAmounts,
+	splitColumns,
+	splitOfStay,
+	subtractSplit,
+	type TaxSplit,
+	taxDueOnKept,
+} from './tax-split';
 
 // Admin-only reservation changes (plan 06): move dates, extend, change room
 // (full reprice at today's rates; the difference is charged to the saved
@@ -217,20 +224,28 @@ async function moneyForChange(
 		price.totalAmount,
 		booking.totalAmount,
 	);
+	const current = bookingAmounts(booking, price.taxBreakdown);
 	const fewerNights = price.numberOfNights < booking.numberOfNights;
 	if (priceDifferenceCents >= 0 || !fewerNights) {
+		// The room / fee / tax of the charge (new - old) or refund (old - new).
+		const moneySplit =
+			priceDifferenceCents >= 0
+				? subtractSplit(splitOfStay(amounts), splitOfStay(current))
+				: subtractSplit(splitOfStay(current), splitOfStay(amounts));
 		return {
 			amounts,
 			priceDifferenceCents,
 			differenceCents: priceDifferenceCents,
 			refundPercent: null,
+			moneySplit,
 		};
 	}
 	const { refundPercent } = await quoteBookingCancellation(db, booking, now);
 	const policy = amountsAfterPolicyRefund(
-		bookingAmounts(booking, price.taxBreakdown),
+		current,
 		amounts,
 		refundPercent,
+		taxDueOnKept(refundPercent, booking.checkInAt, now),
 	);
 	return {
 		amounts: policy.amounts,
@@ -238,6 +253,7 @@ async function moneyForChange(
 		// 0 - x, not -x: a 0% tier moves +0 cents, not -0.
 		differenceCents: 0 - policy.refundCents,
 		refundPercent,
+		moneySplit: policy.refundSplit,
 	};
 }
 
@@ -560,6 +576,7 @@ async function applyModification(
 			context.intent.id,
 			context.card ?? null,
 			now,
+			plan.moneySplit,
 		);
 	} else if (diff < 0) {
 		refundFailed = await refundModification(
@@ -568,6 +585,7 @@ async function applyModification(
 			modificationId,
 			-diff,
 			now,
+			{ split: plan.moneySplit },
 		);
 	}
 	await notifyModification(deps, current, modificationId, now);
@@ -592,6 +610,8 @@ async function finishModificationPayment(
 	intentId: string,
 	card: Pick<SavedCard, 'brand' | 'last4'> | null,
 	now: Date,
+	/** Room / fee / tax of the charge (null on a retry: report estimates). */
+	split: TaxSplit | null = null,
 ) {
 	const { db, stripe } = deps;
 	let intent: Stripe.PaymentIntent;
@@ -628,6 +648,7 @@ async function finishModificationPayment(
 			...fields,
 			cardBrand: fields.cardBrand ?? card?.brand ?? null,
 			cardLast4: fields.cardLast4 ?? card?.last4 ?? null,
+			...splitColumns(split),
 			createdAt: now,
 			updatedAt: now,
 		})
@@ -647,7 +668,10 @@ async function refundModification(
 	modificationId: string,
 	cents: number,
 	now: Date,
-	{ retry = false }: { retry?: boolean } = {},
+	{
+		retry = false,
+		split = null,
+	}: { retry?: boolean; split?: TaxSplit | null } = {},
 ): Promise<boolean> {
 	let failure: string | null = null;
 	try {
@@ -660,6 +684,7 @@ async function refundModification(
 				refundKey: `refund-modify/${booking.id}/${modificationId}/${cents}`,
 				metadata: { modificationId },
 				retry,
+				split,
 			},
 			now,
 		);

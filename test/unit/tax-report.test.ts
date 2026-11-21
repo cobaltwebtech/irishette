@@ -81,7 +81,7 @@ describe('aggregateTaxReport', () => {
 			fees: 2400,
 			receipts: 22400,
 			exempt: 0,
-			untaxedFees: 0,
+			untaxedReceipts: 0,
 			taxable: 22400,
 			stateTax: 1344,
 			cityTax: 1568,
@@ -156,7 +156,7 @@ describe('aggregateTaxReport', () => {
 		});
 		expect(report.summary.net).toMatchObject({
 			receipts: 22400,
-			untaxedFees: 2400,
+			untaxedReceipts: 2400,
 			taxable: 20000,
 			totalTax: 2600,
 		});

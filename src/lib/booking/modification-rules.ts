@@ -1,6 +1,15 @@
 import type { IsoDate } from '@/utils/date-range';
 
 import type { BookingStatus, PaymentStatus } from './booking-status';
+import {
+	policyRefundCents,
+	refundSplitTaxFirst,
+	type StayAmounts,
+	splitOfStay,
+	splitTotalCents,
+	subtractSplit,
+	type TaxSplit,
+} from './tax-split';
 
 // Admin-only reservation changes (plan 06): pure rules shared by the server
 // (modification-service.ts) and the admin modify page. Pure; client-safe.
@@ -145,50 +154,48 @@ export const MODIFICATION_KIND_LABELS: Record<ModificationKind, string> = {
 	release_early: 'Released early',
 };
 
-/** A stay's money columns (dollars). */
-export interface StayAmounts {
-	baseAmount: number;
-	feesAmount: number;
-	taxAmount: number;
-	totalAmount: number;
-	taxableAmount: number;
-	stateTaxAmount: number;
-	cityTaxAmount: number;
-}
-
-const cents = (dollars: number) => Math.round(dollars * 100);
-
 /**
  * A cheaper change that drops nights (plan 06): the dropped nights are
- * cancelled under the booking's policy, so only `refundPercent` of the price
- * difference is refunded. The rest is kept in the booking's amounts,
- * component by component (room, fee, taxes), like a partly refunded
- * cancellation. Returns the booking's new amounts, the refund and the
- * amount kept, in cents. 100% gives the new stay's price exactly.
+ * cancelled under the booking's policy. The refund is the tier's share of
+ * the room price and fee difference plus all the tax difference, unless the
+ * tax stays due (`taxDue`: nothing refunded within 30 days, the full rate is
+ * kept and taxed; see tax-split.ts). The booking keeps the rest untaxed.
+ * Returns the booking's new amounts, the refund (cents and split) and the
+ * amount kept. 100% gives the new stay's price exactly.
  */
 export function amountsAfterPolicyRefund(
 	current: StayAmounts,
 	next: StayAmounts,
 	refundPercent: number,
-): { amounts: StayAmounts; refundCents: number; keptCents: number } {
-	const differenceCents = cents(current.totalAmount) - cents(next.totalAmount);
-	const refundCents = Math.round((differenceCents * refundPercent) / 100);
-	const keptShare = 1 - refundPercent / 100;
-	const keep = (key: keyof StayAmounts) =>
-		(cents(next[key]) +
-			Math.round((cents(current[key]) - cents(next[key])) * keptShare)) /
-		100;
+	taxDue: boolean,
+): {
+	amounts: StayAmounts;
+	refundSplit: TaxSplit;
+	refundCents: number;
+	keptCents: number;
+} {
+	const pool = subtractSplit(splitOfStay(current), splitOfStay(next));
+	const refundSplit = refundSplitTaxFirst(
+		pool,
+		policyRefundCents(pool, refundPercent, taxDue),
+	);
+	const refundCents = splitTotalCents(refundSplit);
+	const after = subtractSplit(splitOfStay(current), refundSplit);
+	const currentTotal = Math.round(current.totalAmount * 100);
+	const tax = (s: TaxSplit) =>
+		(Math.round(s.stateTax * 100) + Math.round(s.cityTax * 100)) / 100;
 	return {
 		amounts: {
-			baseAmount: keep('baseAmount'),
-			feesAmount: keep('feesAmount'),
-			taxAmount: keep('taxAmount'),
-			taxableAmount: keep('taxableAmount'),
-			stateTaxAmount: keep('stateTaxAmount'),
-			cityTaxAmount: keep('cityTaxAmount'),
-			totalAmount: (cents(current.totalAmount) - refundCents) / 100,
+			baseAmount: after.room,
+			feesAmount: after.fees,
+			taxAmount: tax(after),
+			totalAmount: (currentTotal - refundCents) / 100,
+			taxableAmount: after.taxable,
+			stateTaxAmount: after.stateTax,
+			cityTaxAmount: after.cityTax,
 		},
+		refundSplit,
 		refundCents,
-		keptCents: differenceCents - refundCents,
+		keptCents: splitTotalCents(pool) - refundCents,
 	};
 }

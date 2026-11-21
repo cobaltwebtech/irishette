@@ -44,8 +44,35 @@ import { ADMIN, ROSE, TEXAS } from './seed';
 
 const admin = () => caller('admin');
 
+/**
+ * Stored amounts of `nights` at `nightly` with the seed rooms' rates (12%
+ * fee; 6% state and 7% city tax on room + fee), with the tax snapshot.
+ */
+function pricedAt(nightly: number, nights = 2) {
+	const c = (dollars: number) => Math.round(dollars * 100);
+	const base = c(nightly * nights);
+	const fees = Math.round(base * 0.12);
+	const state = Math.round((base + fees) * 0.06);
+	const city = Math.round((base + fees) * 0.07);
+	return {
+		baseAmount: base / 100,
+		feesAmount: fees / 100,
+		taxableAmount: (base + fees) / 100,
+		stateTaxRate: 0.06,
+		cityTaxRate: 0.07,
+		stateTaxAmount: state / 100,
+		cityTaxAmount: city / 100,
+		taxAmount: (state + city) / 100,
+		totalAmount: (base + fees + state + city) / 100,
+		numberOfNights: nights,
+	};
+}
+
 let day = 0;
-/** A confirmed, paid booking with its payment row and saved card. */
+/**
+ * A confirmed, paid booking (real Rose Room prices and tax snapshot) with
+ * its payment row (room / fee / tax split stored) and saved card.
+ */
 async function paidBooking(
 	overrides: Parameters<typeof insertBooking>[0] = {},
 ) {
@@ -56,6 +83,7 @@ async function paidBooking(
 		checkOutDate: addDays(checkIn, 2),
 		stripePaymentIntentId: `pi_orig_${day}`,
 		stripeCustomerId: 'cus_guest',
+		...pricedAt(ROSE.basePrice, overrides.numberOfNights ?? 2),
 		...overrides,
 	});
 	await db()
@@ -71,6 +99,11 @@ async function paidBooking(
 			stripePaymentMethodId: 'pm_saved',
 			cardBrand: 'visa',
 			cardLast4: '4242',
+			roomAmount: booking.baseAmount,
+			feesAmount: booking.feesAmount,
+			taxableAmount: booking.taxableAmount,
+			stateTaxAmount: booking.stateTaxAmount,
+			cityTaxAmount: booking.cityTaxAmount,
 			createdAt: new Date(Date.now() - 3_600_000),
 		});
 	return booking;
@@ -361,7 +394,7 @@ describe('decrease refunded', () => {
 		const refunds = mockStripeRefunds();
 		mockEmail();
 		// Paid more than today's price for two nights: moving refunds the rest.
-		const booking = await paidBooking({ totalAmount: 400, baseAmount: 350 });
+		const booking = await paidBooking(pricedAt(175));
 		const { quote, result } = await change(booking, {
 			checkInDate: addDays(booking.checkInDate, 1),
 			checkOutDate: addDays(booking.checkOutDate, 1),
@@ -387,7 +420,7 @@ describe('decrease refunded', () => {
 	it('a refund Stripe could not create is retried by the recovery cron', async () => {
 		const refunds = mockStripeRefundsStateful();
 		mockEmail();
-		const booking = await paidBooking({ totalAmount: 400, baseAmount: 350 });
+		const booking = await paidBooking(pricedAt(175));
 		refunds.setUnavailable(true);
 		await change(booking, {
 			checkInDate: addDays(booking.checkInDate, 1),
@@ -579,7 +612,7 @@ describe('cancellation windows on fewer nights, and tax liability', () => {
 		await settle();
 	});
 
-	it('3 to 7 days ahead: 75% of the difference refunded, the rest and its tax kept', async () => {
+	it('3 to 7 days ahead: tax back in full plus 75% of room and fee; the rest kept untaxed', async () => {
 		const refunds = mockStripeRefunds();
 		mockEmail();
 		const booking = await paidBooking({
@@ -591,7 +624,14 @@ describe('cancellation windows on fewer nights, and tax liability', () => {
 			checkOutDate: '2033-05-07',
 		});
 		expect(quote.refundPercent).toBe(75);
-		const expected = Math.round((-quote.priceDifferenceCents * 75) / 100);
+		// Texas: a kept percentage is not taxable, so all the tax on the
+		// dropped night comes back, plus 75% of its room price and fee.
+		const c = (dollars: number) => Math.round(dollars * 100);
+		const preTaxDifference =
+			c(booking.baseAmount + (booking.feesAmount ?? 0)) -
+			c(quote.next.baseAmount + quote.next.feesAmount);
+		const taxDifference = c(booking.taxAmount ?? 0) - c(quote.next.taxAmount);
+		const expected = Math.round(preTaxDifference * 0.75) + taxDifference;
 		expect(quote.differenceCents).toBe(-expected);
 		expect(result.status).toBe('applied');
 		expect(refunds[0].body.get('amount')).toBe(String(expected));
@@ -632,6 +672,69 @@ describe('cancellation windows on fewer nights, and tax liability', () => {
 		});
 		const report = await reportedTax(booking.confirmationId);
 		expect(report.tax + 0).toBe(before.tax + 0);
+		await settle();
+	});
+});
+
+describe('cancellations under the hotel tax rule', () => {
+	useClock('2033-05-01T15:00:00Z'); // May 1, 10:00 AM CT
+
+	const untaxed = (rows: Awaited<ReturnType<typeof reportedTax>>['rows']) =>
+		rows.reduce((sum, r) => sum + r.room + r.fees - r.taxable, 0);
+
+	it('3 to 7 days out: tax back in full plus 75% of room and fee; nothing taxed on what is kept', async () => {
+		const refunds = mockStripeRefunds();
+		mockEmail();
+		// 2 nights: $200 room + $24 fee + $29.12 tax = $253.12.
+		const booking = await paidBooking({
+			checkInDate: '2033-05-06',
+			checkOutDate: '2033-05-08',
+		});
+		const quote = await caller('user').bookings.getCancellationQuote({
+			publicId: booking.publicId,
+		});
+		expect(quote.refundPercent).toBe(75);
+		expect(quote.refundAmount).toBe(197.12); // $168 + $29.12
+		await caller('user').bookings.cancelBooking({
+			publicId: booking.publicId,
+			expectedRefundAmount: 197.12,
+		});
+		expect(refunds[0].body.get('amount')).toBe('19712');
+		const [stored] = await db()
+			.select()
+			.from(paymentRefunds)
+			.where(eq(paymentRefunds.bookingId, booking.id));
+		expect(stored).toMatchObject({
+			roomAmount: 150,
+			feesAmount: 18,
+			taxableAmount: 224,
+			stateTaxAmount: 13.44,
+			cityTaxAmount: 15.68,
+		});
+		const report = await reportedTax(booking.confirmationId);
+		expect(report.total).toBe(5600); // $56 kept
+		expect(report.tax).toBe(0);
+		expect(untaxed(report.rows)).toBe(5600);
+		await settle();
+	});
+
+	it('under 3 days: nothing refunded, the full rate and its tax kept', async () => {
+		mockEmail();
+		const booking = await paidBooking({
+			checkInDate: '2033-05-03',
+			checkOutDate: '2033-05-05',
+		});
+		const quote = await caller('user').bookings.getCancellationQuote({
+			publicId: booking.publicId,
+		});
+		expect(quote.refundAmount).toBe(0);
+		await caller('user').bookings.cancelBooking({
+			publicId: booking.publicId,
+			expectedRefundAmount: 0,
+		});
+		const report = await reportedTax(booking.confirmationId);
+		expect(report.tax).toBe(2912);
+		expect(untaxed(report.rows)).toBe(0);
 		await settle();
 	});
 });
