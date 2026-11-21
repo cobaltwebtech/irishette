@@ -483,6 +483,75 @@ describe('confirmation', () => {
 		);
 	});
 
+	it(
+		'a capture already in flight elsewhere (409) is waited out, not a 500',
+		{ timeout: 30_000 },
+		async () => {
+			// The return page is capturing with the same key: Stripe answers
+			// 409 to the first try and stripe-node's 2 retries; the other
+			// capture finishes meanwhile, so the intent shows it captured.
+			const checkout = mockStripeCheckout();
+			mockEmail();
+			const { booking, session } = await paidBooking(checkout);
+			checkout.captureConflict({ attempts: 3, finishes: true });
+			const object = checkout.object(session.id);
+			expect((await webhook('checkout.session.completed', object)).status).toBe(
+				200,
+			);
+			expect(checkout.conflicts).toHaveLength(3);
+			expect(checkout.captures).toHaveLength(1);
+			expect(checkout.cancels).toHaveLength(0);
+			expect((await row(booking.id)).paymentStatus).toBe('paid');
+			expect(await paymentRows(booking.id)).toHaveLength(1);
+			await settle();
+		},
+	);
+
+	it('a 409 after the other capture finished carries on from the intent', async () => {
+		const checkout = mockStripeCheckout();
+		mockEmail();
+		const { booking, session } = await paidBooking(checkout);
+		// No SDK retry: the code reads the intent, sees it captured.
+		checkout.captureConflict({ attempts: 1, finishes: true, retry: false });
+		const object = checkout.object(session.id);
+		expect((await webhook('checkout.session.completed', object)).status).toBe(
+			200,
+		);
+		expect(checkout.captures).toHaveLength(1);
+		expect(checkout.cancels).toHaveLength(0);
+		expect((await row(booking.id)).paymentStatus).toBe('paid');
+		expect(await paymentRows(booking.id)).toHaveLength(1);
+		await settle();
+	});
+
+	it(
+		'a 409 while the other capture still runs is retried, never released',
+		{ timeout: 30_000 },
+		async () => {
+			const checkout = mockStripeCheckout();
+			mockEmail();
+			const { booking, session } = await paidBooking(checkout);
+			checkout.captureConflict({ attempts: 1, finishes: false, retry: false });
+			const object = checkout.object(session.id);
+			expect((await webhook('checkout.session.completed', object)).status).toBe(
+				500,
+			);
+			// Not treated as a failed capture: dates kept, card still authorized.
+			expect(checkout.cancels).toHaveLength(0);
+			expect(await row(booking.id)).toMatchObject({
+				status: 'confirmed',
+				paymentStatus: 'authorized',
+			});
+			// Stripe retries the event once the other request is done.
+			expect((await webhook('checkout.session.completed', object)).status).toBe(
+				200,
+			);
+			expect(checkout.captures).toHaveLength(1);
+			expect((await row(booking.id)).paymentStatus).toBe('paid');
+			await settle();
+		},
+	);
+
 	it('an authorization that can no longer be captured cancels the booking, uncharged', async () => {
 		const checkout = mockStripeCheckout();
 		const sent = mockEmail();

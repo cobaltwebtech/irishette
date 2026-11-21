@@ -15,6 +15,8 @@ import {
 import { createInboxItemInBackground } from '@/lib/inbox/inbox-service';
 import { inBackground, type ServiceDeps } from '@/lib/server/deps';
 import {
+	intentAfterConcurrentCapture,
+	isConcurrentRequestError,
 	isPermanentStripeError,
 	stripeBookingMetadata,
 	stripeId,
@@ -629,6 +631,38 @@ async function applyModification(
 }
 
 /**
+ * Captures a change's extra charge: the intent as it is afterwards.
+ * Expanded so the payment row records the real method type (link or card)
+ * and card details, not the intent's first allowed type. Transient Stripe
+ * errors throw (the recovery cron retries).
+ */
+async function captureModification(
+	stripe: Stripe,
+	intentId: string,
+	modificationId: string,
+): Promise<Stripe.PaymentIntent> {
+	const params = { expand: ['payment_method'] };
+	try {
+		return await stripe.paymentIntents.capture(intentId, params, {
+			idempotencyKey: `capture-modify/${modificationId}`,
+		});
+	} catch (error) {
+		// The return page and the webhook can capture a fresh-card change at
+		// the same moment: carry on with the other request's result.
+		if (isConcurrentRequestError(error)) {
+			const settled = await intentAfterConcurrentCapture(
+				stripe,
+				intentId,
+				params,
+			);
+			if (settled) return settled;
+		}
+		if (!isPermanentStripeError(error)) throw error;
+		return stripe.paymentIntents.retrieve(intentId, params);
+	}
+}
+
+/**
  * Captures a change's extra charge and records it as a payment. Transient
  * Stripe errors throw (the change stays payment_pending and the recovery
  * cron finishes it); a charge that can no longer be captured marks the
@@ -645,21 +679,7 @@ async function finishModificationPayment(
 	split: TaxSplit | null = null,
 ) {
 	const { db, stripe } = deps;
-	let intent: Stripe.PaymentIntent;
-	try {
-		// Expanded so the payment row records the real method type (link or
-		// card) and card details, not the intent's first allowed type.
-		intent = await stripe.paymentIntents.capture(
-			intentId,
-			{ expand: ['payment_method'] },
-			{ idempotencyKey: `capture-modify/${modificationId}` },
-		);
-	} catch (error) {
-		if (!isPermanentStripeError(error)) throw error;
-		intent = await stripe.paymentIntents.retrieve(intentId, {
-			expand: ['payment_method'],
-		});
-	}
+	const intent = await captureModification(stripe, intentId, modificationId);
 	if (intent.status !== 'succeeded') {
 		await setModificationStatus(db, modificationId, 'payment_failed', now);
 		alertModificationProblem(

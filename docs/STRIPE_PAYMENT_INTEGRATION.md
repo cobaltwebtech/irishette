@@ -167,7 +167,9 @@ PaymentIntent status, never from the session's `payment_status`.**
 4. **Capture**: `paymentIntents.capture`, idempotency key
    `capture/<bookingId>/<intentId>` (a retry finds it captured). Transient
    Stripe errors (API, connection, rate limit) throw: the webhook answers 500
-   and Stripe retries.
+   and Stripe retries. A 409 (the return page and the webhook capturing with
+   the same key at once) waits for the other request's result instead
+   (`intentAfterConcurrentCapture`, also used for `capture-modify/<id>`).
 5. **Record**: `paymentStatus: 'paid'`, a `payment_transactions` row
    (session, PaymentIntent, **charge id** from `latest_charge`, payment method
    type; `onConflictDoNothing`) and the confirmation emails in the background

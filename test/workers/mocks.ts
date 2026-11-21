@@ -189,6 +189,19 @@ export interface FakeSession {
 /** How a fake capture fails: Stripe 500 (transient) or 400 (permanent). */
 export type CaptureFailure = 'transient' | 'permanent' | null;
 
+/**
+ * Another request (return page or webhook) is capturing the same intent with
+ * the same idempotency key: the next `attempts` captures answer 409. With
+ * `finishes`, the other capture completes on the last of them (later
+ * attempts replay it); `retry: false` sends `stripe-should-retry: false`
+ * so stripe-node gives up at once instead of backing off.
+ */
+export interface CaptureConflict {
+	attempts: number;
+	finishes: boolean;
+	retry?: boolean;
+}
+
 interface CreatedSession {
 	body: URLSearchParams;
 	idempotencyKey: string | null;
@@ -244,7 +257,12 @@ export function mockStripeCheckout() {
 	const expired: string[] = [];
 	const captures: Array<{ intent: string; idempotencyKey: string | null }> = [];
 	const cancels: Array<{ intent: string; reason: string | null }> = [];
-	const state: { failCapture: CaptureFailure } = { failCapture: null };
+	const state: {
+		failCapture: CaptureFailure;
+		conflict: CaptureConflict | null;
+	} = { failCapture: null, conflict: null };
+	/** Capture attempts that got a 409 (another request in flight). */
+	const conflicts: string[] = [];
 	let counter = 0;
 	const seen = new Map<string, FakeSession>();
 	const capturedKeys = new Map<string, string>();
@@ -354,6 +372,34 @@ export function mockStripeCheckout() {
 				if (idempotencyKey && capturedKeys.get(idempotencyKey) === intent) {
 					return HttpResponse.json(intentJson(s));
 				}
+				const conflict = state.conflict;
+				if (conflict && conflict.attempts > 0) {
+					conflict.attempts -= 1;
+					conflicts.push(intent);
+					if (conflict.attempts === 0 && conflict.finishes) {
+						// The other request's capture completes now.
+						s.intent_status = 'succeeded';
+						s.payment_status = 'paid';
+						captures.push({ intent, idempotencyKey });
+						if (idempotencyKey) capturedKeys.set(idempotencyKey, intent);
+					}
+					return HttpResponse.json(
+						{
+							error: {
+								type: 'idempotency_error',
+								message:
+									'There is currently another in-progress request using this Idempotent Key.',
+							},
+						},
+						{
+							status: 409,
+							headers:
+								conflict.retry === false
+									? { 'stripe-should-retry': 'false' }
+									: {},
+						},
+					);
+				}
 				if (state.failCapture === 'transient') {
 					return stripeError('Stripe is unavailable', 500, 'api_error');
 				}
@@ -408,9 +454,14 @@ export function mockStripeCheckout() {
 		expired,
 		captures,
 		cancels,
+		conflicts,
 		/** Make captures fail until reset with null. */
 		failCapture(mode: CaptureFailure) {
 			state.failCapture = mode;
+		},
+		/** Make the next captures answer 409 (see CaptureConflict). */
+		captureConflict(conflict: CaptureConflict) {
+			state.conflict = { ...conflict };
 		},
 		add(session: Partial<FakeSession> & { id: string }) {
 			const full: FakeSession = {

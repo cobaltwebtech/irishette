@@ -282,7 +282,11 @@ decides from the **PaymentIntent status**, never the session's
    `confirmedAt`, the session, PaymentIntent and customer ids.
 4. **Capture** (`paymentIntents.capture`, idempotency key
    `capture/<bookingId>/<intentId>`). Transient Stripe errors throw (webhook
-   500, Stripe retries).
+   500, Stripe retries). The return page and the webhook often capture at
+   the same moment: Stripe answers the second with 409 while the first
+   runs, so after stripe-node's retries the code re-reads the PaymentIntent
+   for up to ~5 s (`intentAfterConcurrentCapture`) and carries on with the
+   result; still uncaptured, it throws (never a failed capture).
 5. **Record**: `paid`, a `payment_transactions` row (with the charge id;
    `onConflictDoNothing`) and the confirmation emails (deduped). Re-run on
    every retry, so a confirmation cut short after the capture still gets its

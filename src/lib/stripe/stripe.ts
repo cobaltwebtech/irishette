@@ -51,6 +51,37 @@ export function isPermanentStripeError(error: unknown) {
 	return type === 'StripeInvalidRequestError' || type === 'StripeCardError';
 }
 
+/** Stripe still saw another request with the same idempotency key running. */
+export function isConcurrentRequestError(error: unknown) {
+	return (
+		typeof error === 'object' &&
+		error !== null &&
+		'statusCode' in error &&
+		(error as { statusCode: unknown }).statusCode === 409
+	);
+}
+
+/**
+ * After a capture got that 409 (the return page and the webhook capture the
+ * same intent with the same key at once, and stripe-node's own retries ran
+ * out first): the intent once the other request has settled it, or null if
+ * it is still uncaptured after about 5 s.
+ */
+export async function intentAfterConcurrentCapture(
+	stripe: Stripe,
+	intentId: string,
+	params: Stripe.PaymentIntentRetrieveParams = {},
+): Promise<Stripe.PaymentIntent | null> {
+	for (let attempt = 0; attempt < 5; attempt++) {
+		if (attempt > 0) {
+			await new Promise((resolve) => setTimeout(resolve, 1000));
+		}
+		const intent = await stripe.paymentIntents.retrieve(intentId, params);
+		if (intent.status !== 'requires_capture') return intent;
+	}
+	return null;
+}
+
 /** Dollars to Stripe's minor units (USD cents). */
 export const toCents = (amount: number) => Math.round(amount * 100);
 

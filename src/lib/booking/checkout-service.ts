@@ -20,6 +20,8 @@ import { syncRoomFeeds } from '@/lib/ical/ical-sync';
 import { createInboxItemInBackground } from '@/lib/inbox/inbox-service';
 import { inBackground, type ServiceDeps } from '@/lib/server/deps';
 import {
+	intentAfterConcurrentCapture,
+	isConcurrentRequestError,
 	isPermanentStripeError,
 	stripeBookingMetadata,
 	stripeId,
@@ -793,6 +795,15 @@ async function capturePayment(
 			{ idempotencyKey: `capture/${booking.id}/${intent.id}` },
 		);
 	} catch (error) {
+		if (isConcurrentRequestError(error)) {
+			// The other confirmation (return page or webhook) is capturing it:
+			// carry on with its result. Still running: throw (the webhook
+			// answers 500 and Stripe retries; the recovery cron covers the
+			// rest), never treat it as a failed capture.
+			const settled = await intentAfterConcurrentCapture(stripe, intent.id);
+			if (settled) return settled;
+			throw error;
+		}
 		if (!isPermanentStripeError(error)) throw error;
 		console.error(
 			`Capture refused for booking ${booking.confirmationId}:`,
