@@ -4,7 +4,6 @@ import {
 	PaymentElement,
 	useCheckoutElements,
 } from '@stripe/react-stripe-js/checkout';
-import { loadStripe, type Stripe } from '@stripe/stripe-js';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { isTRPCClientError } from '@trpc/client';
@@ -12,6 +11,12 @@ import { useLenis } from 'lenis/react';
 import { useEffect, useId, useState } from 'react';
 
 import { CancellationPolicySummary } from '@/components/booking/CancellationPolicySummary';
+import {
+	CHECKOUT_ELEMENTS_OPTIONS,
+	CheckoutSummary,
+	errorMessage,
+	getStripe,
+} from '@/components/booking/checkout-elements';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -26,51 +31,6 @@ import { useBookingStore } from '@/stores';
 // methods come back to the confirmation page with ?session_id=..., which
 // runs the same confirmation (bookings.confirmCheckout); the webhook is the
 // source of truth either way.
-
-// Initialize Stripe outside component to avoid recreating
-let stripePromise: Promise<Stripe | null>;
-const getStripe = (publishableKey: string) => {
-	if (!stripePromise) {
-		stripePromise = loadStripe(publishableKey);
-	}
-	return stripePromise;
-};
-
-/** A short message for a failed tRPC call, never the whole error object. */
-const errorMessage = (error: unknown, fallback: string) =>
-	isTRPCClientError(error) ? error.message : fallback;
-
-/** Line items and total from the Checkout Session (what Stripe will charge). */
-function CheckoutSummary({
-	lineItems,
-	total,
-	matches,
-}: {
-	lineItems: Array<{ id: string; name: string; total: { amount: string } }>;
-	total: string;
-	matches: boolean;
-}) {
-	return (
-		<div className="space-y-2 rounded-lg border bg-muted p-4 text-sm">
-			{lineItems.map((item) => (
-				<div key={item.id} className="flex justify-between gap-4">
-					<span>{item.name}</span>
-					<span>{item.total.amount}</span>
-				</div>
-			))}
-			<div className="flex justify-between gap-4 border-t pt-2 text-lg font-semibold">
-				<span>Total</span>
-				<span>{total}</span>
-			</div>
-			{!matches && (
-				<p className="text-destructive">
-					The payment total does not match your booking. Please go back and try
-					again.
-				</p>
-			)}
-		</div>
-	);
-}
 
 // Inner payment form component that has access to the Checkout context
 function PaymentForm({ publicId }: { publicId: string }) {
@@ -401,33 +361,6 @@ export function PaymentStep() {
 		);
 	}
 
-	const elementsOptions = {
-		appearance: {
-			theme: 'stripe' as const,
-			labels: 'floating' as const,
-			variables: {
-				colorPrimary: '#072a00',
-				colorBackground: '#dceacf',
-				colorText: '#31632c',
-				colorDanger: '#e85854',
-				fontFamily: 'Schibsted Grotesk, ui-sans-serif, system-ui, sans-serif',
-				spacingUnit: '4px',
-				borderRadius: '10px',
-			},
-			rules: {
-				'.Input': {
-					backgroundColor: '#ffffff',
-				},
-			},
-		},
-		fonts: [
-			{
-				cssSrc:
-					'https://fonts.bunny.net/css?family=schibsted-grotesk:400,600,700',
-			},
-		],
-	};
-
 	return (
 		<Card>
 			<CardHeader>
@@ -455,7 +388,10 @@ export function PaymentStep() {
 				{/* Stripe Checkout Session + Payment Element */}
 				<CheckoutElementsProvider
 					stripe={getStripe(checkoutInfo.publishableKey)}
-					options={{ clientSecret: checkoutInfo.clientSecret, elementsOptions }}
+					options={{
+						clientSecret: checkoutInfo.clientSecret,
+						elementsOptions: CHECKOUT_ELEMENTS_OPTIONS,
+					}}
 				>
 					<PaymentForm publicId={checkoutInfo.publicId} />
 				</CheckoutElementsProvider>

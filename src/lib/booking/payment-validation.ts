@@ -41,6 +41,27 @@ export const guestDetailsSchema = createBookingBaseSchema.pick({
 	estimatedArrival: true,
 });
 
+/**
+ * An admin booking taken by phone (plan 06): the guest's details, no client
+ * prices, the admin's internal notes, the late same-day acknowledgement and
+ * the guest's verbal consent to keep the card on file (required).
+ */
+export const adminCreateBookingSchema = createBookingBaseSchema
+	.omit({
+		basePrice: true,
+		serviceFee: true,
+		taxAmount: true,
+		totalAmount: true,
+	})
+	.extend({
+		internalNotes: z.string().trim().max(5000).optional(),
+		acknowledgeLateBooking: z.boolean().optional(),
+		cardConsent: z.literal(true, {
+			message: 'Confirm the guest agreed to keep the card on file',
+		}),
+	})
+	.refine((d) => d.checkOutDate > d.checkInDate, checkOutAfterCheckIn);
+
 export const createBookingSchema = createBookingBaseSchema.refine(
 	(d) => d.checkOutDate > d.checkInDate,
 	checkOutAfterCheckIn,
@@ -88,3 +109,4 @@ export const adminCancelBookingSchema = z.object({
 });
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
+export type AdminCreateBookingInput = z.infer<typeof adminCreateBookingSchema>;

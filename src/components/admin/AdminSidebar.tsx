@@ -71,6 +71,10 @@ export function AdminSidebar({
 			icon: 'tabler:calendar-week',
 			items: [
 				{
+					title: 'New Booking',
+					url: '/admin/bookings/new',
+				},
+				{
 					title: 'Current Bookings',
 					url: '/admin/bookings/current-bookings',
 				},

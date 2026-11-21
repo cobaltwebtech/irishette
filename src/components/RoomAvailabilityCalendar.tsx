@@ -3,19 +3,17 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 
+import {
+	AvailabilityCalendar,
+	AvailabilityLegend,
+	stayFromRange,
+} from '@/components/booking/AvailabilityCalendar';
 import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
 import { useTRPC } from '@/integrations/trpc/react';
 import { SAME_DAY_CUTOFF_LABEL } from '@/lib/site';
-import { parseISODateString, toISODateString } from '@/utils/booking-utils';
 import {
-	addDays,
 	BOOKING_WINDOW_MONTHS,
 	daysBetween,
-	isCheckInDisabled,
-	isCheckOutAllowed,
-	isNightUnavailable,
-	isStayAvailable,
 	MAX_NIGHTS,
 	type Unavailability,
 } from '@/utils/date-range';
@@ -33,18 +31,14 @@ interface RoomAvailabilityCalendarProps {
 	maxNights?: number;
 }
 
-// The day picker works in local calendar dates; these convert them to and
-// from property-local YYYY-MM-DD stay dates without any time zone shift.
-const toIso = toISODateString;
-const fromIso = parseISODateString;
-
 const EMPTY: Unavailability = { stays: [], events: [], blocks: [] };
 
 /**
- * Booking calendar. Uses the same date rules as the server
- * (src/utils/date-range.ts): a day is unavailable for check-in if its night is
- * booked, held, imported or blocked; check-out is allowed on the first
- * unavailable day after an available night ("checkout only").
+ * Booking calendar for a room page: the public availability query and the
+ * room price for the picked stay, around the shared AvailabilityCalendar
+ * (a day is unavailable for check-in if its night is booked, held, imported
+ * or blocked; check-out is allowed on the first unavailable day after an
+ * available night, "checkout only").
  */
 export default function RoomAvailabilityCalendar({
 	roomSlug,
@@ -69,77 +63,35 @@ export default function RoomAvailabilityCalendar({
 		}),
 	);
 	const data = availabilityQuery.data;
-	const unavailability = data?.unavailability ?? EMPTY;
 	const roomId = data?.room.id;
 	// Empty until loaded; the calendar renders only after the data arrives.
 	const todayIso = data?.today ?? '';
 	const earliestIso = data?.earliestCheckIn ?? todayIso;
-	const lastIso = data?.lastCheckOut ?? todayIso;
-	const today = fromIso(todayIso);
-	const lastDay = fromIso(lastIso);
 	const sameDayClosed = earliestIso > todayIso;
-
-	const isUnavailable = (date: Date) =>
-		isNightUnavailable(toIso(date), unavailability);
-	/** Unavailable night that follows an available one: check-out only. */
-	const isCheckoutOnly = (date: Date) => {
-		const iso = toIso(date);
-		return (
-			isNightUnavailable(iso, unavailability) &&
-			!isNightUnavailable(addDays(iso, -1), unavailability)
-		);
-	};
-
-	const isDisabled = (date: Date) => {
-		const iso = toIso(date);
-		if (iso < todayIso || iso > lastIso) return true;
-		const from = dateRange?.from ? toIso(dateRange.from) : null;
-		// Picking the check-out day: any day the stay can run to.
-		if (from && !dateRange?.to && iso > from) {
-			return (
-				!isCheckOutAllowed(from, iso, unavailability) ||
-				daysBetween(from, iso) > maxNights
-			);
-		}
-		// Check-in: not before the earliest date (same-day cutoff).
-		return iso < earliestIso || isCheckInDisabled(iso, unavailability);
-	};
 
 	const handleSelect = async (range: DateRange | undefined) => {
 		if (!availabilityQuery.data || !roomId) return;
-		if (range?.from && range.to) {
-			const checkIn = toIso(range.from);
-			const checkOut = toIso(range.to);
-			const nights = daysBetween(checkIn, checkOut);
-			if (
-				nights < minNights ||
-				nights > maxNights ||
-				checkIn < earliestIso ||
-				checkOut > lastIso ||
-				!isStayAvailable({ checkIn, checkOut }, unavailability)
-			) {
-				return;
-			}
-			setDateRange(range);
-			try {
-				// Same calculation as checkout; always fresh.
-				const pricing = await queryClient.fetchQuery({
-					...trpc.rooms.calculatePricing.queryOptions({
-						roomId,
-						checkInDate: checkIn,
-						checkOutDate: checkOut,
-					}),
-					staleTime: 0,
-				});
-				onDateRangeSelect?.(range, pricing.baseAmount, pricing.numberOfNights);
-			} catch (error) {
-				console.warn('Could not price the stay:', error);
-				onDateRangeSelect?.(range, 0, nights);
-			}
+		setDateRange(range);
+		const stay = stayFromRange(range);
+		if (!stay) {
+			onDateRangeSelect?.(range, 0, 0);
 			return;
 		}
-		setDateRange(range);
-		onDateRangeSelect?.(range, 0, 0);
+		try {
+			// Same calculation as checkout; always fresh.
+			const pricing = await queryClient.fetchQuery({
+				...trpc.rooms.calculatePricing.queryOptions({
+					roomId,
+					checkInDate: stay.checkIn,
+					checkOutDate: stay.checkOut,
+				}),
+				staleTime: 0,
+			});
+			onDateRangeSelect?.(range, pricing.baseAmount, pricing.numberOfNights);
+		} catch (error) {
+			console.warn('Could not price the stay:', error);
+			onDateRangeSelect?.(range, 0, daysBetween(stay.checkIn, stay.checkOut));
+		}
 	};
 
 	if (availabilityQuery.isPending) {
@@ -171,28 +123,15 @@ export default function RoomAvailabilityCalendar({
 
 	return (
 		<div className="space-y-4">
-			<Calendar
-				mode="range"
+			<AvailabilityCalendar
+				unavailability={data?.unavailability ?? EMPTY}
+				today={todayIso}
+				earliest={earliestIso}
+				last={data?.lastCheckOut ?? todayIso}
 				selected={dateRange}
 				onSelect={handleSelect}
-				defaultMonth={dateRange?.from || today}
-				disabled={isDisabled}
-				hidden={{ before: today, after: lastDay }}
-				modifiers={{
-					unavailable: (date: Date) =>
-						isUnavailable(date) && !isCheckoutOnly(date),
-					checkoutOnly: isCheckoutOnly,
-					available: (date: Date) => !isUnavailable(date),
-				}}
-				modifiersClassNames={{
-					unavailable: 'bg-destructive/40 line-through opacity-75',
-					available: 'hover:bg-secondary/80 border-primary/20',
-					checkoutOnly: 'bg-amber-200 border-orange-300 hover:bg-secondary/80',
-					selected: 'bg-primary text-primary-foreground hover:bg-primary/0',
-				}}
-				numberOfMonths={2}
-				min={minNights}
-				max={maxNights}
+				minNights={minNights}
+				maxNights={maxNights}
 				className={className}
 			/>
 
@@ -229,24 +168,7 @@ export default function RoomAvailabilityCalendar({
 
 			{/* Legend and Info */}
 			<div className="space-y-3">
-				<div className="flex flex-wrap justify-center gap-4 text-sm">
-					<div className="flex items-center gap-2">
-						<div className="size-6 rounded border border-primary/20 bg-white"></div>
-						<span>Available</span>
-					</div>
-					<div className="flex items-center gap-2">
-						<div className="size-6 rounded border border-accent bg-amber-200"></div>
-						<span>Checkout Only</span>
-					</div>
-					<div className="flex items-center gap-2">
-						<div className="size-6 rounded border border-destructive bg-destructive/40"></div>
-						<span>Unavailable</span>
-					</div>
-					<div className="flex items-center gap-2">
-						<div className="size-6 rounded bg-primary"></div>
-						<span>Selected</span>
-					</div>
-				</div>
+				<AvailabilityLegend />
 
 				<div className="space-y-1 text-center text-xs text-muted-foreground">
 					<p>

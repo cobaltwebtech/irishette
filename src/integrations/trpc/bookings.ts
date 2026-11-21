@@ -14,10 +14,16 @@ import { z } from 'zod';
 
 import { bookings, room, user } from '@/db/schema-export';
 import {
+	findGuestByEmail,
+	findOrCreateGuest,
+} from '@/lib/booking/admin-booking-service';
+import {
 	assertBookableDates,
+	assertStayWindow,
 	type Booking,
 	bookingRoomColumns,
 	cancelBooking,
+	createAdminHold,
 	createHold,
 	quoteBookingCancellation,
 	quoteStay,
@@ -39,6 +45,7 @@ import {
 } from '@/lib/booking/dispute-service';
 import {
 	adminCancelBookingSchema,
+	adminCreateBookingSchema,
 	bookingIdSchema,
 	bookingPublicIdSchema,
 	calculateBookingSchema,
@@ -47,7 +54,7 @@ import {
 	createBookingSchema,
 } from '@/lib/booking/payment-validation';
 import { roundCents } from '@/lib/booking/pricing';
-import { stayPhase } from '@/lib/booking/stay-times';
+import { isLateSameDay, stayPhase } from '@/lib/booking/stay-times';
 import { sendBookingConfirmationEmail } from '@/lib/email/email-service';
 import { isoDateSchema } from '@/utils/date-range';
 import { idSchema } from '@/utils/ids';
@@ -185,6 +192,27 @@ const guestRoomColumns = { name: room.name, slug: room.slug };
 
 const listStatusSchema = bookingStatusSchema.optional();
 
+/** The price breakdown returned by calculateBooking and adminQuote. */
+function priceDetails(price: Awaited<ReturnType<typeof quoteStay>>) {
+	return {
+		baseAmount: price.baseAmount,
+		feesAmount: price.feesAmount,
+		taxAmount: price.taxAmount,
+		totalAmount: price.totalAmount,
+		numberOfNights: price.numberOfNights,
+		nights: price.nights.map((n) => ({ date: n.date, price: n.price })),
+		appliedRules: price.appliedRules.map((r) => ({
+			id: r.id,
+			name: r.name,
+			ruleType: r.ruleType,
+			value: r.value,
+			nights: r.nights,
+			appliedAmount: r.appliedAmount,
+		})),
+		taxBreakdown: price.taxBreakdown,
+	};
+}
+
 export const bookingsRouter = createTRPCRouter({
 	/** Price of a stay (read-only). Same calculation as booking creation. */
 	calculateBooking: publicProcedure
@@ -198,23 +226,65 @@ export const bookingsRouter = createTRPCRouter({
 				input.checkInDate,
 				input.checkOutDate,
 			);
+			return priceDetails(price);
+		}),
+
+	/**
+	 * Admin price of a stay (plan 06): the same quote with the admin window
+	 * (no same-day cutoff), and whether it would be a late same-day booking.
+	 */
+	adminQuote: adminProcedure
+		.input(calculateBookingSchema)
+		.query(async ({ ctx, input }) => {
+			const now = new Date();
+			assertStayWindow(input.checkInDate, input.checkOutDate, now);
+			const price = await quoteStay(
+				ctx.db,
+				input.roomId,
+				input.checkInDate,
+				input.checkOutDate,
+			);
 			return {
-				baseAmount: price.baseAmount,
-				feesAmount: price.feesAmount,
-				taxAmount: price.taxAmount,
-				totalAmount: price.totalAmount,
-				numberOfNights: price.numberOfNights,
-				nights: price.nights.map((n) => ({ date: n.date, price: n.price })),
-				appliedRules: price.appliedRules.map((r) => ({
-					id: r.id,
-					name: r.name,
-					ruleType: r.ruleType,
-					value: r.value,
-					nights: r.nights,
-					appliedAmount: r.appliedAmount,
-				})),
-				taxBreakdown: price.taxBreakdown,
+				...priceDetails(price),
+				lateSameDay: isLateSameDay(input.checkInDate, now),
 			};
+		}),
+
+	/** The guest account with this email, for the admin booking form. */
+	adminFindGuest: adminProcedure
+		.input(z.object({ email: z.email().max(254) }))
+		.query(async ({ ctx, input }) => {
+			const guest = await findGuestByEmail(ctx.db, input.email);
+			if (!guest) return null;
+			return {
+				publicId: guest.publicId,
+				name: guest.name,
+				email: guest.email,
+				phoneNumber: guest.phoneNumber,
+				banned: Boolean(guest.banned),
+			};
+		}),
+
+	/**
+	 * An admin booking by phone (plan 06): finds or creates the guest's
+	 * account, then holds the dates (no same-day cutoff; a late same-day
+	 * booking must be acknowledged). The admin then pays it with
+	 * adminCreateCheckoutSession (card only); confirmation is the usual
+	 * claim, capture and emails.
+	 */
+	adminCreateBooking: adminProcedure
+		.input(adminCreateBookingSchema)
+		.mutation(async ({ ctx, input }) => {
+			const { userId, created } = await findOrCreateGuest(ctx.db, {
+				email: input.guestEmail,
+				name: input.guestName,
+				phone: input.guestPhone,
+			});
+			const hold = await createAdminHold(ctx, input, {
+				userId,
+				adminId: ctx.user.id,
+			});
+			return { ...hold, guestCreated: created };
 		}),
 
 	/** Holds the dates for HOLD_MINUTES (35) as a pending booking. */

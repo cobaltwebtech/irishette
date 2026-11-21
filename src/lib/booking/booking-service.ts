@@ -49,9 +49,17 @@ import {
 	roomName,
 } from './checkout-service';
 import { hasOpenDispute } from './dispute-service';
-import type { CreateBookingInput } from './payment-validation';
+import type {
+	AdminCreateBookingInput,
+	CreateBookingInput,
+} from './payment-validation';
 import { priceStay, roundCents, type StayPrice } from './pricing';
-import { checkInAt, checkOutAt, earliestCheckInDate } from './stay-times';
+import {
+	checkInAt,
+	checkOutAt,
+	earliestCheckInDate,
+	isLateSameDay,
+} from './stay-times';
 
 export type { Booking } from './checkout-service';
 
@@ -119,23 +127,57 @@ export function assertBookableDates(
 	checkOut: IsoDate,
 	now = new Date(),
 ) {
-	const today = todayIn(undefined, now);
-	const earliest = earliestCheckInDate(now);
-	const fail = (message: string) =>
-		new TRPCError({ code: 'BAD_REQUEST', message });
-	if (checkIn < today) throw fail('Check-in cannot be in the past');
-	if (checkIn < earliest) {
-		throw fail(
+	assertStayWindow(checkIn, checkOut, now);
+	if (checkIn < earliestCheckInDate(now)) {
+		throw badDates(
 			`Same-day bookings close at ${formatTimeOfDay(SAME_DAY_CUTOFF_TIME, { withZone: true })}. The earliest check-in is tomorrow.`,
 		);
 	}
+}
+
+const badDates = (message: string) =>
+	new TRPCError({ code: 'BAD_REQUEST', message });
+
+/**
+ * The limits every booking has, admin bookings included: check-in not in
+ * the past, at most MAX_NIGHTS nights, check-out within
+ * BOOKING_WINDOW_MONTHS. No same-day cutoff.
+ */
+export function assertStayWindow(
+	checkIn: IsoDate,
+	checkOut: IsoDate,
+	now = new Date(),
+) {
+	const today = todayIn(undefined, now);
+	if (checkIn < today) throw badDates('Check-in cannot be in the past');
 	if (daysBetween(checkIn, checkOut) > MAX_NIGHTS) {
-		throw fail(`Stays can be at most ${MAX_NIGHTS} nights`);
+		throw badDates(`Stays can be at most ${MAX_NIGHTS} nights`);
 	}
 	if (checkOut > lastBookableDate(today)) {
-		throw fail(
+		throw badDates(
 			`Bookings can be made up to ${BOOKING_WINDOW_MONTHS} months ahead`,
 		);
+	}
+}
+
+/** The room takes bookings and this many guests (the room row). */
+async function assertRoomBookable(
+	db: Database,
+	roomId: string,
+	guestCount: number,
+) {
+	const { room: roomRow } = await loadRoomForPricing(db, roomId);
+	if (roomRow.status !== 'active') {
+		throw new TRPCError({
+			code: 'BAD_REQUEST',
+			message: 'This room is not available for booking',
+		});
+	}
+	if (guestCount > roomRow.maxGuests) {
+		throw new TRPCError({
+			code: 'BAD_REQUEST',
+			message: `This room allows at most ${roomRow.maxGuests} guest${roomRow.maxGuests === 1 ? '' : 's'}`,
+		});
 	}
 }
 
@@ -149,24 +191,69 @@ export async function createHold(
 	userId: string,
 	now = new Date(),
 ): Promise<{ bookingId: string; publicId: string }> {
-	const { db } = deps;
-	const { room: roomRow } = await loadRoomForPricing(db, input.roomId);
-	if (roomRow.status !== 'active') {
-		throw new TRPCError({
-			code: 'BAD_REQUEST',
-			message: 'This room is not available for booking',
-		});
-	}
-	if (input.guestCount > roomRow.maxGuests) {
-		throw new TRPCError({
-			code: 'BAD_REQUEST',
-			message: `This room allows at most ${roomRow.maxGuests} guest${roomRow.maxGuests === 1 ? '' : 's'}`,
-		});
-	}
+	await assertRoomBookable(deps.db, input.roomId, input.guestCount);
 	assertBookableDates(input.checkInDate, input.checkOutDate, now);
-
 	// Going back and resubmitting the form replaces the guest's earlier hold.
 	await releaseOwnHolds(deps, userId, input.roomId, now);
+	return insertHold(deps, input, userId, now);
+}
+
+/**
+ * An admin's hold for a guest booking by phone (plan 06). Same room, guest
+ * and window checks as createHold, but no same-day cutoff: a check-in today
+ * after the cutoff is a late same-day booking (non-refundable), which the
+ * admin must acknowledge. Records the admin and the guest's verbal consent
+ * to keep the card on file. Paid by the admin with a card-only session.
+ */
+export async function createAdminHold(
+	deps: ServiceDeps,
+	input: AdminCreateBookingInput,
+	{ userId, adminId }: { userId: string; adminId: string },
+	now = new Date(),
+): Promise<{ bookingId: string; publicId: string; lateSameDay: boolean }> {
+	await assertRoomBookable(deps.db, input.roomId, input.guestCount);
+	assertStayWindow(input.checkInDate, input.checkOutDate, now);
+	const lateSameDay = isLateSameDay(input.checkInDate, now);
+	if (lateSameDay && !input.acknowledgeLateBooking) {
+		throw badDates(
+			`Same-day check-in after ${formatTimeOfDay(SAME_DAY_CUTOFF_TIME, { withZone: true })} is a late booking with no refund. Acknowledge it to continue.`,
+		);
+	}
+	const hold = await insertHold(deps, input, userId, now, {
+		createdByAdminId: adminId,
+		lateSameDay,
+		internalNotes: input.internalNotes || null,
+		cardConsentAt: now,
+		cardConsentBy: 'admin',
+	});
+	return { ...hold, lateSameDay };
+}
+
+type HoldInput = Pick<
+	CreateBookingInput,
+	| 'roomId'
+	| 'checkInDate'
+	| 'checkOutDate'
+	| 'guestCount'
+	| 'guestName'
+	| 'guestEmail'
+	| 'guestPhone'
+	| 'specialRequests'
+	| 'estimatedArrival'
+>;
+
+/**
+ * Releases expired holds on the dates, checks availability, prices the
+ * stay and inserts the pending booking (shared by guest and admin holds).
+ */
+async function insertHold(
+	deps: ServiceDeps,
+	input: HoldInput,
+	userId: string,
+	now: Date,
+	extra: Partial<typeof bookings.$inferInsert> = {},
+): Promise<{ bookingId: string; publicId: string }> {
+	const { db } = deps;
 	// First hold wins while it is live; expired holds on these dates are
 	// released, and their Checkout Sessions expired so nobody can pay them.
 	await releaseExpiredHolds(deps, input, now);
@@ -231,6 +318,7 @@ export async function createHold(
 		stripeCustomerId: guest?.stripeCustomerId ?? null,
 		cancellationPolicyId: policy.id,
 		expiresAt: new Date(now.getTime() + HOLD_MINUTES * 60_000),
+		...extra,
 	});
 	return { bookingId: id, publicId };
 }
@@ -438,7 +526,18 @@ export async function quoteBookingCancellation(
 		alreadyRefunded,
 		now,
 	});
-	return { policy, amountPaid: paid, alreadyRefunded, ...quote };
+	// A late same-day booking (plan 06) is non-refundable under the policy;
+	// an admin's explicit full refund still works (refundFor 'full').
+	const noRefund = booking.lateSameDay
+		? { refundPercent: 0, refundAmount: 0, tier: null }
+		: {};
+	return {
+		policy,
+		amountPaid: paid,
+		alreadyRefunded,
+		...quote,
+		...noRefund,
+	};
 }
 
 export interface CancelResult {

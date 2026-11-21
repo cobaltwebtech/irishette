@@ -51,6 +51,15 @@ export function earliestCheckInDate(now = new Date()): IsoDate {
 		: addDays(today, 1);
 }
 
+/**
+ * A check-in today booked at or after the same-day cutoff (4:00 PM CT).
+ * Only admins can make one (plan 06); it is non-refundable under the policy.
+ * Past check-in dates are not late, just invalid.
+ */
+export function isLateSameDay(checkIn: IsoDate, now = new Date()): boolean {
+	return checkIn === dateInZone(now) && checkIn < earliestCheckInDate(now);
+}
+
 export type StayPhase = 'upcoming' | 'in_stay' | 'past';
 
 /** Before check-in (4:00 PM CT), during the stay, after check-out (11:00 AM CT). */

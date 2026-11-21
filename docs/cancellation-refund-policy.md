@@ -45,6 +45,10 @@ Failure to arrive on your scheduled check-in date without prior cancellation wil
 
 You are welcome to arrive earlier than 4:00 PM CT. The estimated arrival time you choose when booking only helps us plan to meet you; it does not change your check-in time, the cancellation windows or any refund.
 
+## Late Same-Day Bookings
+
+Online booking for a check-in today closes at 4:00 PM CT. After that time we may still book a room for you by phone for the same night. Such a late same-day booking is **non-refundable**: no refund is given if it is cancelled, whatever the cancellation windows above say. We tell you before we take the payment and confirm it by email.
+
 ## Early Departure
 
 If you check out or leave the property before your scheduled checkout date, no refund will be given for the remaining days left on your booking. The full booking amount remains due regardless of early departure.

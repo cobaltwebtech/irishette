@@ -48,6 +48,7 @@
         "patterns": [
           "src/lib/auth/auth.ts",
           "src/lib/booking/booking-service.ts",
+          "src/lib/booking/admin-booking-service.ts",
           "src/lib/booking/checkout-service.ts",
           "src/lib/booking/refund-service.ts",
           "src/lib/booking/dispute-service.ts",

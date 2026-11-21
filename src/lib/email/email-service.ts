@@ -43,6 +43,7 @@ import {
 	PARKING_NOTE,
 	PROPERTY_ADDRESS,
 	type PropertyAddress,
+	SAME_DAY_CUTOFF_LABEL,
 	SITE_NAME,
 	SITE_URL,
 } from '@/lib/site';
@@ -342,7 +343,10 @@ async function deliver(
 		: { success: true };
 }
 
-/** Guest confirmation + admin notification, once per booking. */
+/**
+ * Guest confirmation + admin notification, once per booking. A late
+ * same-day booking (plan 06) also gets the no-refund notice, once.
+ */
 export async function sendBookingConfirmedEmails(
 	db: Database,
 	env: EmailEnv,
@@ -356,10 +360,65 @@ export async function sendBookingConfirmedEmails(
 			adminBookingNotification(booking, room, adminEmails, env.BETTER_AUTH_URL),
 		);
 	}
-	return deliver(env, `booking confirmed ${booking.confirmationId}`, emails, {
-		db,
-		key: `booking-confirmed/${booking.id}`,
-	});
+	const confirmed = await deliver(
+		env,
+		`booking confirmed ${booking.confirmationId}`,
+		emails,
+		{ db, key: `booking-confirmed/${booking.id}` },
+	);
+	if (!booking.lateSameDay) return confirmed;
+	const notice = await sendLateSameDayNoticeEmail(db, env, booking, room);
+	return confirmed.success ? notice : confirmed;
+}
+
+/**
+ * Tells the guest their booking was made on the check-in day after the
+ * same-day cutoff, so no refund applies if it is cancelled (plan 06).
+ */
+function sendLateSameDayNoticeEmail(
+	db: Database,
+	env: EmailEnv,
+	booking: Booking,
+	room: RoomInfo,
+): Promise<EmailResult> {
+	return deliver(
+		env,
+		`late same-day notice ${booking.confirmationId}`,
+		[
+			bookingNotice(
+				env.BETTER_AUTH_URL,
+				EMAIL_FROM_BOOKINGS,
+				[booking.guestEmail],
+				`Late Same-Day Booking - ${booking.confirmationId} | Irishette Bed & Breakfast`,
+				{
+					preview: `Booking ${booking.confirmationId} is a late same-day booking: no refunds`,
+					heading: 'Late same-day booking: no refunds',
+					paragraphs: [
+						`Hi ${booking.guestName},`,
+						`Your booking ${booking.confirmationId} was made on your check-in day after ${SAME_DAY_CUTOFF_LABEL}, our same-day booking cutoff. It is a late same-day booking: it cannot be refunded if it is cancelled, whatever our usual cancellation windows say.`,
+						'Your stay is confirmed; your booking confirmation has the details. If anything changes, call us.',
+					],
+					highlight: {
+						title: 'Refund policy for this booking',
+						rows: [
+							{
+								label: 'Check-in',
+								value: formatStayDate(booking.checkInDate, 'long'),
+							},
+							{ label: 'Refund if cancelled', value: 'None' },
+							{ label: 'Phone', value: CONTACT_PHONE },
+						],
+					},
+					booking: emailBookingDetails(booking, room),
+					button: {
+						label: 'View your bookings',
+						href: `${env.BETTER_AUTH_URL}/account`,
+					},
+				},
+			),
+		],
+		{ db, key: `late-same-day/${booking.id}` },
+	);
 }
 
 /** Re-sends the guest confirmation (account / admin "resend" button). */

@@ -4,6 +4,7 @@ import {
 	checkInAt,
 	checkOutAt,
 	earliestCheckInDate,
+	isLateSameDay,
 	localCutoff,
 	stayPhase,
 } from '@/lib/booking/stay-times';
@@ -71,6 +72,28 @@ describe('earliestCheckInDate (same-day cutoff 4:00 PM CT)', () => {
 		['11:30 PM CT', '2030-06-11T04:30:00Z', '2030-06-11'],
 	])('%s → %s', (_label, now, expected) => {
 		expect(earliestCheckInDate(new Date(now))).toBe(expected);
+	});
+});
+
+describe('isLateSameDay (admin bookings after the 4:00 PM CT cutoff)', () => {
+	it.each([
+		['today before the cutoff', '2030-06-10', '2030-06-10T20:59:00Z', false],
+		['today at the cutoff', '2030-06-10', '2030-06-10T21:00:00Z', true],
+		[
+			'today late evening (UTC next day)',
+			'2030-06-10',
+			'2030-06-11T04:30:00Z',
+			true,
+		],
+		['tomorrow, after the cutoff', '2030-06-11', '2030-06-10T22:00:00Z', false],
+		[
+			'a past date is not late, just invalid',
+			'2030-06-09',
+			'2030-06-10T22:00:00Z',
+			false,
+		],
+	])('%s', (_label, checkIn, now, expected) => {
+		expect(isLateSameDay(checkIn, new Date(now))).toBe(expected);
 	});
 });
 

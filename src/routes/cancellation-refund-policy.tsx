@@ -5,7 +5,7 @@ import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useTRPC } from '@/integrations/trpc/react';
 import { describeTiers } from '@/lib/booking/cancellation-policy';
-import { CHECK_IN_TIME_LABEL } from '@/lib/site';
+import { CHECK_IN_TIME_LABEL, SAME_DAY_CUTOFF_LABEL } from '@/lib/site';
 import { canonicalLink, seo } from '@/utils/seo';
 import { cn } from '@/utils/twMerge';
 
@@ -187,6 +187,22 @@ function CancellationRefundPolicyPage() {
 									The estimated arrival time you choose when booking only helps
 									us plan to meet you; it does not change your check-in time,
 									the cancellation windows or any refund.
+								</p>
+							</section>
+
+							{/* Late Same-Day Bookings */}
+							<section className="mb-8">
+								<h2 className="mb-4 text-2xl font-bold">
+									Late Same-Day Bookings
+								</h2>
+								<p className="leading-relaxed text-muted-foreground">
+									Online booking for a check-in today closes at{' '}
+									{SAME_DAY_CUTOFF_LABEL}. After that time we may still book a
+									room for you by phone for the same night. Such a late same-day
+									booking is <strong>non-refundable</strong>: no refund is given
+									if it is cancelled, whatever the cancellation windows above
+									say. We tell you before we take the payment and confirm it by
+									email.
 								</p>
 							</section>
 

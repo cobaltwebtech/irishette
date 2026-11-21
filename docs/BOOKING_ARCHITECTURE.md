@@ -468,11 +468,54 @@ cron purges rows older than 7 days. Logs never include addresses.
 | `sendBookingConfirmedEmails` | Booking confirmed (key `booking-confirmed/<id>`) | Guest + all admins |
 | `sendBookingConfirmationEmail` | "Resend" button | Guest |
 | `sendCancellationEmails` | Confirmed booking cancelled, or dates taken before the payment was confirmed (not charged) (key `booking-cancelled/<id>`) | Guest + admins |
+| `sendBookingConfirmedEmails` (late same-day) | Also, for `late_same_day` bookings, a no-refund notice (key `late-same-day/<id>`) | Guest |
 | `sendPaymentFailedEmail` | Authorization could not be captured; not charged (key `payment-failed/<id>`) | Guest |
 | `sendAdminAlert` | Payment released (dates taken), failed refund, iCal problems (each also creates an admin inbox item, `ADMIN_INBOX.md`) | Admins |
 | `sendContactNotification` | Contact form (`CONTACT_FORM.md`); `replyTo` = the guest | `CONTACT_EMAIL` |
 
 Admin addresses come from `getAdminEmails` (`src/lib/server/admin-query.ts`).
+
+### Admin bookings by phone (plan 06)
+
+**Admin -> Bookings -> New Booking** (`/admin/bookings/new`,
+`src/routes/_authed/_admin/admin/bookings/new.tsx`):
+
+1. **Room and dates:** active rooms (`rooms.adminList`) and the shared
+   `AvailabilityCalendar` (`src/components/booking/AvailabilityCalendar.tsx`,
+   also used by the guest `RoomAvailabilityCalendar`) fed by
+   `availability.adminGetByRoom` (`AdminStayPicker`): the same unavailable
+   ranges as the room pages, earliest check-in **today** (no same-day
+   cutoff), the usual 30 nights and 10 months.
+2. **Guest:** "Look up email" (`bookings.adminFindGuest`), then the shared
+   `GuestDetailsFields` and admin-only internal notes.
+3. **Review:** `bookings.adminQuote` (`quoteStay`, admin window, plus
+   `lateSameDay`), the late same-day warning and acknowledgement, and the
+   "guest agreed by phone to keep this card on file" checkbox (required).
+4. **Pay:** `bookings.adminCreateBooking` then
+   `bookings.adminCreateCheckoutSession` and `AdminCardPayment` (card-only
+   session; Apple Pay and Google Pay hidden), then
+   `bookings.adminConfirmCheckout` and the booking page.
+
+Server: `adminCreateBooking` calls `findOrCreateGuest`
+(`src/lib/booking/admin-booking-service.ts`): the lowercase email's account,
+refused with `FORBIDDEN` when banned, or a new one created with Better Auth's
+`auth.api.createUser` (server-side call, no headers; `emailVerified` false,
+so the id, publicId and Stripe customer hooks run). It fills an empty name
+and the phone number when the account has none and no other account uses it.
+Then `createAdminHold` (`booking-service.ts`, sharing `insertHold` with
+`createHold`): room active, `maxGuests`, `assertStayWindow` (past, nights,
+window; no cutoff), availability, and it records `createdByAdminId`,
+`internalNotes`, `cardConsentAt` and `cardConsentBy: 'admin'`. Everything
+after payment is the guest pipeline (claim, capture, `sendBookingConfirmedEmails`).
+
+**Late same-day bookings** (`isLateSameDay` in `stay-times.ts`: check-in
+today and now at or after `SAME_DAY_CUTOFF_TIME`): `createAdminHold` refuses
+them unless `acknowledgeLateBooking` is true and stores `late_same_day`.
+`quoteBookingCancellation` gives them `refundPercent: 0` under the policy
+(the admin's explicit `full` refund still works). `sendBookingConfirmedEmails`
+also sends the guest a late same-day notice (key `late-same-day/<id>`, built
+on `BookingNoticeEmail`). The cancellation policy page has a "Late Same-Day
+Bookings" section.
 
 ### Admin blocks
 
@@ -527,12 +570,13 @@ until 11:00 AM CT on the check-out date, then `past`) from the stored
 |---|---|
 | `test/unit/date-range.test.ts`, `pricing.test.ts` | Overlap rules (calendar vs server), per-night pricing, no guest surcharge |
 | `test/unit/cancellation-policy.test.ts` | Tier cutoffs (at, 1 s before/after each cutoff, after check-in), DST check-ins (71/73 h), a 36 h tier, partial-refund cap, `TZ=Asia/Tokyo`, policy schema |
-| `test/unit/stay-times.test.ts` | `checkInAt`/`checkOutAt` (CDT/CST, DST days), `localCutoff`, the 4:00 PM CT same-day cutoff, `stayPhase` edges, `addMonths`, `isPricingComplete` |
+| `test/unit/stay-times.test.ts` | `checkInAt`/`checkOutAt` (CDT/CST, DST days), `localCutoff`, the 4:00 PM CT same-day cutoff, `isLateSameDay`, `stayPhase` edges, `addMonths`, `isPricingComplete` |
 | `test/unit/booking-store.test.ts` | Store steps, `furthestAllowedStep`, old drafts, guest clamping, persistence, reset |
 | `test/unit/ids.test.ts`, `validation.test.ts` | Id formats, booking/payment input schemas |
 | `test/workers/bookings.test.ts` | Overlaps, holds, pricing parity, ownership, cancellation and refunds |
 | `test/workers/booking-integrity.test.ts` | Stored check-in/out instants, booking limits, the same-day cutoff, applied tier, quote drift, partial refunds, save-then-refund with a failing refund, stay phase |
-| `test/workers/checkout.test.ts` | Session parameters (manual capture, card + Link), reuse/replacement, confirmation checks, claim then capture then record, dates taken -> authorization released (no refund), capture once across return page + webhook, transient and permanent capture failures, retry after a cut-short confirmation, priority rule |
+| `test/workers/admin-bookings.test.ts` | Admin bookings: new and existing accounts, banned guests, consent required, card-only session and confirmation, late same-day acknowledgement, notice email and zero policy refund, admin calendar window and exclusion |
+| `test/workers/checkout.test.ts` | Session parameters (manual capture, card + Link, card kept on file, admin card-only variant), reuse/replacement, confirmation checks, claim then capture then record, dates taken -> authorization released (no refund), capture once across return page + webhook, transient and permanent capture failures, retry after a cut-short confirmation, priority rule |
 | `test/workers/stripe-webhook.test.ts` | Signature, `checkout.session.*` (decided from the PaymentIntent, releases for cancelled/deleted/already-paid bookings, `async_payment_*` ignored), refunds (incl. replay after a failure), disputes, log hygiene |
 | `test/workers/payment-recovery.test.ts` | Recovery cron: captures stuck `authorized` bookings, retries stuck `refund_pending` once (finds an existing refund), permanent refusal -> `refund_failed` |
 | `test/workers/blocks.test.ts` | Block conflicts and booking around blocks |
