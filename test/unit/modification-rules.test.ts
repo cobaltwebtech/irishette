@@ -8,38 +8,35 @@ import {
 	releaseEarlyError,
 } from '@/lib/booking/modification-rules';
 
-// Admin reservation changes (plan 06): no shortening, no past check-in
-// unless unchanged, release early within the stay, signed difference.
+// Admin reservation changes (plan 06): before the stay begins any length
+// (shortening included) with no past check-in; once begun only a later
+// check-out; release early only for a stay that has begun.
 
 const current = {
 	roomId: 'rose',
 	checkIn: '2030-06-10',
-	checkOut: '2030-06-12',
+	checkOut: '2030-06-13',
 };
-const today = '2030-06-11';
 
-describe('changeError', () => {
+describe('changeError before the stay begins', () => {
+	const today = '2030-06-08';
 	it.each([
+		['extend', { ...current, checkOut: '2030-06-14' }, null],
 		[
-			'extend an in-progress stay',
-			{ ...current, checkOut: '2030-06-13' },
+			'shorten (repriced, refunded)',
+			{ ...current, checkOut: '2030-06-11' },
 			null,
 		],
 		[
-			'move to later dates, same nights',
-			{ ...current, checkIn: '2030-06-20', checkOut: '2030-06-22' },
+			'move to later dates with fewer nights',
+			{ ...current, checkIn: '2030-06-20', checkOut: '2030-06-21' },
 			null,
 		],
 		['change the room only', { ...current, roomId: 'texas' }, null],
 		['nothing changes', current, /Nothing to change/],
 		[
-			'shorten',
-			{ ...current, checkOut: '2030-06-11' },
-			/cannot shorten the stay \(now 2 nights\)/,
-		],
-		[
 			'move check-in into the past',
-			{ ...current, checkIn: '2030-06-09', checkOut: '2030-06-12' },
+			{ ...current, checkIn: '2030-06-07', checkOut: '2030-06-09' },
 			/past/,
 		],
 		[
@@ -48,26 +45,60 @@ describe('changeError', () => {
 			/after check-in/,
 		],
 	])('%s', (_label, next, expected) => {
-		const error = changeError(current, next, today);
+		const error = changeError(current, next, today, { stayBegun: false });
+		if (expected === null) expect(error).toBeNull();
+		else expect(error).toMatch(expected);
+	});
+});
+
+describe('changeError once the stay has begun', () => {
+	const today = '2030-06-11';
+	it.each([
+		['extend', { ...current, checkOut: '2030-06-14' }, null],
+		['change the room, same dates', { ...current, roomId: 'texas' }, null],
+		[
+			'shorten',
+			{ ...current, checkOut: '2030-06-12' },
+			/release the room instead \(no refund\)/,
+		],
+		[
+			'move the check-in',
+			{ ...current, checkIn: '2030-06-12', checkOut: '2030-06-15' },
+			/check-in cannot change/,
+		],
+	])('%s', (_label, next, expected) => {
+		const error = changeError(current, next, today, { stayBegun: true });
 		if (expected === null) expect(error).toBeNull();
 		else expect(error).toMatch(expected);
 	});
 });
 
 describe('releaseEarlyError', () => {
+	const begun = { stayBegun: true };
 	it.each([
-		['one night earlier', '2030-06-11', null],
-		['not earlier', '2030-06-12', /before the current check-out/],
+		['one night earlier', '2030-06-12', null],
+		['from today', '2030-06-11', null],
+		['not earlier', '2030-06-13', /before the current check-out/],
 		['no night left', '2030-06-10', /at least one night/],
 	])('%s', (_label, newCheckOut, expected) => {
-		const error = releaseEarlyError(current, newCheckOut, '2030-06-10');
+		const error = releaseEarlyError(current, newCheckOut, '2030-06-11', begun);
 		if (expected === null) expect(error).toBeNull();
 		else expect(error).toMatch(expected);
 	});
 
 	it('not in the past', () => {
 		const stay = { checkIn: '2030-06-01', checkOut: '2030-06-10' };
-		expect(releaseEarlyError(stay, '2030-06-05', '2030-06-07')).toMatch(/past/);
+		expect(releaseEarlyError(stay, '2030-06-05', '2030-06-07', begun)).toMatch(
+			/past/,
+		);
+	});
+
+	it('not before the stay begins (shorten it as a change instead)', () => {
+		expect(
+			releaseEarlyError(current, '2030-06-12', '2030-06-08', {
+				stayBegun: false,
+			}),
+		).toMatch(/change the dates instead/);
 	});
 });
 
@@ -79,6 +110,9 @@ describe('modificationKind and modifiableError', () => {
 		expect(
 			modificationKind(current, { ...current, checkOut: '2030-06-14' }),
 		).toBe('extend');
+		expect(
+			modificationKind(current, { ...current, checkOut: '2030-06-11' }),
+		).toBe('shorten');
 		expect(
 			modificationKind(current, {
 				...current,

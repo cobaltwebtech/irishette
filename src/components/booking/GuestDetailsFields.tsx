@@ -43,20 +43,20 @@ export function GuestDetailsFields({
 
 				<div className="grid gap-4 sm:grid-cols-2">
 					<TextField
-						label="Full Name *"
-						type="text"
-						placeholder="Enter your full name"
-						value={form.guestName}
-						onChange={(value) => onChange('guestName', value)}
-						error={errors.guestName}
-					/>
-					<TextField
 						label="Email Address *"
 						type="email"
-						placeholder="Enter your email"
+						placeholder="Enter email"
 						value={form.guestEmail}
 						onChange={(value) => onChange('guestEmail', value)}
 						error={errors.guestEmail}
+					/>
+					<TextField
+						label="Full Name *"
+						type="text"
+						placeholder="Enter full name"
+						value={form.guestName}
+						onChange={(value) => onChange('guestName', value)}
+						error={errors.guestName}
 					/>
 				</div>
 
@@ -64,7 +64,7 @@ export function GuestDetailsFields({
 					<TextField
 						label="Phone Number *"
 						type="tel"
-						placeholder="Enter your phone number"
+						placeholder="Enter phone number"
 						value={form.guestPhone}
 						onChange={(value) => onChange('guestPhone', value)}
 						error={errors.guestPhone}
@@ -219,9 +219,9 @@ function ArrivalField({
 			<FieldError message={error} />
 			<p id={helpId} className="text-xs text-muted-foreground">
 				We meet every guest in person to hand over the key, so please tell us
-				roughly when you will arrive (Central Time). You are welcome to arrive
-				before check-in at {CHECK_IN_TIME_LABEL}. We will contact you with
-				arrival instructions before your stay.
+				roughly when you will arrive (US Central Time). You are welcome to
+				arrive before check-in at {CHECK_IN_TIME_LABEL}. We will contact you
+				with arrival instructions before your stay.
 			</p>
 		</div>
 	);

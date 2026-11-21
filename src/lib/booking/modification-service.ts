@@ -84,10 +84,11 @@ const changedMeanwhile = () =>
 	});
 
 /**
- * Checks a move, extension or room change and prices it: the booking can be
- * changed, the rules (no shortening, no past check-in unless unchanged,
- * 30 nights, 10 months), the room takes the guests, the new dates are free
- * (ignoring this booking) and the full reprice at current rates.
+ * Checks a move, extension, shortening or room change and prices it: the
+ * booking can be changed, the rules (any length before the stay begins;
+ * once it has begun only a later check-out; 30 nights, 10 months), the room
+ * takes the guests, the new dates are free (ignoring this booking) and the
+ * full reprice at current rates.
  */
 export async function planModification(
 	deps: Pick<ServiceDeps, 'db'>,
@@ -108,7 +109,9 @@ export async function planModification(
 		checkIn: target.checkInDate,
 		checkOut: target.checkOutDate,
 	};
-	const invalid = changeError(current, next, today);
+	const invalid = changeError(current, next, today, {
+		stayBegun: now >= booking.checkInAt,
+	});
 	if (invalid) throw bad(invalid);
 	if (daysBetween(next.checkIn, next.checkOut) > MAX_NIGHTS) {
 		throw bad(`Stays can be at most ${MAX_NIGHTS} nights`);
@@ -726,9 +729,10 @@ async function notifyModification(
 // --- Release early -------------------------------------------------------------
 
 /**
- * The guest leaves early: the stay ends on `newCheckOutDate` (today or
- * later), freeing the later nights. No money moves (early departure: no
- * refund). The original dates stay in the log.
+ * The guest leaves a stay that has begun: it ends on `newCheckOutDate`
+ * (today or later), freeing the later nights. No money moves (early
+ * departure: no refund). The original dates stay in the log. Before
+ * check-in, a shorter stay is a change instead (repriced, refunded).
  */
 export async function releaseRoomEarly(
 	deps: ServiceDeps,
@@ -743,6 +747,7 @@ export async function releaseRoomEarly(
 		{ checkIn: booking.checkInDate, checkOut: booking.checkOutDate },
 		input.newCheckOutDate,
 		todayIn(undefined, now),
+		{ stayBegun: now >= booking.checkInAt },
 	);
 	if (invalid) throw bad(invalid);
 	const modificationId = newId();

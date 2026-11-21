@@ -46,11 +46,12 @@ import { addDays, daysBetween, MAX_NIGHTS } from '@/utils/date-range';
 import { formatMoney } from '@/utils/format';
 import { formatStayDate } from '@/utils/timezone';
 import { cn } from '@/utils/twMerge';
-import { useTodayCT } from '@/utils/use-now';
+import { useNow, useTodayCT } from '@/utils/use-now';
 
-// Admin reservation changes by phone (plan 06): move the dates, extend or
-// change the room (full reprice at current rates; the difference is charged
-// to the card on file or refunded), or release the room early (no refund).
+// Admin reservation changes by phone (plan 06): before check-in, move the
+// dates, extend, shorten or change the room (full reprice at current rates;
+// the difference is charged to the card on file or refunded). Once the stay
+// has begun, extend it, or release the room early (no refund).
 // A card on file that can't be charged falls back to a card the guest reads
 // out. The booking is loaded by the layout route ($publicId.tsx).
 
@@ -70,6 +71,8 @@ function ModifyReservationPage() {
 		trpc.bookings.adminGetBooking.queryOptions({ publicId }),
 	);
 	const { booking, room } = data;
+	// Check-in time (4:00 PM CT) passed: the stay is under way.
+	const stayBegun = useNow() >= booking.checkInAt;
 	const back = (
 		<Link
 			to="/admin/bookings/$publicId"
@@ -106,8 +109,8 @@ function ModifyReservationPage() {
 			) : (
 				// Stacked, full width: the two-month calendar needs the room.
 				<div className="space-y-6">
-					<ChangeStayCard data={data} />
-					<ReleaseEarlyCard booking={booking} />
+					<ChangeStayCard data={data} stayBegun={stayBegun} />
+					<ReleaseEarlyCard booking={booking} stayBegun={stayBegun} />
 				</div>
 			)}
 		</AdminLayout>
@@ -148,10 +151,15 @@ function changeTarget(
 		: null;
 }
 
-function ChangeStayCard({ data }: { data: AdminBooking }) {
+function ChangeStayCard({
+	data,
+	stayBegun,
+}: {
+	data: AdminBooking;
+	stayBegun: boolean;
+}) {
 	const { booking, room } = data;
 	const trpc = useTRPC();
-	const today = useTodayCT();
 	const { data: roomList } = useQuery(
 		trpc.rooms.adminList.queryOptions({ status: 'active', limit: 100 }),
 	);
@@ -159,8 +167,8 @@ function ChangeStayCard({ data }: { data: AdminBooking }) {
 	const [roomPublicId, setRoomPublicId] = useState(room.publicId);
 	const [range, setRange] = useState<DateRange | undefined>();
 	const [newCheckOut, setNewCheckOut] = useState('');
-	// A stay already under way keeps its check-in: it can only be extended.
-	const inStay = booking.checkInDate < today;
+	// A stay under way keeps its check-in: it can only be extended.
+	const inStay = stayBegun;
 	const selectedRoom = rooms.find((r) => r.publicId === roomPublicId);
 	const roomId = selectedRoom?.id ?? booking.roomId;
 
@@ -176,10 +184,11 @@ function ChangeStayCard({ data }: { data: AdminBooking }) {
 			<CardHeader>
 				<CardTitle>Change dates or room</CardTitle>
 				<CardDescription>
-					The new stay is priced in full at today's rates. It cannot be shorter
-					than now ({booking.numberOfNights} night
-					{booking.numberOfNights === 1 ? '' : 's'}); for an early departure,
-					release the room instead.
+					The new stay is priced in full at today's rates; the difference is
+					charged to the card on file or refunded.{' '}
+					{stayBegun
+						? 'The stay has begun: it can only be extended. For an early departure, release the room below (no refund).'
+						: 'Before check-in the stay can be moved, extended, shortened or moved to another room.'}
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="space-y-6">
@@ -451,7 +460,13 @@ function FreshCardStep({
 	);
 }
 
-function ReleaseEarlyCard({ booking }: { booking: AdminBooking['booking'] }) {
+function ReleaseEarlyCard({
+	booking,
+	stayBegun,
+}: {
+	booking: AdminBooking['booking'];
+	stayBegun: boolean;
+}) {
 	const trpc = useTRPC();
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
@@ -500,7 +515,12 @@ function ReleaseEarlyCard({ booking }: { booking: AdminBooking['booking'] }) {
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="space-y-4">
-				{options.length === 0 ? (
+				{!stayBegun ? (
+					<p className="text-sm text-muted-foreground">
+						Available once the stay has begun (check-in time). Before then,
+						shorten the stay above: the difference is refunded.
+					</p>
+				) : options.length === 0 ? (
 					<p className="text-sm text-muted-foreground">
 						There is no earlier check-out date to release from.
 					</p>

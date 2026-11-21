@@ -1,4 +1,4 @@
-import { daysBetween, type IsoDate } from '@/utils/date-range';
+import type { IsoDate } from '@/utils/date-range';
 
 import type { BookingStatus, PaymentStatus } from './booking-status';
 
@@ -8,6 +8,7 @@ import type { BookingStatus, PaymentStatus } from './booking-status';
 export const modificationKinds = [
 	'move',
 	'extend',
+	'shorten',
 	'change_room',
 	'release_early',
 ] as const;
@@ -59,15 +60,17 @@ export function modifiableError(booking: {
 }
 
 /**
- * Why a move, extension or room change is not allowed, or null:
- * check-out after check-in, no fewer nights than now (shortening is
- * "release early"), a new check-in not before today unless it is unchanged
- * (an in-progress stay can be extended), and something must change.
+ * Why a move, extension, shortening or room change is not allowed, or null:
+ * check-out after check-in and something must change. Before the stay begins
+ * (check-in time) any length is allowed, with a check-in not before today.
+ * Once it has begun the check-in stays and the stay can only get longer: an
+ * early departure is "release early" (no refund).
  */
 export function changeError(
 	current: StaySpec,
 	next: StaySpec,
 	today: IsoDate,
+	{ stayBegun }: { stayBegun: boolean },
 ): string | null {
 	if (next.checkOut <= next.checkIn) {
 		return 'Check-out must be after check-in.';
@@ -79,22 +82,35 @@ export function changeError(
 	) {
 		return 'Nothing to change: pick other dates or another room.';
 	}
-	const nights = daysBetween(current.checkIn, current.checkOut);
-	if (daysBetween(next.checkIn, next.checkOut) < nights) {
-		return `A change cannot shorten the stay (now ${nights} night${nights === 1 ? '' : 's'}). Use "Release room early" for an early departure.`;
+	if (stayBegun) {
+		if (next.checkIn !== current.checkIn) {
+			return 'The stay has begun: its check-in cannot change.';
+		}
+		if (next.checkOut < current.checkOut) {
+			return 'The stay has begun: to leave early, release the room instead (no refund).';
+		}
+		return null;
 	}
-	if (next.checkIn !== current.checkIn && next.checkIn < today) {
+	if (next.checkIn < today) {
 		return 'The new check-in cannot be in the past.';
 	}
 	return null;
 }
 
-/** Why the room can't be released from `newCheckOut`, or null. */
+/**
+ * Why the room can't be released from `newCheckOut`, or null. Only a stay
+ * that has begun is released early (no refund); before check-in, shorten it
+ * as a change instead (repriced, the difference refunded).
+ */
 export function releaseEarlyError(
 	current: Pick<StaySpec, 'checkIn' | 'checkOut'>,
 	newCheckOut: IsoDate,
 	today: IsoDate,
+	{ stayBegun }: { stayBegun: boolean },
 ): string | null {
+	if (!stayBegun) {
+		return 'The stay has not begun: change the dates instead (the difference is refunded).';
+	}
 	if (newCheckOut >= current.checkOut) {
 		return 'The new check-out must be before the current check-out.';
 	}
@@ -113,8 +129,8 @@ export function modificationKind(
 	next: StaySpec,
 ): Exclude<ModificationKind, 'release_early'> {
 	if (next.roomId !== current.roomId) return 'change_room';
-	if (next.checkIn === current.checkIn) return 'extend';
-	return 'move';
+	if (next.checkIn !== current.checkIn) return 'move';
+	return next.checkOut < current.checkOut ? 'shorten' : 'extend';
 }
 
 /** Signed difference in cents: positive is charged, negative refunded. */
@@ -124,6 +140,7 @@ export const differenceInCents = (newTotal: number, oldTotal: number) =>
 export const MODIFICATION_KIND_LABELS: Record<ModificationKind, string> = {
 	move: 'Dates moved',
 	extend: 'Stay extended',
+	shorten: 'Stay shortened',
 	change_room: 'Room changed',
 	release_early: 'Released early',
 };

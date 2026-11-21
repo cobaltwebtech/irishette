@@ -38,7 +38,9 @@ import { ADMIN, ROSE, TEXAS } from './seed';
 // Admin-only reservation changes (plan 06): full reprice, the difference
 // charged off-session to the saved card (authorize, claim, capture) or
 // refunded across the payments; a decline falls back to a fresh card;
-// release early moves no money; cancellations refund across payments.
+// shortening before check-in is refunded; once the stay has begun,
+// release early frees the nights without a refund; cancellations refund
+// across payments.
 
 const admin = () => caller('admin');
 
@@ -407,18 +409,72 @@ describe('decrease refunded', () => {
 describe('rules and early release', () => {
 	useClock('2033-05-01T15:00:00Z');
 
-	it('refuses to shorten the stay through a change', async () => {
+	it('shortens a stay before check-in: repriced, refunded, the night freed', async () => {
+		const refunds = mockStripeRefunds();
+		mockEmail();
 		const booking = await paidBooking();
+		const { quote, result } = await change(booking, {
+			checkInDate: booking.checkInDate,
+			checkOutDate: addDays(booking.checkInDate, 1),
+		});
+		expect(quote.kind).toBe('shorten');
+		expect(quote.differenceCents).toBeLessThan(0);
+		expect(result.status).toBe('applied');
+		expect(refunds).toHaveLength(1);
+		expect(refunds[0].body.get('amount')).toBe(String(-quote.differenceCents));
+		expect(await row(booking.id)).toMatchObject({
+			checkOutDate: addDays(booking.checkInDate, 1),
+			numberOfNights: 1,
+			totalAmount: quote.next.totalAmount,
+		});
+		const calendar = await admin().availability.adminGetByRoom({
+			roomPublicId: ROSE.publicId,
+		});
+		expect(
+			calendar.unavailability.stays.some(
+				(s) =>
+					s.checkIn === booking.checkInDate &&
+					s.checkOut === addDays(booking.checkInDate, 1),
+			),
+		).toBe(true);
+		expect(
+			calendar.unavailability.stays.some(
+				(s) => s.checkOut === booking.checkOutDate,
+			),
+		).toBe(false);
+		expect((await changes(booking.id))[0].kind).toBe('shorten');
+		await settle();
+	});
+
+	it('once the stay has begun, shortening is refused (release early instead)', async () => {
+		// Check-in Apr 30 at 4:00 PM CT; now is May 1, 10:00 AM CT.
+		const booking = await paidBooking({
+			checkInDate: '2033-04-30',
+			checkOutDate: '2033-05-03',
+			numberOfNights: 3,
+		});
 		const error = await trpcError(
 			admin().bookings.adminQuoteModification({
 				publicId: booking.publicId,
 				roomId: ROSE.id,
 				checkInDate: booking.checkInDate,
-				checkOutDate: addDays(booking.checkInDate, 1),
+				checkOutDate: '2033-05-02',
 			}),
 		);
 		expect(error.code).toBe('BAD_REQUEST');
-		expect(error.message).toMatch(/cannot shorten/);
+		expect(error.message).toMatch(/release the room instead/);
+	});
+
+	it('release early is refused before check-in', async () => {
+		const booking = await paidBooking();
+		const error = await trpcError(
+			admin().bookings.adminReleaseRoomEarly({
+				publicId: booking.publicId,
+				newCheckOutDate: addDays(booking.checkInDate, 1),
+			}),
+		);
+		expect(error.code).toBe('BAD_REQUEST');
+		expect(error.message).toMatch(/change the dates instead/);
 	});
 
 	it('refuses changes while the payment is authorized or refunds are pending', async () => {

@@ -102,16 +102,17 @@ function TermsOfServicePage() {
 									4.3 Booking Modifications
 								</h3>
 								<p className="leading-relaxed text-muted-foreground">
-									Changes to a reservation (new dates, a longer stay or a
-									different room) are made by phone only: call us at
+									Changes to a reservation (new dates, a longer or shorter stay
+									or a different room) are made by phone only: call us at
 									254-454-5558. Changes are subject to availability. A changed
 									reservation is priced again in full at the rates in effect
 									when the change is made. If the new price is higher, the
 									difference is charged to your card on file; if it is lower,
-									the difference is refunded to the card you paid with. Leaving
-									before your checkout date is not a change: early departure is
-									covered by our Cancellation and Refund Policy (no refund for
-									unused nights).
+									the difference is refunded to the card you paid with. Once
+									your stay has begun (at check-in time) it can only be
+									extended: leaving before your checkout date is early
+									departure, covered by our Cancellation and Refund Policy (no
+									refund for unused nights).
 								</p>
 								<h3 className="mt-6 mb-3 text-xl font-semibold">
 									4.4 Card on File

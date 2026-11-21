@@ -525,12 +525,14 @@ a layout, `$publicId.tsx`, with the detail page `$publicId/index.tsx` and
 `$publicId/modify.tsx`). Server: `src/lib/booking/modification-service.ts`,
 pure rules in `modification-rules.ts`, inputs in `modification-validation.ts`.
 
-- **Move, extend, change room** (`bookings.adminQuoteModification`, then
-  `adminModifyBooking` with `expectedDifferenceCents`): the booking must be
-  `confirmed` and `paid` / `partially_refunded`; the new stay has at least as
-  many nights (no shortening), a check-in not in the past unless unchanged
-  (an in-progress stay can be extended; the page then offers a later
-  check-out only), at most 30 nights and within 10 months; a new room must be
+- **Move, extend, shorten, change room** (`bookings.adminQuoteModification`,
+  then `adminModifyBooking` with `expectedDifferenceCents`): the booking must
+  be `confirmed` and `paid` / `partially_refunded`. Before the stay begins
+  (`checkInAt`, 4:00 PM CT) any length is allowed with a check-in not in the
+  past; a shorter stay is repriced and the difference refunded. Once it has
+  begun the check-in stays and only a later check-out is allowed (the page
+  then offers a later check-out only); leaving early is "release early". At
+  most 30 nights and within 10 months; a new room must be
   active and take the guests; the new dates must be free ignoring this
   booking (`availability.adminGetByRoom({ excludeBookingPublicId })` on the
   page). No same-day cutoff. The whole new stay is repriced at current rates
@@ -561,9 +563,11 @@ pure rules in `modification-rules.ts`, inputs in `modification-validation.ts`.
   `refund_pending` (cron retry), a permanent one `refund_failed` with a
   `refund_failed` inbox item and an admin alert. `bookings.refund_amount` is
   not incremented: it stays the refunds against the current total.
-- **Release early** (`adminReleaseRoomEarly`): the stay ends on a date from
-  today, before the current check-out (at least one night stays); only the
-  dates and nights change, no money (early departure: no refund).
+- **Release early** (`adminReleaseRoomEarly`): only for a stay that has
+  begun; it ends on a date from today, before the current check-out (at
+  least one night stays). Only the dates and nights change, freeing the later
+  nights; no money moves (early departure: no refund). Before check-in this
+  is refused: shorten the stay as a change instead.
 - **Not allowed** while the payment is `authorized`, `refund_pending` or
   `refund_failed`, or on cancelled and pending bookings. A refund on a
   disputed payment needs `confirmDisputeRefund`. A cancellation waits while a
@@ -639,7 +643,7 @@ until 11:00 AM CT on the check-out date, then `past`) from the stored
 | `test/unit/ids.test.ts`, `validation.test.ts` | Id formats, booking/payment input schemas |
 | `test/workers/bookings.test.ts` | Overlaps, holds, pricing parity, ownership, cancellation and refunds |
 | `test/workers/booking-integrity.test.ts` | Stored check-in/out instants, booking limits, the same-day cutoff, applied tier, quote drift, partial refunds, save-then-refund with a failing refund, stay phase |
-| `test/workers/modifications.test.ts`, `test/unit/modification-rules.test.ts` | Changes: increase on the saved card (authorize, claim, capture, second payment row), room change, claim conflict cancels the authorization, price drift, decline then fresh card (page and webhook, once), decrease refund (not a cancellation refund), refund retry by the cron, no shortening, blocked payment states, release early, cancellation across two payments, tax report with two payments; the pure rules |
+| `test/workers/modifications.test.ts`, `test/unit/modification-rules.test.ts` | Changes: increase on the saved card (authorize, claim, capture, second payment row), room change, claim conflict cancels the authorization, price drift, decline then fresh card (page and webhook, once), decrease refund (not a cancellation refund), refund retry by the cron, shortening before check-in (refunded) and refused once begun, blocked payment states, release early (begun stays only), cancellation across two payments, tax report with two payments; the pure rules |
 | `test/workers/admin-bookings.test.ts` | Admin bookings: new and existing accounts, banned guests, consent required, card-only session and confirmation, late same-day acknowledgement, notice email and zero policy refund, admin calendar window and exclusion |
 | `test/workers/checkout.test.ts` | Session parameters (manual capture, card + Link, card kept on file, admin card-only variant), reuse/replacement, confirmation checks, claim then capture then record, dates taken -> authorization released (no refund), capture once across return page + webhook, transient and permanent capture failures, retry after a cut-short confirmation, priority rule |
 | `test/workers/stripe-webhook.test.ts` | Signature, `checkout.session.*` (decided from the PaymentIntent, releases for cancelled/deleted/already-paid bookings, `async_payment_*` ignored), refunds (incl. replay after a failure), disputes, log hygiene |
