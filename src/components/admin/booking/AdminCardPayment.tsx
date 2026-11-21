@@ -8,11 +8,12 @@ import { useState } from 'react';
 
 import {
 	CHECKOUT_ELEMENTS_OPTIONS,
+	CheckoutPending,
 	CheckoutSummary,
+	confirmCheckoutSession,
 	getStripe,
 } from '@/components/booking/checkout-elements';
 import { Button } from '@/components/ui/button';
-import { toast } from '@/components/ui/toast';
 
 // The card the guest reads out by phone, typed by an admin (plan 06): a
 // card-only Checkout Session (the server allows only 'card' for admin
@@ -56,17 +57,9 @@ function AdminCardForm({
 	const [isProcessing, setIsProcessing] = useState(false);
 	const [errorText, setErrorText] = useState<string | null>(null);
 
-	if (checkoutState.type === 'loading') {
-		return (
-			<div className="flex justify-center py-8">
-				<Icon icon="tabler:loader-2" className="size-8 animate-spin" />
-			</div>
-		);
-	}
+	if (checkoutState.type === 'loading') return <CheckoutPending />;
 	if (checkoutState.type === 'error') {
-		return (
-			<p className="text-sm text-destructive">{checkoutState.error.message}</p>
-		);
+		return <CheckoutPending error={checkoutState.error.message} />;
 	}
 	const { checkout } = checkoutState;
 	const totalMatches = checkout.total.total.minorUnitsAmount === expectedCents;
@@ -75,16 +68,14 @@ function AdminCardForm({
 		e.preventDefault();
 		setIsProcessing(true);
 		setErrorText(null);
+		const result = await confirmCheckoutSession(checkout);
 		try {
-			const result = await checkout.confirm({ redirect: 'if_required' });
-			if (result.type === 'error') {
-				setErrorText(result.error.message);
-				return;
-			}
-			await onAuthorized(result.session.id);
+			if ('error' in result) setErrorText(result.error);
+			else await onAuthorized(result.sessionId);
 		} catch {
-			setErrorText('The card could not be charged. Please try again.');
-			toast.add({ type: 'error', title: 'Payment processing failed' });
+			setErrorText(
+				'The card was authorized, but the booking could not be confirmed. Check the booking before trying again.',
+			);
 		} finally {
 			setIsProcessing(false);
 		}

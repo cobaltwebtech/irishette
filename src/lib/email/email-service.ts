@@ -382,43 +382,63 @@ function sendLateSameDayNoticeEmail(
 	booking: Booking,
 	room: RoomInfo,
 ): Promise<EmailResult> {
+	return sendGuestNotice(db, env, booking, {
+		kind: `late same-day notice ${booking.confirmationId}`,
+		key: `late-same-day/${booking.id}`,
+		subject: `Late Same-Day Booking - ${booking.confirmationId} | Irishette Bed & Breakfast`,
+		props: {
+			preview: `Booking ${booking.confirmationId} is a late same-day booking: no refunds`,
+			heading: 'Late same-day booking: no refunds',
+			paragraphs: [
+				`Hi ${booking.guestName},`,
+				`Your booking ${booking.confirmationId} was made on your check-in day after ${SAME_DAY_CUTOFF_LABEL}, our same-day booking cutoff. It is a late same-day booking: it cannot be refunded if it is cancelled, whatever our usual cancellation windows say.`,
+				'Your stay is confirmed; your booking confirmation has the details. If anything changes, call us.',
+			],
+			highlight: {
+				title: 'Refund policy for this booking',
+				rows: [
+					{
+						label: 'Check-in',
+						value: formatStayDate(booking.checkInDate, 'long'),
+					},
+					{ label: 'Refund if cancelled', value: 'None' },
+					{ label: 'Phone', value: CONTACT_PHONE },
+				],
+			},
+			booking: emailBookingDetails(booking, room),
+			button: {
+				label: 'View your bookings',
+				href: `${env.BETTER_AUTH_URL}/account`,
+			},
+		},
+	});
+}
+
+/** One notice to the guest only, sent once per `key`. */
+function sendGuestNotice(
+	db: Database,
+	env: EmailEnv,
+	booking: Booking,
+	notice: {
+		kind: string;
+		key: string;
+		subject: string;
+		props: Parameters<typeof bookingNotice>[4];
+	},
+): Promise<EmailResult> {
 	return deliver(
 		env,
-		`late same-day notice ${booking.confirmationId}`,
+		notice.kind,
 		[
 			bookingNotice(
 				env.BETTER_AUTH_URL,
 				EMAIL_FROM_BOOKINGS,
 				[booking.guestEmail],
-				`Late Same-Day Booking - ${booking.confirmationId} | Irishette Bed & Breakfast`,
-				{
-					preview: `Booking ${booking.confirmationId} is a late same-day booking: no refunds`,
-					heading: 'Late same-day booking: no refunds',
-					paragraphs: [
-						`Hi ${booking.guestName},`,
-						`Your booking ${booking.confirmationId} was made on your check-in day after ${SAME_DAY_CUTOFF_LABEL}, our same-day booking cutoff. It is a late same-day booking: it cannot be refunded if it is cancelled, whatever our usual cancellation windows say.`,
-						'Your stay is confirmed; your booking confirmation has the details. If anything changes, call us.',
-					],
-					highlight: {
-						title: 'Refund policy for this booking',
-						rows: [
-							{
-								label: 'Check-in',
-								value: formatStayDate(booking.checkInDate, 'long'),
-							},
-							{ label: 'Refund if cancelled', value: 'None' },
-							{ label: 'Phone', value: CONTACT_PHONE },
-						],
-					},
-					booking: emailBookingDetails(booking, room),
-					button: {
-						label: 'View your bookings',
-						href: `${env.BETTER_AUTH_URL}/account`,
-					},
-				},
+				notice.subject,
+				notice.props,
 			),
 		],
-		{ db, key: `late-same-day/${booking.id}` },
+		{ db, key: notice.key },
 	);
 }
 
@@ -757,30 +777,22 @@ export function sendPaymentFailedEmail(
 	booking: Booking,
 	room: RoomInfo,
 ): Promise<EmailResult> {
-	return deliver(
-		env,
-		`payment failed ${booking.confirmationId}`,
-		[
-			bookingNotice(
-				env.BETTER_AUTH_URL,
-				EMAIL_FROM_BOOKINGS,
-				[booking.guestEmail],
-				`Payment not completed - ${booking.confirmationId} | Irishette Bed & Breakfast`,
-				{
-					preview: `Your payment for booking ${booking.confirmationId} did not go through`,
-					heading: 'Your payment did not go through',
-					paragraphs: [
-						`Hi ${booking.guestName},`,
-						'The payment for this booking could not be completed, so we could not confirm your stay and the dates were released. You have not been charged: any authorization hold on your card is released by your bank.',
-						'You are welcome to book again with another payment method.',
-					],
-					booking: emailBookingDetails(booking, room),
-					button: { label: 'Book again', href: `${env.BETTER_AUTH_URL}/` },
-				},
-			),
-		],
-		{ db, key: `payment-failed/${booking.id}` },
-	);
+	return sendGuestNotice(db, env, booking, {
+		kind: `payment failed ${booking.confirmationId}`,
+		key: `payment-failed/${booking.id}`,
+		subject: `Payment not completed - ${booking.confirmationId} | Irishette Bed & Breakfast`,
+		props: {
+			preview: `Your payment for booking ${booking.confirmationId} did not go through`,
+			heading: 'Your payment did not go through',
+			paragraphs: [
+				`Hi ${booking.guestName},`,
+				'The payment for this booking could not be completed, so we could not confirm your stay and the dates were released. You have not been charged: any authorization hold on your card is released by your bank.',
+				'You are welcome to book again with another payment method.',
+			],
+			booking: emailBookingDetails(booking, room),
+			button: { label: 'Book again', href: `${env.BETTER_AUTH_URL}/` },
+		},
+	});
 }
 
 /**

@@ -851,25 +851,53 @@ async function refundCancellation(
 	}
 
 	if (failure || !refund) {
-		const message = failure ?? 'No refund was created';
-		console.error(
-			`Cancellation refund failed for booking ${booking.confirmationId}: ${message}`,
+		return failCancellationRefund(
+			deps,
+			booking,
+			amounts.refundAmount,
+			failure ?? 'No refund was created',
+			now,
 		);
-		const [updated] = await db
-			.update(bookings)
-			.set({
-				paymentStatus: 'refund_failed',
-				pendingRefundAmount: null,
-				updatedAt: now,
-			})
-			.where(eq(bookings.id, booking.id))
-			.returning();
-		alertCancellationRefundFailed(deps, booking, amounts.refundAmount, message);
-		return { booking: updated ?? booking, refundFailed: true };
 	}
+	return recordCancellationRefund(db, booking, amounts, refund, now);
+}
 
-	// The refund exists (refundAcrossPayments recorded it and the payment
-	// totals). Recording the booking must not report a failed refund.
+/** Stripe refused the refund for good: refund_failed and an admin alert. */
+async function failCancellationRefund(
+	deps: ServiceDeps,
+	booking: Booking,
+	amount: number,
+	message: string,
+	now: Date,
+): Promise<{ booking: Booking; refundFailed: boolean }> {
+	console.error(
+		`Cancellation refund failed for booking ${booking.confirmationId}: ${message}`,
+	);
+	const [updated] = await deps.db
+		.update(bookings)
+		.set({
+			paymentStatus: 'refund_failed',
+			pendingRefundAmount: null,
+			updatedAt: now,
+		})
+		.where(eq(bookings.id, booking.id))
+		.returning();
+	alertCancellationRefundFailed(deps, booking, amount, message);
+	return { booking: updated ?? booking, refundFailed: true };
+}
+
+/**
+ * The refund exists (refundAcrossPayments recorded it and the payment
+ * totals): record it on the booking. A database error must not report a
+ * failed refund (the recovery cron finds the refund and retries).
+ */
+async function recordCancellationRefund(
+	db: Database,
+	booking: Booking,
+	amounts: RefundAmounts,
+	refund: Stripe.Refund,
+	now: Date,
+): Promise<{ booking: Booking; refundFailed: boolean }> {
 	try {
 		const totalRefunded = roundCents(
 			amounts.alreadyRefunded + amounts.refundAmount,

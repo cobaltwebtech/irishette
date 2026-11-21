@@ -1,7 +1,7 @@
 import { Icon } from '@iconify/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useId, useState } from 'react';
+import { useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 
 import { AdminLayout } from '@/components/admin/AdminLayout';
@@ -9,6 +9,11 @@ import {
 	type AdminCheckout,
 	AdminCardPayment,
 } from '@/components/admin/booking/AdminCardPayment';
+import {
+	AdminCheckbox,
+	AdminNoteField,
+	AdminRoomSelect,
+} from '@/components/admin/booking/AdminFormFields';
 import {
 	AdminStayPicker,
 	PriceBreakdown,
@@ -29,18 +34,12 @@ import {
 	CardHeader,
 	CardTitle,
 } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
-import {
-	NativeSelect,
-	NativeSelectOption,
-} from '@/components/ui/native-select';
-import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/toast';
 import { useTRPC } from '@/integrations/trpc/react';
 import { arrivalWindowSchema } from '@/lib/booking/arrival-windows';
 import { SAME_DAY_CUTOFF_LABEL } from '@/lib/site';
 import { formatStayDate } from '@/utils/timezone';
+import { cn } from '@/utils/twMerge';
 
 // Admin booking by phone (plan 06): room, dates (no same-day cutoff), the
 // guest's details (account found by email or created), review with the
@@ -63,71 +62,66 @@ const EMPTY_FORM: GuestDetailsForm = {
 	specialRequests: '',
 };
 
+interface Review {
+	acknowledgeLateBooking: boolean;
+	totalAmount: number;
+}
+
 interface PendingPayment extends AdminCheckout {
 	publicId: string;
 	totalCents: number;
 }
 
-function NewBookingPage() {
+/** The adminCreateBooking input, or null when the guest details are invalid. */
+function holdInput(
+	form: GuestDetailsForm,
+	roomId: string,
+	stay: { checkIn: string; checkOut: string },
+	internalNotes: string,
+	acknowledgeLateBooking: boolean,
+) {
+	const arrival = arrivalWindowSchema.safeParse(form.estimatedArrival);
+	if (!arrival.success) return null;
+	return {
+		roomId,
+		checkInDate: stay.checkIn,
+		checkOutDate: stay.checkOut,
+		guestCount: form.numberOfGuests,
+		guestName: form.guestName,
+		guestEmail: form.guestEmail.trim(),
+		guestPhone: form.guestPhone,
+		specialRequests: form.specialRequests || undefined,
+		estimatedArrival: arrival.data,
+		internalNotes: internalNotes || undefined,
+		acknowledgeLateBooking,
+		cardConsent: true as const,
+	};
+}
+
+/**
+ * Holds the dates (adminCreateBooking) and opens the card-only session; the
+ * payment step then shows. Null input: the guest details are invalid.
+ */
+function useCreateAdminHold() {
 	const trpc = useTRPC();
-	const queryClient = useQueryClient();
 	const navigate = useNavigate();
-	const [roomPublicId, setRoomPublicId] = useState('');
-	const [range, setRange] = useState<DateRange | undefined>();
-	const [form, setForm] = useState<GuestDetailsForm>(EMPTY_FORM);
-	const [errors, setErrors] = useState<GuestDetailsErrors>({});
-	const [internalNotes, setInternalNotes] = useState('');
 	const [payment, setPayment] = useState<PendingPayment | null>(null);
-
-	const { data: roomList } = useQuery(
-		trpc.rooms.adminList.queryOptions({ status: 'active', limit: 100 }),
-	);
-	const rooms = roomList?.rooms ?? [];
-	const selectedRoom = rooms.find((r) => r.publicId === roomPublicId);
-	const stay = stayFromRange(range);
-
 	const createBooking = useMutation(
 		trpc.bookings.adminCreateBooking.mutationOptions(),
 	);
 	const createSession = useMutation(
 		trpc.bookings.adminCreateCheckoutSession.mutationOptions(),
 	);
-	const confirm = useMutation(
-		trpc.bookings.adminConfirmCheckout.mutationOptions(),
-	);
-
-	const onChange = <K extends keyof GuestDetailsForm>(
-		field: K,
-		value: GuestDetailsForm[K],
-	) => setForm((current) => ({ ...current, [field]: value }));
-
-	const submit = async (review: {
-		acknowledgeLateBooking: boolean;
-		totalAmount: number;
-	}) => {
-		const found = validateGuestDetails(form);
-		setErrors(found);
-		const arrival = arrivalWindowSchema.safeParse(form.estimatedArrival);
-		if (!selectedRoom || !stay || Object.keys(found).length > 0) {
+	const submit = async (
+		input: ReturnType<typeof holdInput>,
+		totalAmount: number,
+	) => {
+		if (!input) {
 			toast.add({ type: 'error', title: 'Check the guest details' });
 			return;
 		}
-		if (!arrival.success) return;
 		try {
-			const hold = await createBooking.mutateAsync({
-				roomId: selectedRoom.id,
-				checkInDate: stay.checkIn,
-				checkOutDate: stay.checkOut,
-				guestCount: form.numberOfGuests,
-				guestName: form.guestName,
-				guestEmail: form.guestEmail.trim(),
-				guestPhone: form.guestPhone,
-				specialRequests: form.specialRequests || undefined,
-				estimatedArrival: arrival.data,
-				internalNotes: internalNotes || undefined,
-				acknowledgeLateBooking: review.acknowledgeLateBooking,
-				cardConsent: true,
-			});
+			const hold = await createBooking.mutateAsync(input);
 			const session = await createSession.mutateAsync({
 				bookingId: hold.bookingId,
 			});
@@ -142,7 +136,7 @@ function NewBookingPage() {
 				publicId: session.publicId,
 				clientSecret: session.clientSecret,
 				publishableKey: session.publishableKey,
-				totalCents: Math.round(review.totalAmount * 100),
+				totalCents: Math.round(totalAmount * 100),
 			});
 		} catch (error) {
 			toast.add({
@@ -151,57 +145,51 @@ function NewBookingPage() {
 			});
 		}
 	};
+	return {
+		payment,
+		busy: createBooking.isPending || createSession.isPending,
+		submit,
+	};
+}
 
-	const onAuthorized = async (sessionId: string) => {
-		if (!payment) return;
-		const result = await confirm.mutateAsync({
-			publicId: payment.publicId,
-			sessionId,
-		});
-		await queryClient.invalidateQueries({
-			queryKey: trpc.bookings.adminListBookings.pathKey(),
-		});
-		if (
-			result.status === 'confirmed' ||
-			result.status === 'already_confirmed'
-		) {
-			toast.add({ type: 'success', title: 'Booking confirmed' });
-		} else {
-			toast.add({
-				type: 'error',
-				title: 'The booking could not be confirmed. The card was not charged.',
-			});
-		}
-		void navigate({
-			to: '/admin/bookings/$publicId',
-			params: { publicId: payment.publicId },
-		});
+function NewBookingPage() {
+	const trpc = useTRPC();
+	const [roomPublicId, setRoomPublicId] = useState('');
+	const [range, setRange] = useState<DateRange | undefined>();
+	const [form, setForm] = useState<GuestDetailsForm>(EMPTY_FORM);
+	const [errors, setErrors] = useState<GuestDetailsErrors>({});
+	const [internalNotes, setInternalNotes] = useState('');
+
+	const { data: roomList } = useQuery(
+		trpc.rooms.adminList.queryOptions({ status: 'active', limit: 100 }),
+	);
+	const rooms = roomList?.rooms ?? [];
+	const selectedRoom = rooms.find((r) => r.publicId === roomPublicId);
+	const stay = stayFromRange(range);
+
+	const onChange = <K extends keyof GuestDetailsForm>(
+		field: K,
+		value: GuestDetailsForm[K],
+	) => setForm((current) => ({ ...current, [field]: value }));
+
+	const { payment, busy, submit } = useCreateAdminHold();
+	const onSubmit = (review: Review) => {
+		const found = validateGuestDetails(form);
+		setErrors(found);
+		const input =
+			selectedRoom && stay && Object.keys(found).length === 0
+				? holdInput(
+						form,
+						selectedRoom.id,
+						stay,
+						internalNotes,
+						review.acknowledgeLateBooking,
+					)
+				: null;
+		return submit(input, review.totalAmount);
 	};
 
-	if (payment) {
-		return (
-			<AdminLayout title="New Booking">
-				<Card className="mx-auto max-w-2xl">
-					<CardHeader>
-						<CardTitle>Card payment</CardTitle>
-						<CardDescription>
-							Type the card the guest reads out. It is authorized now, charged
-							once the dates are confirmed, and kept on file for approved
-							changes.
-						</CardDescription>
-					</CardHeader>
-					<CardContent>
-						<AdminCardPayment
-							clientSecret={payment.clientSecret}
-							publishableKey={payment.publishableKey}
-							expectedCents={payment.totalCents}
-							onAuthorized={onAuthorized}
-						/>
-					</CardContent>
-				</Card>
-			</AdminLayout>
-		);
-	}
+	if (payment) return <BookingPaymentStep payment={payment} />;
 
 	return (
 		<AdminLayout title="New Booking">
@@ -215,9 +203,10 @@ function NewBookingPage() {
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="space-y-4">
-						<RoomSelect
+						<AdminRoomSelect
 							rooms={rooms}
 							value={roomPublicId}
+							placeholder="Select a room"
 							onChange={(value) => {
 								setRoomPublicId(value);
 								setRange(undefined);
@@ -234,37 +223,21 @@ function NewBookingPage() {
 					</CardContent>
 				</Card>
 
-				<Card>
-					<CardHeader>
-						<CardTitle>Guest</CardTitle>
-						<CardDescription>
-							Look the guest up by email. A new email creates an account; the
-							guest can sign in later with a magic link.
-						</CardDescription>
-					</CardHeader>
-					<CardContent className="space-y-6">
-						<GuestLookup
-							email={form.guestEmail}
-							onFound={(guest) =>
-								setForm((current) => ({
-									...current,
-									guestName: current.guestName || guest.name,
-									guestPhone: current.guestPhone || guest.phoneNumber || '',
-								}))
-							}
-						/>
-						<GuestDetailsFields
-							form={form}
-							errors={errors}
-							onChange={onChange}
-							maxGuests={selectedRoom?.maxGuests ?? 1}
-						/>
-						<InternalNotesField
-							value={internalNotes}
-							onChange={setInternalNotes}
-						/>
-					</CardContent>
-				</Card>
+				<GuestCard
+					form={form}
+					errors={errors}
+					onChange={onChange}
+					onFound={(guest) =>
+						setForm((current) => ({
+							...current,
+							guestName: current.guestName || guest.name,
+							guestPhone: current.guestPhone || guest.phoneNumber || '',
+						}))
+					}
+					maxGuests={selectedRoom?.maxGuests ?? 1}
+					internalNotes={internalNotes}
+					onNotesChange={setInternalNotes}
+				/>
 
 				{selectedRoom && stay && (
 					<ReviewCard
@@ -274,8 +247,8 @@ function NewBookingPage() {
 						checkIn={stay.checkIn}
 						checkOut={stay.checkOut}
 						guestCount={form.numberOfGuests}
-						busy={createBooking.isPending || createSession.isPending}
-						onSubmit={submit}
+						busy={busy}
+						onSubmit={onSubmit}
 					/>
 				)}
 			</div>
@@ -283,35 +256,107 @@ function NewBookingPage() {
 	);
 }
 
-function RoomSelect({
-	rooms,
-	value,
+function GuestCard({
+	form,
+	errors,
 	onChange,
+	onFound,
+	maxGuests,
+	internalNotes,
+	onNotesChange,
 }: {
-	rooms: Array<{ publicId: string; name: string }>;
-	value: string;
-	onChange: (value: string) => void;
+	form: GuestDetailsForm;
+	errors: GuestDetailsErrors;
+	onChange: <K extends keyof GuestDetailsForm>(
+		field: K,
+		value: GuestDetailsForm[K],
+	) => void;
+	onFound: (guest: { name: string; phoneNumber: string | null }) => void;
+	maxGuests: number;
+	internalNotes: string;
+	onNotesChange: (value: string) => void;
 }) {
-	const id = useId();
 	return (
-		<div className="space-y-2">
-			<Label htmlFor={id}>Room</Label>
-			<NativeSelect
-				id={id}
-				value={value}
-				onChange={(e) => onChange(e.target.value)}
-				className="w-full sm:w-72"
-			>
-				<NativeSelectOption value="" disabled>
-					Select a room
-				</NativeSelectOption>
-				{rooms.map((r) => (
-					<NativeSelectOption key={r.publicId} value={r.publicId}>
-						{r.name}
-					</NativeSelectOption>
-				))}
-			</NativeSelect>
-		</div>
+		<Card>
+			<CardHeader>
+				<CardTitle>Guest</CardTitle>
+				<CardDescription>
+					Look the guest up by email. A new email creates an account; the guest
+					can sign in later with a magic link.
+				</CardDescription>
+			</CardHeader>
+			<CardContent className="space-y-6">
+				<GuestLookup email={form.guestEmail} onFound={onFound} />
+				<GuestDetailsFields
+					form={form}
+					errors={errors}
+					onChange={onChange}
+					maxGuests={maxGuests}
+				/>
+				<AdminNoteField
+					label="Internal notes (admins only)"
+					value={internalNotes}
+					onChange={onNotesChange}
+					maxLength={5000}
+					rows={3}
+				/>
+			</CardContent>
+		</Card>
+	);
+}
+
+/** The card the guest reads out, then the usual confirmation. */
+function BookingPaymentStep({ payment }: { payment: PendingPayment }) {
+	const trpc = useTRPC();
+	const queryClient = useQueryClient();
+	const navigate = useNavigate();
+	const confirm = useMutation(
+		trpc.bookings.adminConfirmCheckout.mutationOptions(),
+	);
+	const onAuthorized = async (sessionId: string) => {
+		const result = await confirm.mutateAsync({
+			publicId: payment.publicId,
+			sessionId,
+		});
+		await queryClient.invalidateQueries({
+			queryKey: trpc.bookings.adminListBookings.pathKey(),
+		});
+		const confirmed =
+			result.status === 'confirmed' || result.status === 'already_confirmed';
+		toast.add(
+			confirmed
+				? { type: 'success', title: 'Booking confirmed' }
+				: {
+						type: 'error',
+						title:
+							'The booking could not be confirmed. The card was not charged.',
+					},
+		);
+		void navigate({
+			to: '/admin/bookings/$publicId',
+			params: { publicId: payment.publicId },
+		});
+	};
+	return (
+		<AdminLayout title="New Booking">
+			<Card className="mx-auto max-w-2xl">
+				<CardHeader>
+					<CardTitle>Card payment</CardTitle>
+					<CardDescription>
+						Type the card the guest reads out. It is authorized now, charged
+						once the dates are confirmed, and kept on file for approved changes.
+					</CardDescription>
+				</CardHeader>
+				<CardContent>
+					<AdminCardPayment
+						clientSecret={payment.clientSecret}
+						publishableKey={payment.publishableKey}
+						expectedCents={payment.totalCents}
+						onAuthorized={onAuthorized}
+					/>
+				</CardContent>
+			</Card>
+		</AdminLayout>
 	);
 }
 
@@ -363,28 +408,6 @@ function GuestLookup({
 	);
 }
 
-function InternalNotesField({
-	value,
-	onChange,
-}: {
-	value: string;
-	onChange: (value: string) => void;
-}) {
-	const id = useId();
-	return (
-		<div className="space-y-2">
-			<Label htmlFor={id}>Internal notes (admins only)</Label>
-			<Textarea
-				id={id}
-				value={value}
-				onChange={(e) => onChange(e.target.value)}
-				rows={3}
-				maxLength={5000}
-			/>
-		</div>
-	);
-}
-
 function ReviewCard({
 	className,
 	roomId,
@@ -402,14 +425,9 @@ function ReviewCard({
 	checkOut: string;
 	guestCount: number;
 	busy: boolean;
-	onSubmit: (review: {
-		acknowledgeLateBooking: boolean;
-		totalAmount: number;
-	}) => Promise<void>;
+	onSubmit: (review: Review) => Promise<void>;
 }) {
 	const trpc = useTRPC();
-	const lateId = useId();
-	const consentId = useId();
 	const [acknowledged, setAcknowledged] = useState(false);
 	const [consented, setConsented] = useState(false);
 	const quote = useQuery(
@@ -432,28 +450,14 @@ function ReviewCard({
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="space-y-4">
-				{quote.isError && (
-					<p className="text-sm text-destructive">{quote.error.message}</p>
-				)}
-				{quote.data && <PriceBreakdown quote={quote.data} />}
+				<QuoteResult quote={quote} />
 				{late && (
-					<div className="space-y-3 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm">
-						<p className="font-semibold">Late same-day booking</p>
-						<p>
-							Check-in is today and it is past {SAME_DAY_CUTOFF_LABEL}. This
-							booking is non-refundable if cancelled, and the guest gets a
-							notice saying so.
-						</p>
-						<ConsentCheckbox
-							id={lateId}
-							checked={acknowledged}
-							onChange={setAcknowledged}
-							label="I told the guest this late booking cannot be refunded."
-						/>
-					</div>
+					<LateBookingNotice
+						acknowledged={acknowledged}
+						onChange={setAcknowledged}
+					/>
 				)}
-				<ConsentCheckbox
-					id={consentId}
+				<AdminCheckbox
 					checked={consented}
 					onChange={setConsented}
 					label="The guest agreed by phone to keep this card on file and to have it charged or refunded for changes they approve."
@@ -469,11 +473,10 @@ function ReviewCard({
 						})
 					}
 				>
-					{busy ? (
-						<Icon icon="tabler:loader-2" className="size-5 animate-spin" />
-					) : (
-						<Icon icon="tabler:credit-card" className="size-5" />
-					)}
+					<Icon
+						icon={busy ? 'tabler:loader-2' : 'tabler:credit-card'}
+						className={cn('size-5', busy && 'animate-spin')}
+					/>
 					Hold dates and take payment
 				</Button>
 			</CardContent>
@@ -481,28 +484,39 @@ function ReviewCard({
 	);
 }
 
-function ConsentCheckbox({
-	id,
-	checked,
-	onChange,
-	label,
+function QuoteResult({
+	quote,
 }: {
-	id: string;
-	checked: boolean;
+	quote: {
+		data?: React.ComponentProps<typeof PriceBreakdown>['quote'];
+		error: { message: string } | null;
+	};
+}) {
+	if (quote.error) {
+		return <p className="text-sm text-destructive">{quote.error.message}</p>;
+	}
+	return quote.data ? <PriceBreakdown quote={quote.data} /> : null;
+}
+
+function LateBookingNotice({
+	acknowledged,
+	onChange,
+}: {
+	acknowledged: boolean;
 	onChange: (checked: boolean) => void;
-	label: string;
 }) {
 	return (
-		<div className="flex items-start gap-3">
-			<Checkbox
-				id={id}
-				className="size-5"
-				checked={checked}
-				onCheckedChange={(value) => onChange(value === true)}
+		<div className="space-y-3 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm">
+			<p className="font-semibold">Late same-day booking</p>
+			<p>
+				Check-in is today and it is past {SAME_DAY_CUTOFF_LABEL}. This booking
+				is non-refundable if cancelled, and the guest gets a notice saying so.
+			</p>
+			<AdminCheckbox
+				checked={acknowledged}
+				onChange={onChange}
+				label="I told the guest this late booking cannot be refunded."
 			/>
-			<Label htmlFor={id} className="text-sm leading-snug font-normal">
-				{label}
-			</Label>
 		</div>
 	);
 }

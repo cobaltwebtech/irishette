@@ -13,7 +13,9 @@ import { useEffect, useId, useState } from 'react';
 import { CancellationPolicySummary } from '@/components/booking/CancellationPolicySummary';
 import {
 	CHECKOUT_ELEMENTS_OPTIONS,
+	CheckoutPending,
 	CheckoutSummary,
+	confirmCheckoutSession,
 	errorMessage,
 	getStripe,
 } from '@/components/booking/checkout-elements';
@@ -43,17 +45,9 @@ function PaymentForm({ publicId }: { publicId: string }) {
 	const [acceptedPolicies, setAcceptedPolicies] = useState(false);
 	const [policyError, setPolicyError] = useState<string | null>(null);
 
-	if (checkoutState.type === 'loading') {
-		return (
-			<div className="flex justify-center py-8">
-				<Icon icon="tabler:loader-2" className="size-8 animate-spin" />
-			</div>
-		);
-	}
+	if (checkoutState.type === 'loading') return <CheckoutPending />;
 	if (checkoutState.type === 'error') {
-		return (
-			<p className="text-sm text-destructive">{checkoutState.error.message}</p>
-		);
+		return <CheckoutPending error={checkoutState.error.message} />;
 	}
 	const { checkout } = checkoutState;
 	const expectedCents = Math.round((booking.pricing?.totalAmount ?? 0) * 100);
@@ -71,26 +65,20 @@ function PaymentForm({ publicId }: { publicId: string }) {
 		setIsProcessing(true);
 		setErrorText(null);
 
-		try {
-			const result = await checkout.confirm({ redirect: 'if_required' });
-			if (result.type === 'error') {
-				setErrorText(result.error.message);
-				toast.add({ type: 'error', title: result.error.message });
-				return;
-			}
-			// Paid (or a delayed payment started): the confirmation page runs
-			// the confirmation and shows the booking's real status.
-			void navigate({
-				to: '/booking/confirmation/$publicId',
-				params: { publicId },
-				search: { session_id: result.session.id },
-			});
-		} catch {
-			setErrorText('Payment failed. Please try again.');
-			toast.add({ type: 'error', title: 'Payment processing failed' });
-		} finally {
-			setIsProcessing(false);
+		const result = await confirmCheckoutSession(checkout);
+		setIsProcessing(false);
+		if ('error' in result) {
+			setErrorText(result.error);
+			toast.add({ type: 'error', title: result.error });
+			return;
 		}
+		// Paid: the confirmation page runs the confirmation and shows the
+		// booking's real status.
+		void navigate({
+			to: '/booking/confirmation/$publicId',
+			params: { publicId },
+			search: { session_id: result.sessionId },
+		});
 	};
 
 	return (

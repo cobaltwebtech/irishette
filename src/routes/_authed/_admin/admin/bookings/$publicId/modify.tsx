@@ -15,6 +15,11 @@ import {
 	AdminCardPayment,
 } from '@/components/admin/booking/AdminCardPayment';
 import {
+	AdminCheckbox,
+	AdminNoteField,
+	AdminRoomSelect,
+} from '@/components/admin/booking/AdminFormFields';
+import {
 	AdminStayPicker,
 	PriceBreakdown,
 } from '@/components/admin/booking/AdminStayPicker';
@@ -29,13 +34,11 @@ import {
 	CardHeader,
 	CardTitle,
 } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import {
 	NativeSelect,
 	NativeSelectOption,
 } from '@/components/ui/native-select';
-import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/toast';
 import { useTRPC } from '@/integrations/trpc/react';
 import type { RouterOutputs } from '@/integrations/trpc/types';
@@ -116,6 +119,34 @@ interface Target {
 	checkOutDate: string;
 }
 
+/** The stay the admin picked: a later check-out mid-stay, or new dates. */
+function changeTarget(
+	booking: AdminBooking['booking'],
+	pick: {
+		inStay: boolean;
+		newCheckOut: string;
+		roomId: string;
+		stay: { checkIn: string; checkOut: string } | null;
+	},
+): Target | null {
+	if (pick.inStay) {
+		return pick.newCheckOut
+			? {
+					roomId: booking.roomId,
+					checkInDate: booking.checkInDate,
+					checkOutDate: pick.newCheckOut,
+				}
+			: null;
+	}
+	return pick.stay
+		? {
+				roomId: pick.roomId,
+				checkInDate: pick.stay.checkIn,
+				checkOutDate: pick.stay.checkOut,
+			}
+		: null;
+}
+
 function ChangeStayCard({
 	className,
 	data,
@@ -138,18 +169,12 @@ function ChangeStayCard({
 	const selectedRoom = rooms.find((r) => r.publicId === roomPublicId);
 	const roomId = selectedRoom?.id ?? booking.roomId;
 
-	const stay = stayFromRange(range);
-	const target: Target | null = inStay
-		? newCheckOut
-			? {
-					roomId: booking.roomId,
-					checkInDate: booking.checkInDate,
-					checkOutDate: newCheckOut,
-				}
-			: null
-		: stay
-			? { roomId, checkInDate: stay.checkIn, checkOutDate: stay.checkOut }
-			: null;
+	const target = changeTarget(booking, {
+		inStay,
+		newCheckOut,
+		roomId,
+		stay: stayFromRange(range),
+	});
 
 	return (
 		<Card className={className}>
@@ -172,7 +197,7 @@ function ChangeStayCard({
 					/>
 				) : (
 					<>
-						<RoomSelect
+						<AdminRoomSelect
 							rooms={rooms}
 							value={roomPublicId}
 							onChange={(value) => {
@@ -198,35 +223,6 @@ function ChangeStayCard({
 				)}
 			</CardContent>
 		</Card>
-	);
-}
-
-function RoomSelect({
-	rooms,
-	value,
-	onChange,
-}: {
-	rooms: Array<{ publicId: string; name: string }>;
-	value: string;
-	onChange: (value: string) => void;
-}) {
-	const id = useId();
-	return (
-		<div className="space-y-2">
-			<Label htmlFor={id}>Room</Label>
-			<NativeSelect
-				id={id}
-				value={value}
-				onChange={(e) => onChange(e.target.value)}
-				className="w-full sm:w-72"
-			>
-				{rooms.map((r) => (
-					<NativeSelectOption key={r.publicId} value={r.publicId}>
-						{r.name}
-					</NativeSelectOption>
-				))}
-			</NativeSelect>
-		</div>
 	);
 }
 
@@ -269,6 +265,35 @@ function ExtendSelect({
 	);
 }
 
+type Quote = RouterOutputs['bookings']['adminQuoteModification'];
+
+/** What happens to the money, in one line. */
+function differenceLine(q: Quote) {
+	const diff = q.differenceCents / 100;
+	if (diff < 0) {
+		return `Refund ${formatMoney(-diff)} to the card the guest paid with`;
+	}
+	if (diff === 0) return 'No price difference';
+	const card = q.savedCard
+		? `the ${q.savedCard.brand ?? 'card'} ending ${q.savedCard.last4 ?? '????'}`
+		: 'a card the guest reads out';
+	return `Charge ${formatMoney(diff)} to ${card}`;
+}
+
+/** After a change: refresh the booking queries and go back to it. */
+function useChangeDone(publicId: string) {
+	const trpc = useTRPC();
+	const queryClient = useQueryClient();
+	const navigate = useNavigate();
+	return async (message: string) => {
+		await queryClient.invalidateQueries({ queryKey: trpc.bookings.pathKey() });
+		toast.add({ type: 'success', title: message });
+		void navigate({ to: '/admin/bookings/$publicId', params: { publicId } });
+	};
+}
+
+type FreshCard = AdminCheckout & { differenceCents: number; reason: string };
+
 function ModificationReview({
 	publicId,
 	target,
@@ -277,15 +302,10 @@ function ModificationReview({
 	target: Target;
 }) {
 	const trpc = useTRPC();
-	const queryClient = useQueryClient();
-	const navigate = useNavigate();
-	const noteId = useId();
-	const disputeId = useId();
+	const done = useChangeDone(publicId);
 	const [note, setNote] = useState('');
 	const [confirmDispute, setConfirmDispute] = useState(false);
-	const [checkout, setCheckout] = useState<
-		(AdminCheckout & { differenceCents: number; reason: string }) | null
-	>(null);
+	const [freshCard, setFreshCard] = useState<FreshCard | null>(null);
 	const input = { publicId, ...target };
 	const quote = useQuery(
 		trpc.bookings.adminQuoteModification.queryOptions(input, {
@@ -298,23 +318,11 @@ function ModificationReview({
 	const createCheckout = useMutation(
 		trpc.bookings.adminCreateModificationCheckout.mutationOptions(),
 	);
-	const confirmCheckout = useMutation(
-		trpc.bookings.adminConfirmModificationCheckout.mutationOptions(),
-	);
 
-	const done = async (message: string) => {
-		await queryClient.invalidateQueries({
-			queryKey: trpc.bookings.pathKey(),
-		});
-		toast.add({ type: 'success', title: message });
-		void navigate({ to: '/admin/bookings/$publicId', params: { publicId } });
-	};
-
-	const apply = async () => {
-		if (!quote.data) return;
+	const apply = async (q: Quote) => {
 		const payload = {
 			...input,
-			expectedDifferenceCents: quote.data.differenceCents,
+			expectedDifferenceCents: q.differenceCents,
 			note: note || undefined,
 			confirmDisputeRefund: confirmDispute || undefined,
 		};
@@ -329,12 +337,7 @@ function ModificationReview({
 				return;
 			}
 			const session = await createCheckout.mutateAsync(payload);
-			setCheckout({
-				clientSecret: session.clientSecret,
-				publishableKey: session.publishableKey,
-				differenceCents: session.differenceCents,
-				reason: result.reason,
-			});
+			setFreshCard({ ...session, reason: result.reason });
 		} catch (error) {
 			toast.add({
 				type: 'error',
@@ -352,78 +355,40 @@ function ModificationReview({
 	if (quote.isError) {
 		return <p className="text-sm text-destructive">{quote.error.message}</p>;
 	}
-	const q = quote.data;
-	if (checkout) {
+	if (freshCard) {
 		return (
-			<div className="space-y-4">
-				<p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
-					{checkout.reason}
-				</p>
-				<AdminCardPayment
-					clientSecret={checkout.clientSecret}
-					publishableKey={checkout.publishableKey}
-					expectedCents={checkout.differenceCents}
-					onCancel={() => setCheckout(null)}
-					onAuthorized={async (sessionId) => {
-						try {
-							await confirmCheckout.mutateAsync({
-								publicId,
-								sessionId,
-								note: note || undefined,
-							});
-							await done('Reservation changed');
-						} catch (error) {
-							toast.add({
-								type: 'error',
-								title: errorMessage(
-									error,
-									'The change could not be applied. The card was not charged.',
-								),
-							});
-						}
-					}}
-				/>
-			</div>
+			<FreshCardStep
+				publicId={publicId}
+				checkout={freshCard}
+				note={note}
+				onCancel={() => setFreshCard(null)}
+			/>
 		);
 	}
-	const diff = q.differenceCents / 100;
-	const needsDisputeConfirm = q.hasOpenDispute && diff < 0;
+	const q = quote.data;
+	const needsDisputeConfirm = q.hasOpenDispute && q.differenceCents < 0;
 	return (
 		<div className="space-y-4">
 			<div className="grid gap-4 sm:grid-cols-2">
 				<PriceBreakdown quote={q.current} title="Now" />
 				<PriceBreakdown quote={q.next} title="After the change" />
 			</div>
-			<p className="text-lg font-semibold">
-				{diff > 0
-					? `Charge ${formatMoney(diff)} to ${q.savedCard ? `the ${q.savedCard.brand ?? 'card'} ending ${q.savedCard.last4 ?? '????'}` : 'a card the guest reads out'}`
-					: diff < 0
-						? `Refund ${formatMoney(-diff)} to the card the guest paid with`
-						: 'No price difference'}
-			</p>
+			<p className="text-lg font-semibold">{differenceLine(q)}</p>
 			{needsDisputeConfirm && (
-				<div className="flex items-start gap-3 rounded-md border border-destructive p-3 text-sm">
-					<Checkbox
-						id={disputeId}
+				<div className="rounded-md border border-destructive p-3">
+					<AdminCheckbox
 						checked={confirmDispute}
-						onCheckedChange={(v) => setConfirmDispute(v === true)}
+						onChange={setConfirmDispute}
+						label="This payment has an open dispute: refund anyway (it can credit the guest twice)."
 					/>
-					<Label htmlFor={disputeId} className="font-normal">
-						This payment has an open dispute: refund anyway (it can credit the
-						guest twice).
-					</Label>
 				</div>
 			)}
-			<div className="space-y-2">
-				<Label htmlFor={noteId}>Note (admins only)</Label>
-				<Textarea
-					id={noteId}
-					value={note}
-					onChange={(e) => setNote(e.target.value)}
-					maxLength={500}
-					rows={2}
-				/>
-			</div>
+			<AdminNoteField
+				label="Note (admins only)"
+				value={note}
+				onChange={setNote}
+				maxLength={500}
+			/>
 			<Button
 				type="button"
 				disabled={
@@ -431,11 +396,62 @@ function ModificationReview({
 					createCheckout.isPending ||
 					(needsDisputeConfirm && !confirmDispute)
 				}
-				onClick={() => void apply()}
+				onClick={() => void apply(q)}
 			>
 				<Icon icon="tabler:check" className="size-5" />
 				Confirm change
 			</Button>
+		</div>
+	);
+}
+
+/** The card on file can't be charged: the card the guest reads out. */
+function FreshCardStep({
+	publicId,
+	checkout,
+	note,
+	onCancel,
+}: {
+	publicId: string;
+	checkout: FreshCard;
+	note: string;
+	onCancel: () => void;
+}) {
+	const trpc = useTRPC();
+	const done = useChangeDone(publicId);
+	const confirm = useMutation(
+		trpc.bookings.adminConfirmModificationCheckout.mutationOptions(),
+	);
+	const onAuthorized = async (sessionId: string) => {
+		try {
+			await confirm.mutateAsync({
+				publicId,
+				sessionId,
+				note: note || undefined,
+			});
+			await done('Reservation changed');
+		} catch (error) {
+			toast.add({
+				type: 'error',
+				title: errorMessage(
+					error,
+					'The change could not be applied. The card was not charged.',
+				),
+			});
+		}
+	};
+	return (
+		<div className="space-y-4">
+			<p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
+				{checkout.reason}
+			</p>
+			<AdminCardPayment
+				clientSecret={checkout.clientSecret}
+				publishableKey={checkout.publishableKey}
+				expectedCents={checkout.differenceCents}
+				onCancel={onCancel}
+				onAuthorized={onAuthorized}
+			/>
 		</div>
 	);
 }
@@ -446,7 +462,6 @@ function ReleaseEarlyCard({ booking }: { booking: AdminBooking['booking'] }) {
 	const navigate = useNavigate();
 	const today = useTodayCT();
 	const selectId = useId();
-	const noteId = useId();
 	const [date, setDate] = useState('');
 	const [note, setNote] = useState('');
 	const release = useMutation(
@@ -514,16 +529,12 @@ function ReleaseEarlyCard({ booking }: { booking: AdminBooking['booking'] }) {
 								))}
 							</NativeSelect>
 						</div>
-						<div className="space-y-2">
-							<Label htmlFor={noteId}>Note (admins only)</Label>
-							<Textarea
-								id={noteId}
-								value={note}
-								onChange={(e) => setNote(e.target.value)}
-								maxLength={500}
-								rows={2}
-							/>
-						</div>
+						<AdminNoteField
+							label="Note (admins only)"
+							value={note}
+							onChange={setNote}
+							maxLength={500}
+						/>
 						<Button
 							type="button"
 							variant="secondary"

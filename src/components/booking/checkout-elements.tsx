@@ -1,3 +1,5 @@
+import { Icon } from '@iconify/react';
+import type { StripeUseCheckoutElementsResult } from '@stripe/react-stripe-js/checkout';
 import { loadStripe, type Stripe } from '@stripe/stripe-js';
 import { isTRPCClientError } from '@trpc/client';
 
@@ -44,6 +46,38 @@ export const CHECKOUT_ELEMENTS_OPTIONS = {
 		},
 	],
 };
+
+type LoadedCheckout = Extract<
+	StripeUseCheckoutElementsResult,
+	{ checkout: unknown }
+>['checkout'];
+
+/**
+ * Confirms the Checkout Session, redirecting only when the payment method
+ * needs it. Returns the session id, or the message to show.
+ */
+export async function confirmCheckoutSession(
+	checkout: LoadedCheckout,
+): Promise<{ sessionId: string } | { error: string }> {
+	try {
+		const result = await checkout.confirm({ redirect: 'if_required' });
+		return result.type === 'error'
+			? { error: result.error.message }
+			: { sessionId: result.session.id };
+	} catch {
+		return { error: 'Payment failed. Please try again.' };
+	}
+}
+
+/** While the Checkout Session loads, or why it could not. */
+export function CheckoutPending({ error }: { error?: string }) {
+	if (error) return <p className="text-sm text-destructive">{error}</p>;
+	return (
+		<div className="flex justify-center py-8">
+			<Icon icon="tabler:loader-2" className="size-8 animate-spin" />
+		</div>
+	);
+}
 
 /** Line items and total from the Checkout Session (what Stripe will charge). */
 export function CheckoutSummary({

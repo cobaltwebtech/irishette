@@ -911,54 +911,20 @@ export async function confirmModificationCheckout(
 	{ note }: { note?: string } = {},
 	now = new Date(),
 ): Promise<Extract<ModifyResult, { status: 'applied' }>> {
-	const session = await deps.stripe.checkout.sessions.retrieve(sessionId, {
-		expand: ['payment_intent', 'payment_intent.payment_method'],
-	});
-	const change = sessionChange(session);
-	const intent = sessionIntent(session);
-	if (!change || session.status !== 'complete' || !intent) {
-		throw bad('This payment is not a completed reservation change.');
-	}
-	const booking = await loadBooking(deps.db, change.bookingId);
-	if (!booking) {
-		if (intent.status === 'requires_capture') {
-			await cancelIntent(deps.stripe, intent.id);
-		}
-		throw new TRPCError({ code: 'NOT_FOUND', message: 'Booking not found' });
-	}
-
+	const { session, change, intent, booking } = await loadModificationSession(
+		deps,
+		sessionId,
+	);
 	const [existing] = await deps.db
 		.select()
 		.from(bookingModifications)
 		.where(eq(bookingModifications.id, change.modificationId));
 	if (existing) {
-		if (note && !existing.note) {
-			await deps.db
-				.update(bookingModifications)
-				.set({ note, updatedAt: now })
-				.where(eq(bookingModifications.id, existing.id));
-		}
-		if (existing.status === 'payment_pending') {
-			await finishModificationPayment(
-				deps,
-				booking,
-				existing.id,
-				intent.id,
-				null,
-				now,
-			);
-		}
-		return {
-			status: 'applied',
-			modificationId: existing.id,
-			differenceCents: existing.differenceCents,
-			refundFailed: false,
-		};
+		return resumeAppliedChange(deps, booking, existing, intent.id, note, now);
 	}
 	if (intent.status !== 'requires_capture') {
 		throw bad('The card was not authorized for this change.');
 	}
-
 	let plan: Plan;
 	try {
 		plan = await planModification(deps, booking, change.target, now);
@@ -985,6 +951,62 @@ export async function confirmModificationCheckout(
 		},
 		now,
 	);
+}
+
+/**
+ * The completed modification session, its change, PaymentIntent and
+ * booking. A session whose booking is gone has its authorization cancelled.
+ */
+async function loadModificationSession(deps: ServiceDeps, sessionId: string) {
+	const session = await deps.stripe.checkout.sessions.retrieve(sessionId, {
+		expand: ['payment_intent', 'payment_intent.payment_method'],
+	});
+	const change = sessionChange(session);
+	const intent = sessionIntent(session);
+	if (!change || session.status !== 'complete' || !intent) {
+		throw bad('This payment is not a completed reservation change.');
+	}
+	const booking = await loadBooking(deps.db, change.bookingId);
+	if (!booking) {
+		if (intent.status === 'requires_capture') {
+			await cancelIntent(deps.stripe, intent.id);
+		}
+		throw new TRPCError({ code: 'NOT_FOUND', message: 'Booking not found' });
+	}
+	return { session, change, intent, booking };
+}
+
+/** A change already applied (the webhook and the page both confirm). */
+async function resumeAppliedChange(
+	deps: ServiceDeps,
+	booking: Booking,
+	existing: typeof bookingModifications.$inferSelect,
+	intentId: string,
+	note: string | undefined,
+	now: Date,
+): Promise<Extract<ModifyResult, { status: 'applied' }>> {
+	if (note && !existing.note) {
+		await deps.db
+			.update(bookingModifications)
+			.set({ note, updatedAt: now })
+			.where(eq(bookingModifications.id, existing.id));
+	}
+	if (existing.status === 'payment_pending') {
+		await finishModificationPayment(
+			deps,
+			booking,
+			existing.id,
+			intentId,
+			null,
+			now,
+		);
+	}
+	return {
+		status: 'applied',
+		modificationId: existing.id,
+		differenceCents: existing.differenceCents,
+		refundFailed: false,
+	};
 }
 
 // --- Recovery (cron) --------------------------------------------------------------
