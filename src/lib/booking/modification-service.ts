@@ -40,6 +40,7 @@ import {
 	quoteStay,
 } from './booking-service';
 import {
+	ADMIN_WALLET_OPTIONS,
 	type Booking,
 	cancelIntent,
 	ensureStripeCustomer,
@@ -62,6 +63,8 @@ import {
 	releaseEarlyError,
 	amountsAfterPolicyRefund,
 } from './modification-rules';
+import { recordOfflinePayment } from './offline-payment-service';
+import { refundChannel } from './payment-methods';
 import { checkInAt, checkOutAt } from './stay-times';
 import {
 	type StayAmounts,
@@ -340,6 +343,8 @@ export interface ModifyInput {
 	note?: string;
 	/** Refund although the payment has an open dispute (as cancellations). */
 	confirmDisputeRefund?: boolean;
+	/** The extra charge was collected outside Stripe: record it. */
+	collectOffline?: boolean;
 }
 
 /** The price moved since the admin reviewed it: CONFLICT with the new one. */
@@ -394,6 +399,15 @@ export async function modifyBooking(
 	const context = { modificationId, adminId, note: input.note ?? null };
 	if (plan.differenceCents <= 0) {
 		return applyModification(deps, booking, plan, context, now);
+	}
+	if (input.collectOffline) {
+		return applyModification(
+			deps,
+			booking,
+			plan,
+			{ ...context, offline: true },
+			now,
+		);
 	}
 	const card = await savedCard(deps, booking);
 	if (!card) {
@@ -506,6 +520,8 @@ interface ApplyContext {
 	/** The authorized extra charge (increases). */
 	intent?: Stripe.PaymentIntent;
 	card?: Pick<SavedCard, 'brand' | 'last4'> | null;
+	/** The extra charge was collected outside Stripe (increases). */
+	offline?: boolean;
 }
 
 /** The stay and price columns a change writes. */
@@ -573,8 +589,7 @@ async function applyModification(
 	}
 
 	const diff = plan.differenceCents;
-	const status: ModificationStatus =
-		diff > 0 ? 'payment_pending' : diff < 0 ? 'refund_pending' : 'applied';
+	const status = modificationStatus(diff, Boolean(context.offline));
 	await db
 		.insert(bookingModifications)
 		.values({
@@ -601,7 +616,16 @@ async function applyModification(
 		.onConflictDoNothing();
 
 	let refundFailed = false;
-	if (diff > 0 && context.intent) {
+	if (diff > 0 && context.offline) {
+		// Taken outside Stripe: the payment row (with its tax split) is all.
+		await recordOfflinePayment(
+			db,
+			booking.id,
+			diff / 100,
+			plan.moneySplit,
+			now,
+		);
+	} else if (diff > 0 && context.intent) {
 		await finishModificationPayment(
 			deps,
 			current,
@@ -628,6 +652,15 @@ async function applyModification(
 		differenceCents: diff,
 		refundFailed,
 	};
+}
+
+/** The change's status once claimed: what is left to do for its money. */
+function modificationStatus(
+	diff: number,
+	offline: boolean,
+): ModificationStatus {
+	if (diff > 0) return offline ? 'applied' : 'payment_pending';
+	return diff < 0 ? 'refund_pending' : 'applied';
 }
 
 /**
@@ -887,6 +920,10 @@ async function notifyModification(
 			releasedEarly: mod.kind === 'release_early',
 			refundPercent: mod.refundPercent,
 			refundFailed: mod.status === 'refund_failed',
+			chargedOffline: mod.differenceCents > 0 && !mod.stripePaymentIntentId,
+			refundChannel: mod.stripeRefundId
+				? refundChannel([mod.stripeRefundId])
+				: undefined,
 		}),
 	);
 }
@@ -1015,6 +1052,8 @@ export async function createModificationCheckout(
 			],
 			metadata,
 			allowed_payment_method_types: ['card'],
+			// Typed by the admin: no Link sign-in or Link "Bank" tab.
+			...ADMIN_WALLET_OPTIONS,
 			payment_intent_data: {
 				capture_method: 'manual',
 				setup_future_usage: 'off_session',

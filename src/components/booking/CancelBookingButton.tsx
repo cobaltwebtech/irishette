@@ -1,7 +1,7 @@
 import { Icon } from '@iconify/react';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { isTRPCClientError } from '@trpc/client';
 import { useId, useState } from 'react';
 
@@ -47,6 +47,7 @@ export function CancelBookingButton({
 }) {
 	const trpc = useTRPC();
 	const queryClient = useQueryClient();
+	const navigate = useNavigate();
 	const [open, setOpen] = useState(false);
 	const [reason, setReason] = useState('');
 	// null: the default (no refund while a payment dispute is open, else the
@@ -95,6 +96,22 @@ export function CancelBookingButton({
 							reason: reason || undefined,
 							expectedRefundAmount,
 						});
+			if (result.holdReleased) {
+				// An unpaid hold is deleted, not cancelled: leave its page.
+				toast.add({
+					type: 'success',
+					title: 'Hold released',
+					description: 'The dates are free again. Nothing was charged.',
+				});
+				setOpen(false);
+				await navigate(
+					mode === 'admin'
+						? { to: '/admin/bookings/current-bookings' }
+						: { to: '/account' },
+				);
+				await queryClient.invalidateQueries(trpc.bookings.pathFilter());
+				return;
+			}
 			if (result.refundFailed) {
 				toast.add({
 					type: 'warning',

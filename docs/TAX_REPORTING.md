@@ -46,6 +46,12 @@ the stored split and fall back to the room's rates only for those rows.
 - A **refund** counts on the day Stripe made it:
   `payment_refunds.stripe_created_at`, only when `status = 'succeeded'`. It is
   a negative row in the period of the refund, not of the original payment.
+- **Payments outside Stripe** (Cash/Check/Other, admin bookings and change
+  charges): a `payment_transactions` row with `payment_method: 'offline'`
+  and the tax split, counted like a card payment on the day it was
+  recorded. A refund owed on one is a `payment_refunds` row with `source:
+  'offline'`, `status: 'succeeded'` and `stripe_created_at` = the day it was
+  recorded (the admins pay it back by hand).
 - Periods are **US Central Time** days: from `from` 00:00 CT up to (not
   including) the day after `to` 00:00 CT. Daylight saving changes are handled
   by `zonedTimeToUtc`.

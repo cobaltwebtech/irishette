@@ -41,10 +41,16 @@ export const guestDetailsSchema = createBookingBaseSchema.pick({
 	estimatedArrival: true,
 });
 
+/** How an admin booking is paid: a card (Stripe) or outside Stripe. */
+export const adminPaymentMethodSchema = z.enum(['card', 'offline']);
+export type AdminPaymentMethod = z.infer<typeof adminPaymentMethodSchema>;
+
 /**
  * An admin booking taken by phone (plan 06): the guest's details, no client
  * prices, the admin's internal notes, the late same-day acknowledgement and
- * the guest's verbal consent to keep the card on file (required).
+ * how it is paid. A card payment needs the guest's verbal consent to keep
+ * the card on file; a payment taken outside Stripe (Cash/Check/Other) does
+ * not.
  */
 export const adminCreateBookingSchema = createBookingBaseSchema
 	.omit({
@@ -56,11 +62,14 @@ export const adminCreateBookingSchema = createBookingBaseSchema
 	.extend({
 		internalNotes: z.string().trim().max(5000).optional(),
 		acknowledgeLateBooking: z.boolean().optional(),
-		cardConsent: z.literal(true, {
-			message: 'Confirm the guest agreed to keep the card on file',
-		}),
+		paymentMethod: adminPaymentMethodSchema.default('card'),
+		cardConsent: z.boolean().optional(),
 	})
-	.refine((d) => d.checkOutDate > d.checkInDate, checkOutAfterCheckIn);
+	.refine((d) => d.checkOutDate > d.checkInDate, checkOutAfterCheckIn)
+	.refine((d) => d.paymentMethod !== 'card' || d.cardConsent === true, {
+		message: 'Confirm the guest agreed to keep the card on file',
+		path: ['cardConsent'],
+	});
 
 export const createBookingSchema = createBookingBaseSchema.refine(
 	(d) => d.checkOutDate > d.checkInDate,

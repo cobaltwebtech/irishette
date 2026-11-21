@@ -53,9 +53,6 @@ function AccountPage() {
 	const bookings = allBookings.filter(
 		(row) => row.booking.status === 'confirmed' && notPast(row),
 	);
-	const awaitingPayment = allBookings.filter(
-		(row) => row.booking.status === 'pending',
-	);
 	const cancelled = allBookings.filter(
 		(row) => row.booking.status === 'cancelled' && notPast(row),
 	);
@@ -140,12 +137,6 @@ function AccountPage() {
 					</Card>
 				)}
 
-				<BookingSummaryList
-					className="mb-8"
-					title="Awaiting Payment"
-					description="Bookings whose payment has not completed. An unpaid hold is released when it expires."
-					rows={awaitingPayment}
-				/>
 				<BookingSummaryList
 					className="mb-8"
 					title="Cancelled Bookings"

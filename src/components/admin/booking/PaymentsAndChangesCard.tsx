@@ -7,6 +7,10 @@ import {
 } from '@/components/ui/card';
 import type { RouterOutputs } from '@/integrations/trpc/types';
 import { MODIFICATION_KIND_LABELS } from '@/lib/booking/modification-rules';
+import {
+	OFFLINE_PAYMENT_LABEL,
+	paymentMethodLabel,
+} from '@/lib/booking/payment-methods';
 import { formatMoney } from '@/utils/format';
 import { formatDateTimeCT, formatStayDate } from '@/utils/timezone';
 
@@ -21,13 +25,6 @@ interface PaymentsAndChangesCardProps {
 	payments: AdminBooking['paymentTransactions'];
 	refunds: AdminBooking['paymentRefunds'];
 	modifications: AdminBooking['bookingModifications'];
-}
-
-/** "visa ending 4242", "Link" or the raw method type. */
-function paymentMethodLabel(p: AdminBooking['paymentTransactions'][number]) {
-	if (p.cardBrand && p.cardLast4) return `${p.cardBrand} ending ${p.cardLast4}`;
-	if (p.paymentMethod === 'link') return 'Link';
-	return p.paymentMethod ?? 'card';
 }
 
 const stay = (checkIn: string, checkOut: string) =>
@@ -78,7 +75,9 @@ export function PaymentsAndChangesCard({
 						<div key={r.id} className="rounded-md border p-3 text-sm">
 							<p className="font-semibold">{formatMoney(r.amount)}</p>
 							<p className="text-muted-foreground">
-								{r.status} · {r.source === 'app' ? 'by the site' : 'in Stripe'}
+								{r.source === 'offline'
+									? `owed: pay back by hand (${OFFLINE_PAYMENT_LABEL})`
+									: `${r.status} · ${r.source === 'app' ? 'by the site' : 'in Stripe'}`}
 								{' · '}
 								{formatDateTimeCT(r.createdAt)}
 							</p>

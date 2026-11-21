@@ -188,6 +188,15 @@ export function checkoutLineItems(
  */
 export type CheckoutVariant = 'guest' | 'admin';
 
+/**
+ * Checkout Session options for a card an admin types for the guest (phone
+ * bookings and reservation changes): Link hidden, so neither its sign-in
+ * (a one-time code sent to the guest) nor its "Bank" tab shows.
+ */
+export const ADMIN_WALLET_OPTIONS = {
+	wallet_options: { link: { display: 'never' } },
+} satisfies Pick<Stripe.Checkout.SessionCreateParams, 'wallet_options'>;
+
 export const checkoutVariant = (
 	booking: Pick<Booking, 'createdByAdminId'>,
 ): CheckoutVariant => (booking.createdByAdminId ? 'admin' : 'guest');
@@ -202,7 +211,7 @@ export type PrepareCheckoutResult =
  * needed. Checks the hold is live, syncs the room's import feeds (best
  * effort) and re-checks the dates first. Reuses the open session while the
  * hold expiry and the amount are unchanged; otherwise expires it and creates
- * a new one, extending the hold to HOLD_MINUTES so the session (which expires
+ * a new one, extending a guest's hold to HOLD_MINUTES so the session (which expires
  * with the hold) gets Stripe's 30-minute minimum.
  */
 export async function prepareCheckout(
@@ -300,6 +309,11 @@ async function createSession(
 	const expiresAt = new Date((seconds(now) + HOLD_MINUTES * 60) * 1000);
 	const metadata = stripeBookingMetadata(booking);
 	const variant = checkoutVariant(booking);
+	// A guest's hold lasts as long as its session. An admin's hold keeps its
+	// ADMIN_HOLD_MINUTES: the session (Stripe's 30-minute minimum) is
+	// expired with it (releaseAdminHold, the cleanup) and never extends it.
+	const holdExpiresAt =
+		variant === 'admin' && booking.expiresAt ? booking.expiresAt : expiresAt;
 	const session = await stripe.checkout.sessions.create(
 		{
 			mode: 'payment',
@@ -317,6 +331,10 @@ async function createSession(
 			// Admin sessions (card read out by phone) take cards only.
 			allowed_payment_method_types:
 				variant === 'admin' ? ['card'] : ['card', 'link'],
+			// Admins type a card for the guest: no Link sign-in (it sends the
+			// guest a one-time code) and no Link "Bank" (Instant Bank
+			// Payments), which Link can offer even on a card-only session.
+			...(variant === 'admin' ? ADMIN_WALLET_OPTIONS : {}),
 			payment_intent_data: {
 				capture_method: 'manual',
 				// Keep the card on the customer for approved changes, charged
@@ -355,7 +373,11 @@ async function createSession(
 	// that one and expire ours.
 	const [saved] = await db
 		.update(bookings)
-		.set({ stripeSessionId: session.id, expiresAt, updatedAt: now })
+		.set({
+			stripeSessionId: session.id,
+			expiresAt: holdExpiresAt,
+			updatedAt: now,
+		})
 		.where(
 			and(
 				eq(bookings.id, booking.id),

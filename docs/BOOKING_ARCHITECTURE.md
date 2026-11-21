@@ -93,9 +93,9 @@ regardless.
 | Route | File | Notes |
 |---|---|---|
 | `/booking/confirmation/$publicId` | `src/routes/_authed/booking/confirmation.$publicId.tsx` | Loader `getBooking` via `orNotFound`; with `?session_id=` it calls `confirmCheckout` (Stripe's return URL lands here too) and refetches. Toasts for the `released` / `payment_failed` outcomes. Renders by status: confirmed, payment processing (legacy), payment not completed, cancelled, and "not confirmed, your card was not charged" (cancelled with `paymentStatus` still `pending`). Resets the store on mount. |
-| `/account` | `src/routes/_authed/account/index.tsx` | `getMyBookings({ limit: 50 })`. Confirmed stays not yet past (server `stayPhase`), plus "Awaiting Payment" (pending, including legacy processing) and "Cancelled Bookings" sections. |
+| `/account` | `src/routes/_authed/account/index.tsx` | `getMyBookings({ limit: 50 })`, which only returns reservations: confirmed, or cancelled after being confirmed (`confirmed_at` set). Holds (pending, or cancelled before payment, guest or admin) are never listed. Confirmed stays not yet past (server `stayPhase`) and a "Cancelled Bookings" section. |
 | `/account/past-bookings` | `src/routes/_authed/account/past-bookings.tsx` | Confirmed stays with `stayPhase: 'past'` (after 11:00 AM CT on the check-out date). |
-| `/account/booking/$publicId` | `src/routes/_authed/account/booking.$publicId.tsx` | Details; "Resend Confirmation Email" for confirmed bookings only; "Contact Support" links to `/contact?booking=<confirmationId>`; `CancelBookingButton mode="guest"` while `canCancel` (before check-in); the cancellation windows with their CT cutoffs (`CancellationPolicySummary`). |
+| `/account/booking/$publicId` | `src/routes/_authed/account/booking.$publicId.tsx` | Not found for a hold (`getBooking().listed` false: never confirmed). Details; "Resend Confirmation Email" for confirmed bookings only; "Contact Support" links to `/contact?booking=<confirmationId>`; `CancelBookingButton mode="guest"` while `canCancel` (before check-in); the cancellation windows with their CT cutoffs (`CancellationPolicySummary`). |
 
 `src/components/booking/CancelBookingButton.tsx` is shared with the admin
 booking page (`mode="admin"`, which adds the refund choice). It loads
@@ -217,7 +217,8 @@ WHERE NOT EXISTS`) with `CONFLICT` and `data.conflict`, and sets
 4. `checkAvailability`, else `CONFLICT` with the conflicting dates.
 5. Inserts a `pending` booking with server prices, the active cancellation
    policy id, the guest's Stripe customer id, and
-   `expiresAt = now + HOLD_MINUTES` (**35**).
+   `expiresAt = now + HOLD_MINUTES` (**35**); an admin's hold (phone
+   booking) gets `ADMIN_HOLD_MINUTES` (**10**), see below.
 
 **Booking priority: first hold wins while it is live.** A live hold blocks
 other holds on the same dates. Creating the Checkout Session (or re-creating
@@ -234,12 +235,32 @@ authorization is released below, so the guest is never charged.
 `refreshHold` extends an **expired** hold by `HOLD_MINUTES` if the dates are
 still free (otherwise `CONFLICT`); a live hold is left as is.
 
+**Admin holds (phone bookings) last `ADMIN_HOLD_MINUTES` (10).** A hold is
+not a reservation, and an admin booking is either paid at once
+(Cash/Check/Other) or by the card the guest reads out, so the dates are not
+blocked for long. `createSession` never extends an admin hold: its Checkout
+Session still gets Stripe's 30-minute minimum (`HOLD_MINUTES`) but outlives
+the hold only until it is expired. `adminCreateCheckoutSession` returns
+`holdExpiresAt`; the card step shows a countdown (`HoldCountdown.tsx`) and
+at zero calls `bookings.adminReleaseHold` (`releaseAdminHold`: expire the
+session, delete the hold; `'confirmed'` if it was paid meanwhile, then the
+booking page opens) and starts the New Booking page over (blank form). If
+the browser is closed instead, the hold stops blocking the dates when it
+lapses (availability ignores expired holds) and is deleted by
+`releaseExpiredHolds` or the cleanup cron.
+
 Expired holds are released by `scheduledBookingCleanup` (cron `5 8 * * *`,
 `src/lib/server/scheduled-tasks.ts`) through `releaseExpiredHold` /
 `closeHoldSession`: open sessions are expired, then the hold is deleted; a
 completed session is settled by `confirmBookingPayment` instead (captured, or
 its authorization released); legacy processing holds are skipped; Stripe
-errors keep the hold for the next run. `checkout.session.expired` releases
+errors keep the hold for the next run. The same run deletes cancelled
+holds that never became reservations (`purgeCancelledHolds`: `cancelled`,
+no `confirmed_at`, no PaymentIntent). Cancelling a pending hold
+(`cancelHold`, guest or admin) deletes it at once (`holdReleased: true`; the
+Cancel button then leaves the page); a cancelled booking whose card was
+authorized but could not be confirmed is kept as the payment attempt's
+record. `checkout.session.expired` releases
 the hold right away. Until then an expired hold simply stops blocking dates.
 
 ### Payment (Checkout Sessions)
@@ -497,15 +518,23 @@ Admin addresses come from `getAdminEmails` (`src/lib/server/admin-query.ts`).
    `availability.adminGetByRoom` (`AdminStayPicker`): the same unavailable
    ranges as the room pages, earliest check-in **today** (no same-day
    cutoff), the usual 30 nights and 10 months.
-2. **Guest:** "Look up email" (`bookings.adminFindGuest`), then the shared
-   `GuestDetailsFields` and admin-only internal notes.
+2. **Guest:** the shared `GuestDetailsFields` and admin-only internal notes.
+   No lookup button: once the email is a valid address the page shows whether
+   an account exists (`bookings.adminFindGuest`, information only); the
+   account is reused or created when the booking is made.
 3. **Review:** `bookings.adminQuote` (`quoteStay`, admin window, plus
    `lateSameDay`), the late same-day warning and acknowledgement, and the
-   "guest agreed by phone to keep this card on file" checkbox (required).
-4. **Pay:** `bookings.adminCreateBooking` then
+   payment method (`AdminPaymentChoice`): **Card** (the "guest agreed by
+   phone to keep this card on file" checkbox is required) or
+   **Cash/Check/Other** (no consent).
+4. **Pay, card:** `bookings.adminCreateBooking` then
    `bookings.adminCreateCheckoutSession` and `AdminCardPayment` (card-only
-   session; Apple Pay and Google Pay hidden), then
-   `bookings.adminConfirmCheckout` and the booking page.
+   session; Apple Pay and Google Pay hidden) beside a
+   `ReservationSummaryCard` (room, dates, nights, guest, arrival, requests,
+   total), then `bookings.adminConfirmCheckout` and the booking page.
+5. **Pay, Cash/Check/Other:** `bookings.adminCreateBooking`
+   (`paymentMethod: 'offline'`) then `bookings.adminConfirmOfflinePayment`
+   and the booking page (see "Payments outside Stripe" below).
 
 Server: `adminCreateBooking` calls `findOrCreateGuest`
 (`src/lib/booking/admin-booking-service.ts`): the lowercase email's account,
@@ -516,8 +545,38 @@ and the phone number when the account has none and no other account uses it.
 Then `createAdminHold` (`booking-service.ts`, sharing `insertHold` with
 `createHold`): room active, `maxGuests`, `assertStayWindow` (past, nights,
 window; no cutoff), availability, and it records `createdByAdminId`,
-`internalNotes`, `cardConsentAt` and `cardConsentBy: 'admin'`. Everything
-after payment is the guest pipeline (claim, capture, `sendBookingConfirmedEmails`).
+`internalNotes` and, for a card, `cardConsentAt` and `cardConsentBy:
+'admin'`. Everything after a card payment is the guest pipeline (claim,
+capture, `sendBookingConfirmedEmails`).
+
+**Payments outside Stripe (Cash/Check/Other)**
+(`src/lib/booking/offline-payment-service.ts`, labels in
+`payment-methods.ts`): admins only, reconciled by hand.
+- `confirmOfflinePayment`: an admin-created pending hold that has not
+  expired; any open Checkout Session is expired first (`closeHoldSession`),
+  the room's feeds are synced (best effort), the dates claimed in one guarded
+  UPDATE (`noOverlapForBookingRow`, as a card payment: `CONFLICT` if taken),
+  then a `payment_transactions` row with `payment_method: 'offline'`, no
+  Stripe ids and the booking's tax split, and `sendBookingConfirmedEmails`.
+  No card is kept on file. The payment recovery cron ignores these bookings
+  (it needs a Checkout Session).
+- **Guests can't cancel them online** (`guestCancelBlocked` in
+  `bookings.ts`: `canCancel` false, `cancelBlocked: 'contact_us'`;
+  `cancelBooking` answers `CONFLICT`). Admins cancel as usual.
+- **Refunds** (cancellations, cheaper changes): `refundAcrossPayments`
+  includes offline payment rows (newest first, like Stripe ones). Their part
+  is recorded, not sent: a `payment_refunds` row with `source: 'offline'`,
+  `status: 'succeeded'`, the tax split and `stripe_refund_id`
+  `offline_<refundKey>/<paymentId>` (unique; a retry finds it), written in
+  one D1 batch with the payment's refunded total. The booking shows
+  refunded; the guest email says our team returns the money; the admin email
+  says to pay it back by hand.
+- **Extra charges for changes:** the modify page offers Card or
+  Cash/Check/Other (default: Cash/Check/Other when the booking has an
+  offline payment, `adminQuoteModification.paidOffline`). Offline:
+  `adminModifyBooking` with `collectOffline: true` claims the change and
+  records an offline payment row with the change's tax split (the change is
+  `applied` at once).
 
 **Late same-day bookings** (`isLateSameDay` in `stay-times.ts`: check-in
 today and now at or after `SAME_DAY_CUTOFF_TIME`): `createAdminHold` refuses
@@ -667,6 +726,7 @@ until 11:00 AM CT on the check-out date, then `past`) from the stored
 | `test/workers/booking-integrity.test.ts` | Stored check-in/out instants, booking limits, the same-day cutoff, applied tier, quote drift, partial refunds, save-then-refund with a failing refund, stay phase |
 | `test/workers/modifications.test.ts`, `test/unit/modification-rules.test.ts` | Changes: increase on the saved card (authorize, claim, capture, second payment row), room change, claim conflict cancels the authorization, price drift, decline then fresh card (page and webhook, once), decrease refund (not a cancellation refund), refund retry by the cron, shortening before check-in (refunded) and refused once begun, blocked payment states, release early (begun stays only), cancellation across two payments, tax report with two payments; the pure rules |
 | `test/workers/admin-bookings.test.ts` | Admin bookings: new and existing accounts, banned guests, consent required, card-only session and confirmation, late same-day acknowledgement, notice email and zero policy refund, admin calendar window and exclusion |
+| `test/workers/offline-payments.test.ts` | Cash/Check/Other admin bookings: confirmed with the payment and taxes recorded and the confirmation emailed (no Stripe call), card consent still required for cards, no double recording, guests can't cancel, an admin cancellation records an owed refund that the tax report nets, a change's extra charge collected offline and a cheaper change's owed refund |
 | `test/workers/checkout.test.ts` | Session parameters (manual capture, card + Link, card kept on file, admin card-only variant), reuse/replacement, confirmation checks, claim then capture then record, dates taken -> authorization released (no refund), capture once across return page + webhook, transient and permanent capture failures, retry after a cut-short confirmation, priority rule |
 | `test/workers/stripe-webhook.test.ts` | Signature, `checkout.session.*` (decided from the PaymentIntent, releases for cancelled/deleted/already-paid bookings, `async_payment_*` ignored), refunds (incl. replay after a failure), disputes, log hygiene |
 | `test/workers/payment-recovery.test.ts` | Recovery cron: captures stuck `authorized` bookings, retries stuck `refund_pending` once (finds an existing refund), permanent refusal -> `refund_failed` |

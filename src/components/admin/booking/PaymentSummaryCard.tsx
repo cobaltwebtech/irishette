@@ -1,6 +1,7 @@
 import { Icon } from '@iconify/react';
 
 import type { RouterOutputs } from '@/integrations/trpc/types';
+import { OFFLINE_PAYMENT_LABEL } from '@/lib/booking/payment-methods';
 import { formatMoney } from '@/utils/format';
 import { cn } from '@/utils/twMerge';
 
@@ -51,21 +52,40 @@ function outcomeOf(cents: number): Outcome {
 	return cents > 0 ? 'charge' : 'none';
 }
 
+/** Where a refund goes: the card, or owed by hand for an offline payment. */
+function refundDestination(q: ModificationQuote, amount: string) {
+	return q.paidOffline
+		? `${amount} is recorded as a refund owed to the guest: pay it back by hand (${OFFLINE_PAYMENT_LABEL}).`
+		: `${amount} goes back to the card the guest paid with.`;
+}
+
+/** Where a charge comes from: outside Stripe, the card on file or a new card. */
+function chargeSource(
+	q: ModificationQuote,
+	amount: string,
+	collectOffline: boolean,
+) {
+	if (collectOffline) {
+		return `${amount} is collected outside Stripe (${OFFLINE_PAYMENT_LABEL}) and recorded with its taxes.`;
+	}
+	const saved = q.savedCard;
+	if (!saved) {
+		return `${amount} is charged to a card the guest reads out: there is no card on file we can use.`;
+	}
+	return saved.type === 'link'
+		? `${amount} is charged to the guest's Link account on file.`
+		: `${amount} is charged to the ${saved.brand ?? 'card'} ending ${saved.last4 ?? '????'} on file.`;
+}
+
 /** Where the money goes, in words. */
-function destination(q: ModificationQuote, outcome: Outcome): string {
+function destination(
+	q: ModificationQuote,
+	outcome: Outcome,
+	collectOffline: boolean,
+): string {
 	const amount = formatMoney(Math.abs(q.differenceCents) / 100);
-	if (outcome === 'refund') {
-		return `${amount} goes back to the card the guest paid with.`;
-	}
-	if (outcome === 'charge') {
-		const saved = q.savedCard;
-		if (!saved) {
-			return `${amount} is charged to a card the guest reads out: there is no card on file we can use.`;
-		}
-		return saved.type === 'link'
-			? `${amount} is charged to the guest's Link account on file.`
-			: `${amount} is charged to the ${saved.brand ?? 'card'} ending ${saved.last4 ?? '????'} on file.`;
-	}
+	if (outcome === 'refund') return refundDestination(q, amount);
+	if (outcome === 'charge') return chargeSource(q, amount, collectOffline);
 	return 'The new stay costs the same as the current one: nothing is charged or refunded.';
 }
 
@@ -114,7 +134,14 @@ function Line({
 	);
 }
 
-export function PaymentSummaryCard({ quote: q }: { quote: ModificationQuote }) {
+export function PaymentSummaryCard({
+	quote: q,
+	collectOffline = false,
+}: {
+	quote: ModificationQuote;
+	/** The extra charge is collected outside Stripe (Cash/Check/Other). */
+	collectOffline?: boolean;
+}) {
 	const outcome = outcomeOf(q.differenceCents);
 	const tone = TONES[outcome];
 	const lines = explanation(q, outcome);
@@ -136,7 +163,7 @@ export function PaymentSummaryCard({ quote: q }: { quote: ModificationQuote }) {
 						<Icon icon={tone.icon} className="size-4" />
 						{tone.label}
 					</span>
-					<p className="text-sm">{destination(q, outcome)}</p>
+					<p className="text-sm">{destination(q, outcome, collectOffline)}</p>
 				</div>
 				<p
 					className={cn(

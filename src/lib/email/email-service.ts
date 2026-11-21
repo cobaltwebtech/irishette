@@ -22,6 +22,7 @@ import {
 	PASSWORD_RESET_EXPIRES_IN,
 } from '@/lib/auth/auth-constants';
 import { storedArrivalLabel } from '@/lib/booking/arrival-windows';
+import type { RefundChannel } from '@/lib/booking/payment-methods';
 import { claimAlert, claimEmail, releaseEmail } from '@/lib/email/email-dedupe';
 import type { NotificationCategory } from '@/lib/email/notification-categories';
 import { getAdminEmails } from '@/lib/server/admin-query';
@@ -114,6 +115,26 @@ export function emailBookingDetails(
 /** Stripe: refunds reach the card in 5-10 business days. */
 const REFUND_TIMING =
 	'Refunds go back to your original payment method. Please allow 5-10 business days for it to appear.';
+
+/** A refund owed on a payment taken outside Stripe (cash, check, other). */
+const OFFLINE_REFUND_NOTE =
+	'You paid us directly, so our team will return your refund the same way and contact you to arrange it.';
+
+/** How the guest gets a refund back, by where it went. */
+function refundTiming(channel: RefundChannel = 'stripe') {
+	if (channel === 'offline') return OFFLINE_REFUND_NOTE;
+	if (channel === 'mixed') {
+		return `The part paid by card goes back to that card (allow 5-10 business days); the part you paid us directly is returned by our team, who will contact you.`;
+	}
+	return REFUND_TIMING;
+}
+
+/** The admins' to-do for a refund owed outside Stripe (null: none). */
+function offlineRefundTodo(channel: RefundChannel = 'stripe') {
+	return channel === 'stripe'
+		? null
+		: 'Part or all of this refund is owed on a payment taken outside Stripe (Cash/Check/Other): pay it back to the guest by hand.';
+}
 
 /**
  * Logo URL and site link for every template. BETTER_AUTH_URL is the
@@ -455,6 +476,8 @@ export function sendBookingConfirmationEmail(
 
 export interface CancellationEmailInfo {
 	refundAmount: number;
+	/** Where the refund went (offline: owed, paid back by hand). */
+	refundChannel?: RefundChannel;
 	cancelledBy: 'guest' | 'admin' | 'system';
 	/** Shown to the guest. */
 	guestMessage: string;
@@ -562,7 +585,7 @@ export function sendCancellationEmails(
 				`Hi ${booking.guestName},`,
 				info.guestMessage,
 				info.refundAmount > 0
-					? REFUND_TIMING
+					? refundTiming(info.refundChannel)
 					: 'No refund is due for this cancellation under our cancellation policy.',
 			],
 		},
@@ -570,7 +593,14 @@ export function sendCancellationEmails(
 			subject: `Booking Cancelled: ${booking.confirmationId} (${info.cancelledBy})`,
 			preview: `Booking ${booking.confirmationId} was cancelled`,
 			heading: 'Booking cancelled',
-			paragraphs: [info.adminMessage],
+			paragraphs: [
+				info.adminMessage,
+				...(info.refundAmount > 0
+					? [offlineRefundTodo(info.refundChannel)].filter(
+							(line): line is string => line !== null,
+						)
+					: []),
+			],
 		},
 	});
 }
@@ -588,6 +618,17 @@ export interface ModificationEmailInfo {
 	refundPercent: number | null;
 	/** The refund for a lower price could not be created (admins fix it). */
 	refundFailed: boolean;
+	/** The extra charge was collected outside Stripe (Cash/Check/Other). */
+	chargedOffline?: boolean;
+	/** Where the refund for a lower price went. */
+	refundChannel?: RefundChannel;
+}
+
+/** "is being refunded to the card you paid with. ..." or the offline note. */
+function refundDestination(channel: RefundChannel = 'stripe') {
+	return channel === 'stripe'
+		? `is being refunded to the card you paid with. ${REFUND_TIMING}`
+		: `is being refunded to you. ${refundTiming(channel)}`;
 }
 
 /** What a change did with the money, for the guest. */
@@ -597,7 +638,9 @@ function guestMoneyText(info: ModificationEmailInfo): string {
 		return 'No refund is given for the unused nights (see our cancellation policy, Early Departure).';
 	}
 	if (difference > 0) {
-		return `The difference of ${currency(difference)} was charged to your card.`;
+		return info.chargedOffline
+			? `The difference of ${currency(difference)} is recorded as paid directly to us.`
+			: `The difference of ${currency(difference)} was charged to your card.`;
 	}
 	if (difference < 0 && info.refundFailed) {
 		// Don't alarm the guest: the admins were alerted and will refund by hand.
@@ -606,11 +649,11 @@ function guestMoneyText(info: ModificationEmailInfo): string {
 	if (info.refundPercent !== null) {
 		// Dropped nights: tax back in full, the tier's share of room and fee.
 		return difference < 0
-			? `The removed nights fall under our cancellation policy: all the hotel tax on them and ${info.refundPercent}% of their room price and service fee are refunded, so ${currency(-difference)} is going back to the card you paid with. ${REFUND_TIMING}`
+			? `The removed nights fall under our cancellation policy: all the hotel tax on them and ${info.refundPercent}% of their room price and service fee are refunded, so ${currency(-difference)} ${refundDestination(info.refundChannel)}`
 			: 'The removed nights fall under our cancellation policy, and no refund is due for them at this point.';
 	}
 	if (difference < 0) {
-		return `The difference of ${currency(-difference)} is being refunded to the card you paid with. ${REFUND_TIMING}`;
+		return `The difference of ${currency(-difference)} ${refundDestination(info.refundChannel)}`;
 	}
 	return 'The price did not change, so nothing was charged or refunded.';
 }
@@ -623,7 +666,11 @@ function adminMoneyText(info: ModificationEmailInfo): string {
 	if (difference < 0 && info.refundFailed) {
 		return `The refund of ${currency(-difference)} FAILED: see the admin alert and refund it in Stripe.`;
 	}
-	return `${difference > 0 ? 'Charged' : 'Refunded'} ${currency(Math.abs(difference))}.`;
+	if (difference > 0 && info.chargedOffline) {
+		return `Charged ${currency(difference)}, collected outside Stripe (Cash/Check/Other).`;
+	}
+	const todo = difference < 0 ? offlineRefundTodo(info.refundChannel) : null;
+	return `${difference > 0 ? 'Charged' : 'Refunded'} ${currency(Math.abs(difference))}.${todo ? ` ${todo}` : ''}`;
 }
 
 /**

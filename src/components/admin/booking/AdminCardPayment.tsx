@@ -17,7 +17,8 @@ import { Button } from '@/components/ui/button';
 
 // The card the guest reads out by phone, typed by an admin (plan 06): a
 // card-only Checkout Session (the server allows only 'card' for admin
-// sessions) with Apple Pay and Google Pay hidden. Not a Stripe MOTO flow:
+// sessions and hides Link, so no Link sign-in or "Bank" tab) with Apple
+// Pay, Google Pay and Link hidden here too. Not a Stripe MOTO flow:
 // confirm with Stripe support before relying on it in live mode.
 
 export interface AdminCheckout {
@@ -89,7 +90,9 @@ function AdminCardForm({
 				matches={totalMatches}
 			/>
 			<PaymentElement
-				options={{ wallets: { applePay: 'never', googlePay: 'never' } }}
+				options={{
+					wallets: { applePay: 'never', googlePay: 'never', link: 'never' },
+				}}
 			/>
 			{errorText && (
 				<p className="rounded-md border border-destructive bg-destructive/10 px-4 py-3 text-sm text-destructive">

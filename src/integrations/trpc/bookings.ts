@@ -7,7 +7,9 @@ import {
 	eq,
 	gt,
 	gte,
+	isNotNull,
 	lte,
+	or,
 	type SQL,
 } from 'drizzle-orm';
 import { z } from 'zod';
@@ -35,6 +37,7 @@ import {
 	quoteBookingCancellation,
 	quoteStay,
 	refreshHold,
+	releaseAdminHold,
 } from '@/lib/booking/booking-service';
 import {
 	bookingStatusSchema,
@@ -65,6 +68,11 @@ import {
 	adminReleaseEarlySchema,
 	modificationTargetSchema,
 } from '@/lib/booking/modification-validation';
+import {
+	confirmOfflinePayment,
+	hasOfflinePayment,
+	offlinePaymentExists,
+} from '@/lib/booking/offline-payment-service';
 import {
 	adminCancelBookingSchema,
 	adminCreateBookingSchema,
@@ -193,11 +201,25 @@ function toGuestBooking(booking: Booking, blocked = false) {
 	);
 }
 
-/** An open dispute blocks online cancellation (confirmed bookings only). */
-const disputeBlocks = (db: TRPCContext['db'], booking: Booking) =>
-	booking.status === 'confirmed'
-		? hasOpenDispute(db, booking.id)
-		: Promise.resolve(false);
+/**
+ * Bookings a guest sees on their account pages: confirmed, or cancelled
+ * after being confirmed. Holds (pending, or released/cancelled before
+ * payment) are not reservations and are never listed.
+ */
+const guestListed = or(
+	eq(bookings.status, 'confirmed'),
+	and(eq(bookings.status, 'cancelled'), isNotNull(bookings.confirmedAt)),
+);
+
+/**
+ * Guests can't cancel a confirmed booking online while its payment has an
+ * open dispute, or when it was paid outside Stripe (Cash/Check/Other: the
+ * refund is arranged in person, so only admins cancel it).
+ */
+const guestCancelBlocked = async (db: TRPCContext['db'], booking: Booking) =>
+	booking.status === 'confirmed' &&
+	((await hasOpenDispute(db, booking.id)) ||
+		(await hasOfflinePayment(db, booking.id)));
 
 /** SQL filter for a stay phase (uses the stored check-in/out instants). */
 function phaseCondition(phase: 'upcoming' | 'current' | 'past', now: Date) {
@@ -362,11 +384,51 @@ export const bookingsRouter = createTRPCRouter({
 				{ allowAdmin: true },
 			);
 			const result = await prepareCheckout(ctx, booking);
+			const [hold] = await ctx.db
+				.select({ expiresAt: bookings.expiresAt })
+				.from(bookings)
+				.where(eq(bookings.id, booking.id));
 			return {
 				...result,
 				publicId: booking.publicId,
 				publishableKey: ctx.env.STRIPE_PUBLISHABLE_KEY,
+				/** When the hold lapses (admin holds: ADMIN_HOLD_MINUTES). */
+				holdExpiresAt: hold?.expiresAt ?? null,
 			};
+		}),
+
+	/**
+	 * Releases an admin's unpaid hold (its time ran out on the payment
+	 * step): the Checkout Session is expired and the hold deleted.
+	 * 'confirmed' when it was paid meanwhile (then show the booking).
+	 */
+	adminReleaseHold: adminProcedure
+		.input(bookingIdSchema)
+		.mutation(async ({ ctx, input }) => {
+			const booking = await findAccessibleBooking(
+				ctx,
+				{ id: input.bookingId },
+				{ allowAdmin: true },
+			);
+			const outcome = await releaseAdminHold(ctx, booking);
+			return { outcome, publicId: booking.publicId };
+		}),
+
+	/**
+	 * An admin's hold paid outside Stripe (Cash/Check/Other, reconciled by
+	 * hand): confirms it, records the payment with its taxes and sends the
+	 * confirmation emails. Admin-created holds only.
+	 */
+	adminConfirmOfflinePayment: adminProcedure
+		.input(bookingIdSchema)
+		.mutation(async ({ ctx, input }) => {
+			const booking = await findAccessibleBooking(
+				ctx,
+				{ id: input.bookingId },
+				{ allowAdmin: true },
+			);
+			const confirmed = await confirmOfflinePayment(ctx, booking);
+			return { publicId: confirmed.publicId };
 		}),
 
 	/** Extends an expired hold if the dates are still free. */
@@ -430,9 +492,17 @@ export const bookingsRouter = createTRPCRouter({
 				booking.cancellationPolicyId,
 			);
 			return {
-				booking: toGuestBooking(booking, await disputeBlocks(ctx.db, booking)),
+				booking: toGuestBooking(
+					booking,
+					await guestCancelBlocked(ctx.db, booking),
+				),
 				room: roomRow,
 				cancellationPolicy: { name: policy.name, tiers: policy.tiers },
+				/**
+				 * A reservation (confirmed at some point), shown on the account
+				 * pages; false for a hold (the checkout pages still read it).
+				 */
+				listed: booking.confirmedAt !== null,
 			};
 		}),
 
@@ -518,6 +588,8 @@ export const bookingsRouter = createTRPCRouter({
 		.query(async ({ ctx, input }) => {
 			const now = new Date();
 			const conditions = [eq(bookings.userId, ctx.user.id)];
+			// Never holds: only reservations that were confirmed.
+			if (guestListed) conditions.push(guestListed);
 			if (input.status) conditions.push(eq(bookings.status, input.status));
 			if (input.phase) conditions.push(phaseCondition(input.phase, now));
 			const rows = await ctx.db
@@ -525,6 +597,7 @@ export const bookingsRouter = createTRPCRouter({
 					booking: guestBookingColumns,
 					room: guestRoomColumns,
 					disputed: openDisputeExists,
+					paidOffline: offlinePaymentExists,
 				})
 				.from(bookings)
 				.innerJoin(room, eq(bookings.roomId, room.id))
@@ -536,9 +609,13 @@ export const bookingsRouter = createTRPCRouter({
 				)
 				.limit(input.limit)
 				.offset(input.offset);
-			return rows.map(({ disputed, ...r }) => ({
+			return rows.map(({ disputed, paidOffline, ...r }) => ({
 				...r,
-				booking: withTiming(r.booking, now, Boolean(disputed)),
+				booking: withTiming(
+					r.booking,
+					now,
+					r.booking.status === 'confirmed' && Boolean(disputed || paidOffline),
+				),
 			}));
 		}),
 
@@ -553,8 +630,12 @@ export const bookingsRouter = createTRPCRouter({
 			const pending = booking.status === 'pending';
 			// Admins see an open dispute (refund only with explicit
 			// confirmation, B7). Guests only see that online cancellation is
-			// closed, never why (decision 2026-11-08).
-			const disputed = await disputeBlocks(ctx.db, booking);
+			// closed, never why (decision 2026-11-08); a booking paid outside
+			// Stripe is closed to them too.
+			const disputed =
+				booking.status === 'confirmed' &&
+				(await hasOpenDispute(ctx.db, booking.id));
+			const blocked = await guestCancelBlocked(ctx.db, booking);
 			const asAdmin =
 				ctx.user.role === 'admin' && (await isActiveAdmin(ctx.db, ctx.user.id));
 			const timeAllows =
@@ -564,11 +645,11 @@ export const bookingsRouter = createTRPCRouter({
 				status: booking.status,
 				hasOpenDispute: asAdmin && disputed,
 				paymentStatus: booking.paymentStatus,
-				canCancel: timeAllows && (asAdmin || !disputed),
+				canCancel: timeAllows && (asAdmin || !blocked),
 				/** Why guests can't cancel online now (null: they can). */
 				cancelBlocked: !timeAllows
 					? ('check_in_passed' as const)
-					: !asAdmin && disputed
+					: !asAdmin && blocked
 						? ('contact_us' as const)
 						: null,
 				amountPaid: quote.amountPaid,
@@ -641,6 +722,8 @@ export const bookingsRouter = createTRPCRouter({
 				savedCard: card
 					? { type: card.type, brand: card.brand, last4: card.last4 }
 					: null,
+				/** Paid outside Stripe: extra charges default to offline. */
+				paidOffline: await hasOfflinePayment(ctx.db, booking.id),
 				hasOpenDispute: await hasOpenDispute(ctx.db, booking.id),
 			};
 		}),
@@ -649,7 +732,9 @@ export const bookingsRouter = createTRPCRouter({
 	 * Applies a move, extension or room change (plan 06). A higher price is
 	 * charged to the saved card off-session; when it can't be, returns
 	 * 'card_required' with nothing changed (then use
-	 * adminCreateModificationCheckout). A lower price is refunded.
+	 * adminCreateModificationCheckout), unless `collectOffline`: the extra
+	 * was taken outside Stripe and is recorded. A lower price is refunded
+	 * (recorded as owed on a payment taken outside Stripe).
 	 */
 	adminModifyBooking: adminProcedure
 		.input(adminModifyBookingSchema)
@@ -663,6 +748,7 @@ export const bookingsRouter = createTRPCRouter({
 					expectedDifferenceCents: input.expectedDifferenceCents,
 					note: input.note,
 					confirmDisputeRefund: input.confirmDisputeRefund,
+					collectOffline: input.collectOffline,
 				},
 				ctx.user.id,
 			);

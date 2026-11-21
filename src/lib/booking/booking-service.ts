@@ -1,7 +1,6 @@
 import { TRPCError } from '@trpc/server';
 import { and, eq, getTableColumns, gt, lt, lte, ne } from 'drizzle-orm';
 import { customAlphabet } from 'nanoid';
-import type Stripe from 'stripe';
 
 import type { Database } from '@/db/drizzle-init';
 import {
@@ -30,8 +29,12 @@ import { formatMoney } from '@/utils/format';
 import { newId, newPublicId } from '@/utils/ids';
 import { todayIn } from '@/utils/timezone';
 
-import { checkAvailability, HOLD_MINUTES } from './availability';
-import { refundAcrossPayments } from './booking-payments';
+import {
+	ADMIN_HOLD_MINUTES,
+	checkAvailability,
+	HOLD_MINUTES,
+} from './availability';
+import { type BookingRefund, refundAcrossPayments } from './booking-payments';
 import { PAID_STATUSES } from './booking-status';
 import { quoteCancellation } from './cancellation-policy';
 import {
@@ -45,6 +48,8 @@ import {
 	roomName,
 } from './checkout-service';
 import { hasOpenDispute } from './dispute-service';
+import { hasOfflinePayment } from './offline-payment-service';
+import { type RefundChannel, refundChannel } from './payment-methods';
 import type {
 	AdminCreateBookingInput,
 	CreateBookingInput,
@@ -204,8 +209,9 @@ export async function createHold(
  * An admin's hold for a guest booking by phone (plan 06). Same room, guest
  * and window checks as createHold, but no same-day cutoff: a check-in today
  * after the cutoff is a late same-day booking (non-refundable), which the
- * admin must acknowledge. Records the admin and the guest's verbal consent
- * to keep the card on file. Paid by the admin with a card-only session.
+ * admin must acknowledge. Records the admin and, for a card, the guest's
+ * verbal consent to keep it on file. Paid by the admin with a card-only
+ * session, or recorded as paid outside Stripe (confirmOfflinePayment).
  */
 export async function createAdminHold(
 	deps: ServiceDeps,
@@ -225,8 +231,13 @@ export async function createAdminHold(
 		createdByAdminId: adminId,
 		lateSameDay,
 		internalNotes: input.internalNotes || null,
-		cardConsentAt: now,
-		cardConsentBy: 'admin',
+		// The admin has ADMIN_HOLD_MINUTES to take the payment.
+		expiresAt: new Date(now.getTime() + ADMIN_HOLD_MINUTES * 60_000),
+		// A card is kept on file only with the guest's verbal consent; a
+		// payment taken outside Stripe keeps nothing.
+		...(input.paymentMethod === 'card'
+			? { cardConsentAt: now, cardConsentBy: 'admin' as const }
+			: {}),
 	});
 	return { ...hold, lateSameDay };
 }
@@ -446,6 +457,25 @@ export async function releaseExpiredHold(
 	return true;
 }
 
+/**
+ * An admin's hold whose ADMIN_HOLD_MINUTES ran out on the payment step: its
+ * Checkout Session is expired and the hold deleted, so the dates are free
+ * again. A hold paid meanwhile is confirmed instead (closeHoldSession) and
+ * kept. Anything but an admin's pending hold is left alone.
+ */
+export async function releaseAdminHold(
+	deps: ServiceDeps,
+	booking: Booking,
+	now = new Date(),
+): Promise<'released' | 'confirmed' | 'unchanged'> {
+	if (booking.status !== 'pending' || !booking.createdByAdminId) {
+		return booking.status === 'confirmed' ? 'confirmed' : 'unchanged';
+	}
+	return (await releaseExpiredHold(deps, booking, now))
+		? 'released'
+		: 'confirmed';
+}
+
 /** Extends an expired hold if the dates are still free. */
 export async function refreshHold(
 	deps: ServiceDeps,
@@ -585,6 +615,8 @@ export interface CancelResult {
 	refundPercent: number;
 	/** The refund could not be created; admins were alerted. */
 	refundFailed?: boolean;
+	/** An unpaid hold: released and deleted (the booking no longer exists). */
+	holdReleased?: boolean;
 }
 
 /**
@@ -595,8 +627,8 @@ export interface CancelResult {
  *   must confirm explicitly to refund (default: no refund).
  * - `expectedRefundAmount` (the amount the dialog showed): if the refund
  *   changed meanwhile (a window passed), CONFLICT with the new quote.
- * Unpaid holds are cancelled without a refund (their Checkout Session is
- * expired so it can't be paid later).
+ * Unpaid holds are released and deleted, with no refund (their Checkout
+ * Session is expired first so it can't be paid later).
  */
 export async function cancelBooking(
 	deps: ServiceDeps,
@@ -611,7 +643,7 @@ export async function cancelBooking(
 		});
 	}
 	return booking.status === 'pending'
-		? cancelHold(deps, booking, options, now)
+		? cancelHold(deps, booking, now)
 		: cancelConfirmed(deps, booking, options, now);
 }
 
@@ -634,11 +666,14 @@ const bookingChanged = () =>
 		message: 'This booking changed. Please reload and try again.',
 	});
 
-/** Unpaid hold: expire its Checkout Session so it can't be paid later. */
+/**
+ * Unpaid hold: expire its Checkout Session so it can't be paid later, then
+ * delete it. A hold is not a reservation, so nothing is kept (no cancelled
+ * row): the dates are free and the database holds no leftover.
+ */
 async function cancelHold(
 	deps: ServiceDeps,
 	booking: Booking,
-	options: CancelOptions,
 	now: Date,
 ): Promise<CancelResult> {
 	if ((await closeHoldSession(deps, booking, now)) === 'paid') {
@@ -648,16 +683,8 @@ async function cancelHold(
 				'A payment for this booking is being processed. Please try again in a minute.',
 		});
 	}
-	const [cancelled] = await deps.db
-		.update(bookings)
-		.set({
-			status: 'cancelled',
-			cancelledAt: now,
-			updatedAt: now,
-			cancelledBy: options.by,
-			cancellationReason: options.reason ?? `${options.by}_request`,
-			refundAmount: 0,
-		})
+	const [deleted] = await deps.db
+		.delete(bookings)
 		.where(
 			and(
 				eq(bookings.id, booking.id),
@@ -665,9 +692,9 @@ async function cancelHold(
 				ne(bookings.paymentStatus, 'processing'),
 			),
 		)
-		.returning();
-	if (!cancelled) throw bookingChanged();
-	return { refundAmount: 0, refundPercent: 0 };
+		.returning({ id: bookings.id });
+	if (!deleted) throw bookingChanged();
+	return { refundAmount: 0, refundPercent: 0, holdReleased: true };
 }
 
 /** Amount to refund for a confirmed booking, by who cancels and how. */
@@ -764,12 +791,21 @@ async function cancelConfirmed(
 		});
 	}
 	await assertDisputeAllows(db, booking, options);
+	const paidOffline = await hasOfflinePayment(db, booking.id);
+	if (paidOffline && options.by === 'guest') {
+		// Paid outside Stripe (Cash/Check/Other): the refund is arranged in
+		// person, so only admins cancel these.
+		throw new TRPCError({
+			code: 'CONFLICT',
+			message: 'This booking cannot be cancelled online. Please contact us.',
+		});
+	}
 	const amounts = await refundFor(db, booking, options, now);
 	const { refundAmount, refundPercent } = amounts;
-	if (refundAmount > 0 && !booking.stripePaymentIntentId) {
+	if (refundAmount > 0 && !booking.stripePaymentIntentId && !paidOffline) {
 		throw new TRPCError({
 			code: 'PRECONDITION_FAILED',
-			message: 'This booking has no Stripe payment to refund',
+			message: 'This booking has no payment to refund',
 		});
 	}
 
@@ -792,7 +828,7 @@ async function cancelConfirmed(
 		.returning();
 	if (!cancelled) throw bookingChanged();
 
-	const outcome =
+	const outcome: CancellationRefundOutcome =
 		refundAmount > 0
 			? await refundCancellation(deps, cancelled, amounts, now)
 			: { booking: cancelled, refundFailed: false };
@@ -801,6 +837,7 @@ async function cancelConfirmed(
 	inBackground(deps, `cancellation ${booking.confirmationId}`, () =>
 		sendCancellationEmails(db, deps.env, outcome.booking, roomInfo, {
 			refundAmount,
+			refundChannel: outcome.refundChannel,
 			cancelledBy: options.by,
 			guestMessage:
 				options.by === 'guest'
@@ -846,6 +883,13 @@ type RefundAmounts = {
 	refundAmount: number;
 };
 
+interface CancellationRefundOutcome {
+	booking: Booking;
+	refundFailed: boolean;
+	/** Where the refund went (offline: owed, paid back by hand). */
+	refundChannel?: RefundChannel;
+}
+
 /**
  * Step 2-3 of cancelConfirmed (and the recovery cron's retry): create the
  * Stripe refund, then record it.
@@ -860,10 +904,11 @@ async function refundCancellation(
 	amounts: RefundAmounts,
 	now: Date,
 	{ retry = false }: { retry?: boolean } = {},
-): Promise<{ booking: Booking; refundFailed: boolean }> {
+): Promise<CancellationRefundOutcome> {
 	const { db } = deps;
 	const cents = toCents(amounts.refundAmount);
-	let refund: Stripe.Refund | undefined;
+	let refund: BookingRefund | undefined;
+	let channel: RefundChannel | undefined;
 	let failure: string | null = null;
 	try {
 		// Spread over the booking's payments (an approved change may have
@@ -882,6 +927,7 @@ async function refundCancellation(
 			now,
 		);
 		refund = result.refunds[0];
+		channel = refundChannel(result.refunds.map((r) => r.id));
 		if (result.uncoveredCents > 0 || !refund) {
 			failure = `The payments on this booking do not cover the refund (${formatMoney(result.uncoveredCents / 100)} short)`;
 		}
@@ -905,7 +951,14 @@ async function refundCancellation(
 			now,
 		);
 	}
-	return recordCancellationRefund(db, booking, amounts, refund, now);
+	const recorded = await recordCancellationRefund(
+		db,
+		booking,
+		amounts,
+		refund,
+		now,
+	);
+	return { ...recorded, refundChannel: channel };
 }
 
 /** The room / fee / tax of a cancellation refund (null: no snapshot). */
@@ -947,7 +1000,7 @@ async function recordCancellationRefund(
 	db: Database,
 	booking: Booking,
 	amounts: RefundAmounts,
-	refund: Stripe.Refund,
+	refund: BookingRefund,
 	now: Date,
 ): Promise<{ booking: Booking; refundFailed: boolean }> {
 	try {

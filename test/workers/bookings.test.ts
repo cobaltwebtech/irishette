@@ -456,7 +456,7 @@ describe('cancellation', () => {
 		expect((await bookingRow(booking.id)).cancelledBy).toBe('admin');
 	});
 
-	it('cancelling an unpaid hold expires its Checkout Session and refunds nothing', async () => {
+	it('cancelling an unpaid hold expires its Checkout Session and deletes it', async () => {
 		const checkout = mockStripeCheckout();
 		const session = checkout.add({ id: 'cs_test_hold1' });
 		const booking = await insertBooking({
@@ -470,9 +470,10 @@ describe('cancellation', () => {
 		const result = await guest().bookings.cancelBooking({
 			publicId: booking.publicId,
 		});
-		expect(result.refundAmount).toBe(0);
+		expect(result).toMatchObject({ refundAmount: 0, holdReleased: true });
 		expect(checkout.expired).toEqual(['cs_test_hold1']);
-		expect((await bookingRow(booking.id)).status).toBe('cancelled');
+		// A hold is not a reservation: no cancelled row is left behind.
+		expect(await bookingRow(booking.id)).toBeUndefined();
 	});
 
 	it('a hold whose payment is processing cannot be cancelled', async () => {

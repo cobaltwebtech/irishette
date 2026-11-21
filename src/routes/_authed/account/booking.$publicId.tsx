@@ -1,6 +1,6 @@
 import { Icon } from '@iconify/react';
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, notFound } from '@tanstack/react-router';
 
 import { CancelBookingButton } from '@/components/booking/CancelBookingButton';
 import { CancellationPolicySummary } from '@/components/booking/CancellationPolicySummary';
@@ -33,14 +33,18 @@ export const Route = createFileRoute('/_authed/account/booking/$publicId')({
 	}),
 	// Auth: the _authed layout. Data: preloaded into the per-request
 	// QueryClient (in-process on SSR) and read with useSuspenseQuery below.
-	loader: ({ context, params }) =>
-		orNotFound(
+	// Holds (not yet paid) are not reservations: not found here.
+	loader: async ({ context, params }) => {
+		const data = await orNotFound(
 			context.queryClient.ensureQueryData(
 				context.trpc.bookings.getBooking.queryOptions({
 					publicId: params.publicId,
 				}),
 			),
-		),
+		);
+		if (!data.listed) throw notFound();
+		return data;
+	},
 	notFoundComponent: BookingNotFound,
 	component: BookingDetailPage,
 });

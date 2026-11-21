@@ -7,20 +7,34 @@ import type { ServiceDeps } from '@/lib/server/deps';
 import { stripeBookingMetadata, toCents } from '@/lib/stripe/stripe';
 
 import { type Booking, recordAppRefund } from './checkout-service';
+import {
+	OFFLINE_PAYMENT_METHOD,
+	OFFLINE_REFUND_PREFIX,
+} from './payment-methods';
 import { divideSplit, splitColumns, type TaxSplit } from './tax-split';
 
 // A booking's payments (plan 06): the checkout payment plus one per extra
 // charge for an approved change, each a payment_transactions row. Refunds
 // are spread across them and the booking's refunded amount is derived from
-// them. Server-only.
+// them. A payment an admin took outside Stripe (cash, check or other) gets
+// its refund recorded as owed, for the admins to pay back by hand.
+// Server-only.
 
 type Payment = {
 	/** payment_transactions id (null: a legacy booking with no row). */
 	id: string | null;
-	intent: string;
+	/** The PaymentIntent (null: a payment taken outside Stripe). */
+	intent: string | null;
 	amountCents: number;
 	refundedCents: number;
 };
+
+/** A refund made (Stripe) or recorded as owed (offline), in cents. */
+export interface BookingRefund {
+	/** The Stripe refund id, or OFFLINE_REFUND_PREFIX + key for offline. */
+	id: string;
+	amount: number;
+}
 
 /** The booking's payments, newest first (refunds take the newest first). */
 async function bookingPayments(
@@ -33,10 +47,14 @@ async function bookingPayments(
 		.where(eq(paymentTransactions.bookingId, booking.id))
 		.orderBy(desc(paymentTransactions.createdAt));
 	const payments = rows
-		.filter((row) => row.stripePaymentIntentId)
+		.filter(
+			(row) =>
+				row.stripePaymentIntentId ||
+				row.paymentMethod === OFFLINE_PAYMENT_METHOD,
+		)
 		.map((row) => ({
 			id: row.id,
-			intent: row.stripePaymentIntentId ?? '',
+			intent: row.stripePaymentIntentId,
 			amountCents: toCents(row.amount),
 			refundedCents: toCents(row.amountRefunded),
 		}));
@@ -79,10 +97,11 @@ export interface RefundRequest {
 /**
  * Refunds `cents` across the booking's payments, newest first, each up to
  * what is left on it. Records every refund (payment_refunds) and the
- * payment's refunded total. Stripe errors propagate (the caller tells
- * transient from permanent); a retry continues where it stopped. Returns the
- * refunds (this call's and, on a retry, earlier ones) and any amount the
- * payments could not cover.
+ * payment's refunded total; a payment taken outside Stripe gets its part
+ * recorded as owed (recordOfflineRefund), with no Stripe call. Stripe
+ * errors propagate (the caller tells transient from permanent); a retry
+ * continues where it stopped. Returns the refunds (this call's and, on a
+ * retry, earlier ones) and any amount the payments could not cover.
  */
 export async function refundAcrossPayments(
 	deps: ServiceDeps,
@@ -90,61 +109,35 @@ export async function refundAcrossPayments(
 	cents: number,
 	request: RefundRequest,
 	now = new Date(),
-): Promise<{ refunds: Stripe.Refund[]; uncoveredCents: number }> {
-	const { db, stripe } = deps;
+): Promise<{ refunds: BookingRefund[]; uncoveredCents: number }> {
+	const { db } = deps;
 	const payments = await bookingPayments(db, booking);
-	const refunds: Stripe.Refund[] = [];
-	let remaining = cents;
-	const ours = (r: Stripe.Refund) =>
-		r.metadata?.bookingId === booking.id &&
-		r.metadata?.reason === request.reason &&
-		// One cancellation per booking; modifications are told apart by key.
-		(request.reason === 'cancellation' ||
-			r.metadata?.refundKey === request.refundKey);
-
-	if (request.retry) {
-		for (const payment of payments) {
-			const list = await stripe.refunds.list({
-				payment_intent: payment.intent,
-				limit: 100,
-			});
-			const live = list.data.filter(liveRefund);
-			payment.refundedCents = live.reduce((sum, r) => sum + r.amount, 0);
-			for (const refund of live.filter(ours)) {
-				remaining -= refund.amount;
-				refunds.push(refund);
-				await recordAppRefund(db, refund, booking.id, now);
-			}
-			await saveRefunded(db, payment, now);
-		}
-	}
-
+	const refunds = request.retry
+		? await earlierRefunds(deps, booking, payments, request, now)
+		: [];
+	let remaining = cents - refunds.reduce((sum, r) => sum + r.amount, 0);
 	for (const payment of payments) {
 		if (remaining <= 0) break;
-		const part = Math.min(
-			payment.amountCents - payment.refundedCents,
-			remaining,
-		);
-		if (part <= 0) continue;
-		const refund = await stripe.refunds.create(
-			{
-				payment_intent: payment.intent,
-				amount: part,
-				reason: 'requested_by_customer',
-				metadata: {
-					...stripeBookingMetadata(booking),
-					reason: request.reason,
-					refundKey: request.refundKey,
-					...request.metadata,
-				},
-			},
-			{ idempotencyKey: `${request.refundKey}/${payment.intent}` },
-		);
-		refunds.push(refund);
-		remaining -= part;
-		payment.refundedCents += part;
-		await recordAppRefund(db, refund, booking.id, now);
-		await saveRefunded(db, payment, now);
+		const made = payment.intent
+			? await stripeRefund(
+					deps,
+					booking,
+					{ payment, intent: payment.intent },
+					remaining,
+					request,
+					now,
+				)
+			: await recordOfflineRefund(
+					db,
+					booking,
+					payment,
+					remaining,
+					request,
+					now,
+				);
+		if (!made) continue;
+		refunds.push(made);
+		remaining -= made.amount;
 	}
 	if (request.split && refunds.length > 0) {
 		await saveRefundSplits(db, refunds, request.split);
@@ -152,10 +145,119 @@ export async function refundAcrossPayments(
 	return { refunds, uncoveredCents: Math.max(0, remaining) };
 }
 
+/**
+ * A retry: the refunds this request already made in Stripe (idempotency keys
+ * only last 24 hours), recorded, with each Stripe payment's refunded total
+ * read back from Stripe. Offline refunds are found by recordOfflineRefund.
+ */
+async function earlierRefunds(
+	{ db, stripe }: ServiceDeps,
+	booking: Booking,
+	payments: Payment[],
+	request: RefundRequest,
+	now: Date,
+): Promise<BookingRefund[]> {
+	const ours = (r: Stripe.Refund) =>
+		r.metadata?.bookingId === booking.id &&
+		r.metadata?.reason === request.reason &&
+		// One cancellation per booking; modifications are told apart by key.
+		(request.reason === 'cancellation' ||
+			r.metadata?.refundKey === request.refundKey);
+	const found: BookingRefund[] = [];
+	for (const payment of payments) {
+		if (!payment.intent) continue;
+		const list = await stripe.refunds.list({
+			payment_intent: payment.intent,
+			limit: 100,
+		});
+		const live = list.data.filter(liveRefund);
+		payment.refundedCents = live.reduce((sum, r) => sum + r.amount, 0);
+		for (const refund of live.filter(ours)) {
+			found.push({ id: refund.id, amount: refund.amount });
+			await recordAppRefund(db, refund, booking.id, now);
+		}
+		await saveRefunded(db, payment, now);
+	}
+	return found;
+}
+
+/** Refunds up to what is left on a Stripe payment, and records it. */
+async function stripeRefund(
+	{ db, stripe }: ServiceDeps,
+	booking: Booking,
+	{ payment, intent }: { payment: Payment; intent: string },
+	remaining: number,
+	request: RefundRequest,
+	now: Date,
+): Promise<BookingRefund | null> {
+	const part = Math.min(payment.amountCents - payment.refundedCents, remaining);
+	if (part <= 0) return null;
+	const refund = await stripe.refunds.create(
+		{
+			payment_intent: intent,
+			amount: part,
+			reason: 'requested_by_customer',
+			metadata: {
+				...stripeBookingMetadata(booking),
+				reason: request.reason,
+				refundKey: request.refundKey,
+				...request.metadata,
+			},
+		},
+		{ idempotencyKey: `${request.refundKey}/${intent}` },
+	);
+	payment.refundedCents += part;
+	await recordAppRefund(db, refund, booking.id, now);
+	await saveRefunded(db, payment, now);
+	return { id: refund.id, amount: part };
+}
+
+/**
+ * A payment taken outside Stripe: records its part of the refund as owed
+ * (source 'offline', succeeded now: the admins pay it back by hand) and the
+ * payment's refunded total in one batch. The id comes from the refund key,
+ * so a retry finds the refund it already recorded instead of adding one.
+ */
+async function recordOfflineRefund(
+	db: Database,
+	booking: Booking,
+	payment: Payment,
+	remaining: number,
+	request: RefundRequest,
+	now: Date,
+): Promise<BookingRefund | null> {
+	if (!payment.id) return null;
+	const id = `${OFFLINE_REFUND_PREFIX}${request.refundKey}/${payment.id}`;
+	const [existing] = await db
+		.select({ amount: paymentRefunds.amount })
+		.from(paymentRefunds)
+		.where(eq(paymentRefunds.stripeRefundId, id));
+	if (existing) return { id, amount: toCents(existing.amount) };
+	const part = Math.min(payment.amountCents - payment.refundedCents, remaining);
+	if (part <= 0) return null;
+	payment.refundedCents += part;
+	await db.batch([
+		db.insert(paymentRefunds).values({
+			stripeRefundId: id,
+			bookingId: booking.id,
+			source: 'offline',
+			amount: part / 100,
+			currency: 'usd',
+			status: 'succeeded',
+			reason: 'requested_by_customer',
+			stripeCreatedAt: now,
+			createdAt: now,
+			updatedAt: now,
+		}),
+		refundedUpdate(db, payment, now),
+	]);
+	return { id, amount: part };
+}
+
 /** Stores each refund's share of the request's tax split. */
 async function saveRefundSplits(
 	db: Database,
-	refunds: Stripe.Refund[],
+	refunds: BookingRefund[],
 	split: TaxSplit,
 ) {
 	const parts = divideSplit(
@@ -172,7 +274,12 @@ async function saveRefundSplits(
 
 async function saveRefunded(db: Database, payment: Payment, now: Date) {
 	if (!payment.id) return;
-	await db
+	await refundedUpdate(db, payment, now);
+}
+
+/** The payment row's refunded total and status (payment.id is set). */
+function refundedUpdate(db: Database, payment: Payment, now: Date) {
+	return db
 		.update(paymentTransactions)
 		.set({
 			amountRefunded: payment.refundedCents / 100,
@@ -184,7 +291,7 @@ async function saveRefunded(db: Database, payment: Payment, now: Date) {
 						: 'paid',
 			updatedAt: now,
 		})
-		.where(eq(paymentTransactions.id, payment.id));
+		.where(eq(paymentTransactions.id, payment.id ?? ''));
 }
 
 /**

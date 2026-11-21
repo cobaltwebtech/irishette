@@ -1,4 +1,4 @@
-import { and, eq, gte, isNotNull, lte, ne, or } from 'drizzle-orm';
+import { and, eq, gte, isNotNull, isNull, lte, ne, or } from 'drizzle-orm';
 
 import { bookings, icalSyncChanges, icalSyncLog } from '@/db/schema-export';
 import {
@@ -137,6 +137,8 @@ async function recoverBooking(
  * Releases pending holds that expired: their Checkout Session is expired
  * first so it can't be paid. A hold whose session was completed in the
  * meantime is settled instead (captured or its authorization released).
+ * Then deletes cancelled holds left from before cancelling deleted them
+ * (purgeCancelledHolds).
  */
 export async function scheduledBookingCleanup(
 	deps: ServiceDeps,
@@ -173,10 +175,32 @@ export async function scheduledBookingCleanup(
 			);
 		}
 	}
+	const purged = await purgeCancelledHolds(deps);
 	console.log(
-		`Expired holds: ${deletedCount} deleted, ${kept} kept (payment found or unknown)`,
+		`Expired holds: ${deletedCount} deleted, ${kept} kept (payment found or unknown); ${purged} cancelled unpaid holds deleted`,
 	);
-	return { deletedCount, kept };
+	return { deletedCount, kept, purged };
+}
+
+/**
+ * Deletes cancelled holds that never became reservations: never confirmed
+ * and never authorized (no PaymentIntent). Cancelling a hold now deletes it
+ * (cancelHold); this clears older ones. A cancelled booking whose card was
+ * authorized but could not be confirmed keeps its row: it is the record of
+ * that payment attempt (the "payment released" notification links to it).
+ */
+async function purgeCancelledHolds({ db }: ServiceDeps) {
+	const rows = await db
+		.delete(bookings)
+		.where(
+			and(
+				eq(bookings.status, 'cancelled'),
+				isNull(bookings.confirmedAt),
+				isNull(bookings.stripePaymentIntentId),
+			),
+		)
+		.returning({ id: bookings.id });
+	return rows.length;
 }
 
 /** Deletes iCal sync history older than SYNC_LOG_RETENTION_DAYS. */

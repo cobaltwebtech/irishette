@@ -196,7 +196,8 @@ export const paymentTransactions = sqliteTable(
 		status: text('status', { enum: paymentStatuses }).notNull(),
 
 		// Payment method info (useful for admin)
-		paymentMethod: text('payment_method'), // card, link, us_bank_account, ...
+		// card, link, offline (taken outside Stripe: cash, check, other), ...
+		paymentMethod: text('payment_method'),
 		// The saved payment method (setup_future_usage off_session, plan 06):
 		// charged off-session for approved changes when it is a card.
 		stripePaymentMethodId: text('stripe_payment_method_id'),
@@ -270,13 +271,17 @@ export const paymentRefunds = sqliteTable(
 	'payment_refunds',
 	{
 		id: text('id').primaryKey().$defaultFn(newId),
+		// Offline refunds (source 'offline'): OFFLINE_REFUND_PREFIX + the
+		// refund key, as there is no Stripe refund (payment-methods.ts).
 		stripeRefundId: text('stripe_refund_id').notNull().unique(),
 		bookingId: text('booking_id').references(() => bookings.id, {
 			onDelete: 'set null',
 		}),
 		stripePaymentIntentId: text('stripe_payment_intent_id'),
 		stripeChargeId: text('stripe_charge_id'),
-		source: text('source', { enum: ['app', 'dashboard'] }).notNull(),
+		// app / dashboard: Stripe refunds; offline: owed on a payment taken
+		// outside Stripe, paid back by hand (plain text, no CHECK: no migration).
+		source: text('source', { enum: ['app', 'dashboard', 'offline'] }).notNull(),
 		amount: real('amount').notNull(), // dollars
 		currency: text('currency').notNull(),
 		// pending, requires_action, succeeded, failed, canceled

@@ -29,6 +29,14 @@ import {
  */
 export const HOLD_MINUTES = 35;
 
+/**
+ * How long an admin's hold (a booking by phone) keeps its dates while the
+ * admin takes the payment. The admin page releases it at the end and starts
+ * over; its Checkout Session still gets Stripe's 30 minutes but is expired
+ * with the hold, and the dates are free for others as soon as it lapses.
+ */
+export const ADMIN_HOLD_MINUTES = 10;
+
 export type ConflictSource = 'direct' | 'block' | (string & {});
 
 export interface Conflict {

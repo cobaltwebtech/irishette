@@ -157,6 +157,8 @@ describe('createCheckoutSession', () => {
 		expect(body.getAll('allowed_payment_method_types[0]')).toEqual(['card']);
 		expect(body.getAll('allowed_payment_method_types[1]')).toEqual(['link']);
 		expect(body.has('allowed_payment_method_types[2]')).toBe(false);
+		// Guests keep Link (admin sessions hide it).
+		expect(body.has('wallet_options[link][display]')).toBe(false);
 		expect(
 			[...body.keys()].some((k) => k.startsWith('payment_method_types')),
 		).toBe(false);
@@ -189,6 +191,7 @@ describe('createCheckoutSession', () => {
 		const [{ body }] = checkout.created;
 		expect(body.get('allowed_payment_method_types[0]')).toBe('card');
 		expect(body.has('allowed_payment_method_types[1]')).toBe(false);
+		expect(body.get('wallet_options[link][display]')).toBe('never');
 		expect(body.get('payment_intent_data[setup_future_usage]')).toBe(
 			'off_session',
 		);

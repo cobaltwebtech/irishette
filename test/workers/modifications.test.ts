@@ -332,6 +332,7 @@ describe('decline falls back to a fresh card', () => {
 		expect(body.get('metadata[kind]')).toBe('modification');
 		expect(body.get('allowed_payment_method_types[0]')).toBe('card');
 		expect(body.has('allowed_payment_method_types[1]')).toBe(false);
+		expect(body.get('wallet_options[link][display]')).toBe('never');
 		expect(fake.amount_total).toBe(quote.differenceCents);
 
 		checkout.complete(fake.id);

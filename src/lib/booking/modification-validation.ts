@@ -27,6 +27,11 @@ export const adminModifyBookingSchema = modificationTargetSchema.and(
 		expectedDifferenceCents: z.number().int().min(-10_000_000).max(10_000_000),
 		note,
 		confirmDisputeRefund: z.boolean().optional(),
+		/**
+		 * The extra charge was collected outside Stripe (Cash/Check/Other):
+		 * record it instead of charging a card.
+		 */
+		collectOffline: z.boolean().optional(),
 	}),
 );
 

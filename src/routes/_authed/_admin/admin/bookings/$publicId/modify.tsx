@@ -17,6 +17,7 @@ import {
 import {
 	AdminCheckbox,
 	AdminNoteField,
+	AdminPaymentChoice,
 	AdminRoomSelect,
 } from '@/components/admin/booking/AdminFormFields';
 import {
@@ -45,7 +46,9 @@ import {
 } from '@/components/ui/native-select';
 import { toast } from '@/components/ui/toast';
 import { useTRPC } from '@/integrations/trpc/react';
-import type { RouterOutputs } from '@/integrations/trpc/types';
+import type { RouterInputs, RouterOutputs } from '@/integrations/trpc/types';
+import { OFFLINE_PAYMENT_LABEL } from '@/lib/booking/payment-methods';
+import type { AdminPaymentMethod } from '@/lib/booking/payment-validation';
 import { addDays, daysBetween, MAX_NIGHTS } from '@/utils/date-range';
 import { formatMoney } from '@/utils/format';
 import { formatStayDate } from '@/utils/timezone';
@@ -276,11 +279,56 @@ function ExtendSelect({
 type Quote = ModificationQuote;
 
 /** The confirm button says what it will do to the money. */
-function confirmLabel(q: Quote) {
+function confirmLabel(q: Quote, collectOffline: boolean) {
 	const amount = formatMoney(Math.abs(q.differenceCents) / 100);
 	if (q.differenceCents < 0) return `Confirm change and refund ${amount}`;
+	if (q.differenceCents > 0 && collectOffline) {
+		return `Confirm change and record ${amount} (${OFFLINE_PAYMENT_LABEL})`;
+	}
 	if (q.differenceCents > 0) return `Confirm change and charge ${amount}`;
 	return 'Confirm change';
+}
+
+/**
+ * A higher price collected outside Stripe (Cash/Check/Other): the admin's
+ * choice, by default when the booking was paid that way.
+ */
+function collectsOffline(q: Quote, choice: AdminPaymentMethod | null) {
+	if (q.differenceCents <= 0) return false;
+	return (choice ?? (q.paidOffline ? 'offline' : 'card')) === 'offline';
+}
+
+/** How a higher price is collected: a card or outside Stripe. */
+function ExtraChargeChoice({
+	hasSavedCard,
+	offline,
+	onChange,
+}: {
+	hasSavedCard: boolean;
+	offline: boolean;
+	onChange: (method: AdminPaymentMethod) => void;
+}) {
+	return (
+		<AdminPaymentChoice
+			legend="Collect the extra charge"
+			value={offline ? 'offline' : 'card'}
+			onChange={onChange}
+			options={[
+				{
+					value: 'card',
+					label: 'Card',
+					description: hasSavedCard
+						? 'Charge the card on file, or a card the guest reads out if it is declined.'
+						: 'A card the guest reads out.',
+				},
+				{
+					value: 'offline',
+					label: OFFLINE_PAYMENT_LABEL,
+					description: 'Collected outside Stripe and reconciled by hand.',
+				},
+			]}
+		/>
+	);
 }
 
 /** After a change: refresh the booking queries and go back to it. */
@@ -297,38 +345,27 @@ function useChangeDone(publicId: string) {
 
 type FreshCard = AdminCheckout & { differenceCents: number; reason: string };
 
-function ModificationReview({
-	publicId,
-	target,
-}: {
-	publicId: string;
-	target: Target;
-}) {
+type ChangePayload = RouterInputs['bookings']['adminModifyBooking'];
+
+/**
+ * Applies a change; a card that can't be charged opens the fresh-card step
+ * (a card-only session for the difference). Errors are toasted and the
+ * quote is refreshed.
+ */
+function useApplyChange(
+	publicId: string,
+	onFreshCard: (checkout: FreshCard) => void,
+	onError: () => void,
+) {
 	const trpc = useTRPC();
 	const done = useChangeDone(publicId);
-	const [note, setNote] = useState('');
-	const [confirmDispute, setConfirmDispute] = useState(false);
-	const [freshCard, setFreshCard] = useState<FreshCard | null>(null);
-	const input = { publicId, ...target };
-	const quote = useQuery(
-		trpc.bookings.adminQuoteModification.queryOptions(input, {
-			retry: false,
-		}),
-	);
 	const modify = useMutation(
 		trpc.bookings.adminModifyBooking.mutationOptions(),
 	);
 	const createCheckout = useMutation(
 		trpc.bookings.adminCreateModificationCheckout.mutationOptions(),
 	);
-
-	const apply = async (q: Quote) => {
-		const payload = {
-			...input,
-			expectedDifferenceCents: q.differenceCents,
-			note: note || undefined,
-			confirmDisputeRefund: confirmDispute || undefined,
-		};
+	const apply = async (payload: ChangePayload) => {
 		try {
 			const result = await modify.mutateAsync(payload);
 			if (result.status === 'applied') {
@@ -340,15 +377,50 @@ function ModificationReview({
 				return;
 			}
 			const session = await createCheckout.mutateAsync(payload);
-			setFreshCard({ ...session, reason: result.reason });
+			onFreshCard({ ...session, reason: result.reason });
 		} catch (error) {
 			toast.add({
 				type: 'error',
 				title: errorMessage(error, 'The reservation could not be changed'),
 			});
-			void quote.refetch();
+			onError();
 		}
 	};
+	return { apply, busy: modify.isPending || createCheckout.isPending };
+}
+
+function ModificationReview({
+	publicId,
+	target,
+}: {
+	publicId: string;
+	target: Target;
+}) {
+	const trpc = useTRPC();
+	const [note, setNote] = useState('');
+	const [confirmDispute, setConfirmDispute] = useState(false);
+	const [freshCard, setFreshCard] = useState<FreshCard | null>(null);
+	// null: the default (offline for a booking paid outside Stripe).
+	const [chargeMethod, setChargeMethod] = useState<AdminPaymentMethod | null>(
+		null,
+	);
+	const input = { publicId, ...target };
+	const quote = useQuery(
+		trpc.bookings.adminQuoteModification.queryOptions(input, {
+			retry: false,
+		}),
+	);
+	const change = useApplyChange(publicId, setFreshCard, () => {
+		void quote.refetch();
+	});
+	const apply = (q: Quote) =>
+		change.apply({
+			...input,
+			expectedDifferenceCents: q.differenceCents,
+			note: note || undefined,
+			confirmDisputeRefund: confirmDispute || undefined,
+			collectOffline: collectsOffline(q, chargeMethod) || undefined,
+		});
 
 	if (quote.isPending) {
 		return (
@@ -370,6 +442,7 @@ function ModificationReview({
 	}
 	const q = quote.data;
 	const needsDisputeConfirm = q.hasOpenDispute && q.differenceCents < 0;
+	const offline = collectsOffline(q, chargeMethod);
 	return (
 		<div className="space-y-4">
 			<div className="grid gap-4 sm:grid-cols-2">
@@ -385,7 +458,14 @@ function ModificationReview({
 					compareTo={q.current}
 				/>
 			</div>
-			<PaymentSummaryCard quote={q} />
+			{q.differenceCents > 0 && (
+				<ExtraChargeChoice
+					hasSavedCard={Boolean(q.savedCard)}
+					offline={offline}
+					onChange={setChargeMethod}
+				/>
+			)}
+			<PaymentSummaryCard quote={q} collectOffline={offline} />
 			{needsDisputeConfirm && (
 				<div className="rounded-md border border-destructive p-3">
 					<AdminCheckbox
@@ -403,15 +483,11 @@ function ModificationReview({
 			/>
 			<Button
 				type="button"
-				disabled={
-					modify.isPending ||
-					createCheckout.isPending ||
-					(needsDisputeConfirm && !confirmDispute)
-				}
+				disabled={change.busy || (needsDisputeConfirm && !confirmDispute)}
 				onClick={() => void apply(q)}
 			>
 				<Icon icon="tabler:check" className="size-5" />
-				{confirmLabel(q)}
+				{confirmLabel(q, offline)}
 			</Button>
 		</div>
 	);

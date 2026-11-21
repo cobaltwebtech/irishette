@@ -77,6 +77,53 @@ export function AdminNoteField({
 	);
 }
 
+/** How the money is taken: a card through Stripe or outside it. */
+export function AdminPaymentChoice<V extends string>({
+	legend,
+	value,
+	onChange,
+	options,
+}: {
+	legend: string;
+	value: V;
+	onChange: (value: V) => void;
+	options: Array<{ value: V; label: string; description: string }>;
+}) {
+	const name = useId();
+	return (
+		<fieldset className="space-y-2">
+			<legend className="text-sm font-medium">{legend}</legend>
+			<div className="grid gap-2 sm:grid-cols-2">
+				{options.map((option) => (
+					<div
+						key={option.value}
+						className="space-y-1 rounded-md border p-3 text-sm has-checked:border-primary has-checked:bg-primary/5"
+					>
+						<label className="flex cursor-pointer items-start gap-3 font-medium">
+							<input
+								type="radio"
+								name={name}
+								value={option.value}
+								checked={value === option.value}
+								onChange={() => onChange(option.value)}
+								aria-describedby={`${name}-${option.value}`}
+								className="mt-0.5 size-4 accent-primary"
+							/>
+							{option.label}
+						</label>
+						<p
+							id={`${name}-${option.value}`}
+							className="pl-7 text-muted-foreground"
+						>
+							{option.description}
+						</p>
+					</div>
+				))}
+			</div>
+		</fieldset>
+	);
+}
+
 /** A confirmation checkbox with its label (consent, acknowledgements). */
 export function AdminCheckbox({
 	checked,

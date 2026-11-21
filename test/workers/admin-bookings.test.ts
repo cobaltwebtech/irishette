@@ -186,6 +186,8 @@ describe('payment and confirmation', () => {
 		const [{ body }] = checkout.created;
 		expect(body.get('allowed_payment_method_types[0]')).toBe('card');
 		expect(body.has('allowed_payment_method_types[1]')).toBe(false);
+		// No Link sign-in or Link "Bank" tab for a card typed by an admin.
+		expect(body.get('wallet_options[link][display]')).toBe('never');
 		expect(body.get('payment_intent_data[setup_future_usage]')).toBe(
 			'off_session',
 		);
@@ -306,5 +308,124 @@ describe('late same-day bookings (after 4:00 PM CT)', () => {
 		expect(without.unavailability.stays.some((s) => s.checkIn === today)).toBe(
 			false,
 		);
+	});
+});
+
+describe('admin holds last 10 minutes', () => {
+	useClock('2033-03-15T15:00:00Z');
+
+	it('keeps the hold at 10 minutes while the session gets Stripe 35', async () => {
+		const checkout = mockStripeCheckout();
+		const hold = await admin().bookings.adminCreateBooking(
+			adminInput({
+				guestEmail: GUEST.email,
+				checkInDate: '2033-06-01',
+				checkOutDate: '2033-06-03',
+			}),
+		);
+		const tenMinutes = new Date('2033-03-15T15:10:00Z');
+		expect((await bookingRow(hold.bookingId)).expiresAt).toEqual(tenMinutes);
+		const session = await admin().bookings.adminCreateCheckoutSession({
+			bookingId: hold.bookingId,
+		});
+		expect(session.holdExpiresAt).toEqual(tenMinutes);
+		expect((await bookingRow(hold.bookingId)).expiresAt).toEqual(tenMinutes);
+		const [{ body }] = checkout.created;
+		expect(Number(body.get('expires_at'))).toBe(
+			Date.parse('2033-03-15T15:35:00Z') / 1000,
+		);
+	});
+
+	it('adminReleaseHold expires the session and deletes the hold', async () => {
+		const checkout = mockStripeCheckout();
+		const hold = await admin().bookings.adminCreateBooking(
+			adminInput({
+				guestEmail: GUEST.email,
+				checkInDate: '2033-06-05',
+				checkOutDate: '2033-06-07',
+			}),
+		);
+		await admin().bookings.adminCreateCheckoutSession({
+			bookingId: hold.bookingId,
+		});
+		const released = await admin().bookings.adminReleaseHold({
+			bookingId: hold.bookingId,
+		});
+		expect(released.outcome).toBe('released');
+		expect(checkout.expired).toEqual([checkout.created[0].session.id]);
+		expect(await bookingRow(hold.bookingId)).toBeUndefined();
+	});
+
+	it('a hold paid just before the release is confirmed, not deleted', async () => {
+		const checkout = mockStripeCheckout();
+		mockEmail();
+		const hold = await admin().bookings.adminCreateBooking(
+			adminInput({
+				guestEmail: GUEST.email,
+				checkInDate: '2033-07-01',
+				checkOutDate: '2033-07-03',
+			}),
+		);
+		await admin().bookings.adminCreateCheckoutSession({
+			bookingId: hold.bookingId,
+		});
+		checkout.complete(checkout.created[0].session.id);
+		const result = await admin().bookings.adminReleaseHold({
+			bookingId: hold.bookingId,
+		});
+		expect(result.outcome).toBe('confirmed');
+		expect((await bookingRow(hold.bookingId)).status).toBe('confirmed');
+		await settle();
+	});
+
+	it("leaves a guest's own hold alone", async () => {
+		const pending = await insertBooking({
+			status: 'pending',
+			paymentStatus: 'pending',
+			expiresAt: new Date('2033-03-15T15:30:00Z'),
+		});
+		const result = await admin().bookings.adminReleaseHold({
+			bookingId: pending.id,
+		});
+		expect(result.outcome).toBe('unchanged');
+		expect((await bookingRow(pending.id)).status).toBe('pending');
+	});
+});
+
+describe('guest account pages list reservations only', () => {
+	it('hides holds and holds cancelled before payment', async () => {
+		const confirmed = await insertBooking({ confirmedAt: new Date() });
+		const cancelledAfter = await insertBooking({
+			status: 'cancelled',
+			paymentStatus: 'refunded',
+			confirmedAt: new Date(),
+		});
+		const hold = await insertBooking({
+			status: 'pending',
+			paymentStatus: 'pending',
+			expiresAt: new Date(Date.now() + 600_000),
+		});
+		const cancelledHold = await insertBooking({
+			status: 'cancelled',
+			paymentStatus: 'pending',
+		});
+		const mine = await caller('user').bookings.getMyBookings({
+			limit: 100,
+			offset: 0,
+		});
+		const ids = mine.map((r) => r.booking.publicId);
+		expect(ids).toContain(confirmed.publicId);
+		expect(ids).toContain(cancelledAfter.publicId);
+		expect(ids).not.toContain(hold.publicId);
+		expect(ids).not.toContain(cancelledHold.publicId);
+
+		const detail = await caller('user').bookings.getBooking({
+			publicId: hold.publicId,
+		});
+		expect(detail.listed).toBe(false);
+		const shown = await caller('user').bookings.getBooking({
+			publicId: confirmed.publicId,
+		});
+		expect(shown.listed).toBe(true);
 	});
 });

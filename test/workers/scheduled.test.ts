@@ -135,6 +135,36 @@ describe('expired pending bookings cleanup (5 8 * * *)', () => {
 		await runCron('5 8 * * *');
 		expect(await exists(processing.id)).toBe(true);
 	});
+
+	it('deletes holds cancelled before payment and keeps real cancellations', async () => {
+		const cancelledHold = await insertBooking({
+			checkInDate: '2042-07-10',
+			checkOutDate: '2042-07-12',
+			status: 'cancelled',
+			paymentStatus: 'pending',
+		});
+		// Confirmed, then cancelled: a reservation the guest still sees.
+		const cancelledBooking = await insertBooking({
+			checkInDate: '2042-08-10',
+			checkOutDate: '2042-08-12',
+			status: 'cancelled',
+			paymentStatus: 'refunded',
+			confirmedAt: new Date(Date.now() - 86_400_000),
+			stripePaymentIntentId: 'pi_cancelled_booking',
+		});
+		// Authorized, then released (dates taken): the payment attempt's record.
+		const released = await insertBooking({
+			checkInDate: '2042-09-10',
+			checkOutDate: '2042-09-12',
+			status: 'cancelled',
+			paymentStatus: 'pending',
+			stripePaymentIntentId: 'pi_released',
+		});
+		await runCron('5 8 * * *');
+		expect(await exists(cancelledHold.id)).toBe(false);
+		expect(await exists(cancelledBooking.id)).toBe(true);
+		expect(await exists(released.id)).toBe(true);
+	});
 });
 
 describe('iCal sync log cleanup (15 9 * * *)', () => {
