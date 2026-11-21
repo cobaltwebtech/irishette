@@ -18,6 +18,7 @@ export const inboxKinds = [
 	'payment_dispute',
 	'ical_sync_failed',
 	'ical_conflict',
+	'booking_modified',
 ] as const;
 export type InboxKind = (typeof inboxKinds)[number];
 
@@ -40,6 +41,7 @@ export const INBOX_KIND_LABELS: Record<InboxKind, string> = {
 	payment_dispute: 'Payment dispute',
 	ical_sync_failed: 'Calendar sync failed',
 	ical_conflict: 'Double booking',
+	booking_modified: 'Reservation changed',
 };
 
 /** The source each kind belongs to (one source per kind). */
@@ -52,6 +54,7 @@ export const INBOX_KIND_SOURCE: Record<InboxKind, InboxSource> = {
 	payment_dispute: 'stripe',
 	ical_sync_failed: 'system',
 	ical_conflict: 'system',
+	booking_modified: 'system',
 };
 
 // --- details (small JSON; no secrets, no card data, no webhook payloads) ----
@@ -175,6 +178,26 @@ interface IcalConflictDetails {
 	}>;
 }
 
+/** An admin changed a reservation (plan 06). */
+interface BookingModifiedDetails {
+	bookingPublicId: string;
+	confirmationId: string;
+	/** move, extend, change_room, release_early */
+	kind: string;
+	previousRoomName: string;
+	newRoomName: string;
+	previousDates: string;
+	newDates: string;
+	/** Dollars. */
+	previousTotal: number;
+	newTotal: number;
+	/** Dollars: positive charged, negative refunded. */
+	difference: number;
+	/** applied, payment_pending, refund_pending, refund_failed, payment_failed */
+	status: string;
+	note: string | null;
+}
+
 export interface InboxDetailsByKind {
 	contact_form: ContactFormDetails;
 	refund_auto: RefundAutoDetails;
@@ -184,6 +207,7 @@ export interface InboxDetailsByKind {
 	payment_dispute: PaymentDisputeDetails;
 	ical_sync_failed: IcalSyncFailedDetails;
 	ical_conflict: IcalConflictDetails;
+	booking_modified: BookingModifiedDetails;
 }
 
 export type InboxDetails = InboxDetailsByKind[InboxKind];

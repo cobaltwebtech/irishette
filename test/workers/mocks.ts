@@ -585,3 +585,107 @@ export function mockStripeRefundsFailing() {
 	);
 	return attempts;
 }
+
+// --- Off-session PaymentIntents (admin reservation changes, plan 06) -----------
+
+let intentSeq = 0;
+
+/** How an off-session confirmation fails: a decline or 3DS needed. */
+export type IntentFailure = 'card_declined' | 'authentication_required' | null;
+
+/**
+ * POST /v1/payment_intents (off-session, manual capture) and capture /
+ * cancel / retrieve for the intents it created. Requests for other intents
+ * fall through to the next handler (e.g. mockStripeCheckout's).
+ */
+export function mockStripeIntents() {
+	const intents = new Map<string, Record<string, unknown>>();
+	const created: Array<{
+		body: URLSearchParams;
+		idempotencyKey: string | null;
+	}> = [];
+	const captures: Array<{ intent: string; idempotencyKey: string | null }> = [];
+	const cancels: string[] = [];
+	/** Ids of the intents created, in order (unique across a test file). */
+	const ids: string[] = [];
+	const state: { fail: IntentFailure } = { fail: null };
+	network.use(
+		http.post(
+			'https://api.stripe.com/v1/payment_intents',
+			async ({ request }) => {
+				const body = new URLSearchParams(await request.text());
+				const idempotencyKey = request.headers.get('idempotency-key');
+				created.push({ body, idempotencyKey });
+				if (state.fail) {
+					return HttpResponse.json(
+						{
+							error: {
+								type: 'card_error',
+								code: state.fail,
+								message:
+									state.fail === 'card_declined'
+										? 'Your card was declined.'
+										: 'This payment requires authentication.',
+							},
+						},
+						{ status: 402 },
+					);
+				}
+				intentSeq += 1;
+				const id = `pi_mod_${intentSeq}`;
+				ids.push(id);
+				const intent = {
+					id,
+					object: 'payment_intent',
+					status: 'requires_capture',
+					amount: Number(body.get('amount')),
+					currency: 'usd',
+					capture_method: 'manual',
+					customer: body.get('customer'),
+					payment_method: body.get('payment_method'),
+					latest_charge: `ch_${id}`,
+					metadata: formRecord(body, 'metadata'),
+				};
+				intents.set(id, intent);
+				return HttpResponse.json(intent);
+			},
+		),
+		http.post(
+			'https://api.stripe.com/v1/payment_intents/:id/capture',
+			({ params, request }) => {
+				const intent = intents.get(String(params.id));
+				if (!intent) return undefined;
+				intent.status = 'succeeded';
+				captures.push({
+					intent: String(params.id),
+					idempotencyKey: request.headers.get('idempotency-key'),
+				});
+				return HttpResponse.json(intent);
+			},
+		),
+		http.post(
+			'https://api.stripe.com/v1/payment_intents/:id/cancel',
+			({ params }) => {
+				const intent = intents.get(String(params.id));
+				if (!intent) return undefined;
+				intent.status = 'canceled';
+				cancels.push(String(params.id));
+				return HttpResponse.json(intent);
+			},
+		),
+		http.get('https://api.stripe.com/v1/payment_intents/:id', ({ params }) => {
+			const intent = intents.get(String(params.id));
+			return intent ? HttpResponse.json(intent) : undefined;
+		}),
+	);
+	return {
+		created,
+		captures,
+		cancels,
+		ids,
+		/** Make off-session confirmations fail until reset with null. */
+		fail(mode: IntentFailure) {
+			state.fail = mode;
+		},
+	};
+}

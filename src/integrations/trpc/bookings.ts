@@ -12,7 +12,14 @@ import {
 } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { bookings, room, user } from '@/db/schema-export';
+import {
+	bookingModifications,
+	bookings,
+	paymentRefunds,
+	paymentTransactions,
+	room,
+	user,
+} from '@/db/schema-export';
 import {
 	findGuestByEmail,
 	findOrCreateGuest,
@@ -43,6 +50,21 @@ import {
 	listDisputes,
 	openDisputeExists,
 } from '@/lib/booking/dispute-service';
+import {
+	confirmModificationCheckout,
+	createModificationCheckout,
+	type ModificationTarget,
+	modifyBooking,
+	planModification,
+	releaseRoomEarly,
+	savedCard,
+} from '@/lib/booking/modification-service';
+import {
+	adminConfirmModificationSchema,
+	adminModifyBookingSchema,
+	adminReleaseEarlySchema,
+	modificationTargetSchema,
+} from '@/lib/booking/modification-validation';
 import {
 	adminCancelBookingSchema,
 	adminCreateBookingSchema,
@@ -191,6 +213,21 @@ const phaseFilterSchema = z.enum(['upcoming', 'current', 'past']).optional();
 const guestRoomColumns = { name: room.name, slug: room.slug };
 
 const listStatusSchema = bookingStatusSchema.optional();
+
+/** A booking for an admin action, by public id (NOT_FOUND otherwise). */
+async function adminBooking(ctx: AuthedContext, publicId: string) {
+	return findAccessibleBooking(ctx, { publicId }, { allowAdmin: true });
+}
+
+const targetOf = (input: {
+	roomId: string;
+	checkInDate: string;
+	checkOutDate: string;
+}): ModificationTarget => ({
+	roomId: input.roomId,
+	checkInDate: input.checkInDate,
+	checkOutDate: input.checkOutDate,
+});
 
 /** The price breakdown returned by calculateBooking and adminQuote. */
 function priceDetails(price: Awaited<ReturnType<typeof quoteStay>>) {
@@ -422,8 +459,51 @@ export const bookingsRouter = createTRPCRouter({
 					.from(user)
 					.where(eq(user.id, booking.userId)),
 			]);
-			const disputes = await listDisputes(ctx.db, { bookingId: booking.id });
-			return { booking, room: roomRow, user: guest ?? null, disputes };
+			const [disputes, payments, refunds, modifications] = await Promise.all([
+				listDisputes(ctx.db, { bookingId: booking.id }),
+				ctx.db
+					.select({
+						id: paymentTransactions.id,
+						stripePaymentIntentId: paymentTransactions.stripePaymentIntentId,
+						amount: paymentTransactions.amount,
+						amountRefunded: paymentTransactions.amountRefunded,
+						status: paymentTransactions.status,
+						paymentMethod: paymentTransactions.paymentMethod,
+						cardBrand: paymentTransactions.cardBrand,
+						cardLast4: paymentTransactions.cardLast4,
+						createdAt: paymentTransactions.createdAt,
+					})
+					.from(paymentTransactions)
+					.where(eq(paymentTransactions.bookingId, booking.id))
+					.orderBy(asc(paymentTransactions.createdAt)),
+				ctx.db
+					.select({
+						id: paymentRefunds.id,
+						stripeRefundId: paymentRefunds.stripeRefundId,
+						stripePaymentIntentId: paymentRefunds.stripePaymentIntentId,
+						source: paymentRefunds.source,
+						amount: paymentRefunds.amount,
+						status: paymentRefunds.status,
+						createdAt: paymentRefunds.createdAt,
+					})
+					.from(paymentRefunds)
+					.where(eq(paymentRefunds.bookingId, booking.id))
+					.orderBy(asc(paymentRefunds.createdAt)),
+				ctx.db
+					.select()
+					.from(bookingModifications)
+					.where(eq(bookingModifications.bookingId, booking.id))
+					.orderBy(asc(bookingModifications.createdAt)),
+			]);
+			return {
+				booking,
+				room: roomRow,
+				user: guest ?? null,
+				disputes,
+				paymentTransactions: payments,
+				paymentRefunds: refunds,
+				bookingModifications: modifications,
+			};
 		}),
 
 	getMyBookings: protectedProcedure
@@ -526,6 +606,105 @@ export const bookingsRouter = createTRPCRouter({
 				expectedRefundAmount: input.expectedRefundAmount,
 			});
 			return { success: true, ...result };
+		}),
+
+	/**
+	 * What a move, extension or room change would cost (plan 06): the full
+	 * reprice at current rates, the signed difference from the booking
+	 * total, and the card on file it would be charged to. Read-only.
+	 */
+	adminQuoteModification: adminProcedure
+		.input(modificationTargetSchema)
+		.query(async ({ ctx, input }) => {
+			const booking = await adminBooking(ctx, input.publicId);
+			const plan = await planModification(ctx, booking, targetOf(input));
+			const card =
+				plan.differenceCents > 0 ? await savedCard(ctx, booking) : null;
+			return {
+				kind: plan.kind,
+				current: {
+					baseAmount: booking.baseAmount,
+					feesAmount: booking.feesAmount ?? 0,
+					taxAmount: booking.taxAmount ?? 0,
+					totalAmount: booking.totalAmount,
+					numberOfNights: booking.numberOfNights,
+				},
+				next: priceDetails(plan.price),
+				differenceCents: plan.differenceCents,
+				savedCard: card ? { brand: card.brand, last4: card.last4 } : null,
+				hasOpenDispute: await hasOpenDispute(ctx.db, booking.id),
+			};
+		}),
+
+	/**
+	 * Applies a move, extension or room change (plan 06). A higher price is
+	 * charged to the saved card off-session; when it can't be, returns
+	 * 'card_required' with nothing changed (then use
+	 * adminCreateModificationCheckout). A lower price is refunded.
+	 */
+	adminModifyBooking: adminProcedure
+		.input(adminModifyBookingSchema)
+		.mutation(async ({ ctx, input }) => {
+			const booking = await adminBooking(ctx, input.publicId);
+			return modifyBooking(
+				ctx,
+				booking,
+				{
+					target: targetOf(input),
+					expectedDifferenceCents: input.expectedDifferenceCents,
+					note: input.note,
+					confirmDisputeRefund: input.confirmDisputeRefund,
+				},
+				ctx.user.id,
+			);
+		}),
+
+	/**
+	 * A card-only Checkout Session for a change's extra charge, when the saved
+	 * card can't be charged: the admin types the card the guest reads out.
+	 */
+	adminCreateModificationCheckout: adminProcedure
+		.input(adminModifyBookingSchema)
+		.mutation(async ({ ctx, input }) => {
+			const booking = await adminBooking(ctx, input.publicId);
+			const result = await createModificationCheckout(
+				ctx,
+				booking,
+				{
+					target: targetOf(input),
+					expectedDifferenceCents: input.expectedDifferenceCents,
+					note: input.note,
+				},
+				ctx.user.id,
+			);
+			return { ...result, publishableKey: ctx.env.STRIPE_PUBLISHABLE_KEY };
+		}),
+
+	/** Applies the change paid with that session (idempotent with the webhook). */
+	adminConfirmModificationCheckout: adminProcedure
+		.input(adminConfirmModificationSchema)
+		.mutation(async ({ ctx, input }) => {
+			const booking = await adminBooking(ctx, input.publicId);
+			const session = await ctx.stripe.checkout.sessions.retrieve(
+				input.sessionId,
+			);
+			if (session.metadata?.bookingId !== booking.id) throw notFound();
+			return confirmModificationCheckout(ctx, input.sessionId, {
+				note: input.note,
+			});
+		}),
+
+	/** The guest left early: the stay ends earlier, no refund (plan 06). */
+	adminReleaseRoomEarly: adminProcedure
+		.input(adminReleaseEarlySchema)
+		.mutation(async ({ ctx, input }) => {
+			const booking = await adminBooking(ctx, input.publicId);
+			return releaseRoomEarly(
+				ctx,
+				booking,
+				{ newCheckOutDate: input.newCheckOutDate, note: input.note },
+				ctx.user.id,
+			);
 		}),
 
 	/** Admin cancellation: full refund (force majeure), policy refund or none. */

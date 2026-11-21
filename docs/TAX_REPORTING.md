@@ -101,7 +101,12 @@ A booking with no tax snapshot is marked **Estimated** (page and CSV):
 - **Disputes (chargebacks)** are not adjusted. Check the Stripe Dashboard and
   the admin inbox for the period.
 - **Exemptions** (permanent residents, exempt organizations) are not tracked.
-- Payments are assumed to be the booking total (one payment per booking).
+- **Several payments per booking** (an admin change charged extra or
+  refunded part, plan 06): each payment and refund row is split in the
+  booking's current proportions. For one room the fee and taxes are fixed
+  shares of the total, so this is exact; after a move to a room with other
+  fee or tax rates, rows paid before the change are split at the new room's
+  rates (approximate). A per-payment snapshot may come later.
 
 ## Exports
 

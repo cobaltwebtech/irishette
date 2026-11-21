@@ -154,6 +154,7 @@ export function reservationMarkup(
 		price: booking.totalAmount.toFixed(2),
 		priceCurrency: 'USD',
 		bookingUrl: `${baseUrl}/account/booking/${booking.publicId}`,
+		modifyUrl: `${baseUrl}/contact?booking=${booking.confirmationId}`,
 		modifiedTime: formatInstantIso(booking.updatedAt),
 	};
 }
@@ -550,6 +551,81 @@ export function sendCancellationEmails(
 			preview: `Booking ${booking.confirmationId} was cancelled`,
 			heading: 'Booking cancelled',
 			paragraphs: [info.adminMessage],
+		},
+	});
+}
+
+export interface ModificationEmailInfo {
+	modificationId: string;
+	/** "Stay extended", "Room changed"... */
+	label: string;
+	previous: { roomName: string; checkIn: string; checkOut: string };
+	previousTotal: number;
+	/** Cents: positive charged, negative refunded, 0 none. */
+	differenceCents: number;
+	releasedEarly: boolean;
+}
+
+/**
+ * An admin changed the reservation (plan 06): the guest and the admins get
+ * the before/after and what was charged or refunded (key
+ * booking-modified/<modificationId>).
+ */
+export function sendBookingModifiedEmails(
+	db: Database,
+	env: EmailEnv,
+	booking: Booking,
+	room: RoomInfo,
+	info: ModificationEmailInfo,
+): Promise<EmailResult> {
+	const difference = info.differenceCents / 100;
+	const before = `${info.previous.roomName}, ${formatStayDate(info.previous.checkIn)} to ${formatStayDate(info.previous.checkOut)}`;
+	const money = info.releasedEarly
+		? 'No refund is given for the unused nights (see our cancellation policy, Early Departure).'
+		: difference > 0
+			? `The difference of ${currency(difference)} was charged to your card on file.`
+			: difference < 0
+				? `The difference of ${currency(-difference)} is being refunded to the card you paid with. ${REFUND_TIMING}`
+				: 'The price did not change, so nothing was charged or refunded.';
+	return sendBookingNotices(db, env, booking, room, {
+		kind: `booking modified ${booking.confirmationId}`,
+		category: 'booking_modified',
+		idempotencyKey: `booking-modified/${info.modificationId}`,
+		highlight: {
+			title: info.label,
+			rows: [
+				{ label: 'Before', value: before },
+				{ label: 'Previous total', value: currency(info.previousTotal) },
+				{ label: 'New total', value: currency(booking.totalAmount) },
+				{
+					label: difference < 0 ? 'Refund' : 'Charged',
+					value: currency(Math.abs(difference)),
+				},
+			],
+		},
+		guest: {
+			subject: `Reservation Changed - ${booking.confirmationId} | Irishette Bed & Breakfast`,
+			preview: `Your reservation ${booking.confirmationId} was changed`,
+			heading: 'Your reservation was changed',
+			paragraphs: [
+				`Hi ${booking.guestName},`,
+				`As you asked by phone, we changed your reservation ${booking.confirmationId}. The details below are your updated stay.`,
+				money,
+				`Reservations are changed by phone only. For anything else, call us at ${CONTACT_PHONE}.`,
+			],
+		},
+		admin: {
+			subject: `Reservation Changed: ${booking.confirmationId} (${info.label})`,
+			preview: `Reservation ${booking.confirmationId} was changed`,
+			heading: `Reservation changed: ${info.label.toLowerCase()}`,
+			paragraphs: [
+				`Before: ${before}, ${currency(info.previousTotal)}.`,
+				info.releasedEarly
+					? 'Released early: no money moved.'
+					: difference === 0
+						? 'No price difference.'
+						: `${difference > 0 ? 'Charged' : 'Refunded'} ${currency(Math.abs(difference))}.`,
+			],
 		},
 	});
 }

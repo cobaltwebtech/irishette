@@ -218,8 +218,9 @@ function ContactPage() {
 							</div>
 							<div className="mt-8 text-center">
 								<p className="text-muted-foreground">
-									For immediate assistance with existing reservations, please
-									call us directly at{' '}
+									Reservation changes (new dates, a longer stay or another room)
+									are made by phone only, and for immediate assistance with
+									existing reservations, please call us directly at{' '}
 									<a
 										href={CONTACT_PHONE_HREF}
 										className="font-medium text-accent hover:text-accent/80"

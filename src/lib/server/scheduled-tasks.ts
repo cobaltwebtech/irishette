@@ -9,6 +9,7 @@ import {
 	confirmBookingPayment,
 	settlePaidHold,
 } from '@/lib/booking/checkout-service';
+import { recoverModifications } from '@/lib/booking/modification-service';
 import { purgeSentEmails } from '@/lib/email/email-dedupe';
 import { syncAllFeeds } from '@/lib/ical/ical-sync';
 
@@ -44,6 +45,8 @@ export const PAYMENT_RECOVERY_AFTER_MINUTES = 15;
  *   authorization, well before it lapses (5 to 7 days);
  * - cancelled bookings still 'refund_pending': create (or find and record)
  *   the cancellation refund;
+ * - admin reservation changes (plan 06) whose extra charge was not
+ *   captured or whose refund was not created;
  * - pending holds whose session the guest completed but nothing confirmed
  *   (webhook failing, tab closed before the return page): confirm and
  *   capture, before anyone else can take the dates. Holds expired for more
@@ -101,6 +104,7 @@ export async function scheduledPaymentRecovery(
 			);
 		}
 	}
+	settled += await recoverModifications(deps, cutoff, now);
 	if (settled + failed > 0) {
 		console.log(
 			`Payment recovery: ${settled} settled, ${failed} failed of ${stuck.length} checked`,

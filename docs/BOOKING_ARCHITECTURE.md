@@ -517,6 +517,70 @@ also sends the guest a late same-day notice (key `late-same-day/<id>`, built
 on `BookingNoticeEmail`). The cancellation policy page has a "Late Same-Day
 Bookings" section.
 
+### Reservation changes (admin only, plan 06)
+
+Guests call to change a booking; staff use **Modify Reservation** on the
+admin booking page (`/admin/bookings/$publicId/modify`; the booking route is
+a layout, `$publicId.tsx`, with the detail page `$publicId/index.tsx` and
+`$publicId/modify.tsx`). Server: `src/lib/booking/modification-service.ts`,
+pure rules in `modification-rules.ts`, inputs in `modification-validation.ts`.
+
+- **Move, extend, change room** (`bookings.adminQuoteModification`, then
+  `adminModifyBooking` with `expectedDifferenceCents`): the booking must be
+  `confirmed` and `paid` / `partially_refunded`; the new stay has at least as
+  many nights (no shortening), a check-in not in the past unless unchanged
+  (an in-progress stay can be extended; the page then offers a later
+  check-out only), at most 30 nights and within 10 months; a new room must be
+  active and take the guests; the new dates must be free ignoring this
+  booking (`availability.adminGetByRoom({ excludeBookingPublicId })` on the
+  page). No same-day cutoff. The whole new stay is repriced at current rates
+  (`quoteStay`); the difference is `newTotal - totalAmount` in cents. A stale
+  difference is `CONFLICT` with the new one.
+- **Increase:** the difference is authorized first on the saved card
+  (`savedCard`: the newest payment row's `stripe_payment_method_id`, `card`
+  only; a PaymentIntent with `off_session`, `confirm`, `capture_method:
+  'manual'`, key `modify/<modificationId>`). A decline or a card that needs
+  the guest returns `card_required` with nothing changed; the page then
+  calls `adminCreateModificationCheckout` (a card-only Checkout Session for
+  the difference, `metadata.kind: 'modification'` with the new room and
+  dates) and `adminConfirmModificationCheckout` after the admin types the
+  card; the webhook applies it too (`confirmModificationCheckout`,
+  idempotent; it re-plans and cancels the authorization if the dates were
+  taken or the price moved).
+- **Claim:** one guarded UPDATE writes the new room, dates, instants, nights,
+  amounts and tax snapshot and `last_modification_id`, `WHERE` still
+  confirmed and paid, `updated_at` unchanged and `noOverlapForStay` (the NEW
+  dates, `availability.ts`). No row: the authorization is cancelled and
+  `CONFLICT`. Then the `booking_modifications` row (the audit trail).
+- **After the claim:** an increase is captured (`capture-modify/<id>`) and
+  recorded as a second `payment_transactions` row (status `payment_pending`
+  until then; the recovery cron finishes it). A decrease is refunded across
+  the payments, newest first (`refundAcrossPayments`, `booking-payments.ts`,
+  key `refund-modify/<bookingId>/<modificationId>/<cents>/<pi>`,
+  `metadata.reason: 'modification'`); a transient failure leaves the change
+  `refund_pending` (cron retry), a permanent one `refund_failed` with a
+  `refund_failed` inbox item and an admin alert. `bookings.refund_amount` is
+  not incremented: it stays the refunds against the current total.
+- **Release early** (`adminReleaseRoomEarly`): the stay ends on a date from
+  today, before the current check-out (at least one night stays); only the
+  dates and nights change, no money (early departure: no refund).
+- **Not allowed** while the payment is `authorized`, `refund_pending` or
+  `refund_failed`, or on cancelled and pending bookings. A refund on a
+  disputed payment needs `confirmDisputeRefund`. A cancellation waits while a
+  change's extra charge is `payment_pending`.
+- **Messages:** `sendBookingModifiedEmails` (guest + admins with the
+  `booking_modified` email category, key `booking-modified/<id>`) and a
+  `booking_modified` inbox item. The admin booking page lists payments,
+  refunds and changes ("Payments and changes").
+
+**Multiple payments.** A booking can now hold several PaymentIntents.
+Cancellation refunds use `refundAcrossPayments` too (key
+`refund-cancel/<bookingId>/<cents>/<pi>`; a retry reads each payment's
+refunds from Stripe first). The refund webhooks find the booking from either
+payment (`bookingIdForIntent`), update only that charge's payment row, and
+derive the booking's refunded amount with `refundedAgainstTotal`: total
+minus what the guest still has paid across all payments.
+
 ### Admin blocks
 
 Managed in **Admin -> Property -> (room)**
@@ -575,6 +639,7 @@ until 11:00 AM CT on the check-out date, then `past`) from the stored
 | `test/unit/ids.test.ts`, `validation.test.ts` | Id formats, booking/payment input schemas |
 | `test/workers/bookings.test.ts` | Overlaps, holds, pricing parity, ownership, cancellation and refunds |
 | `test/workers/booking-integrity.test.ts` | Stored check-in/out instants, booking limits, the same-day cutoff, applied tier, quote drift, partial refunds, save-then-refund with a failing refund, stay phase |
+| `test/workers/modifications.test.ts`, `test/unit/modification-rules.test.ts` | Changes: increase on the saved card (authorize, claim, capture, second payment row), room change, claim conflict cancels the authorization, price drift, decline then fresh card (page and webhook, once), decrease refund (not a cancellation refund), refund retry by the cron, no shortening, blocked payment states, release early, cancellation across two payments, tax report with two payments; the pure rules |
 | `test/workers/admin-bookings.test.ts` | Admin bookings: new and existing accounts, banned guests, consent required, card-only session and confirmation, late same-day acknowledgement, notice email and zero policy refund, admin calendar window and exclusion |
 | `test/workers/checkout.test.ts` | Session parameters (manual capture, card + Link, card kept on file, admin card-only variant), reuse/replacement, confirmation checks, claim then capture then record, dates taken -> authorization released (no refund), capture once across return page + webhook, transient and permanent capture failures, retry after a cut-short confirmation, priority rule |
 | `test/workers/stripe-webhook.test.ts` | Signature, `checkout.session.*` (decided from the PaymentIntent, releases for cancelled/deleted/already-paid bookings, `async_payment_*` ignored), refunds (incl. replay after a failure), disputes, log hygiene |

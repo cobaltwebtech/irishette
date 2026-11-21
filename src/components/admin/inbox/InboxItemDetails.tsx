@@ -398,6 +398,39 @@ function ConflictView({
 	);
 }
 
+function BookingModifiedView({
+	details: d,
+}: {
+	details: InboxDetailsByKind['booking_modified'];
+}) {
+	return (
+		<div className="space-y-4">
+			<DetailList
+				rows={[
+					{ label: 'Confirmation', value: d.confirmationId },
+					{
+						label: 'Before',
+						value: `${d.previousRoomName}, ${d.previousDates}, ${currency(d.previousTotal)}`,
+					},
+					{
+						label: 'After',
+						value: `${d.newRoomName}, ${d.newDates}, ${currency(d.newTotal)}`,
+					},
+					{
+						label: d.difference < 0 ? 'Refunded' : 'Charged',
+						value: currency(Math.abs(d.difference)),
+					},
+					{ label: 'Status', value: d.status.replace('_', ' ') },
+					d.note ? { label: 'Note', value: d.note } : null,
+				]}
+			/>
+			<Actions>
+				<BookingLink publicId={d.bookingPublicId} label="Open booking" />
+			</Actions>
+		</div>
+	);
+}
+
 const VIEWS: KindViews = {
 	contact_form: ContactFormView,
 	refund_auto: RefundAutoView,
@@ -407,6 +440,7 @@ const VIEWS: KindViews = {
 	payment_dispute: PaymentDisputeView,
 	ical_sync_failed: SyncFailedView,
 	ical_conflict: ConflictView,
+	booking_modified: BookingModifiedView,
 };
 
 export function InboxItemDetails({ item }: { item: Item }) {

@@ -230,6 +230,10 @@ skipped) (`releaseExpiredHold()` → `closeHoldSession()`):
 
 ### Payment recovery (cron)
 
+Also finishes admin reservation changes (plan 06): `payment_pending`
+(capture and record the extra charge) and `refund_pending` (retry the
+refund, finding earlier ones first), via `recoverModifications`.
+
 `scheduledPaymentRecovery()` runs in the `*/30` trigger, before the iCal sync.
 It retries payment work a stopped Worker left half done, for bookings not
 updated for `PAYMENT_RECOVERY_AFTER_MINUTES` (15):
@@ -283,6 +287,36 @@ Each booking is isolated: a failure is logged and retried on the next run.
   admins default to no refund and must pass `confirmDisputeRefund: true` to
   refund (Stripe warns a refund on a disputed charge can credit the guest
   twice).
+
+## Reservation changes (admin only, plan 06)
+
+Admins change reservations by phone (`docs/BOOKING_ARCHITECTURE.md`,
+"Reservation changes"). Stripe side:
+
+- **Extra charge on the saved card:** `paymentIntents.create` with the
+  customer, the saved `card` payment method, `off_session: true`,
+  `confirm: true`, `capture_method: 'manual'`,
+  `automatic_payment_methods: { enabled: true, allow_redirects: 'never' }`,
+  metadata `stripeBookingMetadata` + `reason: 'modification'` +
+  `modificationId`, key `modify/<modificationId>`. Captured after the
+  booking claims the new dates (`capture-modify/<modificationId>`), recorded
+  as another `payment_transactions` row. A `card_error` (decline,
+  `authentication_required`) or a status other than `requires_capture`
+  changes nothing; the admin enters a fresh card.
+- **Fresh card:** a card-only Checkout Session for the difference
+  (`metadata.kind: 'modification'`, the new room and dates, the admin's id;
+  `setup_future_usage: 'off_session'`, manual capture, 31 minutes). The
+  webhook's `checkout.session.completed` sends these to
+  `confirmModificationCheckout` (not `confirmBookingPayment`).
+- **Refunds for a cheaper stay** and **cancellation refunds** are spread
+  over the booking's payments, newest first (`refundAcrossPayments`);
+  `metadata.reason` is `modification` or `cancellation` and
+  `metadata.refundKey` identifies the request across retries. A failed
+  modification refund (`refund.failed`) marks the change `refund_failed`,
+  not the booking.
+- **MOTO:** typing a guest's card into the admin form is not a
+  Stripe-recognized MOTO flow (that is Terminal, enabled by Stripe support).
+  Confirm with Stripe support before go-live that this use is acceptable.
 
 ## Refunds made in the Stripe Dashboard
 

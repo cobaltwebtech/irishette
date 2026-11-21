@@ -187,7 +187,7 @@ describe('stuck cancellation refunds', () => {
 			expect(refunds.created).toHaveLength(1);
 			expect(refunds.created[0].body.get('amount')).toBe('25000');
 			expect(refunds.created[0].idempotencyKey).toBe(
-				`refund-cancel/${booking.id}/25000`,
+				`refund-cancel/${booking.id}/25000/pi_recover_1`,
 			);
 			expect(await row(booking.id)).toMatchObject({
 				paymentStatus: 'refunded',

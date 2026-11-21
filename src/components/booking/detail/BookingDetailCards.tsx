@@ -314,8 +314,9 @@ export function ImportantInfoCard({ className }: { className: string }) {
 					</li>
 					<li>
 						We will meet you in person to hand over your key and will contact
-						you with arrival instructions before your stay. If your plans
-						change, call us at{' '}
+						you with arrival instructions before your stay. Reservation changes
+						(new dates, a longer stay or another room) are made by phone only:
+						call us at{' '}
 						<a
 							href={CONTACT_PHONE_HREF}
 							className="text-accent hover:underline"

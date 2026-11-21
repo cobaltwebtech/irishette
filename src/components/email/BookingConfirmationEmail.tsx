@@ -153,9 +153,9 @@ export const BookingConfirmationEmail: React.FC<
 										. You can cancel online from your account until check-in.
 									</Text>
 									<Text className="text-sm text-blue-800">
-										<strong>Contact:</strong> Please reply to this email if you
-										have any questions or need to make changes to your
-										reservation
+										<strong>Changes:</strong> Reservation changes (new dates, a
+										longer stay or another room) are made by phone only: call us
+										at {contactPhone}. For anything else, reply to this email
 									</Text>
 								</Column>
 							</Row>

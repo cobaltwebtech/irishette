@@ -15,6 +15,10 @@ import {
 } from '@/lib/booking/checkout-service';
 import { handleDisputeEvent } from '@/lib/booking/dispute-service';
 import {
+	confirmModificationCheckout,
+	isModificationSession,
+} from '@/lib/booking/modification-service';
+import {
 	handleChargeRefunded,
 	handleRefundEvent,
 } from '@/lib/booking/refund-service';
@@ -118,6 +122,31 @@ async function dispatch(deps: ServiceDeps, event: Stripe.Event) {
 	}
 }
 
+/**
+ * A fresh-card payment for an admin reservation change (plan 06): apply the
+ * change (idempotent with the admin page). A permanent refusal (dates taken,
+ * price moved) already cancelled the authorization: acknowledge it.
+ */
+async function onModificationSessionCompleted(
+	deps: ServiceDeps,
+	session: Stripe.Checkout.Session,
+) {
+	try {
+		const outcome = await confirmModificationCheckout(deps, session.id);
+		console.log(
+			`Checkout Session ${session.id}: reservation change ${outcome.modificationId} applied`,
+		);
+	} catch (error) {
+		if (error instanceof TRPCError && error.code !== 'INTERNAL_SERVER_ERROR') {
+			console.warn(
+				`Checkout Session ${session.id}: reservation change not applied (${error.code}: ${error.message})`,
+			);
+			return;
+		}
+		throw error;
+	}
+}
+
 /** Our booking for a Checkout Session: client_reference_id, metadata, stored id. */
 async function findSessionBooking(
 	deps: ServiceDeps,
@@ -147,6 +176,10 @@ async function onSessionCompleted(
 	session: Stripe.Checkout.Session,
 ) {
 	if (session.mode !== 'payment') return;
+	if (isModificationSession(session)) {
+		await onModificationSessionCompleted(deps, session);
+		return;
+	}
 	const booking = await findSessionBooking(deps, session);
 	if (!booking) {
 		if (session.metadata?.source !== STRIPE_METADATA_SOURCE) {

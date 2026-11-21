@@ -132,7 +132,9 @@ describe('cancellation windows and refunds', () => {
 		});
 		await settle();
 		expect(result).toMatchObject({ refundAmount: 250, refundPercent: 100 });
-		expect(refunds[0].idempotencyKey).toBe(`refund-cancel/${booking.id}/25000`);
+		expect(refunds[0].idempotencyKey).toBe(
+			`refund-cancel/${booking.id}/25000/${booking.stripePaymentIntentId}`,
+		);
 		const after = await row(booking.id);
 		expect(after).toMatchObject({
 			status: 'cancelled',

@@ -114,14 +114,14 @@ Config is the `fmt` and `lint` blocks in `vite.config.ts`. Oxfmt is scoped to co
 ```
 src/server.ts            Custom Worker entry: fetch -> TanStack Start handler; scheduled -> handleScheduledEvent. DO NOT DELETE.
 src/start.tsx, router.tsx  TanStack Start / Router setup. start.tsx: global request middleware (security headers + report-only CSP, CSRF for server functions). router.tsx creates a QueryClient and tRPC client PER REQUEST (SSR uses a local in-process link, no HTTP) and refreshes the session on tRPC UNAUTHORIZED/FORBIDDEN
-src/routes/              File-based routes: _authed.tsx (signed-in layout) -> _authed/account/, _authed/booking/, _authed/_admin.tsx -> _authed/_admin/admin/; public auth/, booking/, rooms/; api/
+src/routes/              File-based routes: _authed.tsx (signed-in layout) -> _authed/account/, _authed/booking/, _authed/_admin.tsx -> _authed/_admin/admin/ (bookings/new = phone booking; bookings/$publicId.tsx = layout for $publicId/index (detail) and $publicId/modify); public auth/, booking/, rooms/; api/
 src/routes/api/          Server routes: auth.$ (Better Auth, rate-limited), trpc.$ (tRPC), stripe.$ (webhook), ical.$ (iCal export feed), csp-report (CSP violation reports -> Workers Logs)
 src/integrations/trpc/   init.ts (public/protected/admin procedures, errorFormatter), context.ts + inner-context.ts (per-request context), router.ts, routers: bookings, rooms, availability, ical, policies, users, inbox, reports
 src/core/functions/      TanStack Start server functions (auth-server.ts: getSessionFn; contact.ts: submitContactFn, public)
 src/core/middleware/     TanStack Start middleware: security-headers (global), rate-limit (server routes + rateLimitFnMiddleware for server functions), auth (requireSession/requireAdmin function middleware)
 src/lib/                 Services, validation and domain logic in subfolders (`site.ts` stays at the root: domain, contact details, email senders, check-in/out times):
   auth/                    auth, auth-client, auth-check (route guards), auth-constants/-errors/-validation, server-auth (server fn checks), session (useSession), session-user, redirect, user-validation
-  booking/                 booking-service, checkout-service, refund-service, dispute-service, availability, pricing, booking-status (status enums), stay-times (check-in/out instants, same-day cutoff, stay phase), cancellation-policy(-store), payment-validation, room-validation
+  booking/                 booking-service, checkout-service, refund-service, dispute-service, admin-booking-service (phone bookings: find/create guest), modification-service + modification-rules + modification-validation (admin reservation changes), booking-payments (refunds across a booking's payments), availability, pricing, booking-status (status enums), stay-times (check-in/out instants, same-day cutoff, stay phase), cancellation-policy(-store), payment-validation, room-validation
   stripe/                  stripe (client, API version, metadata helpers), stripe-webhook
   ical/                    ical-sync/-fetch/-parse/-generate/-export, ical-feed-sources
   inbox/                   inbox (kinds, details types), inbox-service (createInboxItem), inbox-validation, contact-service + contact-validation + turnstile (contact form, Siteverify)
@@ -131,7 +131,7 @@ src/lib/                 Services, validation and domain logic in subfolders (`s
   server/                  deps (ServiceDeps), admin-query, scheduled-tasks
 src/utils/               Small pure helpers and hooks: date-range, timezone, format, ids, read-limited, db-errors, booking-utils, seo, twMerge, use-now, use-mobile
 src/db/                  Drizzle schemas (auth-, booking-, room-, policy-, inbox-), schema-export.ts, drizzle-init.ts (createDrizzle, Database type)
-src/components/          UI (ui/ = shadcn, admin/ (admin/inbox/ = notifications), booking/ (booking/detail/ = cards shared by the admin, account and confirmation pages; BookingsTable = booking lists), rooms/ (room page sections), auth/, email/, data-table/)
+src/components/          UI (ui/ = shadcn, admin/ (admin/inbox/ = notifications, admin/booking/ = phone booking and modify page parts: AdminCardPayment, AdminStayPicker, PaymentsAndChangesCard), booking/ (booking/detail/ = cards shared by the admin, account and confirmation pages; BookingsTable = booking lists; AvailabilityCalendar = date-picking core shared by guest and admin calendars), rooms/ (room page sections), auth/, email/, data-table/)
 src/stores/              TanStack Store booking state
 drizzle/                 Generated SQL migrations: the baseline 0000_init.sql plus later migrations (applied via `cf d1 migrations apply`)
 scripts/                 d1-local.mjs (local D1 helpers), smoke.mjs, check-client-bundle.mjs (post-build secret-name check)
@@ -374,7 +374,7 @@ Tuned in Phase 8 of the 2026-11 upgrade plan and tightened in plan 02 (Phase 7).
   | `ui` | `src/components/ui/**` | `ui`, `shared` |
   | `email` | `src/components/email/**` | `email` |
   | `client` | other `src/components/**`, `src/stores/**` | `ui`, `client`, `shared`; `server` type-only |
-  | `server` | server-only services in `src/lib/` subfolders (`auth/auth`, `auth/server-auth`, `booking/{booking,checkout,refund,dispute}-service`, `booking/availability`, `booking/cancellation-policy-store`, `server/*`, `email/email-service`, `stripe/*`, `ical/ical-sync`, `ical/ical-export`, `security/rate-limit`, `inbox/{inbox,contact}-service`, `inbox/turnstile`, `reports/tax-report-service`), `src/db/**`, `src/server.ts`, tRPC init/access/context/routers | anything |
+  | `server` | server-only services in `src/lib/` subfolders (`auth/auth`, `auth/server-auth`, `booking/{booking,checkout,refund,dispute,admin-booking,modification}-service`, `booking/booking-payments`, `booking/availability`, `booking/cancellation-policy-store`, `server/*`, `email/email-service`, `stripe/*`, `ical/ical-sync`, `ical/ical-export`, `security/rate-limit`, `inbox/{inbox,contact}-service`, `inbox/turnstile`, `reports/tax-report-service`), `src/db/**`, `src/server.ts`, tRPC init/access/context/routers | anything |
   | `shared` | the rest of `src/lib/**`, `src/utils/**`, tRPC `react`/`types`/`errors`/`batching` | `shared`; `server` type-only |
 
   Routes and `src/core/` are unzoned. When you add a server-only module to `src/lib/`, add it to the `server` zone. If client code needs a constant that lives in a server file (e.g. a Drizzle schema), move it into a shared module (see `src/lib/ical/ical-feed-sources.ts`) instead of suppressing the violation.
@@ -395,4 +395,4 @@ Rules of thumb (verify each, do not assume):
 - Do not edit generated files (`src/routeTree.gen.ts`, `varlock.d.ts`, `.cloudflare/types/**`, `drizzle/**`) by hand.
 - Do not remove `src/server.ts`; it is the Worker entry and cron handler.
 - Keep Stripe webhook signature verification and Turnstile verification intact when editing those flows; never log full payment payloads, card data, or session tokens.
-- Scheduled tasks (cron triggers in `cloudflare.config.ts`): `*/30` payment recovery (stuck `authorized` captures, paid holds nothing confirmed, stuck `refund_pending` refunds) then iCal sync, `5 8 * * *` expired pending bookings cleanup, `15 9 * * *` iCal log and sent-email cleanup. Changing the schedule requires updating both `cloudflare.config.ts` and `src/lib/server/scheduled-tasks.ts`.
+- Scheduled tasks (cron triggers in `cloudflare.config.ts`): `*/30` payment recovery (stuck `authorized` captures, paid holds nothing confirmed, stuck `refund_pending` refunds, reservation changes left `payment_pending` / `refund_pending`) then iCal sync, `5 8 * * *` expired pending bookings cleanup, `15 9 * * *` iCal log and sent-email cleanup. Changing the schedule requires updating both `cloudflare.config.ts` and `src/lib/server/scheduled-tasks.ts`.

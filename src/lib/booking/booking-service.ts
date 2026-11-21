@@ -5,8 +5,8 @@ import type Stripe from 'stripe';
 
 import type { Database } from '@/db/drizzle-init';
 import {
+	bookingModifications,
 	bookings,
-	paymentTransactions,
 	room,
 	roomPricingRules,
 	user,
@@ -18,11 +18,7 @@ import {
 import { createInboxItemInBackground } from '@/lib/inbox/inbox-service';
 import { inBackground, type ServiceDeps } from '@/lib/server/deps';
 import { formatTimeOfDay, SAME_DAY_CUTOFF_TIME } from '@/lib/site';
-import {
-	isPermanentStripeError,
-	stripeBookingMetadata,
-	toCents,
-} from '@/lib/stripe/stripe';
+import { isPermanentStripeError, toCents } from '@/lib/stripe/stripe';
 import {
 	BOOKING_WINDOW_MONTHS,
 	daysBetween,
@@ -35,6 +31,7 @@ import { newId, newPublicId } from '@/utils/ids';
 import { todayIn } from '@/utils/timezone';
 
 import { checkAvailability, HOLD_MINUTES } from './availability';
+import { refundAcrossPayments } from './booking-payments';
 import { PAID_STATUSES } from './booking-status';
 import { quoteCancellation } from './cancellation-policy';
 import {
@@ -45,7 +42,6 @@ import {
 	type Booking,
 	closeHoldSession,
 	publicConflicts,
-	recordAppRefund,
 	roomName,
 } from './checkout-service';
 import { hasOpenDispute } from './dispute-service';
@@ -161,7 +157,7 @@ export function assertStayWindow(
 }
 
 /** The room takes bookings and this many guests (the room row). */
-async function assertRoomBookable(
+export async function assertRoomBookable(
 	db: Database,
 	roomId: string,
 	guestCount: number,
@@ -704,6 +700,25 @@ async function cancelConfirmed(
 				'The payment for this booking is still being completed. Please try again in a few minutes.',
 		});
 	}
+	const [charging] = await db
+		.select({ id: bookingModifications.id })
+		.from(bookingModifications)
+		.where(
+			and(
+				eq(bookingModifications.bookingId, booking.id),
+				eq(bookingModifications.status, 'payment_pending'),
+			),
+		)
+		.limit(1);
+	if (charging) {
+		// A change's extra charge is not captured yet (plan 06): its payment
+		// must exist before the refund can be spread over the payments.
+		throw new TRPCError({
+			code: 'CONFLICT',
+			message:
+				'A reservation change is still being charged. Please try again in a few minutes.',
+		});
+	}
 	await assertDisputeAllows(db, booking, options);
 	const amounts = await refundFor(db, booking, options, now);
 	const { refundAmount, refundPercent } = amounts;
@@ -802,25 +817,28 @@ async function refundCancellation(
 	now: Date,
 	{ retry = false }: { retry?: boolean } = {},
 ): Promise<{ booking: Booking; refundFailed: boolean }> {
-	const { db, stripe } = deps;
+	const { db } = deps;
 	const cents = toCents(amounts.refundAmount);
-	let refund: Stripe.Refund;
+	let refund: Stripe.Refund | undefined;
+	let failure: string | null = null;
 	try {
-		const existing = retry ? await findCancellationRefund(deps, booking) : null;
-		refund =
-			existing ??
-			(await stripe.refunds.create(
-				{
-					payment_intent: booking.stripePaymentIntentId ?? '',
-					amount: cents,
-					reason: 'requested_by_customer',
-					metadata: {
-						...stripeBookingMetadata(booking),
-						reason: 'cancellation',
-					},
-				},
-				{ idempotencyKey: `refund-cancel/${booking.id}/${cents}` },
-			));
+		// Spread over the booking's payments (an approved change may have
+		// added one, plan 06), newest first.
+		const result = await refundAcrossPayments(
+			deps,
+			booking,
+			cents,
+			{
+				reason: 'cancellation',
+				refundKey: `refund-cancel/${booking.id}/${cents}`,
+				retry,
+			},
+			now,
+		);
+		refund = result.refunds[0];
+		if (result.uncoveredCents > 0 || !refund) {
+			failure = `The payments on this booking do not cover the refund (${formatMoney(result.uncoveredCents / 100)} short)`;
+		}
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Unknown error';
 		if (!isPermanentStripeError(error)) {
@@ -829,6 +847,11 @@ async function refundCancellation(
 			);
 			return { booking, refundFailed: false };
 		}
+		failure = message;
+	}
+
+	if (failure || !refund) {
+		const message = failure ?? 'No refund was created';
 		console.error(
 			`Cancellation refund failed for booking ${booking.confirmationId}: ${message}`,
 		);
@@ -845,9 +868,9 @@ async function refundCancellation(
 		return { booking: updated ?? booking, refundFailed: true };
 	}
 
-	// The refund exists. Recording it must not report a failed refund.
+	// The refund exists (refundAcrossPayments recorded it and the payment
+	// totals). Recording the booking must not report a failed refund.
 	try {
-		await recordAppRefund(db, refund, booking.id, now);
 		const totalRefunded = roundCents(
 			amounts.alreadyRefunded + amounts.refundAmount,
 		);
@@ -869,14 +892,6 @@ async function refundCancellation(
 				),
 			)
 			.returning();
-		await db
-			.update(paymentTransactions)
-			.set({
-				status: paymentStatus,
-				amountRefunded: totalRefunded,
-				updatedAt: now,
-			})
-			.where(eq(paymentTransactions.bookingId, booking.id));
 		return { booking: updated ?? booking, refundFailed: false };
 	} catch (error) {
 		console.error(
@@ -885,27 +900,6 @@ async function refundCancellation(
 		);
 		return { booking, refundFailed: false };
 	}
-}
-
-/**
- * The cancellation refund already created for this booking, if any (a
- * retry after a crash: Stripe idempotency keys only last 24 hours).
- */
-async function findCancellationRefund(deps: ServiceDeps, booking: Booking) {
-	if (!booking.stripePaymentIntentId) return null;
-	const list = await deps.stripe.refunds.list({
-		payment_intent: booking.stripePaymentIntentId,
-		limit: 100,
-	});
-	return (
-		list.data.find(
-			(r) =>
-				r.metadata?.bookingId === booking.id &&
-				r.metadata?.reason === 'cancellation' &&
-				r.status !== 'failed' &&
-				r.status !== 'canceled',
-		) ?? null
-	);
 }
 
 /**

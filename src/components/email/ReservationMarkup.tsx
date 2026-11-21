@@ -30,8 +30,13 @@ export interface ReservationMarkupData {
 	price: string;
 	/** ISO 4217, e.g. "USD". */
 	priceCurrency: string;
-	/** Page where the guest can view and manage the booking. */
+	/** Page where the guest can view the booking. */
 	bookingUrl: string;
+	/**
+	 * Where the guest asks for a change: the contact page (changes are made
+	 * by phone only, plan 06; the booking page has no modify action).
+	 */
+	modifyUrl: string;
 	/** ISO 8601 time the booking was last changed. */
 	modifiedTime: string;
 }
@@ -57,7 +62,7 @@ export function lodgingReservation(d: ReservationMarkupData) {
 		price: d.price,
 		priceCurrency: d.priceCurrency,
 		url: d.bookingUrl,
-		modifyReservationUrl: d.bookingUrl,
+		modifyReservationUrl: d.modifyUrl,
 		modifiedTime: d.modifiedTime,
 	};
 }

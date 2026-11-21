@@ -7,6 +7,10 @@ import {
 } from 'drizzle-orm/sqlite-core';
 
 import { bookingStatuses, paymentStatuses } from '@/lib/booking/booking-status';
+import {
+	modificationKinds,
+	modificationStatuses,
+} from '@/lib/booking/modification-rules';
 import { newId, newPublicId } from '@/utils/ids';
 
 import { user } from './auth-schema';
@@ -91,6 +95,9 @@ export const bookings = sqliteTable(
 		// given by the guest at checkout, or verbally to an admin by phone.
 		cardConsentAt: integer('card_consent_at', { mode: 'timestamp' }),
 		cardConsentBy: text('card_consent_by', { enum: ['guest', 'admin'] }),
+		// The last admin modification applied to this row (plan 06): a retry
+		// of the same modification finds it applied instead of conflicting.
+		lastModificationId: text('last_modification_id'),
 
 		// Stripe integration
 		stripeCustomerId: text('stripe_customer_id'),
@@ -194,6 +201,48 @@ export const paymentTransactions = sqliteTable(
 	(table) => [
 		index('payment_transactions_booking_idx').on(table.bookingId),
 		index('payment_transactions_charge_idx').on(table.stripeChargeId),
+	],
+);
+
+// Admin reservation changes (plan 06): the audit trail and the source for
+// the admin "Payments and changes" card. One row per change: the stay
+// before and after, the signed price difference and where the money moved.
+export const bookingModifications = sqliteTable(
+	'booking_modifications',
+	{
+		id: text('id').primaryKey().$defaultFn(newId),
+		bookingId: text('booking_id')
+			.notNull()
+			.references(() => bookings.id, { onDelete: 'cascade' }),
+		// The admin's user id (no foreign key: keeps the trail if the account
+		// is deleted).
+		adminUserId: text('admin_user_id'),
+		kind: text('kind', { enum: modificationKinds }).notNull(),
+		previousRoomId: text('previous_room_id').notNull(),
+		newRoomId: text('new_room_id').notNull(),
+		previousCheckInDate: text('previous_check_in_date').notNull(),
+		previousCheckOutDate: text('previous_check_out_date').notNull(),
+		newCheckInDate: text('new_check_in_date').notNull(),
+		newCheckOutDate: text('new_check_out_date').notNull(),
+		previousTotal: real('previous_total').notNull(), // dollars
+		newTotal: real('new_total').notNull(), // dollars
+		// Positive: charged to the guest; negative: refunded; 0: none.
+		differenceCents: integer('difference_cents').notNull(),
+		// The extra charge (increases) or the first refund (decreases).
+		stripePaymentIntentId: text('stripe_payment_intent_id'),
+		stripeRefundId: text('stripe_refund_id'),
+		status: text('status', { enum: modificationStatuses }).notNull(),
+		note: text('note'),
+		createdAt: integer('created_at', { mode: 'timestamp' })
+			.$defaultFn(() => new Date())
+			.notNull(),
+		updatedAt: integer('updated_at', { mode: 'timestamp' })
+			.$defaultFn(() => new Date())
+			.notNull(),
+	},
+	(table) => [
+		index('booking_modifications_booking_idx').on(table.bookingId),
+		index('booking_modifications_status_idx').on(table.status),
 	],
 );
 

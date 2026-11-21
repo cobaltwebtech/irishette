@@ -7,6 +7,7 @@
 export const notificationCategories = [
 	'new_booking',
 	'booking_cancelled',
+	'booking_modified',
 	'refund_issued',
 	'payment_problem',
 	'calendar_sync',
@@ -24,6 +25,11 @@ export const NOTIFICATION_CATEGORY_INFO: Record<
 	booking_cancelled: {
 		label: 'Cancellations',
 		description: 'A booking is cancelled by a guest, an admin or the system.',
+	},
+	booking_modified: {
+		label: 'Reservation changes',
+		description:
+			'An admin moves, extends or changes the room of a booking, or releases it early.',
 	},
 	refund_issued: {
 		label: 'Refunds made in Stripe',

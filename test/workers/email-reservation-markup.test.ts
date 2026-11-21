@@ -66,6 +66,8 @@ describe('reservation markup', () => {
 			price: '250.00',
 			priceCurrency: 'USD',
 			bookingUrl: `${BASE_URL}/account/booking/${b.publicId}`,
+			// Changes are made by phone only (plan 06): the contact page.
+			modifyUrl: `${BASE_URL}/contact?booking=${b.confirmationId}`,
 			telephone: '+12544545558',
 			address: PROPERTY_ADDRESS,
 		});

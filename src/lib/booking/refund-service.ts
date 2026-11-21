@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import type Stripe from 'stripe';
 
 import {
+	bookingModifications,
 	bookings,
 	paymentRefunds,
 	paymentTransactions,
@@ -15,7 +16,8 @@ import { inBackground, type ServiceDeps } from '@/lib/server/deps';
 import { STRIPE_METADATA_SOURCE, stripeId } from '@/lib/stripe/stripe';
 import { formatMoney } from '@/utils/format';
 
-import { type Booking, roomName } from './checkout-service';
+import { bookingIdForIntent, refundedAgainstTotal } from './booking-payments';
+import { type Booking, loadBooking, roomName } from './checkout-service';
 
 // Refund webhooks (plan 02, 3.4): refund.created / refund.updated /
 // refund.failed and charge.refunded. Every refund is upserted into
@@ -29,13 +31,24 @@ import { type Booking, roomName } from './checkout-service';
 // - A failed refund alerts the admins (email + refund_failed notification).
 // Server-only.
 
+/**
+ * The booking a PaymentIntent paid for: its checkout payment, or an extra
+ * charge for an approved change (plan 06, a payment_transactions row).
+ */
+async function bookingForIntent(deps: ServiceDeps, intentId: string) {
+	const [row] = await deps.db
+		.select()
+		.from(bookings)
+		.where(eq(bookings.stripePaymentIntentId, intentId));
+	if (row) return row;
+	const bookingId = await bookingIdForIntent(deps.db, intentId);
+	return bookingId ? loadBooking(deps.db, bookingId) : undefined;
+}
+
 async function findRefundBooking(deps: ServiceDeps, refund: Stripe.Refund) {
 	const intentId = stripeId(refund.payment_intent);
 	if (intentId) {
-		const [row] = await deps.db
-			.select()
-			.from(bookings)
-			.where(eq(bookings.stripePaymentIntentId, intentId));
+		const row = await bookingForIntent(deps, intentId);
 		if (row) return row;
 	}
 	const metadataBookingId = refund.metadata?.bookingId;
@@ -152,7 +165,15 @@ async function onRefundFailed(
 	livemode: boolean,
 	now: Date,
 ) {
-	if (booking && source === 'app') {
+	const modificationId = refund.metadata?.modificationId;
+	if (booking && source === 'app' && modificationId) {
+		// A refund for a cheaper change (plan 06): the booking keeps its
+		// payment status; the change is marked failed.
+		await deps.db
+			.update(bookingModifications)
+			.set({ status: 'refund_failed', updatedAt: now })
+			.where(eq(bookingModifications.id, modificationId));
+	} else if (booking && source === 'app') {
 		await deps.db
 			.update(bookings)
 			.set({ paymentStatus: 'refund_failed', updatedAt: now })
@@ -265,17 +286,12 @@ async function applyChargeTotals(
 	now: Date,
 ): Promise<Booking> {
 	const { db } = deps;
-	const totalRefunded = charge.amount_refunded / 100;
-	const full = charge.amount_refunded >= charge.amount;
-	const paymentStatus = full ? 'refunded' : 'partially_refunded';
-	await db
-		.update(paymentTransactions)
-		.set({
-			amountRefunded: totalRefunded,
-			status: paymentStatus,
-			updatedAt: now,
-		})
-		.where(eq(paymentTransactions.bookingId, booking.id));
+	const { totalRefunded, full, paymentStatus } = await syncChargeRefunds(
+		deps,
+		booking,
+		charge,
+		now,
+	);
 	if (full && booking.status === 'confirmed') {
 		const [cancelled] = await db
 			.update(bookings)
@@ -306,6 +322,54 @@ async function applyChargeTotals(
 	return row ?? booking;
 }
 
+/**
+ * Stores a charge's refunded total on its payment row and works out the
+ * booking's: refunded against its current total across all its payments
+ * (plan 06; a refund for a cheaper change lowered the total too, so it does
+ * not count). Bookings without payment rows use the charge's own totals.
+ */
+async function syncChargeRefunds(
+	deps: ServiceDeps,
+	booking: Booking,
+	charge: Stripe.Charge,
+	now: Date,
+) {
+	const chargeRefunded = charge.amount_refunded / 100;
+	const intentId = stripeId(charge.payment_intent);
+	if (intentId) {
+		await deps.db
+			.update(paymentTransactions)
+			.set({
+				amountRefunded: chargeRefunded,
+				status:
+					charge.amount_refunded >= charge.amount
+						? 'refunded'
+						: charge.amount_refunded > 0
+							? 'partially_refunded'
+							: 'paid',
+				updatedAt: now,
+			})
+			.where(
+				and(
+					eq(paymentTransactions.bookingId, booking.id),
+					eq(paymentTransactions.stripePaymentIntentId, intentId),
+				),
+			);
+	}
+	const derived = await refundedAgainstTotal(deps.db, booking);
+	const totalRefunded = derived ?? chargeRefunded;
+	const full =
+		derived === null
+			? charge.amount_refunded >= charge.amount
+			: Math.round(derived * 100) >= Math.round(booking.totalAmount * 100);
+	const paymentStatus = full
+		? ('refunded' as const)
+		: totalRefunded > 0
+			? ('partially_refunded' as const)
+			: ('paid' as const);
+	return { totalRefunded, full, paymentStatus };
+}
+
 /** charge.refunded: totals only (no email; refund.* events handle those). */
 export async function handleChargeRefunded(
 	deps: ServiceDeps,
@@ -314,24 +378,20 @@ export async function handleChargeRefunded(
 ) {
 	const intentId = stripeId(charge.payment_intent);
 	if (!intentId) return;
-	const [booking] = await deps.db
-		.select()
-		.from(bookings)
-		.where(eq(bookings.stripePaymentIntentId, intentId));
+	const booking = await bookingForIntent(deps, intentId);
 	if (!booking) return;
-	const refunded = charge.amount_refunded / 100;
-	const paymentStatus =
-		charge.amount_refunded >= charge.amount ? 'refunded' : 'partially_refunded';
+	const { totalRefunded, paymentStatus } = await syncChargeRefunds(
+		deps,
+		booking,
+		charge,
+		now,
+	);
 	await deps.db
 		.update(bookings)
-		.set({ paymentStatus, refundAmount: refunded, updatedAt: now })
+		.set({ paymentStatus, refundAmount: totalRefunded, updatedAt: now })
 		.where(eq(bookings.id, booking.id));
-	await deps.db
-		.update(paymentTransactions)
-		.set({ amountRefunded: refunded, status: paymentStatus, updatedAt: now })
-		.where(eq(paymentTransactions.bookingId, booking.id));
 	console.log(
-		`Booking ${booking.confirmationId}: ${paymentStatus} (${refunded})`,
+		`Booking ${booking.confirmationId}: ${paymentStatus} (${totalRefunded})`,
 	);
 }
 

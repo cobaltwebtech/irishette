@@ -522,7 +522,7 @@ function sessionMismatch(session: Stripe.Checkout.Session, booking: Booking) {
 }
 
 /** The PaymentIntent of a session retrieved with `expand: ['payment_intent']`. */
-function sessionIntent(session: Stripe.Checkout.Session) {
+export function sessionIntent(session: Stripe.Checkout.Session) {
 	const pi = session.payment_intent;
 	return pi && typeof pi === 'object' ? pi : null;
 }
@@ -805,7 +805,7 @@ async function capturePayment(
  * Cancels an uncaptured PaymentIntent. True when it is cancelled (now or
  * before), false if it was captured. Transient Stripe errors throw.
  */
-async function cancelIntent(stripe: Stripe, intentId: string) {
+export async function cancelIntent(stripe: Stripe, intentId: string) {
 	try {
 		await stripe.paymentIntents.cancel(intentId, {
 			cancellation_reason: 'abandoned',

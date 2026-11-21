@@ -340,3 +340,48 @@ export function blockIsFree(
 				AND (${excludeBlockId} IS NULL OR other.id <> ${excludeBlockId})
 		)`;
 }
+
+/**
+ * SQL condition (no FROM needed) that is true when the stay
+ * [checkIn, checkOut) in `roomId` overlaps no booking that holds dates
+ * (other than `excludeBookingId`), no imported event and no admin block.
+ * Used as the WHERE of the guarded modification update (plan 06), so the
+ * check and the write are one statement: unlike noOverlapForBookingRow it
+ * checks the NEW dates and room, not the row's current ones.
+ */
+export function noOverlapForStay(
+	roomId: string,
+	checkIn: IsoDate,
+	checkOut: IsoDate,
+	excludeBookingId: string,
+	now: Date,
+) {
+	const nowSeconds = Math.floor(now.getTime() / 1000);
+	return sql`
+		NOT EXISTS (
+			SELECT 1 FROM bookings AS b
+			WHERE b.room_id = ${roomId}
+				AND b.id <> ${excludeBookingId}
+				AND b.check_in_date < ${checkOut}
+				AND b.check_out_date > ${checkIn}
+				AND (
+					b.status = 'confirmed'
+					OR (
+						b.status = 'pending'
+						AND (b.expires_at > ${nowSeconds} OR b.payment_status = 'processing')
+					)
+				)
+		)
+		AND NOT EXISTS (
+			SELECT 1 FROM external_events AS ev
+			WHERE ev.room_id = ${roomId}
+				AND ev.start_date < ${checkOut}
+				AND ev.end_date > ${checkIn}
+		)
+		AND NOT EXISTS (
+			SELECT 1 FROM room_blocked_periods AS blk
+			WHERE blk.room_id = ${roomId}
+				AND blk.start_date < ${checkOut}
+				AND blk.end_date >= ${checkIn}
+		)`;
+}
