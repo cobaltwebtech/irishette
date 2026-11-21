@@ -193,7 +193,8 @@ function NewBookingPage() {
 
 	return (
 		<AdminLayout title="New Booking">
-			<div className="grid gap-6 lg:grid-cols-2">
+			{/* Stacked, full width: the two-month calendar needs the room. */}
+			<div className="space-y-6">
 				<Card>
 					<CardHeader>
 						<CardTitle>Room and dates</CardTitle>
@@ -241,7 +242,6 @@ function NewBookingPage() {
 
 				{selectedRoom && stay && (
 					<ReviewCard
-						className="lg:col-span-2"
 						roomId={selectedRoom.id}
 						roomName={selectedRoom.name}
 						checkIn={stay.checkIn}
@@ -409,7 +409,6 @@ function GuestLookup({
 }
 
 function ReviewCard({
-	className,
 	roomId,
 	roomName,
 	checkIn,
@@ -418,7 +417,6 @@ function ReviewCard({
 	busy,
 	onSubmit,
 }: {
-	className?: string;
 	roomId: string;
 	roomName: string;
 	checkIn: string;
@@ -441,7 +439,7 @@ function ReviewCard({
 	const late = quote.data?.lateSameDay ?? false;
 	const ready = quote.data && consented && (!late || acknowledged);
 	return (
-		<Card className={className}>
+		<Card>
 			<CardHeader>
 				<CardTitle>Review</CardTitle>
 				<CardDescription>

@@ -104,8 +104,9 @@ function ModifyReservationPage() {
 					Only confirmed bookings can be changed.
 				</p>
 			) : (
-				<div className="grid gap-6 lg:grid-cols-3">
-					<ChangeStayCard className="lg:col-span-2" data={data} />
+				// Stacked, full width: the two-month calendar needs the room.
+				<div className="space-y-6">
+					<ChangeStayCard data={data} />
 					<ReleaseEarlyCard booking={booking} />
 				</div>
 			)}
@@ -147,13 +148,7 @@ function changeTarget(
 		: null;
 }
 
-function ChangeStayCard({
-	className,
-	data,
-}: {
-	className?: string;
-	data: AdminBooking;
-}) {
+function ChangeStayCard({ data }: { data: AdminBooking }) {
 	const { booking, room } = data;
 	const trpc = useTRPC();
 	const today = useTodayCT();
@@ -177,7 +172,7 @@ function ChangeStayCard({
 	});
 
 	return (
-		<Card className={className}>
+		<Card>
 			<CardHeader>
 				<CardTitle>Change dates or room</CardTitle>
 				<CardDescription>
