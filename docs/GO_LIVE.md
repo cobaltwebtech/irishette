@@ -54,9 +54,17 @@ VITE_TURNSTILE_PUBLIC_KEY=...             # production Turnstile site key (step 
   only that origin.
 - These three are baked into the build (they are not Worker secrets). Changing
   one means rebuilding and redeploying.
+- Encrypt (you run these; each asks for Touch ID or your password):
+  `pnpm env:encrypt` runs `pnpm env:encrypt:local` (`.env.local`) then
+  `pnpm env:encrypt:prod` (`.env.production`, loaded with
+  `APP_ENV=production`). Only sensitive values are encrypted, so the three
+  `@public` lines above stay plain by design. The key is this Mac's Secure
+  Enclave: production builds (`pnpm build:prod`, `pnpm run deploy`) must run
+  from this Mac. `pnpm env:lock` locks the decrypt daemon again.
 - Check it (the check decrypts `.env.local`, so it asks for Touch ID or your
-  password): `APP_ENV=production pnpm env:check`.
+  password): `pnpm env:check:prod`.
 - `varlock scan` (`pnpm env:scan`) should still pass: nothing here is a secret.
+  `pnpm env:audit` compares code references with `.env.schema`.
 
 ## 2. Production database (done)
 

@@ -52,6 +52,10 @@ pnpm db:reset:local          # wipe local D1, re-migrate, re-seed
 pnpm db:migrate:remote       # cf d1 migrations apply on the REMOTE PRODUCTION database `irishette-prod` (ASK THE USER FIRST)
 
 pnpm env:check               # varlock load --agent: validate schema + resolve values (sensitive values redacted)
+pnpm env:check:prod          # same with APP_ENV=production (also loads .env.production)
+pnpm env:audit               # varlock audit: code env references vs .env.schema (ignores are in the schema header)
+pnpm env:encrypt             # USER ONLY: env:encrypt:local (.env.local) + env:encrypt:prod (.env.production, APP_ENV=production)
+pnpm env:lock / env:reveal   # USER ONLY: lock the decrypt daemon / reveal values
 pnpm env:scan                # varlock scan: fail if sensitive values appear in plaintext in tracked/unignored files
 pnpm env:types               # varlock codegen: regenerate varlock.d.ts from .env.schema
 pnpm check:bundle            # after a build: fail if secret variable names appear in client assets
@@ -209,13 +213,14 @@ Varlock owns the env contract, validation, types and local secret encryption. `c
 Files:
 - `.env.schema` (**committed**): declares every variable with `@public` / sensitive (default) decorators, types and docs. It holds **no secret values, so agents may read and edit it.** Never put a sensitive literal default in it; `varlock scan` flags that.
 - `varlock.d.ts` (**committed**, generated): typed `ENV`. Regenerate with `pnpm env:types` after editing the schema. Never hand-edit.
-- `.env.local` (**gitignored**): real values. Sensitive values are encrypted in place with `varlock encrypt --file .env.local` (macOS Secure Enclave; the key is bound to the user's Mac, and each decrypt asks for Touch ID or a password).
+- `.env.local` (**gitignored**): real values. Sensitive values are encrypted in place with `pnpm env:encrypt:local` (`varlock encrypt --file .env.local`; macOS Secure Enclave; the key is bound to the user's Mac, and each decrypt asks for Touch ID or a password). `pnpm env:encrypt:prod` does the same for `.env.production` (with `APP_ENV=production`, the only way that file is loaded); its `@public` values stay plain.
 - Every other `.env*` file and `.dev.vars*` is gitignored. `vite.config.ts` sets `envDir: false`, so Vite and the Cloudflare plugin never read them; Varlock is the only source.
 
 Rules for agents:
 - **Never read `.env`, `.env.local` or any other `.env*` file other than `.env.schema`.** Never print, `cat`, `reveal` or `printenv` secret values, and never write decrypted values to disk or into tracked files.
 - Check config with `pnpm env:check` (redacted). It triggers a Touch ID prompt, so tell the user first. Note `varlock load --format json` prints `@public` values in plain text; that is fine, but do not use it on sensitive ones.
-- Do not run `varlock encrypt` or `varlock reveal` yourself. The user runs them.
+- Do not run `varlock encrypt`, `varlock reveal` or `varlock lock` yourself (nor the `env:encrypt*`, `env:reveal`, `env:lock` scripts). The user runs them.
+- `varlock audit` ignores live in the `.env.schema` header: `@auditIgnorePaths` takes directories only (it rejects single files), so keys read only by tests and tooling (`playwright.config.ts`, `vitest.config.ts`, `e2e/`, `drizzle.config.ts`) go in `@auditIgnoreKeys`, and the Worker secrets (read as bindings) carry `@auditIgnore`.
 - Do not change `@public` / sensitive markings without asking. A secret marked `@public` will be printed, bundled or unencrypted.
 - When adding a variable: add it to `.env.schema`, run `pnpm env:types`, then declare it in `cloudflare.config.ts` (`bindings.secret()` for sensitive, `bindings.text(publicValue('NAME') as string)` for `@public`). Add secrets to `SECRET_NAMES` in `scripts/check-client-bundle.mjs`. Ask the user to add the value to `.env.local`.
 
