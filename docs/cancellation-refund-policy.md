@@ -85,7 +85,7 @@ In the event we cancel your reservation, you will receive a **full refund** of a
 
 ## Modifications to Reservations
 
-Reservations are changed by phone only: call us at **254-454-5558**. Before check-in we can move your dates, extend or shorten your stay, or move you to another room, subject to availability. The changed reservation is priced again in full at the rates in effect when the change is made, and the difference from what you paid is charged to your card on file or refunded to the card you paid with. You approve the new price before we make the change.
+Reservations are changed by phone only: call us at **254-454-5558**. Before check-in we can move your dates, extend or shorten your stay, or move you to another room, subject to availability. The changed reservation is priced again in full at the rates in effect when the change is made, and the difference from what you paid is charged to your card on file or refunded to the card you paid with. When a change removes nights, those nights are treated as cancelled: the price difference is refunded according to the cancellation windows above, at the time of the change, and the rest is kept. A late same-day booking stays non-refundable. You approve the new price before we make the change.
 
 Once your stay has begun (at check-in time) it can only be extended. If you leave early, we release the room from your new departure date so others can book it, but no refund is given for the unused nights (see Early Departure).
 

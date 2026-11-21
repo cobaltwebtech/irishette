@@ -144,3 +144,51 @@ export const MODIFICATION_KIND_LABELS: Record<ModificationKind, string> = {
 	change_room: 'Room changed',
 	release_early: 'Released early',
 };
+
+/** A stay's money columns (dollars). */
+export interface StayAmounts {
+	baseAmount: number;
+	feesAmount: number;
+	taxAmount: number;
+	totalAmount: number;
+	taxableAmount: number;
+	stateTaxAmount: number;
+	cityTaxAmount: number;
+}
+
+const cents = (dollars: number) => Math.round(dollars * 100);
+
+/**
+ * A cheaper change that drops nights (plan 06): the dropped nights are
+ * cancelled under the booking's policy, so only `refundPercent` of the price
+ * difference is refunded. The rest is kept in the booking's amounts,
+ * component by component (room, fee, taxes), like a partly refunded
+ * cancellation. Returns the booking's new amounts, the refund and the
+ * amount kept, in cents. 100% gives the new stay's price exactly.
+ */
+export function amountsAfterPolicyRefund(
+	current: StayAmounts,
+	next: StayAmounts,
+	refundPercent: number,
+): { amounts: StayAmounts; refundCents: number; keptCents: number } {
+	const differenceCents = cents(current.totalAmount) - cents(next.totalAmount);
+	const refundCents = Math.round((differenceCents * refundPercent) / 100);
+	const keptShare = 1 - refundPercent / 100;
+	const keep = (key: keyof StayAmounts) =>
+		(cents(next[key]) +
+			Math.round((cents(current[key]) - cents(next[key])) * keptShare)) /
+		100;
+	return {
+		amounts: {
+			baseAmount: keep('baseAmount'),
+			feesAmount: keep('feesAmount'),
+			taxAmount: keep('taxAmount'),
+			taxableAmount: keep('taxableAmount'),
+			stateTaxAmount: keep('stateTaxAmount'),
+			cityTaxAmount: keep('cityTaxAmount'),
+			totalAmount: (cents(current.totalAmount) - refundCents) / 100,
+		},
+		refundCents,
+		keptCents: differenceCents - refundCents,
+	};
+}

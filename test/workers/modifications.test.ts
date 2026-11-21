@@ -379,7 +379,8 @@ describe('decrease refunded', () => {
 		expect(after.paymentStatus).toBe('paid');
 		expect(after.refundAmount ?? 0).toBe(0);
 		const [mod] = await changes(booking.id);
-		expect(mod).toMatchObject({ status: 'applied', stripeRefundId: 're_1' });
+		expect(mod.status).toBe('applied');
+		expect(mod.stripeRefundId).toMatch(/^re_\d+$/);
 		await settle();
 	});
 
@@ -533,6 +534,105 @@ describe('rules and early release', () => {
 			}),
 		);
 		expect(error.code).toBe('FORBIDDEN');
+	});
+});
+
+/** The booking's net tax and total in the tax report for the clock's days. */
+async function reportedTax(confirmationId: string) {
+	const report = await getTaxReport(
+		{ db: db() },
+		{ from: '2033-04-30', to: '2033-05-01' },
+	);
+	const rows = report.rows.filter((r) => r.confirmationId === confirmationId);
+	return {
+		rows,
+		tax: rows.reduce((sum, r) => sum + r.stateTax + r.cityTax, 0),
+		total: rows.reduce((sum, r) => sum + r.total, 0),
+	};
+}
+
+describe('cancellation windows on fewer nights, and tax liability', () => {
+	useClock('2033-05-01T15:00:00Z'); // May 1, 10:00 AM CT
+
+	it('more than 7 days ahead: full refund; the refund lowers the tax', async () => {
+		mockStripeRefunds();
+		mockEmail();
+		const booking = await paidBooking();
+		const before = await reportedTax(booking.confirmationId);
+		const { quote } = await change(booking, {
+			checkInDate: booking.checkInDate,
+			checkOutDate: addDays(booking.checkInDate, 1),
+		});
+		expect(quote.refundPercent).toBe(100);
+		expect(quote.differenceCents).toBe(quote.priceDifferenceCents);
+		const after = await row(booking.id);
+		const report = await reportedTax(booking.confirmationId);
+		const refundRow = report.rows.find((r) => r.type === 'refund');
+		expect(refundRow?.total).toBe(quote.differenceCents);
+		expect(refundRow && refundRow.stateTax + refundRow.cityTax).toBeLessThan(0);
+		// Net liability = the tax on the shorter stay.
+		expect(report.total).toBe(Math.round(after.totalAmount * 100));
+		expect(
+			Math.abs(report.tax - Math.round((after.taxAmount ?? 0) * 100)),
+		).toBeLessThanOrEqual(1);
+		expect(report.tax).toBeLessThan(before.tax);
+		await settle();
+	});
+
+	it('3 to 7 days ahead: 75% of the difference refunded, the rest and its tax kept', async () => {
+		const refunds = mockStripeRefunds();
+		mockEmail();
+		const booking = await paidBooking({
+			checkInDate: '2033-05-06',
+			checkOutDate: '2033-05-08',
+		});
+		const { quote, result } = await change(booking, {
+			checkInDate: '2033-05-06',
+			checkOutDate: '2033-05-07',
+		});
+		expect(quote.refundPercent).toBe(75);
+		const expected = Math.round((-quote.priceDifferenceCents * 75) / 100);
+		expect(quote.differenceCents).toBe(-expected);
+		expect(result.status).toBe('applied');
+		expect(refunds[0].body.get('amount')).toBe(String(expected));
+		const after = await row(booking.id);
+		expect(after).toMatchObject({
+			numberOfNights: 1,
+			checkOutDate: '2033-05-07',
+			totalAmount: (Math.round(booking.totalAmount * 100) - expected) / 100,
+		});
+		const [mod] = await changes(booking.id);
+		expect(mod).toMatchObject({ kind: 'shorten', refundPercent: 75 });
+		const report = await reportedTax(booking.confirmationId);
+		expect(report.total).toBe(Math.round(after.totalAmount * 100));
+		expect(
+			Math.abs(report.tax - Math.round((after.taxAmount ?? 0) * 100)),
+		).toBeLessThanOrEqual(1);
+		await settle();
+	});
+
+	it('under 3 days: no refund, the night is still freed, tax unchanged', async () => {
+		mockEmail();
+		const booking = await paidBooking({
+			checkInDate: '2033-05-03',
+			checkOutDate: '2033-05-05',
+		});
+		const before = await reportedTax(booking.confirmationId);
+		const { quote, result } = await change(booking, {
+			checkInDate: '2033-05-03',
+			checkOutDate: '2033-05-04',
+		});
+		expect(quote.refundPercent).toBe(0);
+		expect(quote.differenceCents).toBe(0);
+		expect(result.status).toBe('applied');
+		expect(await row(booking.id)).toMatchObject({
+			checkOutDate: '2033-05-04',
+			numberOfNights: 1,
+			totalAmount: booking.totalAmount,
+		});
+		const report = await reportedTax(booking.confirmationId);
+		expect(report.tax + 0).toBe(before.tax + 0);
+		await settle();
 	});
 });
 

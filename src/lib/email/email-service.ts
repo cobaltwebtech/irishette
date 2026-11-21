@@ -584,6 +584,8 @@ export interface ModificationEmailInfo {
 	/** Cents: positive charged, negative refunded, 0 none. */
 	differenceCents: number;
 	releasedEarly: boolean;
+	/** Cancellation tier applied to dropped nights (null: none). */
+	refundPercent: number | null;
 }
 
 /**
@@ -604,9 +606,13 @@ export function sendBookingModifiedEmails(
 		? 'No refund is given for the unused nights (see our cancellation policy, Early Departure).'
 		: difference > 0
 			? `The difference of ${currency(difference)} was charged to your card on file.`
-			: difference < 0
-				? `The difference of ${currency(-difference)} is being refunded to the card you paid with. ${REFUND_TIMING}`
-				: 'The price did not change, so nothing was charged or refunded.';
+			: info.refundPercent !== null
+				? difference < 0
+					? `The removed nights fall under our cancellation policy: ${info.refundPercent}% of the price difference is refunded, so ${currency(-difference)} is going back to the card you paid with. ${REFUND_TIMING}`
+					: 'The removed nights fall under our cancellation policy, and no refund is due for them at this point.'
+				: difference < 0
+					? `The difference of ${currency(-difference)} is being refunded to the card you paid with. ${REFUND_TIMING}`
+					: 'The price did not change, so nothing was charged or refunded.';
 	return sendBookingNotices(db, env, booking, room, {
 		kind: `booking modified ${booking.confirmationId}`,
 		category: 'booking_modified',

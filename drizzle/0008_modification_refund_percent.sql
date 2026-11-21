@@ -1,0 +1,1 @@
+ALTER TABLE `booking_modifications` ADD `refund_percent` integer;

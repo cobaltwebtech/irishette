@@ -62,6 +62,9 @@ export function resetEmail() {
 	} as unknown as SendEmail;
 }
 
+/** Refund ids unique across a test file (stripe_refund_id is unique). */
+let refundSeq = 0;
+
 /** Stripe: POST /v1/refunds succeeds and records the form body. */
 export function mockStripeRefunds() {
 	const refunds: Array<{
@@ -75,8 +78,9 @@ export function mockStripeRefunds() {
 				body,
 				idempotencyKey: request.headers.get('idempotency-key'),
 			});
+			refundSeq += 1;
 			return HttpResponse.json({
-				id: `re_${refunds.length}`,
+				id: `re_${refundSeq}`,
 				object: 'refund',
 				status: 'succeeded',
 				payment_intent: body.get('payment_intent'),

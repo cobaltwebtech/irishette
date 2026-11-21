@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test';
 
 import {
+	amountsAfterPolicyRefund,
 	changeError,
 	differenceInCents,
 	modifiableError,
@@ -146,5 +147,51 @@ describe('modificationKind and modifiableError', () => {
 	it('differences are signed cents without float drift', () => {
 		expect(differenceInCents(253.12, 250)).toBe(312);
 		expect(differenceInCents(200.1, 200.3)).toBe(-20);
+	});
+});
+
+describe('amountsAfterPolicyRefund (fewer nights under the cancellation policy)', () => {
+	// Two nights at $253.12 down to one at $126.56 (difference $126.56).
+	const current = {
+		baseAmount: 200,
+		feesAmount: 24,
+		taxAmount: 29.12,
+		totalAmount: 253.12,
+		taxableAmount: 224,
+		stateTaxAmount: 13.44,
+		cityTaxAmount: 15.68,
+	};
+	const next = {
+		baseAmount: 100,
+		feesAmount: 12,
+		taxAmount: 14.56,
+		totalAmount: 126.56,
+		taxableAmount: 112,
+		stateTaxAmount: 6.72,
+		cityTaxAmount: 7.84,
+	};
+
+	it('100% refunds the whole difference: the new stay price', () => {
+		const r = amountsAfterPolicyRefund(current, next, 100);
+		expect(r).toMatchObject({ refundCents: 12656, keptCents: 0 });
+		expect(r.amounts).toEqual(next);
+	});
+
+	it('75% keeps a quarter of each part, total = old total - refund', () => {
+		const r = amountsAfterPolicyRefund(current, next, 75);
+		expect(r.refundCents).toBe(9492);
+		expect(r.keptCents).toBe(3164);
+		expect(r.amounts.totalAmount).toBe(158.2);
+		expect(r.amounts.baseAmount).toBe(125);
+		expect(r.amounts.taxAmount).toBe(18.2);
+		const parts =
+			r.amounts.baseAmount + r.amounts.feesAmount + r.amounts.taxAmount;
+		expect(Math.round(parts * 100)).toBe(15820);
+	});
+
+	it('0% refunds nothing and keeps the amounts', () => {
+		const r = amountsAfterPolicyRefund(current, next, 0);
+		expect(r.refundCents).toBe(0);
+		expect(r.amounts).toEqual(current);
 	});
 });

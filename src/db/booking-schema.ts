@@ -226,8 +226,11 @@ export const bookingModifications = sqliteTable(
 		newCheckOutDate: text('new_check_out_date').notNull(),
 		previousTotal: real('previous_total').notNull(), // dollars
 		newTotal: real('new_total').notNull(), // dollars
-		// Positive: charged to the guest; negative: refunded; 0: none.
+		// What moved: positive charged to the guest, negative refunded, 0 none.
 		differenceCents: integer('difference_cents').notNull(),
+		// Fewer nights for less money: the cancellation tier applied to the
+		// price difference (null when the policy did not apply).
+		refundPercent: integer('refund_percent'),
 		// The extra charge (increases) or the first refund (decreases).
 		stripePaymentIntentId: text('stripe_payment_intent_id'),
 		stripeRefundId: text('stripe_refund_id'),

@@ -274,6 +274,11 @@ type Quote = RouterOutputs['bookings']['adminQuoteModification'];
 /** What happens to the money, in one line. */
 function differenceLine(q: Quote) {
 	const diff = q.differenceCents / 100;
+	if (q.refundPercent !== null) {
+		// Fewer nights: the dropped nights fall under the cancellation policy.
+		const kept = (q.differenceCents - q.priceDifferenceCents) / 100;
+		return `Refund ${formatMoney(-diff)} (${q.refundPercent}% of the ${formatMoney(-q.priceDifferenceCents / 100)} difference under the cancellation policy; ${formatMoney(kept)} kept, new booking total ${formatMoney(q.newTotal)})`;
+	}
 	if (diff < 0) {
 		return `Refund ${formatMoney(-diff)} to the card the guest paid with`;
 	}

@@ -108,8 +108,10 @@ function TermsOfServicePage() {
 									reservation is priced again in full at the rates in effect
 									when the change is made. If the new price is higher, the
 									difference is charged to your card on file; if it is lower,
-									the difference is refunded to the card you paid with. Once
-									your stay has begun (at check-in time) it can only be
+									the difference is refunded to the card you paid with, except
+									that nights removed from a stay are refunded according to the
+									cancellation windows of our Cancellation and Refund Policy.
+									Once your stay has begun (at check-in time) it can only be
 									extended: leaving before your checkout date is early
 									departure, covered by our Cancellation and Refund Policy (no
 									refund for unused nights).

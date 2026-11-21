@@ -57,6 +57,13 @@
       "when": 1795278075136,
       "tag": "0007_booking_modifications",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1795280786518,
+      "tag": "0008_modification_refund_percent",
+      "breakpoints": true
     }
   ]
 }

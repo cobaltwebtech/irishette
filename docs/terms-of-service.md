@@ -33,7 +33,7 @@ You agree to provide accurate, current, and complete information during the book
 
 ### 4.3 Booking Modifications
 
-Changes to a reservation (new dates, a longer or shorter stay or a different room) are made by phone only: call us at 254-454-5558. Changes are subject to availability. A changed reservation is priced again in full at the rates in effect when the change is made. If the new price is higher, the difference is charged to your card on file; if it is lower, the difference is refunded to the card you paid with. Once your stay has begun (at check-in time) it can only be extended: leaving before your checkout date is early departure, covered by our Cancellation and Refund Policy (no refund for unused nights).
+Changes to a reservation (new dates, a longer or shorter stay or a different room) are made by phone only: call us at 254-454-5558. Changes are subject to availability. A changed reservation is priced again in full at the rates in effect when the change is made. If the new price is higher, the difference is charged to your card on file; if it is lower, the difference is refunded to the card you paid with, except that nights removed from a stay are refunded according to the cancellation windows of our Cancellation and Refund Policy. Once your stay has begun (at check-in time) it can only be extended: leaving before your checkout date is early departure, covered by our Cancellation and Refund Policy (no refund for unused nights).
 
 ### 4.4 Card on File
 

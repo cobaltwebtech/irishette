@@ -630,7 +630,14 @@ export const bookingsRouter = createTRPCRouter({
 					numberOfNights: booking.numberOfNights,
 				},
 				next: priceDetails(plan.price),
+				/** The booking total after the change (kept money included). */
+				newTotal: plan.amounts.totalAmount,
+				/** New stay price minus the current total (cents). */
+				priceDifferenceCents: plan.priceDifferenceCents,
+				/** What moves: positive charged, negative refunded (cents). */
 				differenceCents: plan.differenceCents,
+				/** Cancellation tier applied to dropped nights (null: none). */
+				refundPercent: plan.refundPercent,
 				savedCard: card ? { brand: card.brand, last4: card.last4 } : null,
 				hasOpenDispute: await hasOpenDispute(ctx.db, booking.id),
 			};

@@ -32,7 +32,11 @@ import { todayIn } from '@/utils/timezone';
 
 import { checkAvailability, noOverlapForStay } from './availability';
 import { refundAcrossPayments } from './booking-payments';
-import { assertRoomBookable, quoteStay } from './booking-service';
+import {
+	assertRoomBookable,
+	quoteBookingCancellation,
+	quoteStay,
+} from './booking-service';
 import {
 	type Booking,
 	cancelIntent,
@@ -54,6 +58,8 @@ import {
 	modifiableError,
 	modificationKind,
 	releaseEarlyError,
+	amountsAfterPolicyRefund,
+	type StayAmounts,
 } from './modification-rules';
 import { checkInAt, checkOutAt } from './stay-times';
 
@@ -149,7 +155,89 @@ export async function planModification(
 		current,
 		next,
 		price,
-		differenceCents: differenceInCents(price.totalAmount, booking.totalAmount),
+		...(await moneyForChange(deps.db, booking, price, now)),
+	};
+}
+
+/**
+ * The booking's money columns now. A booking without a tax snapshot
+ * (legacy) splits its stored tax total by the state and city rates, and its
+ * taxable amount is the room price plus the fee.
+ */
+function bookingAmounts(
+	booking: Booking,
+	rates: { stateTaxRate: number; cityTaxRate: number },
+): StayAmounts {
+	const fees = booking.feesAmount ?? 0;
+	const tax = booking.taxAmount ?? 0;
+	const hasSnapshot =
+		booking.stateTaxAmount != null && booking.cityTaxAmount != null;
+	const rateSum = rates.stateTaxRate + rates.cityTaxRate;
+	const stateTax = hasSnapshot
+		? (booking.stateTaxAmount ?? 0)
+		: rateSum > 0
+			? Math.round((tax * 100 * rates.stateTaxRate) / rateSum) / 100
+			: 0;
+	return {
+		baseAmount: booking.baseAmount,
+		feesAmount: fees,
+		taxAmount: tax,
+		totalAmount: booking.totalAmount,
+		taxableAmount: booking.taxableAmount ?? booking.baseAmount + fees,
+		stateTaxAmount: stateTax,
+		cityTaxAmount: hasSnapshot
+			? (booking.cityTaxAmount ?? 0)
+			: Math.round((tax - stateTax) * 100) / 100,
+	};
+}
+
+/**
+ * What the booking will hold and what moves (signed cents). A full reprice;
+ * but when the stay gets cheaper by dropping nights, the dropped nights are
+ * cancelled under the booking's cancellation policy (plan 06): only the
+ * current tier's percentage of the difference is refunded and the rest is
+ * kept in the booking's amounts. A late same-day booking refunds nothing.
+ */
+async function moneyForChange(
+	db: Database,
+	booking: Booking,
+	price: Awaited<ReturnType<typeof quoteStay>>,
+	now: Date,
+) {
+	const amounts: StayAmounts = {
+		baseAmount: price.baseAmount,
+		feesAmount: price.feesAmount,
+		taxAmount: price.taxAmount,
+		totalAmount: price.totalAmount,
+		taxableAmount: price.taxBreakdown.taxableAmount,
+		stateTaxAmount: price.taxBreakdown.stateTaxAmount,
+		cityTaxAmount: price.taxBreakdown.cityTaxAmount,
+	};
+	const priceDifferenceCents = differenceInCents(
+		price.totalAmount,
+		booking.totalAmount,
+	);
+	const fewerNights = price.numberOfNights < booking.numberOfNights;
+	if (priceDifferenceCents >= 0 || !fewerNights) {
+		return {
+			amounts,
+			priceDifferenceCents,
+			differenceCents: priceDifferenceCents,
+			refundPercent: null,
+		};
+	}
+	const { refundPercent } = await quoteBookingCancellation(db, booking, now);
+	const policy = amountsAfterPolicyRefund(
+		bookingAmounts(booking, price.taxBreakdown),
+		amounts,
+		refundPercent,
+	);
+	return {
+		amounts: policy.amounts,
+		priceDifferenceCents,
+		// 0 - x, not -x: a 0% tier moves +0 cents, not -0.
+		differenceCents: 0 - policy.refundCents,
+		refundPercent,
 	};
 }
 
@@ -373,7 +461,7 @@ interface ApplyContext {
 
 /** The stay and price columns a change writes. */
 function stayColumns(plan: Plan) {
-	const { price, next } = plan;
+	const { price, next, amounts } = plan;
 	return {
 		roomId: next.roomId,
 		checkInDate: next.checkIn,
@@ -381,15 +469,9 @@ function stayColumns(plan: Plan) {
 		checkInAt: checkInAt(next.checkIn),
 		checkOutAt: checkOutAt(next.checkOut),
 		numberOfNights: price.numberOfNights,
-		baseAmount: price.baseAmount,
-		feesAmount: price.feesAmount,
-		taxAmount: price.taxAmount,
-		totalAmount: price.totalAmount,
-		taxableAmount: price.taxBreakdown.taxableAmount,
+		...amounts,
 		stateTaxRate: price.taxBreakdown.stateTaxRate,
 		cityTaxRate: price.taxBreakdown.cityTaxRate,
-		stateTaxAmount: price.taxBreakdown.stateTaxAmount,
-		cityTaxAmount: price.taxBreakdown.cityTaxAmount,
 	};
 }
 
@@ -458,8 +540,9 @@ async function applyModification(
 			newCheckInDate: plan.next.checkIn,
 			newCheckOutDate: plan.next.checkOut,
 			previousTotal: booking.totalAmount,
-			newTotal: plan.price.totalAmount,
+			newTotal: plan.amounts.totalAmount,
 			differenceCents: diff,
+			refundPercent: plan.refundPercent,
 			stripePaymentIntentId: context.intent?.id ?? null,
 			status,
 			note: context.note,
@@ -722,6 +805,7 @@ async function notifyModification(
 			previousTotal: mod.previousTotal,
 			differenceCents: mod.differenceCents,
 			releasedEarly: mod.kind === 'release_early',
+			refundPercent: mod.refundPercent,
 		}),
 	);
 }

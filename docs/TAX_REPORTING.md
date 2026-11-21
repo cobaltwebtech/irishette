@@ -87,6 +87,32 @@ Refunds that match no booking (for example a Dashboard refund of an unlinked
 payment) are listed as "No booking" and reported on their own line, **not**
 included in any total.
 
+## Reservation changes (admin, plan 06)
+
+A change updates the booking's tax snapshot (`taxable_amount`, rates,
+`state_tax_amount`, `city_tax_amount`, `tax_amount`) to what the guest now
+owes, and the money moves as ordinary report rows:
+
+- **Extra charge** (longer or dearer stay): a second `payment_transactions`
+  row on the day it was captured: a positive row that adds its tax.
+- **Refund** (cheaper stay): a `payment_refunds` row (source `app`), counted
+  on the day Stripe made it once `succeeded`: a negative row that **reduces
+  the liability** in that period.
+- **Fewer nights for less money**: the dropped nights are cancelled under the
+  booking's cancellation policy, so only the tier's percentage of the
+  difference is refunded. The part kept stays in the booking's room, fee and
+  tax amounts in proportion, exactly like a partly refunded cancellation,
+  so its tax stays reported. Confirm with your CPA whether amounts kept for
+  cancelled nights are taxable; today the report treats them like
+  cancellation amounts kept (taxed in proportion).
+- **Release early** moves no money and changes no amounts.
+
+Every payment and refund of a booking is split in the booking's current
+proportions, so a booking's net rows always add up to its current snapshot
+(within a cent): the tax still owed for the stay. Tests:
+`test/workers/modifications.test.ts` ("cancellation windows on fewer nights,
+and tax liability", "the tax report counts both payments").
+
 ## Estimated rows
 
 A booking with no tax snapshot is marked **Estimated** (page and CSV):

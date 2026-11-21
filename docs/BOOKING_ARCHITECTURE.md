@@ -529,7 +529,15 @@ pure rules in `modification-rules.ts`, inputs in `modification-validation.ts`.
   then `adminModifyBooking` with `expectedDifferenceCents`): the booking must
   be `confirmed` and `paid` / `partially_refunded`. Before the stay begins
   (`checkInAt`, 4:00 PM CT) any length is allowed with a check-in not in the
-  past; a shorter stay is repriced and the difference refunded. Once it has
+  past; a shorter stay is repriced, and when it ends up cheaper with fewer
+  nights the dropped nights are cancelled under the booking's policy
+  (`moneyForChange`, `amountsAfterPolicyRefund`): only the current tier's
+  `refundPercent` of the price difference is refunded (0 for late same-day
+  bookings), and the rest stays in the booking's amounts component by
+  component, so the total is the old total minus the refund. The change row
+  stores `refund_percent` (migration 0008); the quote returns
+  `priceDifferenceCents`, `differenceCents` (what moves), `refundPercent`
+  and `newTotal`. Once it has
   begun the check-in stays and only a later check-out is allowed (the page
   then offers a later check-out only); leaving early is "release early". At
   most 30 nights and within 10 months; a new room must be
