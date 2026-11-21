@@ -241,6 +241,27 @@ export const bookingsRouter = createTRPCRouter({
 			};
 		}),
 
+	/**
+	 * Admin variant of createCheckoutSession (plan 06): any booking. An
+	 * admin-created hold gets a card-only session (the card the guest reads
+	 * out by phone) that returns to the admin booking page.
+	 */
+	adminCreateCheckoutSession: adminProcedure
+		.input(bookingIdSchema)
+		.mutation(async ({ ctx, input }) => {
+			const booking = await findAccessibleBooking(
+				ctx,
+				{ id: input.bookingId },
+				{ allowAdmin: true },
+			);
+			const result = await prepareCheckout(ctx, booking);
+			return {
+				...result,
+				publicId: booking.publicId,
+				publishableKey: ctx.env.STRIPE_PUBLISHABLE_KEY,
+			};
+		}),
+
 	/** Extends an expired hold if the dates are still free. */
 	refreshBooking: protectedProcedure
 		.input(bookingIdSchema)
@@ -263,6 +284,23 @@ export const bookingsRouter = createTRPCRouter({
 			const booking = await findAccessibleBooking(ctx, {
 				publicId: input.publicId,
 			});
+			const outcome = await confirmBookingPayment(
+				ctx,
+				booking.id,
+				input.sessionId,
+			);
+			return { status: outcome.status, publicId: booking.publicId };
+		}),
+
+	/** Admin variant of confirmCheckout (plan 06): any booking. */
+	adminConfirmCheckout: adminProcedure
+		.input(confirmCheckoutSchema)
+		.mutation(async ({ ctx, input }) => {
+			const booking = await findAccessibleBooking(
+				ctx,
+				{ publicId: input.publicId },
+				{ allowAdmin: true },
+			);
 			const outcome = await confirmBookingPayment(
 				ctx,
 				booking.id,

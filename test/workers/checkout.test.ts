@@ -144,12 +144,15 @@ describe('createCheckoutSession', () => {
 		expect(body.get('payment_intent_data[description]')).toBe(
 			`Irishette booking ${booking.confirmationId}`,
 		);
-		// No saved cards. Authorize only (capture after confirmation), and
-		// only methods that can be captured later without an upfront charge.
+		// The card is kept for approved changes (plan 06), with no saved-card
+		// picker. Authorize only (capture after confirmation), and only
+		// methods that can be captured later without an upfront charge.
 		expect(body.get('saved_payment_method_options[payment_method_save]')).toBe(
 			'disabled',
 		);
-		expect(body.has('payment_intent_data[setup_future_usage]')).toBe(false);
+		expect(body.get('payment_intent_data[setup_future_usage]')).toBe(
+			'off_session',
+		);
 		expect(body.get('payment_intent_data[capture_method]')).toBe('manual');
 		expect(body.getAll('allowed_payment_method_types[0]')).toEqual(['card']);
 		expect(body.getAll('allowed_payment_method_types[1]')).toEqual(['link']);
@@ -174,6 +177,23 @@ describe('createCheckoutSession', () => {
 		);
 		expect(idempotencyKey).toBe(
 			`checkout/${booking.id}/${expiresAt}/${Math.round(booking.totalAmount * 100)}`,
+		);
+	});
+
+	it('admin-created holds get a card-only session returning to the admin page', async () => {
+		const checkout = mockStripeCheckout();
+		const booking = await pendingBooking({ createdByAdminId: ADMIN.id });
+		await caller('admin').bookings.adminCreateCheckoutSession({
+			bookingId: booking.id,
+		});
+		const [{ body }] = checkout.created;
+		expect(body.get('allowed_payment_method_types[0]')).toBe('card');
+		expect(body.has('allowed_payment_method_types[1]')).toBe(false);
+		expect(body.get('payment_intent_data[setup_future_usage]')).toBe(
+			'off_session',
+		);
+		expect(body.get('return_url')).toMatch(
+			new RegExp(`/admin/bookings/${booking.publicId}$`),
 		);
 	});
 
@@ -303,13 +323,20 @@ describe('confirmation', () => {
 			paymentStatus: 'paid',
 			stripeSessionId: session.id,
 			stripePaymentIntentId: `pi_${session.id}`,
+			// Paying is the guest's consent to keep the card on file (plan 06).
+			cardConsentBy: 'guest',
 		});
+		expect(after.cardConsentAt).toBeInstanceOf(Date);
 		const [tx] = await paymentRows(booking.id);
 		expect(tx).toMatchObject({
 			stripeCheckoutSessionId: session.id,
 			stripePaymentIntentId: `pi_${session.id}`,
 			stripeChargeId: `ch_pi_${session.id}`,
 			paymentMethod: 'card',
+			// The saved card, for off-session charges on approved changes.
+			stripePaymentMethodId: 'pm_1',
+			cardBrand: 'visa',
+			cardLast4: '4242',
 			status: 'paid',
 		});
 		await settle();

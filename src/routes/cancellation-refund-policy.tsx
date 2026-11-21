@@ -81,7 +81,7 @@ function CancellationRefundPolicyPage() {
 						Cancellation and Refund Policy
 					</h1>
 					<p className="text-lg text-muted-foreground">
-						Last Updated: November 13, 2026
+						Last Updated: November 21, 2026
 					</p>
 				</div>
 			</section>
@@ -279,10 +279,19 @@ function CancellationRefundPolicyPage() {
 									Modifications to Reservations
 								</h2>
 								<p className="leading-relaxed text-muted-foreground">
-									Changes to your reservation dates or guest information may be
-									possible subject to availability. Please contact us as early
-									as possible to discuss modifications. Depending on the nature
-									of the change, standard cancellation penalties may apply.
+									Reservations are changed by phone only: call us at{' '}
+									<strong>254-454-5558</strong>. We can move your dates, extend
+									your stay or move you to another room, subject to
+									availability. The changed reservation is priced again in full
+									at the rates in effect when the change is made, and the
+									difference from what you paid is charged to your card on file
+									or refunded to the card you paid with. You approve the new
+									price before we make the change.
+								</p>
+								<p className="mt-3 leading-relaxed text-muted-foreground">
+									A change cannot shorten your stay. If you leave early, we can
+									release the room from your new departure date, but no refund
+									is given for the unused nights (see Early Departure).
 								</p>
 							</section>
 

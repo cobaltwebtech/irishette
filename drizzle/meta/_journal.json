@@ -43,6 +43,13 @@
       "when": 1794581270929,
       "tag": "0005_admin_notification_preferences",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1795277223066,
+      "tag": "0006_admin_bookings_card_on_file",
+      "breakpoints": true
     }
   ]
 }

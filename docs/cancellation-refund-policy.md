@@ -1,6 +1,6 @@
 # Cancellation and Refund Policy
 
-**Last Updated:** November 13, 2026
+**Last Updated:** November 21, 2026
 
 ## Overview
 
@@ -81,7 +81,9 @@ In the event we cancel your reservation, you will receive a **full refund** of a
 
 ## Modifications to Reservations
 
-Changes to your reservation dates or guest information may be possible subject to availability. Please contact us as early as possible to discuss modifications. Depending on the nature of the change, standard cancellation penalties may apply.
+Reservations are changed by phone only: call us at **254-454-5558**. We can move your dates, extend your stay or move you to another room, subject to availability. The changed reservation is priced again in full at the rates in effect when the change is made, and the difference from what you paid is charged to your card on file or refunded to the card you paid with. You approve the new price before we make the change.
+
+A change cannot shorten your stay. If you leave early, we can release the room from your new departure date, but no refund is given for the unused nights (see Early Departure).
 
 ## Special Circumstances
 

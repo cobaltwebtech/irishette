@@ -26,7 +26,7 @@ function TermsOfServicePage() {
 						Terms of Service
 					</h1>
 					<p className="text-lg text-muted-foreground">
-						Last Updated: November 13, 2026
+						Last Updated: November 21, 2026
 					</p>
 				</div>
 			</section>
@@ -102,9 +102,29 @@ function TermsOfServicePage() {
 									4.3 Booking Modifications
 								</h3>
 								<p className="leading-relaxed text-muted-foreground">
-									Any changes to your reservation must be requested by
-									contacting us directly. Modifications are subject to
-									availability and may incur additional fees.
+									Changes to a reservation (new dates, a longer stay or a
+									different room) are made by phone only: call us at
+									254-454-5558. Changes are subject to availability. A changed
+									reservation is priced again in full at the rates in effect
+									when the change is made. If the new price is higher, the
+									difference is charged to your card on file; if it is lower,
+									the difference is refunded to the card you paid with. Leaving
+									before your checkout date is not a change: early departure is
+									covered by our Cancellation and Refund Policy (no refund for
+									unused nights).
+								</p>
+								<h3 className="mt-6 mb-3 text-xl font-semibold">
+									4.4 Card on File
+								</h3>
+								<p className="leading-relaxed text-muted-foreground">
+									When you pay for a reservation, you authorize us to keep that
+									card on file with our payment processor, Stripe, and to charge
+									or refund it only for changes to that reservation that you
+									request and approve by phone. When you book by phone, you give
+									this authorization verbally to our staff, and we record the
+									date you gave it. We never store your full card number. If the
+									card on file is declined or needs your authentication, we will
+									ask you for another card before the change is made.
 								</p>
 							</section>
 

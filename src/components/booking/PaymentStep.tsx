@@ -190,6 +190,11 @@ function PaymentForm({ publicId }: { publicId: string }) {
 						</Link>
 						.
 					</p>
+					<p className="text-balance">
+						I authorize Irishette to keep this card on file and to charge or
+						refund it for the difference when I ask to change this reservation
+						by phone and approve the new price.
+					</p>
 				</div>
 				{policyError && (
 					<p className="ml-7 text-sm text-destructive">{policyError}</p>

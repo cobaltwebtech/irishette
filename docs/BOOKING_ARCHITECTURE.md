@@ -255,8 +255,9 @@ Full details: `STRIPE_PAYMENT_INTEGRATION.md`.
 3. Reuses the hold's open Checkout Session if the amount and expiry still
    match (and 10+ minutes are left); otherwise expires it and creates a new
    one (`ui_mode: 'elements'`, line items from our pricing, booking ids in
-   metadata, no saved cards, `capture_method: 'manual'`,
-   `allowed_payment_method_types: ['card', 'link']`, `expires_at` = the
+   metadata, the card kept on file (`setup_future_usage: 'off_session'`),
+   `capture_method: 'manual'`, `allowed_payment_method_types: ['card',
+   'link']` (card only for admin-created holds), `expires_at` = the
    extended hold expiry), saving
    `stripeSessionId` and the new `expiresAt` in one guarded write.
 

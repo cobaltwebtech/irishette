@@ -179,8 +179,10 @@ internal `id`, `userId`, `roomId`, `internalNotes`, Stripe ids,
 |---|---|---|---|---|
 | `calculateBooking` | query | public, rate-limited | `calculateBookingSchema` (`roomId`, dates, `guestCount`) | Full price (base, fees, taxes, nights, applied rules, tax breakdown). Same `quoteStay` and date limits (`assertBookableDates`: same-day cutoff 4:00 PM CT, 30 nights, 10 months) as booking creation |
 | `createBooking` | mutation | user | `createBookingSchema` (room, dates, guest count/name/email/phone, `estimatedArrival` (required arrival window start, `ARRIVAL_WINDOW_STARTS`), special requests; client prices ignored) | `createHold`: 35-minute pending hold (releases expired holds on the dates first: priority rule); returns `bookingId`, `publicId` |
-| `createCheckoutSession` | mutation | user (owner) | `bookingIdSchema` | `prepareCheckout`: the hold's Checkout Session (`ui_mode: 'elements'`, card authorized only: `capture_method: 'manual'`, card + Link). Returns `{ status: 'open', clientSecret }` or `{ status: 'complete' }` (already paid and settled, or a legacy processing hold), plus `publicId`, `publishableKey` |
+| `createCheckoutSession` | mutation | user (owner) | `bookingIdSchema` | `prepareCheckout`: the hold's Checkout Session (`ui_mode: 'elements'`, card authorized only: `capture_method: 'manual'`, card + Link, card kept on file with `setup_future_usage: 'off_session'`). Returns `{ status: 'open', clientSecret }` or `{ status: 'complete' }` (already paid and settled, or a legacy processing hold), plus `publicId`, `publishableKey` |
 | `refreshBooking` | mutation | user (owner) | `bookingIdSchema` | `refreshHold`: extend an expired hold if the dates are still free |
+| `adminCreateCheckoutSession` | mutation | admin | `bookingIdSchema` | `createCheckoutSession` for any booking. Admin-created holds get a card-only session (no Link) returning to `/admin/bookings/<publicId>` (plan 06) |
+| `adminConfirmCheckout` | mutation | admin | `confirmCheckoutSchema` | `confirmCheckout` for any booking (same `confirmBookingPayment`) |
 | `confirmCheckout` | mutation | user (owner) | `confirmCheckoutSchema` (`publicId`, `sessionId` `cs_test_...`/`cs_live_...`) | Return-page fast path: `confirmBookingPayment` (idempotent; the webhook is the source of truth): claims the dates and captures the authorization. Returns `{ status: 'confirmed' \| 'already_confirmed' \| 'released' \| 'payment_failed', publicId }`: `released` = the booking could not be confirmed (e.g. dates taken) and the authorization was cancelled; `payment_failed` = the authorization could not be captured, booking cancelled. Neither charges the guest |
 | `getBooking` | query | user (owner only) | `bookingPublicIdSchema` | `{ booking, room }` with guest fields only (above) |
 | `adminGetBooking` | query | admin | `bookingPublicIdSchema` | Any booking: the full row, the room (`bookingRoomColumns`), the guest account (`publicId`, `email`, `name`) and its payment `disputes` (panel fields, no internal ids) |
@@ -290,7 +292,8 @@ The contact form is a TanStack Start server function, not a tRPC procedure
   admin role). A booking that exists but is not the caller's is `NOT_FOUND`.
   `getBooking`, `cancelBooking`, `createCheckoutSession`, `refreshBooking` and
   `confirmCheckout` are owner-only even for admins; admins use
-  `adminGetBooking` and `adminCancelBooking`.
+  `adminGetBooking`, `adminCancelBooking`, `adminCreateCheckoutSession` and
+  `adminConfirmCheckout`.
 - **Admin role and bans:** the session comes from `getSession` with Better
   Auth's 5-minute cookie cache. `adminProcedure` therefore re-reads role and
   ban status from D1 on every call, so revoking a role or banning an admin

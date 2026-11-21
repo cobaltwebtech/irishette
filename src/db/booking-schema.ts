@@ -77,6 +77,20 @@ export const bookings = sqliteTable(
 		// the hosts; null on bookings made before the question existed.
 		estimatedArrival: text('estimated_arrival'),
 		internalNotes: text('internal_notes'), // Admin-only notes
+		// Admin bookings (plan 06): the user id of the admin who took it by
+		// phone (null for guest bookings). No foreign key on purpose: SQLite's
+		// ADD COLUMN can't carry ON DELETE SET NULL, and the id must not block
+		// deleting that admin's account.
+		createdByAdminId: text('created_by_admin_id'),
+		// Booked by an admin on the check-in day after SAME_DAY_CUTOFF_TIME:
+		// non-refundable under the policy (plan 06).
+		lateSameDay: integer('late_same_day', { mode: 'boolean' })
+			.notNull()
+			.default(false),
+		// Consent to keep the card on file for approved changes (plan 06):
+		// given by the guest at checkout, or verbally to an admin by phone.
+		cardConsentAt: integer('card_consent_at', { mode: 'timestamp' }),
+		cardConsentBy: text('card_consent_by', { enum: ['guest', 'admin'] }),
 
 		// Stripe integration
 		stripeCustomerId: text('stripe_customer_id'),
@@ -139,7 +153,8 @@ export const bookings = sqliteTable(
 	],
 );
 
-// One row per paid booking (the Checkout Session's PaymentIntent and charge).
+// One row per payment on a booking: the Checkout Session's PaymentIntent and
+// charge, plus one per extra charge for an approved change (plan 06).
 export const paymentTransactions = sqliteTable(
 	'payment_transactions',
 	{
@@ -163,6 +178,11 @@ export const paymentTransactions = sqliteTable(
 
 		// Payment method info (useful for admin)
 		paymentMethod: text('payment_method'), // card, link, us_bank_account, ...
+		// The saved payment method (setup_future_usage off_session, plan 06):
+		// charged off-session for approved changes when it is a card.
+		stripePaymentMethodId: text('stripe_payment_method_id'),
+		cardBrand: text('card_brand'),
+		cardLast4: text('card_last4'),
 
 		createdAt: integer('created_at', { mode: 'timestamp' })
 			.$defaultFn(() => new Date())

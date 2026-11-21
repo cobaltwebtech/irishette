@@ -110,10 +110,11 @@ throws `CONFLICT`.
 | `client_reference_id` | Booking `id` |
 | `metadata`, `payment_intent_data.metadata` | `stripeBookingMetadata()`: `bookingId`, `bookingPublicId`, `confirmationId`, `source: 'irishette'`. No personal data. |
 | `payment_intent_data.capture_method` | `manual` (authorize only; captured after confirmation) |
-| `allowed_payment_method_types` | `['card', 'link']`: methods that support a separate capture without an upfront charge (cards include Apple Pay and Google Pay). A filter on the methods enabled in the Dashboard. No delayed bank payments. |
+| `payment_intent_data.setup_future_usage` | `off_session`: the card is attached to the customer and kept on file for approved reservation changes (plan 06). Checkout shows its own save notice; the policies checkbox carries the consent sentence. |
+| `allowed_payment_method_types` | Guest: `['card', 'link']`: methods that support a separate capture without an upfront charge (cards include Apple Pay and Google Pay). A filter on the methods enabled in the Dashboard. No delayed bank payments. Admin (`checkoutVariant`: holds with `createdByAdminId`): `['card']`; the admin Payment Element also sets `wallets: { applePay: 'never', googlePay: 'never' }`. |
 | `payment_intent_data.description` | `Irishette booking <confirmationId>` |
-| `saved_payment_method_options.payment_method_save` | `disabled` (no saved cards) |
-| `return_url` | `<BETTER_AUTH_URL>/booking/confirmation/<publicId>?session_id={CHECKOUT_SESSION_ID}` |
+| `saved_payment_method_options.payment_method_save` | `disabled`: no opt-in checkbox and no saved-card picker (the card is always kept, never offered back at checkout) |
+| `return_url` | Guest: `<BETTER_AUTH_URL>/booking/confirmation/<publicId>?session_id={CHECKOUT_SESSION_ID}`. Admin: `<BETTER_AUTH_URL>/admin/bookings/<publicId>` |
 | `expires_at` | The hold expiry (Stripe allows 30 minutes to 24 hours; `HOLD_MINUTES` is 35 for clock skew) |
 | `integration_identifier` | `irishette_booking_qzmvtrkd` |
 | Idempotency key | `checkout/<bookingId>/<expiresAt>/<amountCents>` |
@@ -333,9 +334,18 @@ the admin booking lists show an "Open dispute" badge.
   `user.stripeCustomerId`. Plugin subscriptions are not enabled.
 - `ensureStripeCustomer()` in `src/lib/booking/checkout-service.ts` is the fallback for
   users without a customer (idempotency key `customer/<userId>`).
-- **No saved cards:** sessions set
-  `saved_payment_method_options.payment_method_save: 'disabled'` and no
-  `setup_future_usage`. Refunds go back to the card used.
+- **Card on file (plan 06):** sessions set
+  `payment_intent_data.setup_future_usage: 'off_session'`, so the card is
+  attached to the customer for approved reservation changes. The claim
+  records the consent (`bookings.card_consent_at`, `card_consent_by`:
+  `guest` for checkout, `admin` when an admin books by phone and ticks the
+  verbal-consent box). `payment_transactions` stores `stripe_payment_method_id`,
+  `card_brand` and `card_last4` from the expanded payment method. Only a
+  saved `card` is charged off-session (a `link` method is not; the admin
+  enters a fresh card instead). `saved_payment_method_options.payment_method_save`
+  stays `disabled` (no picker). Refunds go back to the card used. Typing a
+  guest's card into the admin form is not a Stripe MOTO flow: confirm with
+  Stripe support before go-live.
 
 ## Webhooks
 
@@ -402,7 +412,7 @@ Declared in `.env.schema`, bound in `cloudflare.config.ts`.
 
 | File | Covers |
 |---|---|
-| `test/workers/checkout.test.ts` | Session parameters (line items = total, metadata, no saved cards, `capture_method: 'manual'`, `allowed_payment_method_types` card + link, no `payment_method_types`, `expires_at` = hold expiry, idempotency key), reuse, expire-and-recreate, already-paid session; `confirmCheckout` verification; claim then capture then record; dates taken -> authorization released (no refund, tRPC and webhook, once); return page + webhook + repeat capture once and send one confirmation; transient capture error retried; lapsed authorization -> `payment_failed`; a confirmation cut short after the capture completed by the retry; the priority rule |
+| `test/workers/checkout.test.ts` | Session parameters (line items = total, metadata, `setup_future_usage: 'off_session'`, `capture_method: 'manual'`, `allowed_payment_method_types` card + link (admin holds: card only, admin return URL), saved card fields on the payment row and guest consent on the booking, no `payment_method_types`, `expires_at` = hold expiry, idempotency key), reuse, expire-and-recreate, already-paid session; `confirmCheckout` verification; claim then capture then record; dates taken -> authorization released (no refund, tRPC and webhook, once); return page + webhook + repeat capture once and send one confirmation; transient capture error retried; lapsed authorization -> `payment_failed`; a confirmation cut short after the capture completed by the retry; the priority rule |
 | `test/workers/stripe-webhook.test.ts` | Signatures (400, nothing echoed), 404 for other paths; `checkout.session.completed` (confirm once, decided from the PaymentIntent not `payment_status`, unknown session, no addresses in logs); releases (booking cancelled while paying, deleted hold, second payment for a paid booking); `async_payment_*` acknowledged and ignored; `checkout.session.expired`; `charge.refunded`; Dashboard full/partial refunds (cancel, emails, inbox, replays, replay after a failure redoes the work, trace reference); app refunds; `refund.failed`; disputes (store, link, inbox, no email, replay, out of order, closed, unlinked, fallback link, guest/admin cancel guards) |
 | `test/workers/payment-recovery.test.ts` | Recovery cron: captures a booking left `authorized` (after the grace period only); stuck `refund_pending` created once by the cron, an existing refund found and recorded (not created again), a permanent refusal is `refund_failed` and not retried |
 | `test/workers/bookings.test.ts` | Holds, pricing, cancellation refunds by policy and their metadata, cancelling a hold expires its session, legacy processing holds can't be cancelled |

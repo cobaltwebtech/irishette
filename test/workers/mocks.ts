@@ -271,7 +271,12 @@ export function mockStripeCheckout() {
 				? {
 						...intentJson(s),
 						payment_method: expand.includes('payment_intent.payment_method')
-							? { id: 'pm_1', object: 'payment_method', type: 'card' }
+							? {
+									id: 'pm_1',
+									object: 'payment_method',
+									type: 'card',
+									card: { brand: 'visa', last4: '4242' },
+								}
 							: 'pm_1',
 					}
 				: s.payment_intent,

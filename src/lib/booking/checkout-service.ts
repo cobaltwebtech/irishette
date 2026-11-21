@@ -102,9 +102,10 @@ async function expireSession(
 
 // --- Session creation --------------------------------------------------------
 
-async function ensureStripeCustomer(
-	{ db, stripe }: ServiceDeps,
-	booking: Booking,
+/** The guest's Stripe customer, created once per user (saved cards attach to it). */
+export async function ensureStripeCustomer(
+	{ db, stripe }: Pick<ServiceDeps, 'db' | 'stripe'>,
+	booking: Pick<Booking, 'userId' | 'guestEmail' | 'guestName'>,
 ): Promise<string> {
 	const [guest] = await db
 		.select({ stripeCustomerId: user.stripeCustomerId })
@@ -175,6 +176,18 @@ export function checkoutLineItems(
 			},
 		}));
 }
+
+/**
+ * Who pays the session: the guest on the booking page, or an admin typing
+ * the card the guest reads out by phone (plan 06). Admin sessions take
+ * cards only (no Link, and the page hides Apple Pay and Google Pay) and
+ * return to the admin booking page. Admin-created bookings always use it.
+ */
+export type CheckoutVariant = 'guest' | 'admin';
+
+export const checkoutVariant = (
+	booking: Pick<Booking, 'createdByAdminId'>,
+): CheckoutVariant => (booking.createdByAdminId ? 'admin' : 'guest');
 
 export type PrepareCheckoutResult =
 	| { status: 'open'; clientSecret: string }
@@ -283,6 +296,7 @@ async function createSession(
 	const customer = await ensureStripeCustomer(deps, booking);
 	const expiresAt = new Date((seconds(now) + HOLD_MINUTES * 60) * 1000);
 	const metadata = stripeBookingMetadata(booking);
+	const variant = checkoutVariant(booking);
 	const session = await stripe.checkout.sessions.create(
 		{
 			mode: 'payment',
@@ -297,15 +311,24 @@ async function createSession(
 			// separate capture without charging up front: cards (Apple Pay and
 			// Google Pay included) and Link. No delayed bank payments. A filter
 			// on the methods enabled in the Dashboard, not a static list.
-			allowed_payment_method_types: ['card', 'link'],
+			// Admin sessions (card read out by phone) take cards only.
+			allowed_payment_method_types:
+				variant === 'admin' ? ['card'] : ['card', 'link'],
 			payment_intent_data: {
 				capture_method: 'manual',
+				// Keep the card on the customer for approved changes, charged
+				// off-session (plan 06; the guest consents at checkout).
+				setup_future_usage: 'off_session',
 				metadata,
 				description: `Irishette booking ${booking.confirmationId}`,
 			},
-			// No saved cards (plan 02 decision).
+			// No saved-card picker or opt-in checkbox: the card is always kept
+			// (setup_future_usage above), never offered back at checkout.
 			saved_payment_method_options: { payment_method_save: 'disabled' },
-			return_url: `${env.BETTER_AUTH_URL}/booking/confirmation/${booking.publicId}?session_id={CHECKOUT_SESSION_ID}`,
+			return_url:
+				variant === 'admin'
+					? `${env.BETTER_AUTH_URL}/admin/bookings/${booking.publicId}`
+					: `${env.BETTER_AUTH_URL}/booking/confirmation/${booking.publicId}?session_id={CHECKOUT_SESSION_ID}`,
 			expires_at: seconds(expiresAt),
 			integration_identifier: INTEGRATION_IDENTIFIER,
 		},
@@ -529,6 +552,18 @@ function paymentMethodType(intent: Stripe.PaymentIntent | null) {
 	return intent?.payment_method_types?.[0] ?? 'card';
 }
 
+/** The payment method id and card details to store with a payment row. */
+export function paymentMethodFields(intent: Stripe.PaymentIntent | null) {
+	const pm = intent?.payment_method;
+	const card = pm && typeof pm === 'object' ? pm.card : null;
+	return {
+		paymentMethod: paymentMethodType(intent),
+		stripePaymentMethodId: stripeId(pm ?? null),
+		cardBrand: card?.brand ?? null,
+		cardLast4: card?.last4 ?? null,
+	};
+}
+
 /** The payment row for this session exists (confirmation fully recorded). */
 async function hasPaymentRow(
 	db: Database,
@@ -660,6 +695,11 @@ async function claimDates(
 			stripeSessionId: session.id,
 			stripePaymentIntentId: intent.id,
 			stripeCustomerId: stripeId(session.customer) ?? booking.stripeCustomerId,
+			// Paying the session is the guest's consent to keep the card on
+			// file (the checkout policies line); admin bookings record the
+			// verbal consent when they are created.
+			cardConsentAt: booking.cardConsentAt ?? now,
+			cardConsentBy: booking.cardConsentBy ?? 'guest',
 		})
 		.where(
 			and(
@@ -1052,7 +1092,7 @@ async function recordConfirmation(
 			stripeCustomerId: stripeId(session.customer),
 			amount: confirmed.totalAmount,
 			status: 'paid',
-			paymentMethod: paymentMethodType(intent),
+			...paymentMethodFields(intent),
 			createdAt: now,
 			updatedAt: now,
 		})
