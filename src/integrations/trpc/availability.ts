@@ -69,7 +69,7 @@ export const availabilityRouter = createTRPCRouter({
 				dateRange: { startDate, endDate },
 				unavailability,
 				// Property time (America/Chicago), not the browser's clock:
-				// same-day check-in closes at 9:00 AM CT.
+				// same-day check-in closes at 4:00 PM CT.
 				today,
 				earliestCheckIn: earliestCheckInDate(now),
 				lastCheckOut: lastBookableDate(today),

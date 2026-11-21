@@ -110,7 +110,7 @@ export async function quoteStay(
 
 /**
  * Dates a new booking may have (plan 02, 3.8 / 3.9): check-in not before
- * the earliest check-in date (today until 9:00 AM CT, then tomorrow), at most
+ * the earliest check-in date (today until 4:00 PM CT, then tomorrow), at most
  * MAX_NIGHTS nights, and check-out within BOOKING_WINDOW_MONTHS. Used when
  * pricing and when holding; a hold created in time stays payable (B3).
  */

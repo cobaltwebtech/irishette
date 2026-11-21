@@ -57,15 +57,16 @@ describe('localCutoff', () => {
 	});
 });
 
-describe('earliestCheckInDate (same-day cutoff 9:00 AM CT)', () => {
+describe('earliestCheckInDate (same-day cutoff 4:00 PM CT)', () => {
 	it.each([
-		['08:59 CDT', '2030-06-10T13:59:00Z', '2030-06-10'],
-		['09:00 CDT', '2030-06-10T14:00:00Z', '2030-06-11'],
-		['08:59 CST', '2030-01-10T14:59:00Z', '2030-01-10'],
-		['09:00 CST', '2030-01-10T15:00:00Z', '2030-01-11'],
-		// The morning DST starts (2:00 AM jumps to 3:00 AM).
-		['08:59 on the DST day', '2030-03-10T13:59:00Z', '2030-03-10'],
-		['09:00 on the DST day', '2030-03-10T14:00:00Z', '2030-03-11'],
+		['09:00 CDT', '2030-06-10T14:00:00Z', '2030-06-10'],
+		['15:59 CDT', '2030-06-10T20:59:00Z', '2030-06-10'],
+		['16:00 CDT', '2030-06-10T21:00:00Z', '2030-06-11'],
+		['15:59 CST', '2030-01-10T21:59:00Z', '2030-01-10'],
+		['16:00 CST', '2030-01-10T22:00:00Z', '2030-01-11'],
+		// The day DST starts (2:00 AM jumps to 3:00 AM).
+		['15:59 on the DST day', '2030-03-10T20:59:00Z', '2030-03-10'],
+		['16:00 on the DST day', '2030-03-10T21:00:00Z', '2030-03-11'],
 		// Late evening CT is already the next day in UTC.
 		['11:30 PM CT', '2030-06-11T04:30:00Z', '2030-06-11'],
 	])('%s → %s', (_label, now, expected) => {

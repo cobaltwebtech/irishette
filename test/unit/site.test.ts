@@ -21,7 +21,7 @@ describe('site constants', () => {
 		expect(CHECK_OUT_TIME).toBe('11:00');
 		expect(CHECK_IN_TIME_LABEL).toBe('4:00 PM CT');
 		expect(CHECK_OUT_TIME_LABEL).toBe('11:00 AM CT');
-		expect(SAME_DAY_CUTOFF_LABEL).toBe('9:00 AM CT');
+		expect(SAME_DAY_CUTOFF_LABEL).toBe('4:00 PM CT');
 	});
 
 	it('shows the phone as 254-454-5558 and links the full international number', () => {

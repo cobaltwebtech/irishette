@@ -91,8 +91,12 @@ export const EMAIL_REPLY_TO = CONTACT_EMAIL;
 // (America/Chicago wall-clock time).
 export const CHECK_IN_TIME = '16:00';
 export const CHECK_OUT_TIME = '11:00';
-/** Same-day check-in is allowed only before this time (plan 02, 3.9). */
-export const SAME_DAY_CUTOFF_TIME = '09:00';
+/**
+ * Same-day check-in is open to guests only before this time (plan 02, 3.9;
+ * moved to 4:00 PM in plan 06). Admins may book past it (a late same-day
+ * booking, non-refundable).
+ */
+export const SAME_DAY_CUTOFF_TIME = '16:00';
 
 /**
  * Estimated arrival windows guests pick at booking ("HH:MM", property time).
@@ -146,7 +150,7 @@ export const CHECK_IN_TIME_LABEL = formatTimeOfDay(CHECK_IN_TIME, {
 export const CHECK_OUT_TIME_LABEL = formatTimeOfDay(CHECK_OUT_TIME, {
 	withZone: true,
 });
-/** "9:00 AM CT" */
+/** "4:00 PM CT" */
 export const SAME_DAY_CUTOFF_LABEL = formatTimeOfDay(SAME_DAY_CUTOFF_TIME, {
 	withZone: true,
 });

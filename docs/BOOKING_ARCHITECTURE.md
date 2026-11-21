@@ -34,7 +34,7 @@ the details step's "Back" goes to `/rooms/<booking.roomSlug>`.
   months ahead). The response is date ranges only (`stays`, `events`,
   `blocks`), no ids, plus `today`, `earliestCheckIn` and `lastCheckOut` in
   property time: the calendar never uses the browser's clock. Check-in
-  before `earliestCheckIn` (today until 9:00 AM CT, then tomorrow) is
+  before `earliestCheckIn` (today until 4:00 PM CT, then tomorrow) is
   disabled, with a note under the calendar.
 - Applies the same rules as the server, imported from `src/utils/date-range.ts`:
   `isCheckInDisabled`, `isCheckOutAllowed`, `isStayAvailable`. A day whose
@@ -339,7 +339,7 @@ Logs carry Stripe ids and confirmation ids only.
 
 All date/time rules use **America/Chicago wall-clock time**, whatever the
 server's or browser's time zone. The times are constants in `src/lib/site.ts`:
-`CHECK_IN_TIME` 16:00, `CHECK_OUT_TIME` 11:00, `SAME_DAY_CUTOFF_TIME` 09:00
+`CHECK_IN_TIME` 16:00, `CHECK_OUT_TIME` 11:00, `SAME_DAY_CUTOFF_TIME` 16:00
 (labels `CHECK_IN_TIME_LABEL` etc. are what pages and emails print; the legal
 pages are the one exception). `src/lib/booking/stay-times.ts` turns them into
 instants: `checkInAt(date)`, `checkOutAt(date)`, `localCutoff(date, time,
@@ -355,7 +355,7 @@ lists filter by them (`phase: 'upcoming' | 'current' | 'past'`).
 
 **Booking limits** (`assertBookableDates`, used by `createHold` and
 `calculateBooking`): check-in not before `earliestCheckInDate(now)` (today
-until 9:00 AM CT, else tomorrow: "Same-day bookings close at 9:00 AM CT"), at
+until 4:00 PM CT, else tomorrow: "Same-day bookings close at 4:00 PM CT"), at
 most `MAX_NIGHTS` (30) nights, check-out within `BOOKING_WINDOW_MONTHS` (10)
 months. A hold created in time stays payable until it expires (B3).
 
@@ -526,7 +526,7 @@ until 11:00 AM CT on the check-out date, then `past`) from the stored
 |---|---|
 | `test/unit/date-range.test.ts`, `pricing.test.ts` | Overlap rules (calendar vs server), per-night pricing, no guest surcharge |
 | `test/unit/cancellation-policy.test.ts` | Tier cutoffs (at, 1 s before/after each cutoff, after check-in), DST check-ins (71/73 h), a 36 h tier, partial-refund cap, `TZ=Asia/Tokyo`, policy schema |
-| `test/unit/stay-times.test.ts` | `checkInAt`/`checkOutAt` (CDT/CST, DST days), `localCutoff`, the 9:00 AM CT same-day cutoff, `stayPhase` edges, `addMonths`, `isPricingComplete` |
+| `test/unit/stay-times.test.ts` | `checkInAt`/`checkOutAt` (CDT/CST, DST days), `localCutoff`, the 4:00 PM CT same-day cutoff, `stayPhase` edges, `addMonths`, `isPricingComplete` |
 | `test/unit/booking-store.test.ts` | Store steps, `furthestAllowedStep`, old drafts, guest clamping, persistence, reset |
 | `test/unit/ids.test.ts`, `validation.test.ts` | Id formats, booking/payment input schemas |
 | `test/workers/bookings.test.ts` | Overlaps, holds, pricing parity, ownership, cancellation and refunds |

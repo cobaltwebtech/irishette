@@ -65,7 +65,7 @@ describe('holds store the normalized check-in and check-out instants', () => {
 	});
 });
 
-describe('same-day cutoff (9:00 AM CT)', () => {
+describe('same-day cutoff (4:00 PM CT)', () => {
 	useClock('2032-12-01T17:00:00Z');
 
 	const today = '2033-03-15';
@@ -74,16 +74,16 @@ describe('same-day cutoff (9:00 AM CT)', () => {
 			bookingInput({ checkInDate: today, checkOutDate: addDays(today, 1) }),
 		);
 
-	it('accepts check-in today at 8:59 AM CT', async () => {
-		vi.setSystemTime(new Date('2033-03-15T13:59:00Z')); // 08:59 CDT
+	it('accepts check-in today at 3:59 PM CT', async () => {
+		vi.setSystemTime(new Date('2033-03-15T20:59:00Z')); // 15:59 CDT
 		await expect(book()).resolves.toMatchObject({ success: true });
 	});
 
-	it('refuses check-in today from 9:00 AM CT, for pricing too', async () => {
-		vi.setSystemTime(new Date('2033-03-15T14:00:00Z')); // 09:00 CDT
+	it('refuses check-in today from 4:00 PM CT, for pricing too', async () => {
+		vi.setSystemTime(new Date('2033-03-15T21:00:00Z')); // 16:00 CDT
 		const error = await trpcError(book());
 		expect(error.code).toBe('BAD_REQUEST');
-		expect(error.message).toMatch(/Same-day bookings close at 9:00 AM CT/);
+		expect(error.message).toMatch(/Same-day bookings close at 4:00 PM CT/);
 		const pricing = await trpcError(
 			caller(null).bookings.calculateBooking({
 				roomId: bookingInput().roomId,
@@ -96,7 +96,7 @@ describe('same-day cutoff (9:00 AM CT)', () => {
 	});
 
 	it('availability.getBySlug reports today and the earliest check-in in CT', async () => {
-		vi.setSystemTime(new Date('2033-03-15T14:00:00Z'));
+		vi.setSystemTime(new Date('2033-03-15T21:00:00Z'));
 		const data = await caller(null).availability.getBySlug({
 			roomSlug: 'rose-room',
 		});

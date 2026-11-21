@@ -1,7 +1,7 @@
 // The property's fixed times as instants (plan 02, 3.9). Pure and
 // client-safe. All rules use America/Chicago wall-clock time, whatever the
 // server's or browser's time zone: check-in 4:00 PM, check-out 11:00 AM, and
-// same-day check-in only before 9:00 AM (src/lib/site.ts).
+// same-day check-in only before 4:00 PM (src/lib/site.ts).
 
 import {
 	CHECK_IN_TIME,
@@ -42,7 +42,7 @@ export function localCutoff(
 
 /**
  * The earliest check-in date a new hold may have: today (property date)
- * until 9:00 AM CT, tomorrow after that.
+ * until 4:00 PM CT (SAME_DAY_CUTOFF_TIME), tomorrow after that.
  */
 export function earliestCheckInDate(now = new Date()): IsoDate {
 	const today = dateInZone(now);

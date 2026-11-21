@@ -177,7 +177,7 @@ internal `id`, `userId`, `roomId`, `internalNotes`, Stripe ids,
 
 | Procedure | Type | Access | Input | Purpose |
 |---|---|---|---|---|
-| `calculateBooking` | query | public, rate-limited | `calculateBookingSchema` (`roomId`, dates, `guestCount`) | Full price (base, fees, taxes, nights, applied rules, tax breakdown). Same `quoteStay` and date limits (`assertBookableDates`: same-day cutoff 9:00 AM CT, 30 nights, 10 months) as booking creation |
+| `calculateBooking` | query | public, rate-limited | `calculateBookingSchema` (`roomId`, dates, `guestCount`) | Full price (base, fees, taxes, nights, applied rules, tax breakdown). Same `quoteStay` and date limits (`assertBookableDates`: same-day cutoff 4:00 PM CT, 30 nights, 10 months) as booking creation |
 | `createBooking` | mutation | user | `createBookingSchema` (room, dates, guest count/name/email/phone, `estimatedArrival` (required arrival window start, `ARRIVAL_WINDOW_STARTS`), special requests; client prices ignored) | `createHold`: 35-minute pending hold (releases expired holds on the dates first: priority rule); returns `bookingId`, `publicId` |
 | `createCheckoutSession` | mutation | user (owner) | `bookingIdSchema` | `prepareCheckout`: the hold's Checkout Session (`ui_mode: 'elements'`, card authorized only: `capture_method: 'manual'`, card + Link). Returns `{ status: 'open', clientSecret }` or `{ status: 'complete' }` (already paid and settled, or a legacy processing hold), plus `publicId`, `publishableKey` |
 | `refreshBooking` | mutation | user (owner) | `bookingIdSchema` | `refreshHold`: extend an expired hold if the dates are still free |
@@ -197,7 +197,7 @@ internal `id`, `userId`, `roomId`, `internalNotes`, Stripe ids,
 
 | Procedure | Type | Access | Input | Purpose |
 |---|---|---|---|---|
-| `getBySlug` | query | public | `{ roomSlug, startDate?, endDate?, monthsAhead 1-12 (10) }` (ISO dates) | Active room summary and unavailable date ranges (`loadUnavailability`) for the booking calendar, plus `today`, `earliestCheckIn` (same-day cutoff 9:00 AM CT), `lastCheckOut` and `maxNights`, all in property time. Dates only: no booking ids, confirmation ids or guest data |
+| `getBySlug` | query | public | `{ roomSlug, startDate?, endDate?, monthsAhead 1-12 (10) }` (ISO dates) | Active room summary and unavailable date ranges (`loadUnavailability`) for the booking calendar, plus `today`, `earliestCheckIn` (same-day cutoff 4:00 PM CT), `lastCheckOut` and `maxNights`, all in property time. Dates only: no booking ids, confirmation ids or guest data |
 
 ### `ical` (`src/integrations/trpc/ical.ts`)
 
